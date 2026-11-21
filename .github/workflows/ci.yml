@@ -40,3 +40,37 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-pages:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v6
+
+      - name: Upload roadmap
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs
+
+  deploy-pages:
+    needs: build-pages
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy roadmap
+        id: deployment
+        uses: actions/deploy-pages@v5
