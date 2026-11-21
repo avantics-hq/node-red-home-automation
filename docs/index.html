@@ -566,13 +566,14 @@
         </article>
 
         <article class="phase" data-phase="shadow">
-          <div class="phase-head"><div class="phase-number">7</div><div class="phase-title"><h3>Shadow deployment</h3><p>Exercise the full controller against real observations with writes suppressed.</p></div><span class="status planned">Planned</span></div>
+          <div class="phase-head"><div class="phase-number">7</div><div class="phase-title"><h3>Shadow deployment</h3><p>Exercise the full controller against real observations with writes suppressed.</p></div><span class="status complete">Complete</span></div>
           <div class="phase-body">
             <div class="tasks">
-              <div class="task"><input id="p7-1" data-task="shadow-package" type="checkbox"><label for="p7-1">Install the packaged controller disabled from command outputs.</label></div>
-              <div class="task"><input id="p7-2" data-task="shadow-compare" type="checkbox"><label for="p7-2">Compare proposed target plans with current live behavior for every activity.</label></div>
-              <div class="task"><input id="p7-3" data-task="shadow-restart" type="checkbox"><label for="p7-3">Prove restart, drift and supersession without physical side effects.</label></div>
+              <div class="task"><input id="p7-1" data-task="shadow-package" type="checkbox" checked><label for="p7-1">Install the packaged controller disabled from command outputs.</label></div>
+              <div class="task"><input id="p7-2" data-task="shadow-compare" type="checkbox" checked><label for="p7-2">Compare proposed target plans with current live behavior for every activity.</label></div>
+              <div class="task"><input id="p7-3" data-task="shadow-restart" type="checkbox" checked><label for="p7-3">Prove restart, drift and supersession without physical side effects.</label></div>
             </div>
+            <div class="gate-box"><strong>Gate passed:</strong> package 1.8.0 runs on an isolated shadow tab and MQTT namespace. All five activity plans were evaluated against live AVR, display, Shield, room-light and backlight observations; inert probes proved stale-result rejection, drift, failure recovery, supersession and restart recovery while the physical room remained TV + Shield.</div>
           </div>
         </article>
 
