@@ -1,0 +1,63 @@
+<script type="text/javascript">
+  RED.nodes.registerType("home-display-mode-controller", {
+    category: "function",
+    color: "#c7d9f1",
+    defaults: {
+      name: {value: ""},
+      area: {value: "lounge", required: true},
+      tvHost: {value: "", required: true},
+      screenHost: {value: "", required: true},
+      projectorMeterHost: {value: "", required: true},
+      screenOpenPosition: {value: 82, required: true, validate: RED.validators.number()},
+      screenTolerance: {value: 2, required: true, validate: RED.validators.number()},
+      pollMs: {value: 2000, required: true, validate: RED.validators.number()},
+      queryTimeoutMs: {value: 5000, required: true, validate: RED.validators.number()},
+      tvTimeoutMs: {value: 30000, required: true, validate: RED.validators.number()},
+      screenTimeoutMs: {value: 65000, required: true, validate: RED.validators.number()},
+      projectorWarmupMs: {value: 60000, required: true, validate: RED.validators.number()},
+      projectorMinimumWarmupMs: {value: 15000, required: true, validate: RED.validators.number()},
+      projectorShutdownConfirmMs: {value: 5000, required: true, validate: RED.validators.number()},
+      projectorCooldownMs: {value: 120000, required: true, validate: RED.validators.number()},
+      maxAttempts: {value: 2, required: true, validate: RED.validators.number()},
+      projectorOnWatts: {value: 20, required: true, validate: RED.validators.number()},
+      projectorOffWatts: {value: 10, required: true, validate: RED.validators.number()},
+      transportTimeoutMs: {value: 5000, required: true, validate: RED.validators.number()}
+    },
+    credentials: {tvPsk: {type: "password"}},
+    inputs: 1,
+    outputs: 2,
+    outputLabels: ["projector IR fallback", "state and results"],
+    icon: "font-awesome/fa-television",
+    label: function () { return this.name || this.area + " display mode"; }
+  });
+</script>
+
+<script type="text/html" data-template-name="home-display-mode-controller">
+  <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
+  <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area"></div>
+  <div class="form-row"><label for="node-input-tvHost">Bravia host</label><input type="text" id="node-input-tvHost"></div>
+  <div class="form-row"><label for="node-input-tvPsk">Bravia PSK</label><input type="password" id="node-input-tvPsk"></div>
+  <div class="form-row"><label for="node-input-screenHost">Screen Shelly host</label><input type="text" id="node-input-screenHost"></div>
+  <div class="form-row"><label for="node-input-projectorMeterHost">Projector Shelly host</label><input type="text" id="node-input-projectorMeterHost"></div>
+  <div class="form-row"><label for="node-input-screenOpenPosition">Screen viewing position</label><input type="number" id="node-input-screenOpenPosition"></div>
+  <div class="form-row"><label for="node-input-screenTolerance">Screen position tolerance</label><input type="number" id="node-input-screenTolerance"></div>
+  <div class="form-row"><label for="node-input-pollMs">Confirmation poll milliseconds</label><input type="number" id="node-input-pollMs"></div>
+  <div class="form-row"><label for="node-input-queryTimeoutMs">Query timeout milliseconds</label><input type="number" id="node-input-queryTimeoutMs"></div>
+  <div class="form-row"><label for="node-input-tvTimeoutMs">TV confirmation timeout</label><input type="number" id="node-input-tvTimeoutMs"></div>
+  <div class="form-row"><label for="node-input-screenTimeoutMs">Screen movement timeout</label><input type="number" id="node-input-screenTimeoutMs"></div>
+  <div class="form-row"><label for="node-input-projectorWarmupMs">Projector warm-up timeout</label><input type="number" id="node-input-projectorWarmupMs"></div>
+  <div class="form-row"><label for="node-input-projectorMinimumWarmupMs">Projector minimum warm-up</label><input type="number" id="node-input-projectorMinimumWarmupMs"></div>
+  <div class="form-row"><label for="node-input-projectorShutdownConfirmMs">Projector shutdown confirm delay</label><input type="number" id="node-input-projectorShutdownConfirmMs"></div>
+  <div class="form-row"><label for="node-input-projectorCooldownMs">Projector cool-down timeout</label><input type="number" id="node-input-projectorCooldownMs"></div>
+  <div class="form-row"><label for="node-input-maxAttempts">Maximum idempotent attempts</label><input type="number" id="node-input-maxAttempts"></div>
+  <div class="form-row"><label for="node-input-projectorOnWatts">Projector on watts</label><input type="number" id="node-input-projectorOnWatts"></div>
+  <div class="form-row"><label for="node-input-projectorOffWatts">Projector standby watts</label><input type="number" id="node-input-projectorOffWatts"></div>
+  <div class="form-row"><label for="node-input-transportTimeoutMs">Transport timeout milliseconds</label><input type="number" id="node-input-transportTimeoutMs"></div>
+</script>
+
+<script type="text/html" data-help-name="home-display-mode-controller">
+  <p>Owns Bravia power, projector lamp power and projector-screen position for <code>off</code>, <code>tv</code> and <code>projector</code> modes.</p>
+  <p>Send <code>msg.display = {kind: "intent", requestId, generation, mode}</code>. Send <code>kind: "startup"</code> after deployment to query every owned device and reconcile persisted intent.</p>
+  <p>The Bravia and both Shelly devices use direct LAN APIs. Output 1 is the explicitly named HA/Broadlink projector-power fallback and must connect only to <code>remote.send_command</code> for the projector. Output 2 emits observed state plus ready, failed, rejected and superseded results.</p>
+  <p>The Bravia PSK remains in Node-RED's encrypted credential store and is never emitted in a message or status.</p>
+</script>

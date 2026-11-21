@@ -1,0 +1,7 @@
+title = "node-red-home-automation gitleaks configuration"
+
+[[allowlists]]
+description = "Synthetic credential used only by transport leakage tests"
+regexes = [
+  '''test-secret'''
+]

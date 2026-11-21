@@ -1,0 +1,51 @@
+<script type="text/javascript">
+  RED.nodes.registerType("home-room-lighting-controller", {
+    category: "function",
+    color: "#ffd27f",
+    defaults: {
+      name: {value: ""},
+      area: {value: "room", required: true},
+      displayName: {value: "Room", required: true},
+      targets: {value: "[]", required: true},
+      latitude: {value: "", required: true, validate: RED.validators.number()},
+      longitude: {value: "", required: true, validate: RED.validators.number()},
+      minBrightnessPct: {value: 1, required: true, validate: RED.validators.number()},
+      maxBrightnessPct: {value: 100, required: true, validate: RED.validators.number()},
+      minColorTempKelvin: {value: 2000, required: true, validate: RED.validators.number()},
+      maxColorTempKelvin: {value: 5500, required: true, validate: RED.validators.number()},
+      sleepBrightnessPct: {value: 1, required: true, validate: RED.validators.number()},
+      sleepColorTempKelvin: {value: 1000, required: true, validate: RED.validators.number()},
+      initialTransitionSeconds: {value: 1, required: true, validate: RED.validators.number()},
+      refreshTransitionSeconds: {value: 45, required: true, validate: RED.validators.number()},
+      refreshSeconds: {value: 90, required: true, validate: RED.validators.number()},
+      initialSleep: {value: false}
+    },
+    inputs: 1,
+    outputs: 1,
+    icon: "font-awesome/fa-lightbulb-o",
+    label: function () { return this.name || this.area + " lighting controller"; }
+  });
+</script>
+
+<script type="text/html" data-template-name="home-room-lighting-controller">
+  <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
+  <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area"></div>
+  <div class="form-row"><label for="node-input-displayName">Display name</label><input type="text" id="node-input-displayName"></div>
+  <div class="form-row"><label for="node-input-targets">Targets JSON</label><input type="text" id="node-input-targets"></div>
+  <div class="form-row"><label for="node-input-latitude">Latitude</label><input type="number" step="any" id="node-input-latitude"></div>
+  <div class="form-row"><label for="node-input-longitude">Longitude</label><input type="number" step="any" id="node-input-longitude"></div>
+  <div class="form-row"><label for="node-input-minBrightnessPct">Minimum brightness %</label><input type="number" id="node-input-minBrightnessPct"></div>
+  <div class="form-row"><label for="node-input-maxBrightnessPct">Maximum brightness %</label><input type="number" id="node-input-maxBrightnessPct"></div>
+  <div class="form-row"><label for="node-input-minColorTempKelvin">Minimum kelvin</label><input type="number" id="node-input-minColorTempKelvin"></div>
+  <div class="form-row"><label for="node-input-maxColorTempKelvin">Maximum kelvin</label><input type="number" id="node-input-maxColorTempKelvin"></div>
+  <div class="form-row"><label for="node-input-sleepBrightnessPct">Sleep brightness %</label><input type="number" id="node-input-sleepBrightnessPct"></div>
+  <div class="form-row"><label for="node-input-sleepColorTempKelvin">Sleep kelvin</label><input type="number" id="node-input-sleepColorTempKelvin"></div>
+  <div class="form-row"><label for="node-input-initialTransitionSeconds">Initial transition seconds</label><input type="number" id="node-input-initialTransitionSeconds"></div>
+  <div class="form-row"><label for="node-input-refreshTransitionSeconds">Refresh transition seconds</label><input type="number" id="node-input-refreshTransitionSeconds"></div>
+  <div class="form-row"><label for="node-input-refreshSeconds">Refresh interval seconds</label><input type="number" id="node-input-refreshSeconds"></div>
+  <div class="form-row"><label for="node-input-initialSleep">Initial sleep mode</label><input type="checkbox" id="node-input-initialSleep" style="display:inline-block; width:auto;"></div>
+</script>
+
+<script type="text/html" data-help-name="home-room-lighting-controller">
+  <p>Owns room MQTT commands, adaptive colour and brightness, manual overrides, discovery and bounded tracing.</p>
+</script>

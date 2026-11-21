@@ -1,0 +1,16 @@
+#!/bin/sh
+set -eu
+
+node scripts/check-public.mjs --staged
+npm audit --audit-level=high
+npm test
+
+if command -v gitleaks >/dev/null 2>&1; then
+  if gitleaks protect --help >/dev/null 2>&1; then
+    gitleaks protect --staged --redact
+  else
+    gitleaks git --pre-commit --redact
+  fi
+else
+  echo "warning: gitleaks is not installed; CI will run the full secret scan" >&2
+fi

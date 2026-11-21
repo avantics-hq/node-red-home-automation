@@ -1,0 +1,46 @@
+<script type="text/javascript">
+  RED.nodes.registerType("home-source-capability-controller", {
+    category: "function",
+    color: "#c7d9f1",
+    defaults: {
+      name: {value: ""},
+      area: {value: "lounge", required: true},
+      sources: {
+        value: "{}",
+        required: true,
+        validate: function(value) {
+          try {
+            const parsed = JSON.parse(value);
+            return parsed && typeof parsed === "object" && !Array.isArray(parsed);
+          } catch (_) {
+            return false;
+          }
+        }
+      },
+      pollMs: {value: 2000, required: true, validate: RED.validators.number()},
+      confirmationTimeoutMs: {value: 15000, required: true, validate: RED.validators.number()},
+      maxAttempts: {value: 2, required: true, validate: RED.validators.number()}
+    },
+    inputs: 1,
+    outputs: 2,
+    outputLabels: ["semantic source commands", "theatre target state"],
+    icon: "font-awesome/fa-play-circle",
+    label: function() { return this.name || "source capability controller"; }
+  });
+</script>
+
+<script type="text/html" data-template-name="home-source-capability-controller">
+  <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
+  <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area"></div>
+  <div class="form-row"><label for="node-input-sources">Source capabilities</label><input type="text" id="node-input-sources"></div>
+  <div class="form-row"><label for="node-input-pollMs">Poll milliseconds</label><input type="number" id="node-input-pollMs"></div>
+  <div class="form-row"><label for="node-input-confirmationTimeoutMs">Confirmation timeout</label><input type="number" id="node-input-confirmationTimeoutMs"></div>
+  <div class="form-row"><label for="node-input-maxAttempts">Maximum attempts</label><input type="number" id="node-input-maxAttempts"></div>
+</script>
+
+<script type="text/html" data-help-name="home-source-capability-controller">
+  <p>Coordinates configured source capabilities without containing source names, entity IDs or transport logic.</p>
+  <p>Send <code>msg.sourceCapability</code> with <code>kind: "intent"</code>, a request ID, generation, source ID and <code>activate</code> or <code>deactivate</code> action. Send adapter observations with <code>kind: "observed"</code>, source ID, generation, timestamp and status.</p>
+  <p>Source JSON maps deployment-owned IDs to <code>activation</code>, <code>deactivation</code> and <code>confirmation</code> capabilities. Control values are <code>command</code>, <code>external</code> or <code>unavailable</code>. Confirmation values are <code>active</code>, <code>available</code> or <code>unavailable</code>.</p>
+  <p>Output 1 emits semantic commands for a separate transport adapter. Output 2 emits generation-scoped theatre <code>target_state</code> events.</p>
+</script>

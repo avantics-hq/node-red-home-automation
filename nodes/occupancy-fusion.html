@@ -1,0 +1,32 @@
+<script type="text/javascript">
+  RED.nodes.registerType("home-occupancy-fusion", {
+    category: "function",
+    color: "#c7e9c0",
+    defaults: {
+      name: {value: ""},
+      area: {value: "room", required: true},
+      presenceMode: {value: "none", required: true}
+    },
+    inputs: 1,
+    outputs: 1,
+    icon: "font-awesome/fa-users",
+    label: function () { return this.name || this.area + " occupancy"; }
+  });
+</script>
+
+<script type="text/html" data-template-name="home-occupancy-fusion">
+  <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
+  <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area"></div>
+  <div class="form-row">
+    <label for="node-input-presenceMode">Presence sensor</label>
+    <select id="node-input-presenceMode">
+      <option value="none">None (PIR only)</option>
+      <option value="hold">Hold occupancy (PIR + mmWave)</option>
+    </select>
+  </div>
+</script>
+
+<script type="text/html" data-help-name="home-occupancy-fusion">
+  <p>Combines normalised <code>motion</code> and optional <code>presence</code> events into <code>msg.source = "occupancy"</code>.</p>
+  <p>PIR establishes occupancy. Presence can hold an established occupancy but cannot establish one by itself.</p>
+</script>

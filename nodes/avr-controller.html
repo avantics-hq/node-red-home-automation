@@ -1,0 +1,33 @@
+<script type="text/javascript">
+  RED.nodes.registerType("home-avr-controller", {
+    category: "function",
+    color: "#c7d9f1",
+    defaults: {
+      name: {value: ""},
+      area: {value: "lounge", required: true},
+      sources: {value: "{\"shield\":\"SAT/CBL\",\"playstation\":\"GAME\"}", required: true},
+      retryMs: {value: 2000, required: true, validate: RED.validators.number()},
+      maxAttempts: {value: 3, required: true, validate: RED.validators.number()}
+    },
+    inputs: 1,
+    outputs: 2,
+    outputLabels: ["Denon commands", "state and results"],
+    icon: "font-awesome/fa-volume-up",
+    label: function () { return this.name || this.area + " AVR controller"; }
+  });
+</script>
+
+<script type="text/html" data-template-name="home-avr-controller">
+  <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
+  <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area"></div>
+  <div class="form-row"><label for="node-input-sources">Sources</label><input type="text" id="node-input-sources"></div>
+  <div class="form-row"><label for="node-input-retryMs">Retry milliseconds</label><input type="number" id="node-input-retryMs"></div>
+  <div class="form-row"><label for="node-input-maxAttempts">Maximum attempts</label><input type="number" id="node-input-maxAttempts"></div>
+</script>
+
+<script type="text/html" data-help-name="home-avr-controller">
+  <p>Owns explicit power, main-zone and source targets for a Denon AVR.</p>
+  <p>Send protocol observations as <code>msg.avr = {kind: "observed", line: msg.payload}</code>.</p>
+  <p>Send requests as <code>msg.avr = {kind: "intent", requestId, generation, power: "on", source: "shield"}</code>. Omit <code>source</code> to preserve the current input, or use <code>power: "standby"</code> to stop the AVR.</p>
+  <p>Send <code>kind: "startup"</code> after deployment to discard stale observations and query the receiver. Output 1 connects to a TCP output node; output 2 emits state plus ready, failed, rejected and superseded results.</p>
+</script>

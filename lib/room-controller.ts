@@ -1,0 +1,432 @@
+"use strict";
+
+interface SunCalcApi {
+  getTimes(date: Date, latitude: number, longitude: number): {
+    sunrise: Date;
+    solarNoon: Date;
+    sunset: Date;
+    nadir: Date;
+  };
+}
+
+const SunCalc: SunCalcApi = require("suncalc");
+
+export interface RoomTarget {
+  id: string;
+  stateTopic: string;
+  commandTopic: string;
+}
+
+export interface RoomConfig {
+  area: string;
+  displayName: string;
+  targets: RoomTarget[];
+  initialSleep: boolean;
+  latitude: number;
+  longitude: number;
+  sleepBrightnessPct: number;
+  maxBrightnessPct: number;
+  minBrightnessPct: number;
+  sleepColorTempKelvin: number;
+  minColorTempKelvin: number;
+  maxColorTempKelvin: number;
+  refreshTransitionSeconds: number;
+  initialTransitionSeconds: number;
+}
+
+export interface RoomObservation {
+  on: boolean;
+  brightness: unknown;
+  color_temp: unknown;
+  observedAt: string;
+}
+
+export interface ExpectedCommand {
+  fingerprint: string;
+  expires: number;
+}
+
+export interface RoomState {
+  observed: Record<string, RoomObservation>;
+  desired: Record<string, boolean>;
+  manual: Record<string, boolean>;
+  expected: Record<string, ExpectedCommand[]>;
+  circadianEnabled: boolean;
+  sleeping: boolean;
+}
+
+export interface LightingEvent {
+  kind?: string;
+  targets?: string[];
+  target?: string;
+  state?: string;
+  values?: Record<string, unknown>;
+  updateOnOnly?: boolean;
+  manual?: boolean;
+  source?: string;
+  refresh?: boolean;
+  retained?: boolean;
+  enabled?: boolean;
+}
+
+export interface RoomMessage {
+  lighting?: LightingEvent;
+  topic?: string;
+  payload?: unknown;
+  retain?: boolean;
+}
+
+export interface RoomOutput {
+  topic: string;
+  payload: unknown;
+  retain: boolean;
+  lighting_command?: {area: string; target: string; source: string};
+}
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.max(minimum, Math.min(maximum, value));
+}
+
+export function parsePayload(payload: unknown): unknown {
+  if (typeof payload !== "string") return payload;
+  try { return JSON.parse(payload) as unknown; } catch { return payload; }
+}
+
+function stable(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stable);
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return Object.fromEntries(Object.keys(record).sort().map((key) => [key, stable(record[key])]));
+  }
+  return value;
+}
+
+export function fingerprint(payload: unknown): string {
+  return JSON.stringify(stable(payload));
+}
+
+export function createRoomState(
+  config: RoomConfig,
+  saved: Partial<RoomState> = {}
+): RoomState {
+  return {
+    observed: {...(saved.observed || {})},
+    desired: {...(saved.desired || {})},
+    manual: {...(saved.manual || {})},
+    expected: Object.fromEntries(
+      Object.entries(saved.expected || {}).map(([target, entries]) => [target, [...entries]])
+    ),
+    circadianEnabled: saved.circadianEnabled !== false,
+    sleeping: saved.sleeping === undefined ? config.initialSleep : saved.sleeping === true
+  };
+}
+
+export function sunPosition(now: Date, config: Pick<RoomConfig, "latitude" | "longitude">): number {
+  const events: Array<{name: string; at: number}> = [];
+  for (const dayOffset of [-1, 0, 1]) {
+    const date = new Date(now);
+    date.setHours(12, 0, 0, 0);
+    date.setDate(date.getDate() + dayOffset);
+    const times = SunCalc.getTimes(date, config.latitude, config.longitude);
+    for (const [name, at] of [
+      ["sunrise", times.sunrise],
+      ["noon", times.solarNoon],
+      ["sunset", times.sunset],
+      ["midnight", times.nadir]
+    ] as const) {
+      if (at instanceof Date && Number.isFinite(at.getTime())) events.push({name, at: at.getTime()});
+    }
+  }
+  events.sort((left, right) => left.at - right.at);
+  const target = now.getTime();
+  const nextIndex = events.findIndex((event) => event.at > target);
+  if (nextIndex < 1) throw new Error("cannot bracket the current solar event");
+  const previous = events[nextIndex - 1];
+  const next = events[nextIndex];
+  if (!previous || !next) throw new Error("cannot bracket the current solar event");
+  const nextIsHorizon = next.name === "sunrise" || next.name === "sunset";
+  const h = nextIsHorizon ? previous.at : next.at;
+  const x = nextIsHorizon ? next.at : previous.at;
+  const sign = next.name === "sunset" || next.name === "noon" ? 1 : -1;
+  return clamp(sign * (1 - Math.pow((target - h) / (h - x), 2)), -1, 1);
+}
+
+export function adaptivePayload(
+  lightState: string,
+  isRefresh: boolean,
+  sleeping: boolean,
+  now: Date,
+  config: RoomConfig
+) {
+  if (lightState === "OFF") return {state: lightState};
+  const position = sunPosition(now, config);
+  const brightnessPct = sleeping
+    ? config.sleepBrightnessPct
+    : position > 0
+      ? config.maxBrightnessPct
+      : (config.maxBrightnessPct - config.minBrightnessPct) * (1 + position) + config.minBrightnessPct;
+  const kelvin = sleeping
+    ? config.sleepColorTempKelvin
+    : position > 0
+      ? 5 * Math.round((config.minColorTempKelvin + (config.maxColorTempKelvin - config.minColorTempKelvin) * position) / 5)
+      : config.minColorTempKelvin;
+  return {
+    state: lightState,
+    brightness: clamp(Math.round(brightnessPct * 254 / 100), 1, 254),
+    color_temp: Math.floor(1000000 / kelvin),
+    transition: isRefresh ? config.refreshTransitionSeconds : config.initialTransitionSeconds
+  };
+}
+
+export function transitionRoom(
+  saved: Partial<RoomState> | undefined,
+  msg: RoomMessage,
+  config: RoomConfig,
+  nowValue: Date | string | number = new Date()
+) {
+  const now = nowValue instanceof Date ? nowValue : new Date(nowValue);
+  const nowMs = now.getTime();
+  const state = createRoomState(config, saved);
+  const targetById = Object.fromEntries(config.targets.map((target) => [target.id, target]));
+  const traces: Array<{event: string; outcome: string; reason: string | null; details: Record<string, unknown>}> = [];
+  const outputs: RoomOutput[] = [];
+
+  function trace(event: string, outcome: string, reason: string | null = null, details: Record<string, unknown> = {}) {
+    traces.push({event, outcome, reason, details});
+  }
+
+  function targetForTopic(topic: string | undefined, field: "stateTopic" | "commandTopic") {
+    return config.targets.find((target) => target[field] === topic);
+  }
+
+  function intendedOn(targetId: string): boolean {
+    if (Object.hasOwn(state.desired, targetId)) return state.desired[targetId] === true;
+    return state.observed[targetId]?.on === true;
+  }
+
+  function rememberExpected(targetId: string, payload: unknown) {
+    const queue = (state.expected[targetId] || []).filter((entry) => entry.expires > nowMs);
+    queue.push({fingerprint: fingerprint(payload), expires: nowMs + 5000});
+    state.expected[targetId] = queue.slice(-8);
+  }
+
+  function command(targetId: string, payload: unknown, source: string): RoomOutput | null {
+    const target = targetById[targetId];
+    if (!target) return null;
+    rememberExpected(targetId, payload);
+    return {
+      topic: target.commandTopic,
+      payload,
+      retain: false,
+      lighting_command: {area: config.area, target: targetId, source}
+    };
+  }
+
+  function discoveryMessages(): RoomOutput[] {
+    const objectId = config.area + "_circadian_lighting";
+    return [
+      {
+        topic: "homeassistant/switch/" + objectId + "/config",
+        payload: {
+          name: config.displayName + " Circadian Lighting",
+          unique_id: objectId,
+          default_entity_id: "switch." + objectId,
+          icon: "mdi:theme-light-dark",
+          command_topic: "home/" + config.area + "/circadian/set",
+          state_topic: "home/" + config.area + "/circadian/state",
+          payload_on: "ON",
+          payload_off: "OFF",
+          optimistic: false,
+          device: {
+            identifiers: ["nodered_" + config.area + "_lighting"],
+            name: config.displayName + " Lighting Controller",
+            manufacturer: "Node-RED",
+            model: "Composable circadian lighting"
+          }
+        },
+        retain: true
+      },
+      {
+        topic: "home/" + config.area + "/circadian/state",
+        payload: state.circadianEnabled ? "ON" : "OFF",
+        retain: true
+      }
+    ];
+  }
+
+  function refreshCommands(source: string): RoomOutput[] {
+    if (!state.circadianEnabled) return [];
+    const commands: Array<RoomOutput | null> = [];
+    for (const target of config.targets) {
+      if (!intendedOn(target.id) || state.manual[target.id] === true) continue;
+      commands.push(command(
+        target.id,
+        adaptivePayload("ON", true, state.sleeping, now, config),
+        source
+      ));
+    }
+    return commands.filter((entry): entry is RoomOutput => entry !== null);
+  }
+
+  function emitIntent(event: LightingEvent): RoomOutput[] {
+    const targets = Array.isArray(event.targets)
+      ? event.targets
+      : config.targets.map((target) => target.id);
+    const requestedState = String(event.state || "").toUpperCase();
+    if (!["ON", "OFF", "TOGGLE"].includes(requestedState)) return [];
+    const commands: Array<RoomOutput | null> = [];
+    const manualValues = event.values && typeof event.values === "object" ? event.values : null;
+
+    for (const targetId of targets) {
+      if (!targetById[targetId]) continue;
+      const wasOn = intendedOn(targetId);
+      const resolvedState = requestedState === "TOGGLE" ? (wasOn ? "OFF" : "ON") : requestedState;
+      if (event.updateOnOnly === true && !wasOn) continue;
+      if (resolvedState === "OFF") state.manual[targetId] = false;
+      if (event.manual === true || manualValues) state.manual[targetId] = true;
+      if (resolvedState === "ON" && wasOn && event.source === "motion" && !manualValues) continue;
+
+      let payload: Record<string, unknown>;
+      if (resolvedState === "OFF") {
+        payload = {state: "OFF"};
+      } else if (manualValues) {
+        payload = {state: "ON", ...manualValues};
+        if (!Object.hasOwn(payload, "transition")) {
+          payload.transition = config.initialTransitionSeconds;
+        }
+      } else if (state.circadianEnabled && state.manual[targetId] !== true) {
+        payload = adaptivePayload("ON", event.refresh === true, state.sleeping, now, config);
+      } else {
+        payload = {state: "ON"};
+      }
+      state.desired[targetId] = resolvedState === "ON";
+      commands.push(command(targetId, payload, event.source || "intent"));
+    }
+    return commands.filter((entry): entry is RoomOutput => entry !== null);
+  }
+
+  const event: LightingEvent = msg.lighting || {};
+  if (event.kind === "startup") {
+    outputs.push(...discoveryMessages());
+  } else if (event.kind === "observed") {
+    const target = event.target ? targetById[event.target] : targetForTopic(msg.topic, "stateTopic");
+    const parsed = parsePayload(msg.payload);
+    const payload = parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : null;
+    if (target && payload && ["ON", "OFF"].includes(String(payload.state).toUpperCase())) {
+      const previousOn = state.observed[target.id]?.on;
+      const nextOn = String(payload.state).toUpperCase() === "ON";
+      state.observed[target.id] = {
+        on: nextOn,
+        brightness: payload.brightness ?? null,
+        color_temp: payload.color_temp ?? null,
+        observedAt: now.toISOString()
+      };
+      if (previousOn !== nextOn) {
+        trace("state-observed", "changed", null, {
+          target: target.id,
+          state: nextOn ? "ON" : "OFF"
+        });
+      }
+      if (!Object.hasOwn(state.desired, target.id)) state.desired[target.id] = nextOn;
+      if (!nextOn) state.manual[target.id] = false;
+    }
+  } else if (event.kind === "command-observed") {
+    const target = event.target ? targetById[event.target] : targetForTopic(msg.topic, "commandTopic");
+    const parsed = parsePayload(msg.payload);
+    const payload = parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : null;
+    if (msg.retain !== true && event.retained !== true && target && payload) {
+      const queue = (state.expected[target.id] || []).filter((entry) => entry.expires > nowMs);
+      const ownIndex = queue.findIndex((entry) => entry.fingerprint === fingerprint(payload));
+      if (ownIndex >= 0) {
+        queue.splice(ownIndex, 1);
+        state.expected[target.id] = queue;
+      } else {
+        state.expected[target.id] = queue;
+        const requestedState = String(payload.state || "").toUpperCase();
+        const fields = [
+          "brightness", "brightness_percent", "color", "color_temp", "color_temp_kelvin",
+          "effect", "hue", "saturation", "x", "y"
+        ];
+        if (requestedState === "OFF") {
+          state.desired[target.id] = false;
+          state.manual[target.id] = false;
+        } else if (requestedState === "ON") {
+          state.desired[target.id] = true;
+          if (fields.some((field) => Object.hasOwn(payload, field))) {
+            state.manual[target.id] = true;
+          } else if (state.circadianEnabled && state.manual[target.id] !== true) {
+            const corrective = command(
+              target.id,
+              adaptivePayload("ON", false, state.sleeping, now, config),
+              "external-bare-on"
+            );
+            if (corrective) outputs.push(corrective);
+          }
+        } else if (requestedState === "TOGGLE") {
+          state.desired[target.id] = !intendedOn(target.id);
+        }
+        trace("external-command", "observed", null, {
+          target: target.id,
+          state: requestedState || "UNKNOWN",
+          manual: state.manual[target.id] === true
+        });
+      }
+    }
+  } else if (event.kind === "circadian") {
+    const previous = state.circadianEnabled;
+    state.circadianEnabled = event.enabled === true;
+    if (previous !== state.circadianEnabled) {
+      trace("circadian", "changed", null, {enabled: state.circadianEnabled});
+    }
+    outputs.push({
+      topic: "home/" + config.area + "/circadian/state",
+      payload: state.circadianEnabled ? "ON" : "OFF",
+      retain: true
+    });
+    if (state.circadianEnabled) {
+      state.manual = {};
+      outputs.push(...refreshCommands("circadian-enabled"));
+    }
+  } else if (event.kind === "sleep") {
+    const previous = state.sleeping;
+    state.sleeping = event.enabled === true;
+    if (previous !== state.sleeping) trace("sleep", "changed", null, {enabled: state.sleeping});
+    outputs.push(...refreshCommands("sleep-policy"));
+  } else if (event.kind === "refresh") {
+    outputs.push(...refreshCommands("periodic-refresh"));
+  } else if (event.kind === "intent") {
+    outputs.push(...emitIntent(event));
+    const commands = outputs.flatMap((message) => {
+      if (!message.lighting_command) return [];
+      const payload = message.payload && typeof message.payload === "object"
+        ? message.payload as Record<string, unknown>
+        : {};
+      return [{
+        target: message.lighting_command.target,
+        state: String(payload.state || "").toUpperCase()
+      }];
+    });
+    trace("intent", commands.length ? "commanded" : "suppressed", commands.length ? null : "no-command-required", {
+      source: event.source || "intent",
+      state: String(event.state || "").toUpperCase(),
+      targets: Array.isArray(event.targets)
+        ? event.targets
+        : config.targets.map((target) => target.id),
+      commands
+    });
+  }
+
+  const onCount = Object.values(state.desired).filter(Boolean).length;
+  const manualCount = Object.values(state.manual).filter(Boolean).length;
+  return {
+    state,
+    outputs,
+    traces,
+    status: {
+      circadianEnabled: state.circadianEnabled,
+      sleeping: state.sleeping,
+      onCount,
+      manualCount
+    }
+  };
+}
