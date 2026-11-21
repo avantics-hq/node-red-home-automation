@@ -239,6 +239,56 @@ test("new requests supersede unfinished work and stale target state is inert", (
   assert.equal(result.traces.some((entry) => entry.reason === "stale-generation"), true);
 });
 
+test("new requests supersede every unfinished activity boundary", () => {
+  const preparing = request(undefined, "projector_shield", 1);
+  const confirming = target(preparing.state, "display", "ready", 1, 0.1);
+  const transitioning = target(preparing.state, "display", "transitioning", 1, 0.1);
+  const waiting = confirmCore(request(undefined, "projector_ps5", 1).state, 1);
+  const boundaries = [
+    ["preparing", preparing.state],
+    ["confirming", confirming.state],
+    ["transitioning", transitioning.state],
+    ["waiting_for_source", waiting.state]
+  ] as const;
+
+  for (const [phase, state] of boundaries) {
+    assert.equal(state.phase, phase);
+    let result = request(state, "tv_shield", 2, 2, `supersede-${phase}`);
+    assert.equal(result.events.some((entry) => entry.theatre.kind === "superseded"), true);
+    assert.equal(result.commands.length, 5);
+    assert.equal(result.state.desired?.activity, "tv_shield");
+
+    result = target(result.state, "display", "ready", 1, 2.1);
+    assert.equal(result.state.targets.display, null);
+    assert.equal(result.commands.length, 0);
+    assert.equal(result.traces.some((entry) => entry.reason === "stale-generation"), true);
+  }
+});
+
+test("startup from every active phase refreshes observations without replaying intents", () => {
+  const preparing = request(undefined, "projector_shield", 1);
+  const confirming = target(preparing.state, "display", "ready", 1, 0.1);
+  const transitioning = target(preparing.state, "display", "transitioning", 1, 0.1);
+  const waiting = confirmCore(request(undefined, "projector_ps5", 1).state, 1);
+  const ready = confirmActivity("tv_shield");
+
+  for (const state of [
+    preparing.state,
+    confirming.state,
+    transitioning.state,
+    waiting.state,
+    ready.state
+  ]) {
+    const result = apply(state, {kind: "startup"}, 3);
+    assert.equal(result.state.phase, "confirming");
+    assert.equal(result.state.currentActivity, "unknown");
+    assert.equal(result.commands.length, 5);
+    assert.equal(result.commands.every((command) => command.kind === "refresh"), true);
+    assert.equal(result.traces.some((entry) =>
+      entry.event === "startup" && entry.outcome === "refreshing"), true);
+  }
+});
+
 test("same-generation conflicts are rejected while exact duplicates are idempotent", () => {
   let result = request(undefined, "tv_shield", 4, 0, "request-4");
   result = request(result.state, "tv_shield", 4, 0.1, "request-4");

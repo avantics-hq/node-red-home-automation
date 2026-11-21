@@ -366,7 +366,7 @@
       <div class="meta-row">
         <span class="pill">Updated 21 November 2026</span>
         <span class="pill">Package 1.8.1 · live deployment 1.8.1</span>
-        <span class="pill">Next: Phase 10 failure and recovery acceptance</span>
+        <span class="pill">Next: Phase 11 reproducible release workflow</span>
       </div>
     </div>
   </header>
@@ -396,7 +396,7 @@
     <section aria-labelledby="baseline-title">
       <h2 id="baseline-title">Current baseline</h2>
       <div class="summary-grid">
-        <div class="metric"><strong>85/85</strong><span>Package tests passing</span></div>
+        <div class="metric"><strong>87/87</strong><span>Package tests passing</span></div>
         <div class="metric"><strong>5</strong><span>Deterministic target controllers packaged</span></div>
         <div class="metric"><strong>5</strong><span>Configured activity profiles</span></div>
         <div class="metric"><strong>1.8.1</strong><span>Installed Node-RED package</span></div>
@@ -405,13 +405,13 @@
         <table>
           <thead><tr><th>Layer</th><th>Current state</th><th>Gap</th></tr></thead>
           <tbody>
-            <tr><td>AVR power and source</td><td>Source-controlled, tested and live</td><td>Volume ownership and richer availability</td></tr>
-            <tr><td>TV, projector and screen</td><td>Latest-request-wins controller is live</td><td>Explicit primary/fallback health</td></tr>
-            <tr><td>Whole activity</td><td>One production controller owns all five configured activity profiles</td><td>Failure and recovery acceptance</td></tr>
-            <tr><td>Shield</td><td>HA fallback is live, named and confirmed from the configured Shield entity</td><td>Direct Android TV Remote transport remains optional</td></tr>
+            <tr><td>AVR power and source</td><td>Source-controlled, tested and live; bounded TCP failure and recovery proved</td><td>Volume ownership and richer availability</td></tr>
+            <tr><td>TV, projector and screen</td><td>Latest-request-wins controller passed direct transport failure and restart acceptance</td><td>Release automation</td></tr>
+            <tr><td>Whole activity</td><td>Production restart, supersession, stale-result rejection and fault recovery passed</td><td>Release automation</td></tr>
+            <tr><td>Shield</td><td>Named HA fallback passed success, visible timeout and newer-request recovery</td><td>Direct Android TV Remote transport remains optional</td></tr>
             <tr><td>PlayStation 5</td><td>Explicit unavailable capability; no invented power-on success</td><td>Remain <code>waiting_for_source</code> until a proved observation path exists</td></tr>
-            <tr><td>Lighting and backlighting</td><td>Semantic owners are live with observed confirmation and existing occupancy/manual ownership preserved</td><td>Failure and recovery acceptance</td></tr>
-            <tr><td>Home Assistant</td><td>Three dashboards use the production activity select; duplicate lifecycle controls are removed</td><td>Failure and recovery UI acceptance</td></tr>
+            <tr><td>Lighting and backlighting</td><td>Restart emits observation only; existing occupancy/manual ownership remains preserved</td><td>Release automation</td></tr>
+            <tr><td>Home Assistant</td><td>Three dashboards use the production activity select and expose controller health</td><td>Release automation</td></tr>
             <tr><td>Release process</td><td>Strict TypeScript build, compiled tests, public scans and CI-gated Pages deployment</td><td>Tracked release command</td></tr>
             <tr><td>Legacy HA commands</td><td>Retired from the scoped dashboards, scripts, MQTT aliases and flow graph</td><td>Ongoing ownership scan</td></tr>
           </tbody>
@@ -605,14 +605,15 @@
         </article>
 
         <article class="phase" data-phase="recovery">
-          <div class="phase-head"><div class="phase-number">10</div><div class="phase-title"><h3>Failure and recovery acceptance</h3><p>Prove safe outcomes under realistic faults.</p></div><span class="status gate">Maintenance gate</span></div>
+          <div class="phase-head"><div class="phase-number">10</div><div class="phase-title"><h3>Failure and recovery acceptance</h3><p>Prove safe outcomes under realistic faults.</p></div><span class="status complete">Complete</span></div>
           <div class="phase-body">
             <div class="tasks">
-              <div class="task"><input id="p10-1" data-task="recovery-restart" type="checkbox"><label for="p10-1">Restart Node-RED during each transition phase.</label></div>
-              <div class="task"><input id="p10-2" data-task="recovery-devices" type="checkbox"><label for="p10-2">Exercise unavailable TV, AVR and Shelly transports with bounded failure.</label></div>
-              <div class="task"><input id="p10-3" data-task="recovery-supersede" type="checkbox"><label for="p10-3">Supersede requests at every waiting boundary and reject delayed work.</label></div>
-              <div class="task"><input id="p10-4" data-task="recovery-fallback" type="checkbox"><label for="p10-4">Prove explicit fallback use and fallback failure are visible.</label></div>
+              <div class="task"><input id="p10-1" data-task="recovery-restart" type="checkbox" checked><label for="p10-1">Restart Node-RED during each transition phase.</label></div>
+              <div class="task"><input id="p10-2" data-task="recovery-devices" type="checkbox" checked><label for="p10-2">Exercise unavailable TV, AVR and Shelly transports with bounded failure.</label></div>
+              <div class="task"><input id="p10-3" data-task="recovery-supersede" type="checkbox" checked><label for="p10-3">Supersede requests at every waiting boundary and reject delayed work.</label></div>
+              <div class="task"><input id="p10-4" data-task="recovery-fallback" type="checkbox" checked><label for="p10-4">Prove explicit fallback use and fallback failure are visible.</label></div>
             </div>
+            <div class="gate-box"><strong>Gate passed:</strong> four production restarts covered preparation, transition, confirmation and source-wait boundaries without replaying state-changing commands. Unavailable TV, AVR and both Shelly transports failed within configured bounds; the explicit HA fallback exposed its confirmation timeout. Newer requests recovered every fault, delayed target results were rejected, all temporary probes were removed, and the requested Cinema activity remained the final ready state. The package now has 87 passing tests.</div>
           </div>
         </article>
 
