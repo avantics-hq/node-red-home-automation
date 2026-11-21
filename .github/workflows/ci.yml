@@ -4,7 +4,7 @@ name: CI
 on:
   push:
     branches: [main]
-  pull_request:
+    tags: ["v*"]
 
 permissions:
   contents: read
@@ -74,3 +74,44 @@ jobs:
       - name: Deploy roadmap
         id: deployment
         uses: actions/deploy-pages@v5
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate tag and pack release
+        id: package
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          test "${GITHUB_REF_NAME}" = "v${version}"
+          mkdir release
+          npm pack --pack-destination release
+          package_file="release/avantics-node-red-home-automation-${version}.tgz"
+          sha256sum "${package_file}" > "${package_file}.sha256"
+          echo "file=${package_file}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "${GITHUB_REF_NAME}"
+          "${{ steps.package.outputs.file }}"
+          "${{ steps.package.outputs.file }}.sha256"
+          --generate-notes
+          --title "${GITHUB_REF_NAME}"

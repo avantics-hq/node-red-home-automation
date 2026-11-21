@@ -45,6 +45,46 @@ test("retained raw state is a baseline and a single edge toggles after the windo
   assert.equal(messages(elapsed)[0]?.lighting.state, "TOGGLE");
 });
 
+test("retained state re-baselines a known switch without replaying an edge", () => {
+  const baseline = transitionSwitchPolicy(undefined, {
+    source: "switch",
+    payload: {state: false},
+    retain: true
+  }, config, 1000);
+  const edge = transitionSwitchPolicy(baseline.state, {
+    source: "switch",
+    payload: {state: true}
+  }, config, 2000);
+  const timer = edge.effects.find(
+    (effect): effect is Extract<SwitchPolicyEffect, {kind: "schedule-switch-timer"}> =>
+      effect.kind === "schedule-switch-timer"
+  );
+  assert.ok(timer);
+
+  const replay = transitionSwitchPolicy(edge.state, {
+    source: "switch",
+    payload: {state: false},
+    retain: true
+  }, config, 2100);
+  assert.equal(messages(replay).length, 0);
+  assert.equal(replay.effects.some((effect) => effect.kind === "cancel-switch-timer"), true);
+  assert.equal(replay.traces.at(-1)?.reason, "retained-baseline");
+
+  const stale = transitionSwitchPolicy(replay.state, {
+    source: "switch-timer",
+    generation: timer.generation,
+    switchAt: timer.switchAt
+  }, config, 2500);
+  assert.equal(messages(stale).length, 0);
+
+  const duplicate = transitionSwitchPolicy(stale.state, {
+    source: "switch",
+    payload: {state: false}
+  }, config, 3000);
+  assert.equal(duplicate.effects.some((effect) => effect.kind === "schedule-switch-timer"), false);
+  assert.equal(duplicate.traces.at(-1)?.reason, "unchanged");
+});
+
 test("a second raw edge in the window cancels the toggle and requests full brightness", () => {
   const baseline = transitionSwitchPolicy(undefined, {
     source: "switch",

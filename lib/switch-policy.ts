@@ -112,10 +112,14 @@ export function transitionSwitchPolicy(
       const changed = firstState || nextState !== state.switchState;
       state.switchStateKnown = true;
       state.switchState = nextState;
-      if (!changed) {
+      if (input.retain === true) {
+        if (state.timerDueAt !== null || state.switchAt) {
+          state.switchAt = 0;
+          cancelTimer("retained-baseline");
+        }
+        trace("switch", "ignored", "retained-baseline", {changed});
+      } else if (!changed) {
         trace("switch", "ignored", "unchanged");
-      } else if (firstState && input.retain === true) {
-        trace("switch", "ignored", "retained-baseline");
       } else if (state.switchAt && now - state.switchAt <= config.switchWindowMs) {
         state.switchAt = 0;
         cancelTimer("double-edge");

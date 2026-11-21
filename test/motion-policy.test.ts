@@ -120,3 +120,36 @@ test("retained switch startup is inert, single edge toggles and double edge is f
   assert.deepEqual(sendEffects(second)[0]?.lighting.values, {brightness: 254});
   assert.equal(sendEffects(second)[0]?.lighting.manual, true);
 });
+
+test("retained switch state re-baselines persisted motion policy state", () => {
+  const baseline = transitionMotion(undefined, {
+    source: "switch",
+    payload: {state: false},
+    retain: true
+  }, config, true, 1000);
+  const edge = transitionMotion(baseline.state, {
+    source: "switch",
+    payload: {state: true}
+  }, config, true, 2000);
+  const timer = edge.effects.find(
+    (effect): effect is Extract<MotionEffect, {kind: "schedule-switch-timer"}> =>
+      effect.kind === "schedule-switch-timer"
+  );
+  assert.ok(timer);
+
+  const replay = transitionMotion(edge.state, {
+    source: "switch",
+    payload: {state: false},
+    retain: true
+  }, config, true, 2100);
+  assert.equal(sendEffects(replay).length, 0);
+  assert.equal(replay.effects.some((effect) => effect.kind === "cancel-switch-timer"), true);
+  assert.equal(replay.traces.at(-1)?.reason, "retained-baseline");
+
+  const stale = transitionMotion(replay.state, {
+    source: "switch-timer",
+    generation: timer.generation,
+    switchAt: timer.switchAt
+  }, config, true, 2500);
+  assert.equal(sendEffects(stale).length, 0);
+});

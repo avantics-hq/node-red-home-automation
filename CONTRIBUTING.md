@@ -23,6 +23,18 @@ npm run hooks:install
 
 The hook runs the public-content scan, dependency audit, strict TypeScript build, and compiled tests. It also scans staged changes with `gitleaks` when the binary is installed. CI always runs the full `gitleaks` scan.
 
+## Releases
+
+`main` pushes run CI and publish Pages. Package releases are intentional:
+
+1. Commit the package version and complete the deployment smoke.
+2. Create and push the matching `v<version>` tag.
+3. The same CI workflow repeats the package gates, validates the tag against
+   `package.json`, and creates a GitHub Release containing the package tarball
+   and its SHA-256 checksum.
+
+Documentation-only commits do not receive package tags or releases.
+
 ## Repository boundaries
 
 - Keep device addresses, precise coordinates, credentials, exported flows, and deployment state out of the repository.

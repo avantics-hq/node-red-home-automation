@@ -252,7 +252,13 @@ export function transitionMotion(
       const changed = firstState || nextState !== state.switchState;
       state.switchStateKnown = true;
       state.switchState = nextState;
-      if (changed && !(firstState && input.retain === true)) {
+      if (input.retain === true) {
+        if (state.switchTimerDueAt !== null || state.switchAt) {
+          state.switchAt = 0;
+          cancelSwitchTimer("retained-baseline");
+        }
+        trace("switch", "ignored", "retained-baseline", {changed});
+      } else if (changed) {
         cancelOffTimer("wall-switch");
         const previousAt = state.switchAt;
         if (previousAt && now - previousAt <= config.switchWindowMs) {
@@ -278,6 +284,8 @@ export function transitionMotion(
             targets: config.onTargets
           });
         }
+      } else {
+        trace("switch", "ignored", "unchanged");
       }
     }
   } else if (source === "switch-timer") {
