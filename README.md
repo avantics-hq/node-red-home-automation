@@ -69,7 +69,7 @@ npm pack
 Install the resulting tarball through **Node-RED → Manage palette → Install → Upload module**, or from a Node-RED user directory:
 
 ```sh
-npm install /path/to/avantics-node-red-home-automation-1.13.0.tgz
+npm install /path/to/avantics-node-red-home-automation-1.14.1.tgz
 ```
 
 Add the installed nodes from the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.
@@ -87,6 +87,11 @@ budget, 95% success objective, 20 outcomes and five samples before normal
 evaluation; active timeouts and explicit failures breach immediately. Expected
 `waiting_for_source` and physical manual ownership do not create false
 operational failures. Retained request messages are deliberately inert.
+
+MQTT state topics may be retained so controllers can rebuild observed state
+after a restart. Command and request topics must not be retained: the room
+controller treats a retained command-topic delivery as historical input and
+will not replay it.
 
 Unsolicited display, AVR, source, and backlighting changes latch manual
 ownership instead of issuing corrective commands. A newer explicit activity

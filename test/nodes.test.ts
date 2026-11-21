@@ -235,6 +235,15 @@ test("room adapter publishes startup messages and standard traces", async (t) =>
   });
   const commandPayload = commanded[0]?.[0]?.[0]?.payload as {state?: string} | undefined;
   assert.equal(commandPayload?.state, "OFF");
+  assert.deepEqual(
+    await receive<SendEnvelope>(node, {
+      topic: "home/kitchen/light/group/cooking/set",
+      payload: {state: "ON"},
+      retain: true,
+      lighting: {kind: "command-observed", target: "cooking"}
+    }),
+    []
+  );
   const trace = traces(node);
   assert.equal(trace.at(-1)?.component, "room-controller");
   assert.equal(trace.at(-1)?.event, "intent");

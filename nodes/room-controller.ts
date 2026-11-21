@@ -129,7 +129,8 @@ const registerRoomController: NodeInitializer = (RED) => {
             ? msg.lighting as RoomMessage["lighting"]
             : undefined,
           topic: typeof msg.topic === "string" ? msg.topic : undefined,
-          payload: msg.payload
+          payload: msg.payload,
+          retain: msg.retain === true
         }, send);
         done();
       } catch (error) {
