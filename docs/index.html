@@ -365,9 +365,9 @@
       </p>
       <div class="meta-row">
         <span class="pill">Updated 21 November 2026</span>
-        <span class="pill">Package 1.9.0 · live deployment 1.9.0</span>
+        <span class="pill">Package 1.10.0 · live deployment 1.10.0</span>
         <span class="pill">Core home-theatre programme complete</span>
-        <span class="pill">Next: operational SLOs and manual-control UX</span>
+        <span class="pill">Next: friendly activity profiles</span>
       </div>
     </div>
   </header>
@@ -397,10 +397,10 @@
     <section aria-labelledby="baseline-title">
       <h2 id="baseline-title">Current baseline</h2>
       <div class="summary-grid">
-        <div class="metric"><strong>94/94</strong><span>Package tests passing</span></div>
+        <div class="metric"><strong>99/99</strong><span>Package tests passing</span></div>
         <div class="metric"><strong>5</strong><span>Deterministic target controllers packaged</span></div>
         <div class="metric"><strong>5</strong><span>Configured activity profiles</span></div>
-        <div class="metric"><strong>1.9.0</strong><span>Installed Node-RED package</span></div>
+        <div class="metric"><strong>1.10.0</strong><span>Installed Node-RED package</span></div>
       </div>
       <div class="gate-box" style="margin-top: 18px;"><strong>Core delivery complete:</strong> one production activity owner now coordinates display, AVR, source, lighting and backlighting; all scoped legacy command paths are retired; restart, recovery, manual ownership, failure and release behavior are proved. Remaining items below are optional product and operational improvements, not unfinished migration work.</div>
       <div class="table-wrap" style="margin-top: 18px;">
@@ -409,11 +409,11 @@
           <tbody>
             <tr><td>AVR power and source</td><td>Source-controlled, tested and live; bounded failure recovery and non-fighting physical-remote ownership proved</td><td>Optional volume ownership and trend thresholds</td></tr>
             <tr><td>TV, projector and screen</td><td>Latest-request-wins controller passed direct transport failure, restart and manual-override acceptance</td><td>Replace fallback transport only when a direct path is proved safer</td></tr>
-            <tr><td>Whole activity</td><td>Restart, supersession, stale rejection, clean physical-state adoption, ambiguous safe Off and metrics passed</td><td>No core gap; optional UX and SLO work only</td></tr>
+            <tr><td>Whole activity</td><td>Restart, supersession, stale rejection, clean physical-state adoption, ambiguous safe Off, metrics and rolling SLO evaluation passed</td><td>No core gap; optional friendlier profile UX only</td></tr>
             <tr><td>Shield</td><td>Named HA fallback exposes use and failure evidence</td><td>Direct Android TV Remote transport remains optional</td></tr>
             <tr><td>PlayStation 5</td><td>Explicit unavailable capability; no invented power-on success</td><td>Add only when a real power/readiness observation path exists</td></tr>
-            <tr><td>Lighting and backlighting</td><td>Occupancy/manual ownership is preserved; latency, retry and availability evidence is published</td><td>Turn evidence into long-term operational thresholds</td></tr>
-            <tr><td>Home Assistant</td><td>Three dashboards use the activity contract; controller health and transition metrics are discovered</td><td>Manual-control banner, recovery guidance and friendlier profile UX</td></tr>
+            <tr><td>Lighting and backlighting</td><td>Kitchen, Hallway and Lounge use shared ownership components; manual state and rapid wall-switch full brightness are preserved</td><td>Optional Shelly-local failover proof</td></tr>
+            <tr><td>Home Assistant</td><td>Three dashboards expose activity health, actionable SLO breaches, manual ownership and explicit recovery choices</td><td>Friendlier profile UX</td></tr>
             <tr><td>Release process</td><td>One transactional command owns build, backup, deployment, smoke, rollback and release records</td><td>Package publication remains intentionally out of scope</td></tr>
             <tr><td>Legacy HA commands</td><td>Retired from the scoped dashboards, scripts, MQTT aliases and flow graph</td><td>Ongoing ownership scan</td></tr>
           </tbody>
@@ -646,6 +646,19 @@
             <div class="gate-box"><strong>Gate passed:</strong> package 1.9.0 is deployed with a recovery coordinator and retained Home Assistant metrics discovery. Deployed-code probes proved clean physical-state adoption emits no commands, ambiguous startup recovery produces one five-target Off plan, and unsolicited AVR or display changes emit no corrective commands. A production restart preserved the active activity, returned all five targets to ready and published measured latency, retries, fallback use and availability.</div>
           </div>
         </article>
+
+        <article class="phase" data-phase="operations">
+          <div class="phase-head"><div class="phase-number">13</div><div class="phase-title"><h3>Operational objectives and control UX</h3><p>Turn controller evidence into actionable status and complete shared Lounge lighting ownership.</p></div><span class="status complete">Complete</span></div>
+          <div class="phase-body">
+            <div class="tasks">
+              <div class="task"><input id="p13-1" data-task="operations-slo" type="checkbox" checked><label for="p13-1">Evaluate rolling transition success and latency against explicit operational objectives.</label></div>
+              <div class="task"><input id="p13-2" data-task="operations-ux" type="checkbox" checked><label for="p13-2">Show activity status, manual ownership and explicit recovery choices on every Home Assistant activity surface.</label></div>
+              <div class="task"><input id="p13-3" data-task="operations-lounge" type="checkbox" checked><label for="p13-3">Move Lounge lighting to the shared policy and room controller while preserving rapid-switch full brightness.</label></div>
+              <div class="task"><input id="p13-4" data-task="operations-proof" type="checkbox" checked><label for="p13-4">Deploy transactionally and prove restart reconciliation, discovery, ownership and wall-control behavior.</label></div>
+            </div>
+            <div class="gate-box"><strong>Gate passed:</strong> package 1.10.0 evaluates a bounded 20-outcome window against a 95% success objective and 60-second transition budget, while explicit failures and active transition timeouts breach immediately. Home Assistant exposes the SLO and manual-recovery choices. Lounge lighting now has one shared command owner; live wall edges toggled the group, and a deployed-code probe proved a second edge inside 500 ms emits manual On at brightness 254 without publishing a test command.</div>
+          </div>
+        </article>
       </div>
     </section>
 
@@ -688,12 +701,10 @@
       <h2 id="extensions-title">Next improvement priorities</h2>
       <p class="note">Ordered by value from the stable foundation; these are optional increments rather than missing core delivery.</p>
       <div class="backlog">
-        <div class="backlog-item"><h3>1. Metrics to SLOs</h3><p>Trend transition latency, retries, fallbacks and failures; establish activity-specific baselines and alert only on actionable breaches.</p></div>
-        <div class="backlog-item"><h3>2. Manual-control UX</h3><p>Show manual ownership prominently in Home Assistant, explain what changed and offer explicit activity choices to resume automation.</p></div>
-        <div class="backlog-item"><h3>3. Friendly activity profiles</h3><p>Add exposed, deterministic shortcuts such as last-used source and lighting preference without hiding the resolved target activity.</p></div>
-        <div class="backlog-item"><h3>4. Source transport hardening</h3><p>Prove a direct Shield transport and retain the HA path as a measured fallback rather than replacing a working path speculatively.</p></div>
-        <div class="backlog-item"><h3>5. PlayStation observability</h3><p>Add control only with a real power and readiness signal; AVR input selection alone remains insufficient evidence.</p></div>
-        <div class="backlog-item"><h3>6. AVR volume ownership</h3><p>Define whether automation or physical remotes own volume, then add limits and user-visible override behavior before commands.</p></div>
+        <div class="backlog-item"><h3>1. Friendly activity profiles</h3><p>Add exposed, deterministic shortcuts such as last-used source and lighting preference without hiding the resolved target activity.</p></div>
+        <div class="backlog-item"><h3>2. Source transport hardening</h3><p>Prove a direct Shield transport and retain the HA path as a measured fallback rather than replacing a working path speculatively.</p></div>
+        <div class="backlog-item"><h3>3. PlayStation observability</h3><p>Add control only with a real power and readiness signal; AVR input selection alone remains insufficient evidence.</p></div>
+        <div class="backlog-item"><h3>4. AVR volume ownership</h3><p>Define whether automation or physical remotes own volume, then add limits and user-visible override behavior before commands.</p></div>
         <div class="backlog-item"><h3>Separate: whole-home audio</h3><p>Audit Sonos and Music Assistant before defining player, group and playback-readiness ownership as a distinct project.</p></div>
         <div class="backlog-item"><h3>Blocked: motion-aware Off</h3><p>Remain deferred until the lounge has a reliable presence signal; playback state alone must not silently establish vacancy.</p></div>
       </div>
