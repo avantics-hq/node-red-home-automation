@@ -366,7 +366,7 @@
       <div class="meta-row">
         <span class="pill">Updated 21 November 2026</span>
         <span class="pill">Package 1.8.1 · live deployment 1.8.1</span>
-        <span class="pill">Next: Phase 9 legacy path removal</span>
+        <span class="pill">Next: Phase 10 failure and recovery acceptance</span>
       </div>
     </div>
   </header>
@@ -410,10 +410,10 @@
             <tr><td>Whole activity</td><td>One production controller owns all five configured activity profiles</td><td>Failure and recovery acceptance</td></tr>
             <tr><td>Shield</td><td>HA fallback is live, named and confirmed from the configured Shield entity</td><td>Direct Android TV Remote transport remains optional</td></tr>
             <tr><td>PlayStation 5</td><td>Explicit unavailable capability; no invented power-on success</td><td>Remain <code>waiting_for_source</code> until a proved observation path exists</td></tr>
-            <tr><td>Lighting and backlighting</td><td>Semantic owners are live with observed confirmation and existing occupancy/manual ownership preserved</td><td>Broader legacy-path audit</td></tr>
-            <tr><td>Home Assistant</td><td>Production activity select, phase, fault and target-health entities are discovered</td><td>Dashboard consolidation</td></tr>
+            <tr><td>Lighting and backlighting</td><td>Semantic owners are live with observed confirmation and existing occupancy/manual ownership preserved</td><td>Failure and recovery acceptance</td></tr>
+            <tr><td>Home Assistant</td><td>Three dashboards use the production activity select; duplicate lifecycle controls are removed</td><td>Failure and recovery UI acceptance</td></tr>
             <tr><td>Release process</td><td>Strict TypeScript build, compiled tests, public scans and CI-gated Pages deployment</td><td>Tracked release command</td></tr>
-            <tr><td>Legacy HA commands</td><td>Activity callers use the production controller; the HA projector fallback is explicitly named</td><td>Complete the Phase 9 ownership audit</td></tr>
+            <tr><td>Legacy HA commands</td><td>Retired from the scoped dashboards, scripts, MQTT aliases and flow graph</td><td>Ongoing ownership scan</td></tr>
           </tbody>
         </table>
       </div>
@@ -592,14 +592,15 @@
         </article>
 
         <article class="phase" data-phase="cleanup">
-          <div class="phase-head"><div class="phase-number">9</div><div class="phase-title"><h3>Legacy path removal</h3><p>Complete the clean cutover and enforce single ownership.</p></div><span class="status planned">Planned</span></div>
+          <div class="phase-head"><div class="phase-number">9</div><div class="phase-title"><h3>Legacy path removal</h3><p>Complete the clean cutover and enforce single ownership.</p></div><span class="status complete">Complete</span></div>
           <div class="phase-body">
             <div class="tasks">
-              <div class="task"><input id="p9-1" data-task="cleanup-callers" type="checkbox"><label for="p9-1">Migrate dashboard, wall, schedule, Bedtime and All Off callers.</label></div>
-              <div class="task"><input id="p9-2" data-task="cleanup-ha" type="checkbox"><label for="p9-2">Remove duplicate HA IR-blaster, TV-power and projector command paths.</label></div>
-              <div class="task"><input id="p9-3" data-task="cleanup-delays" type="checkbox"><label for="p9-3">Delete obsolete fixed delays, retries, topics, aliases and dead flow nodes.</label></div>
-              <div class="task"><input id="p9-4" data-task="cleanup-ownership" type="checkbox"><label for="p9-4">Prove each controlled target has exactly one command owner.</label></div>
+              <div class="task"><input id="p9-1" data-task="cleanup-callers" type="checkbox" checked><label for="p9-1">Migrate dashboard, wall, schedule, Bedtime and All Off callers.</label></div>
+              <div class="task"><input id="p9-2" data-task="cleanup-ha" type="checkbox" checked><label for="p9-2">Remove duplicate HA IR-blaster, TV-power and projector command paths.</label></div>
+              <div class="task"><input id="p9-3" data-task="cleanup-delays" type="checkbox" checked><label for="p9-3">Delete obsolete fixed delays, retries, topics, aliases and dead flow nodes.</label></div>
+              <div class="task"><input id="p9-4" data-task="cleanup-ownership" type="checkbox" checked><label for="p9-4">Prove each controlled target has exactly one command owner.</label></div>
             </div>
+            <div class="gate-box"><strong>Gate passed:</strong> three Home Assistant dashboards retain 16 direct activity-select actions while duplicate TV, projector, screen, AVR and source lifecycle controls are removed. Five script aliases, legacy state topics and 19 dead flow nodes are gone. Static ownership checks found no retired topic or state-variable references, and live Off, TV + Shield and Cinema requests reached terminal controller states through the production graph.</div>
           </div>
         </article>
 
