@@ -365,8 +365,8 @@
       </p>
       <div class="meta-row">
         <span class="pill">Updated 21 November 2026</span>
-        <span class="pill">Package 1.8.0 · live deployment 1.3.1</span>
-        <span class="pill">Next: Phase 7 shadow deployment</span>
+        <span class="pill">Package 1.8.1 · live deployment 1.8.1</span>
+        <span class="pill">Next: Phase 9 legacy path removal</span>
       </div>
     </div>
   </header>
@@ -399,7 +399,7 @@
         <div class="metric"><strong>85/85</strong><span>Package tests passing</span></div>
         <div class="metric"><strong>5</strong><span>Deterministic target controllers packaged</span></div>
         <div class="metric"><strong>5</strong><span>Configured activity profiles</span></div>
-        <div class="metric"><strong>1.3.1</strong><span>Installed Node-RED package</span></div>
+        <div class="metric"><strong>1.8.1</strong><span>Installed Node-RED package</span></div>
       </div>
       <div class="table-wrap" style="margin-top: 18px;">
         <table>
@@ -407,13 +407,13 @@
           <tbody>
             <tr><td>AVR power and source</td><td>Source-controlled, tested and live</td><td>Volume ownership and richer availability</td></tr>
             <tr><td>TV, projector and screen</td><td>Latest-request-wins controller is live</td><td>Explicit primary/fallback health</td></tr>
-            <tr><td>Whole activity</td><td>Config-driven controller, thin Node-RED wrapper and state contract packaged in strict TypeScript source package 1.8.0</td><td>Live wiring and shadow deployment</td></tr>
-            <tr><td>Shield</td><td>Generic source contract; explicit Android TV Remote fallback selected</td><td>Wire and shadow-test the configured Shield entity</td></tr>
+            <tr><td>Whole activity</td><td>One production controller owns all five configured activity profiles</td><td>Failure and recovery acceptance</td></tr>
+            <tr><td>Shield</td><td>HA fallback is live, named and confirmed from the configured Shield entity</td><td>Direct Android TV Remote transport remains optional</td></tr>
             <tr><td>PlayStation 5</td><td>Explicit unavailable capability; no invented power-on success</td><td>Remain <code>waiting_for_source</code> until a proved observation path exists</td></tr>
-            <tr><td>Lighting and backlighting</td><td>Semantic owners packaged with manual/occupancy preservation and observed confirmation</td><td>Wire deployment transports and shadow-test</td></tr>
-            <tr><td>Home Assistant</td><td>Discovery-backed activity request, phase, fault and target-health contract packaged</td><td>Install and shadow-test without routing existing buttons</td></tr>
+            <tr><td>Lighting and backlighting</td><td>Semantic owners are live with observed confirmation and existing occupancy/manual ownership preserved</td><td>Broader legacy-path audit</td></tr>
+            <tr><td>Home Assistant</td><td>Production activity select, phase, fault and target-health entities are discovered</td><td>Dashboard consolidation</td></tr>
             <tr><td>Release process</td><td>Strict TypeScript build, compiled tests, public scans and CI-gated Pages deployment</td><td>Tracked release command</td></tr>
-            <tr><td>Legacy HA commands</td><td>Some command paths remain</td><td>IR-blaster, TV and projector ownership audit</td></tr>
+            <tr><td>Legacy HA commands</td><td>Activity callers use the production controller; the HA projector fallback is explicitly named</td><td>Complete the Phase 9 ownership audit</td></tr>
           </tbody>
         </table>
       </div>
@@ -578,16 +578,16 @@
         </article>
 
         <article class="phase" data-phase="cutover">
-          <div class="phase-head"><div class="phase-number">8</div><div class="phase-title"><h3>Authorised activity cutover</h3><p>Migrate one complete activity at a time.</p></div><span class="status gate">Maintenance gate</span></div>
+          <div class="phase-head"><div class="phase-number">8</div><div class="phase-title"><h3>Authorised activity cutover</h3><p>Migrate one complete activity at a time.</p></div><span class="status complete">Complete</span></div>
           <div class="phase-body">
             <div class="tasks">
-              <div class="task"><input id="p8-1" data-task="cutover-tv-shield" type="checkbox"><label for="p8-1">Cut over and prove TV + Shield.</label></div>
-              <div class="task"><input id="p8-2" data-task="cutover-tv-ps5" type="checkbox"><label for="p8-2">Cut over and prove TV + PS5.</label></div>
-              <div class="task"><input id="p8-3" data-task="cutover-projector-shield" type="checkbox"><label for="p8-3">Cut over and prove Projector + Shield.</label></div>
-              <div class="task"><input id="p8-4" data-task="cutover-projector-ps5" type="checkbox"><label for="p8-4">Cut over and prove Projector + PS5.</label></div>
-              <div class="task"><input id="p8-5" data-task="cutover-off" type="checkbox"><label for="p8-5">Cut over and prove Off, including safe projector shutdown.</label></div>
+              <div class="task"><input id="p8-1" data-task="cutover-tv-shield" type="checkbox" checked><label for="p8-1">Cut over and prove TV + Shield.</label></div>
+              <div class="task"><input id="p8-2" data-task="cutover-tv-ps5" type="checkbox" checked><label for="p8-2">Cut over and prove TV + PS5.</label></div>
+              <div class="task"><input id="p8-3" data-task="cutover-projector-shield" type="checkbox" checked><label for="p8-3">Cut over and prove Projector + Shield.</label></div>
+              <div class="task"><input id="p8-4" data-task="cutover-projector-ps5" type="checkbox" checked><label for="p8-4">Cut over and prove Projector + PS5.</label></div>
+              <div class="task"><input id="p8-5" data-task="cutover-off" type="checkbox" checked><label for="p8-5">Cut over and prove Off, including safe projector shutdown.</label></div>
             </div>
-            <div class="gate-box"><strong>Gate:</strong> each live step requires an explicit maintenance window and restores the requested final activity.</div>
+            <div class="gate-box"><strong>Gate passed:</strong> production ownership moved to one activity graph with no obsolete direct scene owner. Supported profiles reached confirmed final states, unsupported source profiles remained visibly <code>waiting_for_source</code>, and Off completed its safe projector sequence. Package 1.8.1 includes the transport compatibility fix discovered during proving. Restart recovery restored the requested final activity.</div>
           </div>
         </article>
 

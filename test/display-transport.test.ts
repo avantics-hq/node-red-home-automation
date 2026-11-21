@@ -57,7 +57,7 @@ test("direct transport queries and commands the Bravia and both Shelly devices",
     } else if (request.url === "/rpc/Cover.GetStatus?id=0") {
       response.end(JSON.stringify({state: "stopped", current_pos: 82}));
     } else if (request.url === "/rpc/Cover.GoToPosition") {
-      response.end("{}");
+      response.end("null");
     } else if (request.url === "/rpc/Switch.GetStatus?id=1") {
       response.end(JSON.stringify({apower: 2.1}));
     } else {

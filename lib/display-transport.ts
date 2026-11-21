@@ -49,15 +49,18 @@ export function safeReason(error: unknown): string {
   return "transport-error";
 }
 
-async function responseJson(response: Response): Promise<DeviceResponse> {
+async function responseJson(response: Response, allowNull: true): Promise<DeviceResponse | null>;
+async function responseJson(response: Response, allowNull?: false): Promise<DeviceResponse>;
+async function responseJson(response: Response, allowNull = false): Promise<DeviceResponse | null> {
   if (!response.ok) {
     const error = new Error("HTTP request failed") as CodedError;
     error.code = `http_${response.status}`;
     throw error;
   }
-  let body: DeviceResponse;
+  let body: DeviceResponse | null;
   try {
     const decoded: unknown = await response.json();
+    if (decoded === null && allowNull) return null;
     if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) {
       throw new Error("response is not an object");
     }
@@ -116,14 +119,14 @@ export class DisplayTransport {
     return responseJson(response);
   }
 
-  async shellyPost(deviceHost: string, component: string, params: Record<string, unknown>): Promise<DeviceResponse> {
+  async shellyPost(deviceHost: string, component: string, params: Record<string, unknown>): Promise<void> {
     const response = await this.fetch(`http://${deviceHost}/rpc/${component}`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(params),
       signal: this.signal()
     });
-    return responseJson(response);
+    await responseJson(response, true);
   }
 
   async execute(command: DisplayTransportCommand, now = new Date()): Promise<DisplayMessage | null> {

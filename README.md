@@ -65,7 +65,7 @@ npm pack
 Install the resulting tarball through **Node-RED → Manage palette → Install → Upload module**, or from a Node-RED user directory:
 
 ```sh
-npm install /path/to/avantics-node-red-home-automation-1.8.0.tgz
+npm install /path/to/avantics-node-red-home-automation-1.8.1.tgz
 ```
 
 Add the installed nodes from the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.
@@ -81,6 +81,14 @@ request messages are deliberately inert.
 The repository contains no home-network addresses, deployment coordinates, or live credentials. Device hosts and room coordinates are required configuration where applicable.
 
 The display controller stores its Bravia PSK as a Node-RED credential. Keep credentials in Node-RED's encrypted credential store rather than flow fields or repository files.
+
+## Public repository boundary
+
+This repository contains reusable controller code and general delivery status.
+Live flows, private hostnames and IP addresses, Home Assistant entity IDs,
+backup paths, credentials, and infrastructure operations belong only in the
+private deployment repositories. `npm run scan:public` enforces the machine-
+detectable parts of that boundary.
 
 ## Development
 

@@ -27,6 +27,18 @@ const contentRules = [
     pattern: /\b(?:latitude|longitude)\s*[:=]\s*-?\d{1,3}\.\d{6,}\b/gi
   },
   {
+    name: "private infrastructure hostname",
+    pattern: /(?:https?:\/\/|@)[A-Za-z0-9.-]*avantics\.co\.uk\b/gi
+  },
+  {
+    name: "live Node-RED data path",
+    pattern: /\/data\/(?:flows|node_modules|projects)(?:\/|\b)/g
+  },
+  {
+    name: "private deployment repository URL",
+    pattern: /gitlab\.com\/cptbucky\//gi
+  },
+  {
     name: "private key block",
     pattern: /-----BEGIN (?:RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----/g
   }
