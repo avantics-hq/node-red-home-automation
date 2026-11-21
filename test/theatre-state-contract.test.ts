@@ -15,7 +15,13 @@ const config: TheatreStateContractConfig = {
   displayName: "Lounge",
   baseTopic: "home/lounge/theatre",
   discoveryPrefix: "homeassistant",
-  activities: ["off", "tv_streamer", "projector_streamer"]
+  activities: ["off", "tv_streamer", "projector_streamer"],
+  slo: {
+    windowSize: 20,
+    minimumSamples: 5,
+    latencyBudgetMs: 60000,
+    successObjectivePct: 95
+  }
 };
 const at = (seconds: number): Date =>
   new Date(Date.parse("2026-11-21T17:00:00Z") + seconds * 1000);
@@ -82,7 +88,7 @@ test("startup publishes retained Home Assistant discovery for requests and truth
     theatreStateContract: {kind: "startup"}
   }, config, at(0));
 
-  assert.equal(result.publications.length, 11);
+  assert.equal(result.publications.length, 13);
   assert.equal(result.publications.every(({retain}) => retain), true);
   const select = result.publications.find(({topic}) => topic ===
     "homeassistant/select/lounge_theatre_activity/config");
@@ -96,6 +102,10 @@ test("startup publishes retained Home Assistant discovery for requests and truth
     "homeassistant/sensor/lounge_theatre_backlighting_health/config"));
   assert.ok(result.publications.some(({topic}) => topic ===
     "homeassistant/sensor/lounge_theatre_transition_metrics/config"));
+  assert.ok(result.publications.some(({topic}) => topic ===
+    "homeassistant/sensor/lounge_theatre_slo_status/config"));
+  assert.ok(result.publications.some(({topic}) => topic ===
+    "homeassistant/binary_sensor/lounge_theatre_slo_breach/config"));
 });
 
 test("non-retained requests allocate generations and exact duplicates are idempotent", () => {
@@ -158,7 +168,7 @@ test("controller snapshots publish retained desired, current, phase, failure and
     theatre: snapshot()
   }, config, at(2));
 
-  assert.equal(result.publications.length, 11);
+  assert.equal(result.publications.length, 13);
   assert.equal(result.publications.every(({retain}) => retain), true);
   const byTopic = Object.fromEntries(result.publications.map(({topic, payload}) => [topic, payload]));
   assert.deepEqual(JSON.parse(byTopic["home/lounge/theatre/desired"]!), {
@@ -174,6 +184,8 @@ test("controller snapshots publish retained desired, current, phase, failure and
   assert.equal(jsonObject(byTopic["home/lounge/theatre/health/display"]!).status, "ready");
   assert.equal(jsonObject(byTopic["home/lounge/theatre/health/source"]!).status, "unknown");
   assert.equal(jsonObject(byTopic["home/lounge/theatre/metrics"]!).lastTransitionMs, null);
+  assert.equal(jsonObject(byTopic["home/lounge/theatre/slo"]!).status, "learning");
+  assert.equal(byTopic["home/lounge/theatre/slo/breach"], "OFF");
 
   for (const exposedPhase of ["waiting_for_source", "ready", "failed"]) {
     const phaseResult = transitionTheatreStateContract(undefined, {

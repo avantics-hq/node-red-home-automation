@@ -443,7 +443,7 @@ test("theatre state adapter bridges non-retained requests and retained HA truth"
   const startup = await receive<SendEnvelope>(node, {
     theatreStateContract: {kind: "startup"}
   });
-  assert.equal(startup[0]?.[1]?.length, 11);
+  assert.equal(startup[0]?.[1]?.length, 13);
   assert.equal(startup[0]?.[1]?.every((entry) => entry.retain === true), true);
 
   const requested = await receive<SendEnvelope>(node, {

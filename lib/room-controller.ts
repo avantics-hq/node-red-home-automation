@@ -62,6 +62,7 @@ export interface LightingEvent {
   state?: string;
   values?: Record<string, unknown>;
   updateOnOnly?: boolean;
+  updateOffOnly?: boolean;
   preserveManual?: boolean;
   manual?: boolean;
   source?: string;
@@ -283,6 +284,7 @@ export function transitionRoom(
       const wasOn = intendedOn(targetId);
       const resolvedState = requestedState === "TOGGLE" ? (wasOn ? "OFF" : "ON") : requestedState;
       if (event.updateOnOnly === true && !wasOn) continue;
+      if (event.updateOffOnly === true && wasOn) continue;
       if (event.preserveManual === true && state.manual[targetId] === true) continue;
       if (resolvedState === "OFF") state.manual[targetId] = false;
       if (event.manual === true || (manualValues && event.source !== "activity")) {

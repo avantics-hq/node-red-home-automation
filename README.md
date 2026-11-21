@@ -65,7 +65,7 @@ npm pack
 Install the resulting tarball through **Node-RED → Manage palette → Install → Upload module**, or from a Node-RED user directory:
 
 ```sh
-npm install /path/to/avantics-node-red-home-automation-1.9.0.tgz
+npm install /path/to/avantics-node-red-home-automation-1.10.0.tgz
 ```
 
 Add the installed nodes from the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.
@@ -73,10 +73,16 @@ Add the installed nodes from the Node-RED palette, then configure the room, devi
 The whole-theatre MQTT contract uses non-retained requests at
 `home/<area>/theatre/request`; every request supplies a unique `requestId` and an
 explicit configured activity. Controller output is retained under `desired`,
-`current`, `phase`, `failure`, `availability`, `metrics`, and
+`current`, `phase`, `failure`, `availability`, `metrics`, `slo`, and
 `health/<target>`. Metrics expose transition latency and outcome counts plus
 per-target retry, fallback, confirmation-latency, failure, manual-override, and
-availability evidence. Retained request messages are deliberately inert.
+availability evidence. The SLO evaluator keeps a bounded outcome window,
+publishes success rate plus p50/p95 transition latency, and exposes an
+actionable Home Assistant problem sensor. Defaults are a 60-second transition
+budget, 95% success objective, 20 outcomes and five samples before normal
+evaluation; active timeouts and explicit failures breach immediately. Expected
+`waiting_for_source` and physical manual ownership do not create false
+operational failures. Retained request messages are deliberately inert.
 
 Unsolicited display, AVR, source, and backlighting changes latch manual
 ownership instead of issuing corrective commands. A newer explicit activity

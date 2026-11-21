@@ -1,6 +1,13 @@
 "use strict";
 
 import {TARGETS, type TheatreMetrics, type TheatreTarget} from "./theatre-activity-controller";
+import {
+  evaluateTheatreSlo,
+  normaliseTheatreSloConfig,
+  type TheatreSloAssessment,
+  type TheatreSloConfig,
+  type TheatreSloState
+} from "./theatre-slo";
 
 const NAME = /^[a-z][a-z0-9_-]*$/;
 const REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
@@ -11,6 +18,7 @@ export interface TheatreStateContractConfig {
   baseTopic: string;
   discoveryPrefix: string;
   activities: string[];
+  slo: TheatreSloConfig;
 }
 
 export interface ContractRequest {
@@ -23,6 +31,7 @@ export interface ContractRequest {
 export interface TheatreStateContractState {
   generation: number;
   lastRequest: ContractRequest | null;
+  slo: TheatreSloState;
 }
 
 export interface TheatreStateSnapshot {
@@ -88,7 +97,14 @@ export function normaliseStateContractConfig(
     throw new Error("activities must contain lowercase identifiers");
   }
   if (new Set(activities).size !== activities.length) throw new Error("activities must be unique");
-  return {area, displayName, baseTopic, discoveryPrefix, activities};
+  return {
+    area,
+    displayName,
+    baseTopic,
+    discoveryPrefix,
+    activities,
+    slo: normaliseTheatreSloConfig(config.slo)
+  };
 }
 
 function createState(saved: Partial<TheatreStateContractState> = {}): TheatreStateContractState {
@@ -99,7 +115,10 @@ function createState(saved: Partial<TheatreStateContractState> = {}): TheatreSta
     generation: Number.isInteger(saved.generation) && (saved.generation ?? -1) >= 0
       ? saved.generation!
       : 0,
-    lastRequest
+    lastRequest,
+    slo: {
+      samples: Array.isArray(saved.slo?.samples) ? saved.slo.samples.map((sample) => ({...sample})) : []
+    }
   };
 }
 
@@ -229,6 +248,37 @@ function discoveryPublications(config: TheatreStateContractConfig): ContractPubl
         entity_category: "diagnostic",
         device: controllerDevice
       }
+    },
+    {
+      component: "sensor",
+      objectId: `${area}_theatre_slo_status`,
+      payload: {
+        name: "Operational SLO",
+        unique_id: `${area}_theatre_slo_status`,
+        default_entity_id: `sensor.${area}_theatre_slo_status`,
+        icon: "mdi:target-account",
+        state_topic: `${baseTopic}/slo`,
+        value_template: "{{ value_json.status }}",
+        json_attributes_topic: `${baseTopic}/slo`,
+        entity_category: "diagnostic",
+        device: controllerDevice
+      }
+    },
+    {
+      component: "binary_sensor",
+      objectId: `${area}_theatre_slo_breach`,
+      payload: {
+        name: "Operational SLO breach",
+        unique_id: `${area}_theatre_slo_breach`,
+        default_entity_id: `binary_sensor.${area}_theatre_slo_breach`,
+        icon: "mdi:alert-decagram-outline",
+        state_topic: `${baseTopic}/slo/breach`,
+        payload_on: "ON",
+        payload_off: "OFF",
+        device_class: "problem",
+        entity_category: "diagnostic",
+        device: controllerDevice
+      }
     }
   ];
   for (const target of TARGETS) {
@@ -256,7 +306,8 @@ function discoveryPublications(config: TheatreStateContractConfig): ContractPubl
 
 function statePublications(
   event: TheatreStateSnapshot,
-  config: TheatreStateContractConfig
+  config: TheatreStateContractConfig,
+  slo: TheatreSloAssessment
 ): ContractPublication[] {
   const base = config.baseTopic;
   const desired = event.requestId && event.desiredActivity
@@ -286,7 +337,9 @@ function statePublications(
       maxTransitionMs: null,
       lastOutcome: null,
       targets: {}
-    })
+    }),
+    publication(`${base}/slo`, slo),
+    publication(`${base}/slo/breach`, slo.status === "breached" ? "ON" : "OFF")
   ];
   for (const target of TARGETS) {
     const health = event.targets[target];
@@ -392,7 +445,9 @@ export function transitionTheatreStateContract(
           requestedAt: event.requestedAt || event.transitionStartedAt || now.toISOString()
         };
       }
-      publications.push(...statePublications(event, config));
+      const slo = evaluateTheatreSlo(state.slo, event, config.slo, now);
+      state.slo = slo.state;
+      publications.push(...statePublications(event, config, slo.assessment));
       trace("state", "published", null, {
         generation: event.generation,
         phase: event.phase,

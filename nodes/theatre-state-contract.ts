@@ -16,6 +16,10 @@ interface TheatreStateContractNodeConfig extends NodeDef {
   baseTopic?: string;
   discoveryPrefix?: string;
   activities?: string;
+  sloWindowSize?: number | string;
+  sloMinimumSamples?: number | string;
+  sloLatencyBudgetMs?: number | string;
+  sloSuccessObjectivePct?: number | string;
 }
 
 interface TheatreStateContractNode extends Node {}
@@ -35,7 +39,13 @@ const registerTheatreStateContract: NodeInitializer = (RED) => {
         displayName: config.displayName || config.area || "Lounge",
         baseTopic: config.baseTopic || `home/${config.area || "lounge"}/theatre`,
         discoveryPrefix: config.discoveryPrefix || "homeassistant",
-        activities: Array.isArray(activities) ? activities.map(String) : []
+        activities: Array.isArray(activities) ? activities.map(String) : [],
+        slo: {
+          windowSize: Number(config.sloWindowSize ?? 20),
+          minimumSamples: Number(config.sloMinimumSamples ?? 5),
+          latencyBudgetMs: Number(config.sloLatencyBudgetMs ?? 60000),
+          successObjectivePct: Number(config.sloSuccessObjectivePct ?? 95)
+        }
       });
     } catch (error) {
       node.status({fill: "red", shape: "ring", text: "invalid state contract"});

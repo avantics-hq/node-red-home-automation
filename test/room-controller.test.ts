@@ -142,6 +142,30 @@ test("activity styling preserves manual and occupancy power ownership", () => {
   assert.equal(result.state.manual.cooking, false);
 });
 
+test("off-only intents preserve active lights while applying a bedtime level to inactive targets", () => {
+  const state = transitionRoom(undefined, {
+    lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "wall"}
+  }, config, now).state;
+
+  const result = transitionRoom(state, {
+    lighting: {
+      kind: "intent",
+      targets: ["cooking", "dining"],
+      state: "ON",
+      source: "bedtime",
+      values: {brightness: 40},
+      updateOffOnly: true,
+      manual: true
+    }
+  }, config, new Date(now.getTime() + 100));
+
+  assert.equal(result.outputs.length, 1);
+  assert.equal(output(result, 0).lighting_command?.target, "dining");
+  assert.equal(payload(result, 0).brightness, 40);
+  assert.equal(result.state.manual.cooking, undefined);
+  assert.equal(result.state.manual.dining, true);
+});
+
 test("startup publishes stable discovery and state messages", () => {
   const result = transitionRoom(undefined, {lighting: {kind: "startup"}}, config, now);
   assert.equal(result.outputs.length, 2);
