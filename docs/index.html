@@ -358,15 +358,16 @@
       <p class="eyebrow">Source-controlled delivery plan</p>
       <h1>Home Theatre Control System Roadmap</h1>
       <p class="lead">
-        A tracked route from the current AVR and display controllers to one deterministic,
-        unit-tested and extensible theatre activity system. The design keeps device ownership
-        explicit, Home Assistant as a control surface, and live equipment changes behind
-        measured maintenance gates.
+        The core delivery is complete: one deterministic, unit-tested and recoverable theatre
+        activity system now owns the live equipment. Device ownership remains explicit, Home
+        Assistant is a control and status surface, and future work is an optional improvement
+        programme behind measured maintenance gates.
       </p>
       <div class="meta-row">
         <span class="pill">Updated 21 November 2026</span>
-        <span class="pill">Package 1.8.1 · live deployment 1.8.1</span>
-        <span class="pill">Next: Phase 12 incremental improvements</span>
+        <span class="pill">Package 1.9.0 · live deployment 1.9.0</span>
+        <span class="pill">Core home-theatre programme complete</span>
+        <span class="pill">Next: operational SLOs and manual-control UX</span>
       </div>
     </div>
   </header>
@@ -396,23 +397,24 @@
     <section aria-labelledby="baseline-title">
       <h2 id="baseline-title">Current baseline</h2>
       <div class="summary-grid">
-        <div class="metric"><strong>87/87</strong><span>Package tests passing</span></div>
+        <div class="metric"><strong>94/94</strong><span>Package tests passing</span></div>
         <div class="metric"><strong>5</strong><span>Deterministic target controllers packaged</span></div>
         <div class="metric"><strong>5</strong><span>Configured activity profiles</span></div>
-        <div class="metric"><strong>1.8.1</strong><span>Installed Node-RED package</span></div>
+        <div class="metric"><strong>1.9.0</strong><span>Installed Node-RED package</span></div>
       </div>
+      <div class="gate-box" style="margin-top: 18px;"><strong>Core delivery complete:</strong> one production activity owner now coordinates display, AVR, source, lighting and backlighting; all scoped legacy command paths are retired; restart, recovery, manual ownership, failure and release behavior are proved. Remaining items below are optional product and operational improvements, not unfinished migration work.</div>
       <div class="table-wrap" style="margin-top: 18px;">
         <table>
           <thead><tr><th>Layer</th><th>Current state</th><th>Gap</th></tr></thead>
           <tbody>
-            <tr><td>AVR power and source</td><td>Source-controlled, tested and live; bounded TCP failure and recovery proved</td><td>Volume ownership and richer availability</td></tr>
-            <tr><td>TV, projector and screen</td><td>Latest-request-wins controller passed direct transport failure and restart acceptance</td><td>Primary/fallback health metrics</td></tr>
-            <tr><td>Whole activity</td><td>Production restart, supersession, stale-result rejection and fault recovery passed</td><td>Motion-aware shutdown and restore-last-source policies</td></tr>
-            <tr><td>Shield</td><td>Named HA fallback passed success, visible timeout and newer-request recovery</td><td>Direct Android TV Remote transport remains optional</td></tr>
-            <tr><td>PlayStation 5</td><td>Explicit unavailable capability; no invented power-on success</td><td>Remain <code>waiting_for_source</code> until a proved observation path exists</td></tr>
-            <tr><td>Lighting and backlighting</td><td>Restart emits observation only; existing occupancy/manual ownership remains preserved</td><td>Latency and retry metrics</td></tr>
-            <tr><td>Home Assistant</td><td>Three dashboards use the production activity select and expose controller health</td><td>Incremental activity-profile UX</td></tr>
-            <tr><td>Release process</td><td>One transactional command owns build, backup, deployment, smoke, rollback and release records</td><td>Package remains private; registry publication is intentionally out of scope</td></tr>
+            <tr><td>AVR power and source</td><td>Source-controlled, tested and live; bounded failure recovery and non-fighting physical-remote ownership proved</td><td>Optional volume ownership and trend thresholds</td></tr>
+            <tr><td>TV, projector and screen</td><td>Latest-request-wins controller passed direct transport failure, restart and manual-override acceptance</td><td>Replace fallback transport only when a direct path is proved safer</td></tr>
+            <tr><td>Whole activity</td><td>Restart, supersession, stale rejection, clean physical-state adoption, ambiguous safe Off and metrics passed</td><td>No core gap; optional UX and SLO work only</td></tr>
+            <tr><td>Shield</td><td>Named HA fallback exposes use and failure evidence</td><td>Direct Android TV Remote transport remains optional</td></tr>
+            <tr><td>PlayStation 5</td><td>Explicit unavailable capability; no invented power-on success</td><td>Add only when a real power/readiness observation path exists</td></tr>
+            <tr><td>Lighting and backlighting</td><td>Occupancy/manual ownership is preserved; latency, retry and availability evidence is published</td><td>Turn evidence into long-term operational thresholds</td></tr>
+            <tr><td>Home Assistant</td><td>Three dashboards use the activity contract; controller health and transition metrics are discovered</td><td>Manual-control banner, recovery guidance and friendlier profile UX</td></tr>
+            <tr><td>Release process</td><td>One transactional command owns build, backup, deployment, smoke, rollback and release records</td><td>Package publication remains intentionally out of scope</td></tr>
             <tr><td>Legacy HA commands</td><td>Retired from the scoped dashboards, scripts, MQTT aliases and flow graph</td><td>Ongoing ownership scan</td></tr>
           </tbody>
         </table>
@@ -679,18 +681,21 @@
           </tbody>
         </table>
       </div>
-      <p class="note">Keep package, infrastructure and live-flow ownership separate until the activity contract is stable.</p>
+      <p class="note">The activity contract is stable. Keep package, infrastructure and live-flow ownership separate as improvements are added.</p>
     </section>
 
     <section aria-labelledby="extensions-title">
-      <h2 id="extensions-title">Extension backlog enabled by this design</h2>
+      <h2 id="extensions-title">Next improvement priorities</h2>
+      <p class="note">Ordered by value from the stable foundation; these are optional increments rather than missing core delivery.</p>
       <div class="backlog">
-        <div class="backlog-item"><h3>Motion-aware Off</h3><p>A separate policy emits a cancellable Off request after no motion or playback.</p></div>
-        <div class="backlog-item"><h3>Whole-home audio</h3><p>Audit the existing Sonos HA entry and cluster Music Assistant service before defining player, group or playback-readiness ownership.</p></div>
-        <div class="backlog-item"><h3>Activity profiles</h3><p>Restore last source and vary lighting without duplicating control graphs.</p></div>
-        <div class="backlog-item"><h3>Manual drift</h3><p>Classify physical remote changes without silently changing desired activity.</p></div>
-        <div class="backlog-item"><h3>Operational metrics</h3><p>Latency, retries, fallbacks, stale cancellations and adapter availability.</p></div>
-        <div class="backlog-item"><h3>Degraded operation</h3><p>Visible optional-component failures while mandatory safety remains enforced.</p></div>
+        <div class="backlog-item"><h3>1. Metrics to SLOs</h3><p>Trend transition latency, retries, fallbacks and failures; establish activity-specific baselines and alert only on actionable breaches.</p></div>
+        <div class="backlog-item"><h3>2. Manual-control UX</h3><p>Show manual ownership prominently in Home Assistant, explain what changed and offer explicit activity choices to resume automation.</p></div>
+        <div class="backlog-item"><h3>3. Friendly activity profiles</h3><p>Add exposed, deterministic shortcuts such as last-used source and lighting preference without hiding the resolved target activity.</p></div>
+        <div class="backlog-item"><h3>4. Source transport hardening</h3><p>Prove a direct Shield transport and retain the HA path as a measured fallback rather than replacing a working path speculatively.</p></div>
+        <div class="backlog-item"><h3>5. PlayStation observability</h3><p>Add control only with a real power and readiness signal; AVR input selection alone remains insufficient evidence.</p></div>
+        <div class="backlog-item"><h3>6. AVR volume ownership</h3><p>Define whether automation or physical remotes own volume, then add limits and user-visible override behavior before commands.</p></div>
+        <div class="backlog-item"><h3>Separate: whole-home audio</h3><p>Audit Sonos and Music Assistant before defining player, group and playback-readiness ownership as a distinct project.</p></div>
+        <div class="backlog-item"><h3>Blocked: motion-aware Off</h3><p>Remain deferred until the lounge has a reliable presence signal; playback state alone must not silently establish vacancy.</p></div>
       </div>
     </section>
     <section aria-labelledby="smart-home-backlog-title">
