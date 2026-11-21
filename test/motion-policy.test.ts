@@ -120,3 +120,31 @@ test("retained switch startup is inert, single edge toggles and double edge is f
   assert.deepEqual(sendEffects(second)[0]?.lighting.values, {brightness: 254});
   assert.equal(sendEffects(second)[0]?.lighting.manual, true);
 });
+
+test("pre-classified switch actions use the shared single and double gesture policy", () => {
+  const retained = transitionMotion(undefined, {
+    source: "switch-action",
+    payload: {action: "double"},
+    retain: true
+  }, config, true, 1000);
+  assert.equal(sendEffects(retained).length, 0);
+
+  const single = transitionMotion(retained.state, {
+    source: "switch-action",
+    payload: {action: "single"}
+  }, config, true, 2000);
+  assert.equal(sendEffects(single)[0]?.lighting.state, "TOGGLE");
+
+  const double = transitionMotion(single.state, {
+    source: "switch-action",
+    payload: {action: "double"}
+  }, config, true, 3000);
+  assert.deepEqual(sendEffects(double)[0]?.lighting, {
+    kind: "intent",
+    targets: ["cooking", "dining"],
+    state: "ON",
+    source: "wall",
+    manual: true,
+    values: {brightness: 254}
+  });
+});

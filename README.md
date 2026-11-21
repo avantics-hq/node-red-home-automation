@@ -4,7 +4,7 @@
 
 State-aware Node-RED controllers for reliable lighting and home-theatre automation.
 
-**[View the interactive home-theatre roadmap →](https://cptbucky.github.io/node-red-home-automation/)**
+**[View the smart-home programme and completed project records →](https://cptbucky.github.io/node-red-home-automation/)**
 
 Most home automations translate an event directly into a command. This package adds a deterministic control layer between them: it tracks desired and observed state, preserves manual control, confirms outcomes, retries bounded failures, and rejects stale work.
 
@@ -65,7 +65,7 @@ npm pack
 Install the resulting tarball through **Node-RED → Manage palette → Install → Upload module**, or from a Node-RED user directory:
 
 ```sh
-npm install /path/to/avantics-node-red-home-automation-1.10.0.tgz
+npm install /path/to/avantics-node-red-home-automation-1.10.1.tgz
 ```
 
 Add the installed nodes from the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.
