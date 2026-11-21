@@ -4,6 +4,8 @@
 
 State-aware Node-RED controllers for reliable lighting and home-theatre automation.
 
+**[View the interactive home-theatre roadmap →](https://cptbucky.github.io/node-red-home-automation/)**
+
 Most home automations translate an event directly into a command. This package adds a deterministic control layer between them: it tracks desired and observed state, preserves manual control, confirms outcomes, retries bounded failures, and rejects stale work.
 
 ## What it solves
