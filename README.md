@@ -40,6 +40,8 @@ flowchart LR
 | `home-source-capability-controller` | Tracks controllable, external, and unavailable media sources. |
 | `home-activity-lighting-controller` | Applies activity styles without taking room power or manual ownership. |
 | `home-backlighting-controller` | Owns TV-backlight power with observation-gated confirmation. |
+| `home-theatre-activity-controller` | Owns latest-request-wins activity state and aggregates target evidence. |
+| `home-theatre-state-contract` | Bridges non-retained activity requests to retained MQTT truth and HA discovery. |
 
 Pure TypeScript policy modules live in `lib/`; thin Node-RED runtime and editor adapters live in `nodes/`.
 
@@ -63,10 +65,16 @@ npm pack
 Install the resulting tarball through **Node-RED → Manage palette → Install → Upload module**, or from a Node-RED user directory:
 
 ```sh
-npm install /path/to/avantics-node-red-home-automation-1.7.0.tgz
+npm install /path/to/avantics-node-red-home-automation-1.8.0.tgz
 ```
 
 Add the installed nodes from the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.
+
+The whole-theatre MQTT contract uses non-retained requests at
+`home/<area>/theatre/request`; every request supplies a unique `requestId` and an
+explicit configured activity. Controller output is retained under `desired`,
+`current`, `phase`, `failure`, `availability`, and `health/<target>`. Retained
+request messages are deliberately inert.
 
 ## Configuration and security
 

@@ -1,6 +1,6 @@
 {
   "name": "@avantics/node-red-home-automation",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "private": true,
   "description": "Deterministic home automation components for Node-RED",
   "keywords": [
@@ -49,7 +49,9 @@
       "home-display-mode-controller": "dist/nodes/display-mode-controller.js",
       "home-source-capability-controller": "dist/nodes/source-capability-controller.js",
       "home-activity-lighting-controller": "dist/nodes/activity-lighting-controller.js",
-      "home-backlighting-controller": "dist/nodes/backlighting-controller.js"
+      "home-backlighting-controller": "dist/nodes/backlighting-controller.js",
+      "home-theatre-activity-controller": "dist/nodes/theatre-activity-controller.js",
+      "home-theatre-state-contract": "dist/nodes/theatre-state-contract.js"
     }
   },
   "devDependencies": {

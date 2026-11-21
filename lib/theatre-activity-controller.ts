@@ -318,6 +318,7 @@ function stateEvent(state: TheatreState, area: string): TheatreOutput {
       requestId: state.desired?.requestId || null,
       generation: state.generation,
       desiredActivity: state.desired?.activity || null,
+      requestedAt: state.desired?.requestedAt || null,
       currentActivity: state.currentActivity,
       phase: state.phase,
       availability: state.availability,

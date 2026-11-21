@@ -1,0 +1,33 @@
+<script type="text/javascript">
+  RED.nodes.registerType("home-theatre-state-contract", {
+    category: "function",
+    color: "#d9c7f1",
+    defaults: {
+      name: {value: ""},
+      area: {value: "lounge", required: true},
+      displayName: {value: "Lounge", required: true},
+      baseTopic: {value: "home/lounge/theatre", required: true},
+      discoveryPrefix: {value: "homeassistant", required: true},
+      activities: {value: "[]", required: true}
+    },
+    inputs: 1,
+    outputs: 2,
+    outputLabels: ["activity requests", "retained MQTT state and HA discovery"],
+    icon: "font-awesome/fa-exchange",
+    label: function() { return this.name || "theatre state contract"; }
+  });
+</script>
+
+<script type="text/html" data-template-name="home-theatre-state-contract">
+  <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
+  <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area"></div>
+  <div class="form-row"><label for="node-input-displayName">Display name</label><input type="text" id="node-input-displayName"></div>
+  <div class="form-row"><label for="node-input-baseTopic">Base topic</label><input type="text" id="node-input-baseTopic"></div>
+  <div class="form-row"><label for="node-input-discoveryPrefix">Discovery prefix</label><input type="text" id="node-input-discoveryPrefix"></div>
+  <div class="form-row"><label for="node-input-activities">Activities JSON</label><input type="text" id="node-input-activities"></div>
+</script>
+
+<script type="text/html" data-help-name="home-theatre-state-contract">
+  <p>Bridges non-retained MQTT activity requests to the theatre controller and publishes retained controller truth.</p>
+  <p>Requests arrive on <code>&lt;base&gt;/request</code> with a request ID and activity. Retained requests are inert. Complete <code>msg.theatre</code> state snapshots publish desired, current, phase, failure, availability and per-target health topics. A startup event emits Home Assistant discovery for the activity selector and status sensors.</p>
+</script>

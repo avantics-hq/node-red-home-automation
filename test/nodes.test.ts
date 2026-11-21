@@ -6,6 +6,8 @@ import test from "node:test";
 import type {NodeInitializer} from "node-red";
 import registerActivityLighting from "../nodes/activity-lighting-controller";
 import registerBacklighting from "../nodes/backlighting-controller";
+import registerTheatreActivity from "../nodes/theatre-activity-controller";
+import registerTheatreStateContract from "../nodes/theatre-state-contract";
 import registerAvr from "../nodes/avr-controller";
 import registerMotion from "../nodes/motion-policy";
 import registerOccupancy from "../nodes/occupancy-fusion";
@@ -38,6 +40,7 @@ interface WireMessage {
   source?: string;
   payload?: unknown;
   topic?: string;
+  retain?: boolean;
   lighting?: Record<string, unknown>;
   avr_command?: Record<string, unknown>;
   activityLighting?: Record<string, unknown>;
@@ -45,6 +48,8 @@ interface WireMessage {
   backlighting?: Record<string, unknown>;
   backlightingCommand?: Record<string, unknown>;
   sourceCommand?: Record<string, unknown>;
+  theatreCommand?: Record<string, unknown>;
+  theatreStateContract?: Record<string, unknown>;
   theatre?: Record<string, unknown>;
 }
 
@@ -387,5 +392,89 @@ test("backlighting adapter waits for observed power before ready", async (t) => 
   });
   assert.equal(observed[0]?.[1]?.[0]?.theatre?.status, "ready");
   assert.equal(traces(node).at(-1)?.component, "backlighting-controller");
+  assert.equal(node.errors.length, 0);
+});
+
+test("theatre activity adapter emits semantic target plans and complete state", async (t) => {
+  const {Constructor} = runtime(registerTheatreActivity);
+  const profile = {
+    display: {mode: "tv"},
+    avr: {power: "on", source: "streamer"},
+    source: {action: "activate", sourceId: "streamer", readiness: "required"},
+    lighting: {profile: "tv"},
+    backlighting: {power: "on"}
+  };
+  const node = new Constructor({
+    area: "lounge",
+    freshnessMs: 30000,
+    activityProfiles: JSON.stringify({tv_streamer: profile})
+  });
+  t.after(() => close(node));
+
+  const sent = await receive<SendEnvelope>(node, {
+    theatre: {
+      kind: "intent",
+      requestId: "activity-adapter-test",
+      generation: 1,
+      activity: "tv_streamer",
+      requestedAt: "2026-11-21T17:00:00.000Z"
+    }
+  });
+  assert.equal(sent[0]?.[0]?.length, 5);
+  assert.equal(sent[0]?.[0]?.[0]?.theatreCommand?.target, "display");
+  const state = sent[1]?.[1]?.find((entry) => entry.theatre?.kind === "state");
+  assert.equal(state?.theatre?.desiredActivity, "tv_streamer");
+  assert.equal(state?.theatre?.requestedAt, "2026-11-21T17:00:00.000Z");
+  assert.equal(traces(node).at(-1)?.component, "theatre-activity-controller");
+  assert.equal(node.errors.length, 0);
+});
+
+test("theatre state adapter bridges non-retained requests and retained HA truth", async (t) => {
+  const {Constructor} = runtime(registerTheatreStateContract);
+  const node = new Constructor({
+    area: "lounge",
+    displayName: "Lounge",
+    baseTopic: "home/lounge/theatre",
+    discoveryPrefix: "homeassistant",
+    activities: "[\"off\",\"tv_streamer\"]"
+  });
+  t.after(() => close(node));
+
+  const startup = await receive<SendEnvelope>(node, {
+    theatreStateContract: {kind: "startup"}
+  });
+  assert.equal(startup[0]?.[1]?.length, 10);
+  assert.equal(startup[0]?.[1]?.every((entry) => entry.retain === true), true);
+
+  const requested = await receive<SendEnvelope>(node, {
+    topic: "home/lounge/theatre/request",
+    payload: {requestId: "mqtt-adapter-test", activity: "tv_streamer"},
+    retain: false
+  });
+  assert.equal(requested[0]?.[0]?.[0]?.theatre?.kind, "intent");
+  assert.equal(requested[0]?.[0]?.[0]?.theatre?.generation, 1);
+
+  const published = await receive<SendEnvelope>(node, {
+    theatre: {
+      kind: "state",
+      area: "lounge",
+      requestId: "mqtt-adapter-test",
+      generation: 1,
+      desiredActivity: "tv_streamer",
+      requestedAt: new Date().toISOString(),
+      currentActivity: "unknown",
+      phase: "transitioning",
+      availability: "unknown",
+      transitionStartedAt: new Date().toISOString(),
+      transitionCompletedAt: null,
+      targets: {},
+      failure: null,
+      degraded: []
+    }
+  });
+  const phase = published[0]?.[1]?.find((entry) => entry.topic === "home/lounge/theatre/phase");
+  assert.equal(phase?.payload, "transitioning");
+  assert.equal(phase?.retain, true);
+  assert.equal(traces(node).at(-1)?.component, "theatre-state-contract");
   assert.equal(node.errors.length, 0);
 });
