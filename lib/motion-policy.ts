@@ -243,29 +243,6 @@ export function transitionMotion(
       state.offTimerDueAt = null;
       emitIntent(lightingIntent(config.offTargets, "OFF", "motion"), "off-timer");
     }
-  } else if (source === "switch-action") {
-    const action = String(
-      payload && typeof payload === "object"
-        ? (payload as Record<string, unknown>).action ?? ""
-        : payload ?? ""
-    ).toLowerCase();
-    if (input.retain === true) {
-      trace("switch-action", "ignored", "retained-message", {action});
-    } else if (action === "single" || action === "double") {
-      cancelOffTimer("wall-switch");
-      state.switchAt = 0;
-      cancelSwitchTimer("explicit-action");
-      if (action === "single") {
-        emitIntent(lightingIntent(config.onTargets, "TOGGLE", "wall"), "switch-action");
-      } else {
-        emitIntent(lightingIntent(config.onTargets, "ON", "wall", {
-          manual: true,
-          values: {brightness: 254}
-        }), "switch-action");
-      }
-    } else {
-      trace("switch-action", "ignored", "unsupported-action", {action});
-    }
   } else if (source === "switch") {
     const nextState = payload && typeof payload === "object"
       ? (payload as Record<string, unknown>).state

@@ -34,6 +34,7 @@ flowchart LR
 |---|---|
 | `home-occupancy-fusion` | Combines PIR motion with optional presence sensing. |
 | `home-motion-lighting-policy` | Converts occupancy and illuminance into lighting intent. |
+| `home-switch-lighting-policy` | Converts raw edges or pre-classified button actions into lighting intent without motion state. |
 | `home-room-lighting-controller` | Owns adaptive room commands, manual overrides, and lighting state. |
 | `home-avr-controller` | Controls AVR power, zones, and source selection from observed state. |
 | `home-display-mode-controller` | Coordinates TV, projector, and screen transitions. |
@@ -65,7 +66,7 @@ npm pack
 Install the resulting tarball through **Node-RED → Manage palette → Install → Upload module**, or from a Node-RED user directory:
 
 ```sh
-npm install /path/to/avantics-node-red-home-automation-1.10.1.tgz
+npm install /path/to/avantics-node-red-home-automation-1.11.0.tgz
 ```
 
 Add the installed nodes from the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.

@@ -10,6 +10,7 @@ import registerTheatreActivity from "../nodes/theatre-activity-controller";
 import registerTheatreStateContract from "../nodes/theatre-state-contract";
 import registerAvr from "../nodes/avr-controller";
 import registerMotion from "../nodes/motion-policy";
+import registerSwitch from "../nodes/switch-policy";
 import registerOccupancy from "../nodes/occupancy-fusion";
 import registerRoom from "../nodes/room-controller";
 import registerSource from "../nodes/source-capability-controller";
@@ -148,6 +149,34 @@ test("motion adapter emits intents and persists standard traces", async (t) => {
   assert.equal(trace.at(-1)?.area, "kitchen");
   assert.equal(trace.at(-1)?.event, "occupancy");
   assert.equal(trace.at(-1)?.outcome, "emit-on");
+  assert.equal(node.errors.length, 0);
+});
+
+test("switch adapter emits gestures without motion state", async (t) => {
+  const {Constructor} = runtime(registerSwitch);
+  const node = new Constructor({
+    area: "room",
+    targets: "[\"main\"]",
+    switchWindowMs: 500
+  });
+  t.after(() => close(node));
+
+  assert.deepEqual(
+    await receive<WireMessage>(node, {
+      source: "switch-action",
+      payload: {action: "double"},
+      retain: true
+    }),
+    []
+  );
+  const sent = await receive<WireMessage>(node, {
+    source: "switch-action",
+    payload: {action: "double"}
+  });
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0]?.lighting?.state, "ON");
+  assert.deepEqual(sent[0]?.lighting?.values, {brightness: 254});
+  assert.equal(traces(node).at(-1)?.component, "switch-policy");
   assert.equal(node.errors.length, 0);
 });
 

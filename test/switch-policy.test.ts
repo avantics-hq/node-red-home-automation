@@ -1,0 +1,89 @@
+"use strict";
+
+import assert from "node:assert/strict";
+import test from "node:test";
+import {
+  transitionSwitchPolicy,
+  type SwitchPolicyConfig,
+  type SwitchPolicyEffect
+} from "../lib/switch-policy";
+
+const config: SwitchPolicyConfig = {
+  targets: ["main"],
+  switchWindowMs: 500
+};
+
+function messages(result: ReturnType<typeof transitionSwitchPolicy>) {
+  return result.effects
+    .filter((effect): effect is Extract<SwitchPolicyEffect, {kind: "send"}> => effect.kind === "send")
+    .map((effect) => effect.message);
+}
+
+test("retained raw state is a baseline and a single edge toggles after the window", () => {
+  const retained = transitionSwitchPolicy(undefined, {
+    source: "switch",
+    payload: {state: false},
+    retain: true
+  }, config, 1000);
+  assert.equal(messages(retained).length, 0);
+
+  const edge = transitionSwitchPolicy(retained.state, {
+    source: "switch",
+    payload: {state: true}
+  }, config, 2000);
+  const timer = edge.effects.find(
+    (effect): effect is Extract<SwitchPolicyEffect, {kind: "schedule-switch-timer"}> =>
+      effect.kind === "schedule-switch-timer"
+  );
+  assert.ok(timer);
+
+  const elapsed = transitionSwitchPolicy(edge.state, {
+    source: "switch-timer",
+    generation: timer.generation,
+    switchAt: timer.switchAt
+  }, config, 2500);
+  assert.equal(messages(elapsed)[0]?.lighting.state, "TOGGLE");
+});
+
+test("a second raw edge in the window cancels the toggle and requests full brightness", () => {
+  const baseline = transitionSwitchPolicy(undefined, {
+    source: "switch",
+    payload: {state: false},
+    retain: true
+  }, config, 1000);
+  const first = transitionSwitchPolicy(baseline.state, {
+    source: "switch",
+    payload: {state: true}
+  }, config, 2000);
+  const second = transitionSwitchPolicy(first.state, {
+    source: "switch",
+    payload: {state: false}
+  }, config, 2200);
+
+  assert.equal(second.effects.some((effect) => effect.kind === "cancel-switch-timer"), true);
+  assert.deepEqual(messages(second)[0]?.lighting.values, {brightness: 254});
+  assert.equal(messages(second)[0]?.lighting.manual, true);
+});
+
+test("pre-classified actions are immediate and retained actions are inert", () => {
+  const retained = transitionSwitchPolicy(undefined, {
+    source: "switch-action",
+    payload: {action: "double"},
+    retain: true
+  }, config, 1000);
+  assert.equal(messages(retained).length, 0);
+
+  const single = transitionSwitchPolicy(retained.state, {
+    source: "switch-action",
+    payload: {action: "single"}
+  }, config, 2000);
+  assert.equal(messages(single)[0]?.lighting.state, "TOGGLE");
+
+  const double = transitionSwitchPolicy(single.state, {
+    source: "switch-action",
+    payload: {action: "double"}
+  }, config, 3000);
+  assert.equal(messages(double)[0]?.lighting.state, "ON");
+  assert.deepEqual(messages(double)[0]?.lighting.values, {brightness: 254});
+  assert.equal(messages(double)[0]?.lighting.manual, true);
+});
