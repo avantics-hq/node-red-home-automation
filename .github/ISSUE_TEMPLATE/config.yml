@@ -1,0 +1,9 @@
+---
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/cptbucky/node-red-home-automation/security/advisories/new
+    about: Use GitHub private vulnerability reporting instead of a public issue.
+  - name: Read the package contracts
+    url: https://cptbucky.github.io/node-red-home-automation/contract-examples.html
+    about: Check the executable, deployment-neutral contracts before filing a bug.

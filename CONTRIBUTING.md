@@ -13,6 +13,17 @@ npm test
 
 The public-content scan rejects credential-like files, private network addresses, absolute user-home paths, high-precision location defaults, and private-key blocks.
 
+## Public reports and dependency updates
+
+Use the structured bug-report form for reproducible package defects. Security
+reports must follow [SECURITY.md](SECURITY.md) and remain private until a fix is
+available. Public evidence must use synthetic identifiers and omit installation
+topology.
+
+Dependabot checks npm and GitHub Actions weekly. Action dependencies remain
+pinned to immutable commit revisions; the adjacent version comments document
+the reviewed release.
+
 ## Pre-commit hook
 
 Enable the versioned hook once per clone:

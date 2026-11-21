@@ -148,6 +148,9 @@ The repository contains no home-network addresses, deployment coordinates, or li
 
 The display controller stores its Bravia PSK as a Node-RED credential. Keep credentials in Node-RED's encrypted credential store rather than flow fields or repository files.
 
+Report suspected vulnerabilities privately using the process in
+[`SECURITY.md`](SECURITY.md), not through a public issue.
+
 ## Public repository boundary
 
 This repository contains reusable controller code and general delivery status.

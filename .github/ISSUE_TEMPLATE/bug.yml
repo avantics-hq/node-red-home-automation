@@ -1,0 +1,85 @@
+---
+name: Bug report
+description: Report reproducible package behavior that differs from its documented contract
+title: "[Bug]: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. This public repository contains reusable package behavior only. Remove credentials, private addresses, entity IDs, flow exports, and installation topology from all evidence.
+
+  - type: input
+    id: package-version
+    attributes:
+      label: Package version
+      description: The tagged release or commit that exhibits the problem.
+      placeholder: v1.15.0
+    validations:
+      required: true
+
+  - type: input
+    id: runtime
+    attributes:
+      label: Runtime versions
+      description: Node-RED and Node.js versions.
+      placeholder: Node-RED 4.1.x; Node.js 20.x
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Occupancy fusion
+        - Motion lighting policy
+        - Switch lighting policy
+        - Room lighting controller
+        - AVR controller
+        - Display mode controller
+        - Source capability controller
+        - Activity lighting controller
+        - Backlighting controller
+        - Theatre activity controller
+        - Theatre state contract
+        - Examples or documentation
+        - CI, package, or release
+    validations:
+      required: true
+
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Observed and expected behavior
+      description: State what happened and what the documented contract led you to expect.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Provide deployment-neutral messages, configuration, and ordered steps. Prefer synthetic identifiers.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized evidence
+      description: Add relevant traces or errors after removing private deployment details.
+      render: text
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I reproduced this against the stated package version.
+          required: true
+        - label: I removed credentials and private installation details.
+          required: true
+        - label: This is not a security vulnerability; those are reported privately under SECURITY.md.
+          required: true
