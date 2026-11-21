@@ -366,7 +366,7 @@
       <div class="meta-row">
         <span class="pill">Updated 21 November 2026</span>
         <span class="pill">Package 1.8.1 · live deployment 1.8.1</span>
-        <span class="pill">Next: Phase 11 reproducible release workflow</span>
+        <span class="pill">Next: Phase 12 incremental improvements</span>
       </div>
     </div>
   </header>
@@ -406,13 +406,13 @@
           <thead><tr><th>Layer</th><th>Current state</th><th>Gap</th></tr></thead>
           <tbody>
             <tr><td>AVR power and source</td><td>Source-controlled, tested and live; bounded TCP failure and recovery proved</td><td>Volume ownership and richer availability</td></tr>
-            <tr><td>TV, projector and screen</td><td>Latest-request-wins controller passed direct transport failure and restart acceptance</td><td>Release automation</td></tr>
-            <tr><td>Whole activity</td><td>Production restart, supersession, stale-result rejection and fault recovery passed</td><td>Release automation</td></tr>
+            <tr><td>TV, projector and screen</td><td>Latest-request-wins controller passed direct transport failure and restart acceptance</td><td>Primary/fallback health metrics</td></tr>
+            <tr><td>Whole activity</td><td>Production restart, supersession, stale-result rejection and fault recovery passed</td><td>Motion-aware shutdown and restore-last-source policies</td></tr>
             <tr><td>Shield</td><td>Named HA fallback passed success, visible timeout and newer-request recovery</td><td>Direct Android TV Remote transport remains optional</td></tr>
             <tr><td>PlayStation 5</td><td>Explicit unavailable capability; no invented power-on success</td><td>Remain <code>waiting_for_source</code> until a proved observation path exists</td></tr>
-            <tr><td>Lighting and backlighting</td><td>Restart emits observation only; existing occupancy/manual ownership remains preserved</td><td>Release automation</td></tr>
-            <tr><td>Home Assistant</td><td>Three dashboards use the production activity select and expose controller health</td><td>Release automation</td></tr>
-            <tr><td>Release process</td><td>Strict TypeScript build, compiled tests, public scans and CI-gated Pages deployment</td><td>Tracked release command</td></tr>
+            <tr><td>Lighting and backlighting</td><td>Restart emits observation only; existing occupancy/manual ownership remains preserved</td><td>Latency and retry metrics</td></tr>
+            <tr><td>Home Assistant</td><td>Three dashboards use the production activity select and expose controller health</td><td>Incremental activity-profile UX</td></tr>
+            <tr><td>Release process</td><td>One transactional command owns build, backup, deployment, smoke, rollback and release records</td><td>Package remains private; registry publication is intentionally out of scope</td></tr>
             <tr><td>Legacy HA commands</td><td>Retired from the scoped dashboards, scripts, MQTT aliases and flow graph</td><td>Ongoing ownership scan</td></tr>
           </tbody>
         </table>
@@ -618,15 +618,16 @@
         </article>
 
         <article class="phase" data-phase="release">
-          <div class="phase-head"><div class="phase-number">11</div><div class="phase-title"><h3>Reproducible release workflow</h3><p>Promote the proven manual process into tracked tooling.</p></div><span class="status planned">Planned</span></div>
+          <div class="phase-head"><div class="phase-number">11</div><div class="phase-title"><h3>Reproducible release workflow</h3><p>Promote the proven manual process into tracked tooling.</p></div><span class="status complete">Complete</span></div>
           <div class="phase-body">
             <div class="tasks">
-              <div class="task"><input id="p11-1" data-task="release-command" type="checkbox"><label for="p11-1">Create one tracked release command using existing repository conventions.</label></div>
-              <div class="task"><input id="p11-2" data-task="release-backups" type="checkbox"><label for="p11-2">Automate matching flow and module backups before deployment.</label></div>
-              <div class="task"><input id="p11-3" data-task="release-version" type="checkbox"><label for="p11-3">Record package version, infrastructure SHA and flow SHA as one release.</label></div>
-              <div class="task"><input id="p11-4" data-task="release-smoke" type="checkbox"><label for="p11-4">Run package, flow, restart and reconciliation smoke gates automatically.</label></div>
-              <div class="task"><input id="p11-5" data-task="release-rollback" type="checkbox"><label for="p11-5">Restore a matching backup pair on failed verification.</label></div>
+              <div class="task"><input id="p11-1" data-task="release-command" type="checkbox" checked><label for="p11-1">Create one tracked release command using existing repository conventions.</label></div>
+              <div class="task"><input id="p11-2" data-task="release-backups" type="checkbox" checked><label for="p11-2">Automate matching flow and module backups before deployment.</label></div>
+              <div class="task"><input id="p11-3" data-task="release-version" type="checkbox" checked><label for="p11-3">Record package version, infrastructure SHA and flow SHA as one release.</label></div>
+              <div class="task"><input id="p11-4" data-task="release-smoke" type="checkbox" checked><label for="p11-4">Run package, flow, restart and reconciliation smoke gates automatically.</label></div>
+              <div class="task"><input id="p11-5" data-task="release-rollback" type="checkbox" checked><label for="p11-5">Restore a matching backup pair on failed verification.</label></div>
             </div>
+            <div class="gate-box"><strong>Gate passed:</strong> one tracked infrastructure command now checks both repositories, rebuilds and scans the package, creates matching flow and module backups, installs through an isolated maintenance pod, restarts Node-RED and requires package, flow, HTTP and activity-reconciliation smoke evidence. A real package-install failure restored the matching backup pair and passed the same post-rollback smoke. Successful and rolled-back attempts produce commit-ready release records containing package, infrastructure and flow identities.</div>
           </div>
         </article>
 
@@ -655,16 +656,16 @@
         <div class="test-level"><div><strong>Physical acceptance</strong><span>Observed TV, AVR, projector, screen, source and lighting postconditions.</span></div></div>
         <div class="test-level"><div><strong>Recovery proof</strong><span>Restart, unavailable transport, stale response, fallback failure and supersession.</span></div></div>
       </div>
-      <p class="note">CI owns levels 1–5. Physical and recovery checks remain explicit release gates.</p>
+      <p class="note">CI owns levels 1–5. The release command repeats those package gates and automates backup, restart, flow-integrity and reconciliation checks; physical acceptance remains an explicit release decision.</p>
     </section>
 
     <section aria-labelledby="release-title">
       <h2 id="release-title">Source-control and release model</h2>
       <div class="release-flow">
-        <div class="release-step"><h3>1. Build</h3><p>Test and pack the module from <code>node-red-home-automation</code>.</p></div>
-        <div class="release-step"><h3>2. Validate</h3><p>Compare the candidate graph with the live Node-RED project and reject unrelated drift.</p></div>
-        <div class="release-step"><h3>3. Deploy</h3><p>Create matching backups, install package and flow, restart and smoke the live surface.</p></div>
-        <div class="release-step"><h3>4. Record</h3><p>Commit all repositories and record package version, package SHA, infrastructure SHA and flow SHA.</p></div>
+        <div class="release-step"><h3>1. Build</h3><p>Require clean current commits, install locked dependencies, scan, test and pack the module.</p></div>
+        <div class="release-step"><h3>2. Back up</h3><p>Require a reconciled activity and capture matching flow, credentials, package metadata, archives and modules.</p></div>
+        <div class="release-step"><h3>3. Deploy</h3><p>Install through an isolated maintenance pod, restart, then verify package, flow, HTTP and activity reconciliation.</p></div>
+        <div class="release-step"><h3>4. Record or restore</h3><p>Write one identity record on success; on failure restore the matching pair, restart and smoke the restored release.</p></div>
       </div>
       <div class="table-wrap" style="margin-top: 18px;">
         <table>
