@@ -20,6 +20,7 @@ export interface DisplayConfig {
   maxAttempts: number;
   projectorOnWatts: number;
   projectorOffWatts: number;
+  projectorPowerFallback?: boolean;
 }
 
 interface DisplayDesired {
@@ -90,6 +91,9 @@ export interface DisplayState {
   pending: DisplayPending | null;
   failure: DisplayFailure | null;
   blockedGeneration: number | null;
+  classification: "manual_override" | null;
+  lastAttempt: number;
+  fallbackUsed: boolean;
 }
 
 export type DisplayInputEvent =
@@ -137,7 +141,12 @@ function initialState(saved: Partial<DisplayState> = {}): DisplayState {
     querying: saved.querying || {tv: false, screen: false, projector: false},
     pending: saved.pending || null,
     failure: saved.failure || null,
-    blockedGeneration: saved.blockedGeneration || null
+    blockedGeneration: saved.blockedGeneration || null,
+    classification: saved.classification === "manual_override" ? "manual_override" : null,
+    lastAttempt: Number.isInteger(saved.lastAttempt) && (saved.lastAttempt ?? -1) >= 0
+      ? saved.lastAttempt!
+      : 0,
+    fallbackUsed: saved.fallbackUsed === true
   };
 }
 
@@ -250,8 +259,26 @@ export function normaliseConfig(config: Partial<DisplayConfig> = {}): DisplayCon
     projectorCooldownMs: Math.max(1000, Number(config.projectorCooldownMs ?? 120000)),
     maxAttempts: Math.max(1, Math.floor(Number(config.maxAttempts ?? 2))),
     projectorOnWatts: Number(config.projectorOnWatts ?? 20),
-    projectorOffWatts: Number(config.projectorOffWatts ?? 10)
+    projectorOffWatts: Number(config.projectorOffWatts ?? 10),
+    projectorPowerFallback: config.projectorPowerFallback === true
   };
+}
+
+function modeSatisfied(state: DisplayState, config: DisplayConfig): boolean {
+  if (!state.desired || !allSeen(state)) return false;
+  if (state.desired.mode === "tv") {
+    return state.observed.tv?.power === "on" &&
+      state.observed.projector?.power === "standby" &&
+      screenAtPosition(state.observed.screen, 0, config.screenTolerance);
+  }
+  if (state.desired.mode === "projector") {
+    return state.observed.tv?.power === "standby" &&
+      state.observed.projector?.power === "on" &&
+      screenAtPosition(state.observed.screen, config.screenOpenPosition, config.screenTolerance);
+  }
+  return state.observed.tv?.power === "standby" &&
+    state.observed.projector?.power === "standby" &&
+    screenAtPosition(state.observed.screen, 0, config.screenTolerance);
 }
 
 export function transitionDisplay(
@@ -294,6 +321,11 @@ export function transitionDisplay(
     state.phase = "transitioning";
     commands.push(command);
     trace("command", "emitted", null, {device, operation, attempt});
+    state.lastAttempt = Math.max(state.lastAttempt, attempt);
+    if (device === "projector" && operation.startsWith("projector_") &&
+      config.projectorPowerFallback) {
+      state.fallbackUsed = true;
+    }
   }
 
   function issueTv(power: "on" | "standby") {
@@ -332,6 +364,8 @@ export function transitionDisplay(
     state.phase = "transitioning";
     commands.push(command);
     trace("command", "emitted", null, {device: "projector", operation: "shutdown-request", attempt: 1});
+    state.lastAttempt = Math.max(state.lastAttempt, 1);
+    if (config.projectorPowerFallback) state.fallbackUsed = true;
   }
 
   function beginDiscovery() {
@@ -351,6 +385,7 @@ export function transitionDisplay(
       events.push(displayEvent("ready", state));
       trace("transition", "ready");
     }
+    state.classification = null;
   }
 
   function reconcile() {
@@ -360,6 +395,10 @@ export function transitionDisplay(
     }
     if (state.blockedGeneration === state.desired.generation) {
       state.phase = "failed";
+      return;
+    }
+    if (state.classification === "manual_override") {
+      state.phase = "manual_override";
       return;
     }
     if (state.pending) return;
@@ -434,6 +473,15 @@ export function transitionDisplay(
     state.querying[device] = false;
     trace("observation", "accepted", null, {device});
 
+    if (state.phase === "ready" && !state.pending && state.desired &&
+      allSeen(state) && !modeSatisfied(state, config)) {
+      state.phase = "manual_override";
+      state.classification = "manual_override";
+      events.push(displayEvent("manual_override", state, {device}));
+      trace("observation", "manual_override", null, {device});
+      return;
+    }
+
     if (!state.pending || state.pending.device !== device) return reconcile();
     if (state.pending.operation === "projector_start" &&
       state.pending.readyAt !== undefined &&
@@ -459,6 +507,8 @@ export function transitionDisplay(
           nextAt: now.getTime() + config.pollMs
         };
         trace("command", "emitted", null, {device: "projector", operation: "shutdown-confirm", attempt: 1});
+        state.lastAttempt = Math.max(state.lastAttempt, 1);
+        if (config.projectorPowerFallback) state.fallbackUsed = true;
       }
     }
   }
@@ -492,6 +542,7 @@ export function transitionDisplay(
         pending.deadlineAt = now.getTime() + timeout;
         pending.nextAt = now.getTime() + config.pollMs;
         trace("command", "retried", null, {device: pending.device, operation: pending.operation, attempt});
+        state.lastAttempt = Math.max(state.lastAttempt, attempt);
         return;
       }
       return fail(pending.device, pending.operation, "confirmation-timeout");
@@ -531,6 +582,9 @@ export function transitionDisplay(
       state.desired = {requestId: event.requestId, generation: event.generation, mode: event.mode};
       state.generation = event.generation;
       state.failure = null;
+      state.classification = null;
+      state.lastAttempt = 0;
+      state.fallbackUsed = false;
       state.blockedGeneration = null;
       state.pending = null;
       state.seen = {tv: false, screen: false, projector: false};
@@ -557,6 +611,7 @@ export function transitionDisplay(
         trace("command", "retried", event.reason || "transport-failed", {
           device: event.device, operation: state.pending.operation, attempt
         });
+        state.lastAttempt = Math.max(state.lastAttempt, attempt);
       } else {
         fail(event.device, state.pending.operation, event.reason || "transport-failed");
       }
@@ -572,7 +627,13 @@ export function transitionDisplay(
   events.unshift(displayEvent("state", state, {
     phase: state.phase,
     observed: state.observed,
-    failure: state.failure
+    failure: state.failure,
+    classification: state.classification,
+    metrics: {
+      attempts: state.lastAttempt,
+      retries: Math.max(0, state.lastAttempt - 1),
+      fallbackUsed: state.fallbackUsed
+    }
   }));
   return {state, commands, events, traces, status: statusFor(state)};
 }

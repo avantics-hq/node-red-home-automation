@@ -82,7 +82,7 @@ test("startup publishes retained Home Assistant discovery for requests and truth
     theatreStateContract: {kind: "startup"}
   }, config, at(0));
 
-  assert.equal(result.publications.length, 10);
+  assert.equal(result.publications.length, 11);
   assert.equal(result.publications.every(({retain}) => retain), true);
   const select = result.publications.find(({topic}) => topic ===
     "homeassistant/select/lounge_theatre_activity/config");
@@ -94,6 +94,8 @@ test("startup publishes retained Home Assistant discovery for requests and truth
   assert.match(String(selectConfig.command_template), /requestId/);
   assert.ok(result.publications.some(({topic}) => topic ===
     "homeassistant/sensor/lounge_theatre_backlighting_health/config"));
+  assert.ok(result.publications.some(({topic}) => topic ===
+    "homeassistant/sensor/lounge_theatre_transition_metrics/config"));
 });
 
 test("non-retained requests allocate generations and exact duplicates are idempotent", () => {
@@ -156,7 +158,7 @@ test("controller snapshots publish retained desired, current, phase, failure and
     theatre: snapshot()
   }, config, at(2));
 
-  assert.equal(result.publications.length, 10);
+  assert.equal(result.publications.length, 11);
   assert.equal(result.publications.every(({retain}) => retain), true);
   const byTopic = Object.fromEntries(result.publications.map(({topic, payload}) => [topic, payload]));
   assert.deepEqual(JSON.parse(byTopic["home/lounge/theatre/desired"]!), {
@@ -171,6 +173,7 @@ test("controller snapshots publish retained desired, current, phase, failure and
   assert.equal(byTopic["home/lounge/theatre/availability"], "unknown");
   assert.equal(jsonObject(byTopic["home/lounge/theatre/health/display"]!).status, "ready");
   assert.equal(jsonObject(byTopic["home/lounge/theatre/health/source"]!).status, "unknown");
+  assert.equal(jsonObject(byTopic["home/lounge/theatre/metrics"]!).lastTransitionMs, null);
 
   for (const exposedPhase of ["waiting_for_source", "ready", "failed"]) {
     const phaseResult = transitionTheatreStateContract(undefined, {

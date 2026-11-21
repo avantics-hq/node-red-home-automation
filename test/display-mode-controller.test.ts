@@ -181,3 +181,31 @@ test("startup re-queries all devices and preserves a failed generation as blocke
   assert.equal(result.commands.length, 3);
   assert.equal(result.state.blockedGeneration, 1);
 });
+
+test("unsolicited display changes latch manual ownership without corrective commands", () => {
+  let result = discover("tv", 7, [
+    [0.1, "tv", {power: "on"}],
+    [0.2, "screen", {position: 0, state: "closed"}],
+    [0.3, "projector", {watts: 2.1}]
+  ]);
+  assert.equal(result.state.phase, "ready");
+
+  result = observe(result.state, "tv", {power: "standby"}, 1, 7);
+  assert.equal(result.commands.length, 0);
+  assert.equal(result.state.phase, "manual_override");
+  assert.equal(result.state.classification, "manual_override");
+  assert.equal(result.events.some(({display}) => display.kind === "manual_override"), true);
+
+  result = apply(result.state, {
+    kind: "intent",
+    requestId: "off-8",
+    generation: 8,
+    mode: "off"
+  }, 2);
+  assert.equal(result.state.classification, null);
+  assert.deepEqual(result.commands.map(({operation}) => operation).sort(), [
+    "query_position",
+    "query_power",
+    "query_power"
+  ]);
+});

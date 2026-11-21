@@ -73,6 +73,7 @@ const registerAvrController: NodeInitializer = (RED) => {
         idle: {fill: "grey", shape: "dot"},
         transitioning: {fill: "blue", shape: "dot"},
         ready: {fill: "green", shape: "dot"},
+        manual_override: {fill: "yellow", shape: "ring"},
         failed: {fill: "red", shape: "ring"}
       };
       const appearance = appearances[status.phase] ?? {fill: "grey", shape: "ring"};

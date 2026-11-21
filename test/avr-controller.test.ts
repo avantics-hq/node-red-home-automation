@@ -183,3 +183,23 @@ test("unknown state is queried before any transition command", () => {
   assert.equal(result.commands[0]!.payload, QUERY_COMMAND);
   assert.equal(result.state.pending?.operation, "query");
 });
+
+test("unsolicited AVR source changes latch manual ownership without fighting the remote", () => {
+  let result = transitionAvr(readyState(), {
+    avr: {kind: "intent", requestId: "shield-7", generation: 7, power: "on", source: "shield"}
+  }, config, at(1));
+  assert.equal(result.state.phase, "ready");
+
+  result = observed(result.state, "SIGAME", 2);
+  assert.equal(result.commands.length, 0);
+  assert.equal(result.state.phase, "manual_override");
+  assert.equal(result.state.classification, "manual_override");
+  assert.equal(result.events.some(({avr}) => avr.kind === "manual_override"), true);
+
+  result = transitionAvr(result.state, {
+    avr: {kind: "intent", requestId: "playstation-8", generation: 8, power: "on", source: "playstation"}
+  }, config, at(3));
+  assert.equal(result.commands.length, 0);
+  assert.equal(result.state.phase, "ready");
+  assert.equal(result.state.classification, null);
+});

@@ -52,6 +52,8 @@ export interface AvrState {
   failure: AvrFailure | null;
   blockedGeneration: number | null;
   querySentAt: number | null;
+  classification: "manual_override" | null;
+  lastAttempt: number;
 }
 
 export type AvrInputEvent =
@@ -143,7 +145,11 @@ export function createAvrState(
     phase: typeof saved.phase === "string" ? saved.phase : "unknown",
     failure: saved.failure && typeof saved.failure === "object" ? {...saved.failure} : null,
     blockedGeneration: Number.isInteger(saved.blockedGeneration) ? saved.blockedGeneration! : null,
-    querySentAt: Number.isFinite(saved.querySentAt) ? saved.querySentAt! : null
+    querySentAt: Number.isFinite(saved.querySentAt) ? saved.querySentAt! : null,
+    classification: saved.classification === "manual_override" ? "manual_override" : null,
+    lastAttempt: Number.isInteger(saved.lastAttempt) && (saved.lastAttempt ?? -1) >= 0
+      ? saved.lastAttempt!
+      : 0
   };
 }
 
@@ -202,7 +208,9 @@ export function transitionAvr(
     pending: state.pending,
     phase: state.phase,
     failure: state.failure,
-    blockedGeneration: state.blockedGeneration
+    blockedGeneration: state.blockedGeneration,
+    classification: state.classification,
+    lastAttempt: state.lastAttempt
   });
   let forceStateEvent = false;
 
@@ -264,6 +272,7 @@ export function transitionAvr(
     };
     state.phase = operation === "query" ? "discovering" : "transitioning";
     trace("command", "emitted", null, {operation, attempt});
+    state.lastAttempt = Math.max(state.lastAttempt, attempt);
   }
 
   function ready() {
@@ -294,6 +303,27 @@ export function transitionAvr(
     if (!state.desired) {
       state.pending = null;
       state.phase = Object.values(state.seen).some(Boolean) ? "idle" : "discovering";
+      return;
+    }
+
+    if (state.classification === "manual_override") {
+      state.pending = null;
+      state.phase = "manual_override";
+      return;
+    }
+    if (!state.pending && state.phase === "ready" && hasFreshTargetState() && !targetSatisfied()) {
+      state.classification = "manual_override";
+      state.phase = "manual_override";
+      events.push({
+        avr: {
+          kind: "manual_override",
+          area: config.area,
+          requestId: state.desired.requestId,
+          generation: state.desired.generation,
+          observed: {...state.observed}
+        }
+      });
+      trace("observation", "manual_override");
       return;
     }
 
@@ -348,7 +378,8 @@ export function transitionAvr(
         attempt: 1
       }
     });
-    if (state.desired && !requestBlocked) {
+    state.lastAttempt = Math.max(state.lastAttempt, 1);
+    if (state.desired && !requestBlocked && state.classification !== "manual_override") {
       state.pending = {
         operation: "query",
         payload: QUERY_COMMAND,
@@ -459,6 +490,8 @@ export function transitionAvr(
       state.pending = null;
       state.failure = null;
       state.blockedGeneration = null;
+      state.classification = null;
+      state.lastAttempt = 0;
       trace("intent", "accepted", null, {
         requestId: event.requestId,
         generation: event.generation,
@@ -514,7 +547,9 @@ export function transitionAvr(
     pending: state.pending,
     phase: state.phase,
     failure: state.failure,
-    blockedGeneration: state.blockedGeneration
+    blockedGeneration: state.blockedGeneration,
+    classification: state.classification,
+    lastAttempt: state.lastAttempt
   });
   if (forceStateEvent || before !== after) {
     const payload = {
@@ -529,7 +564,13 @@ export function transitionAvr(
         attempt: state.pending.attempt,
         deadlineAt: state.pending.deadlineAt
       } : null,
-      failure: state.failure ? {...state.failure} : null
+      failure: state.failure,
+      classification: state.classification,
+      metrics: {
+        attempts: state.lastAttempt,
+        retries: Math.max(0, state.lastAttempt - 1),
+        fallbackUsed: false
+      }
     };
     events.unshift({payload, avr: {kind: "state", ...payload}});
   }
@@ -543,11 +584,13 @@ export function transitionAvr(
         text: (state.pending?.operation || "unknown") + " · " +
           (state.pending?.attempt || 0) + "/" + config.maxAttempts
       }
-      : state.phase === "discovering"
-        ? {phase: "discovering", text: "discovering"}
-        : state.phase === "ready"
-          ? {phase: "ready", text: (state.observed.power || "unknown") + " · " + source}
-          : {phase: "idle", text: (state.observed.power || "unknown") + " · " + source};
+      : state.phase === "manual_override"
+        ? {phase: "manual_override", text: "manual control"}
+        : state.phase === "discovering"
+          ? {phase: "discovering", text: "discovering"}
+          : state.phase === "ready"
+            ? {phase: "ready", text: (state.observed.power || "unknown") + " · " + source}
+            : {phase: "idle", text: (state.observed.power || "unknown") + " · " + source};
 
   return {state, commands, events, traces, status};
 }

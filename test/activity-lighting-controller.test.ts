@@ -100,7 +100,8 @@ test("matching lights confirm while manual and occupancy-off targets remain pres
     profile: "tv",
     matched: 1,
     preserved: 1,
-    expected: 2
+    expected: 2,
+    metrics: {attempts: 0, retries: 0, fallbackUsed: false}
   });
 
   result = intent(result.state, "projector", 2, 2);

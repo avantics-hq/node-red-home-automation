@@ -21,6 +21,7 @@
       maxAttempts: {value: 2, required: true, validate: RED.validators.number()},
       projectorOnWatts: {value: 20, required: true, validate: RED.validators.number()},
       projectorOffWatts: {value: 10, required: true, validate: RED.validators.number()},
+      projectorPowerFallback: {value: false},
       transportTimeoutMs: {value: 5000, required: true, validate: RED.validators.number()}
     },
     credentials: {tvPsk: {type: "password"}},
@@ -52,12 +53,14 @@
   <div class="form-row"><label for="node-input-maxAttempts">Maximum idempotent attempts</label><input type="number" id="node-input-maxAttempts"></div>
   <div class="form-row"><label for="node-input-projectorOnWatts">Projector on watts</label><input type="number" id="node-input-projectorOnWatts"></div>
   <div class="form-row"><label for="node-input-projectorOffWatts">Projector standby watts</label><input type="number" id="node-input-projectorOffWatts"></div>
+  <div class="form-row"><label for="node-input-projectorPowerFallback">Projector power is fallback</label><input type="checkbox" id="node-input-projectorPowerFallback"></div>
   <div class="form-row"><label for="node-input-transportTimeoutMs">Transport timeout milliseconds</label><input type="number" id="node-input-transportTimeoutMs"></div>
 </script>
 
 <script type="text/html" data-help-name="home-display-mode-controller">
   <p>Owns Bravia power, projector lamp power and projector-screen position for <code>off</code>, <code>tv</code> and <code>projector</code> modes.</p>
   <p>Send <code>msg.display = {kind: "intent", requestId, generation, mode}</code>. Send <code>kind: "startup"</code> after deployment to query every owned device and reconcile persisted intent.</p>
-  <p>The Bravia and both Shelly devices use direct LAN APIs. Output 1 is the explicitly named HA/Broadlink projector-power fallback and must connect only to <code>remote.send_command</code> for the projector. Output 2 emits observed state plus ready, failed, rejected and superseded results.</p>
+  <p>The Bravia and both Shelly devices use direct LAN APIs. Output 1 is the explicitly named HA/Broadlink projector-power fallback and must connect only to <code>remote.send_command</code> for the projector. Enable “Projector power is fallback” to include its use in activity metrics. Output 2 emits observed state plus ready, manual-override, failed, rejected and superseded results.</p>
+  <p>An unsolicited physical-state change after readiness latches manual ownership. The controller observes and reports it without issuing corrective commands; a newer activity intent resumes automation.</p>
   <p>The Bravia PSK remains in Node-RED's encrypted credential store and is never emitted in a message or status.</p>
 </script>

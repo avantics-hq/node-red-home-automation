@@ -404,6 +404,9 @@ test("explicit manual override classification remains evidence, not a new reques
   assert.equal(result.events.some((entry) => entry.theatre.kind === "manual_override"), true);
   assert.equal(result.state.desired?.activity, "projector_shield");
   assert.equal(result.state.generation, 12);
+  assert.equal(result.state.phase, "manual_override");
+  assert.equal(result.commands.length, 0);
+  assert.equal(result.state.metrics.manualOverrides, 1);
 });
 
 test("adapter failure after ready is failure evidence, not physical drift", () => {
@@ -442,4 +445,105 @@ test("older same-generation observations cannot overwrite newer target state", (
   assert.equal(result.state.targets.display?.status, "ready");
   assert.equal(result.state.phase, "confirming");
   assert.equal(result.traces.some((entry) => entry.reason === "out-of-order"), true);
+});
+
+test("startup without persisted intent probes before recovering physical state", () => {
+  const result = apply(undefined, {kind: "startup"});
+  assert.equal(result.state.phase, "recovering");
+  assert.deepEqual(result.commands.map(({target, kind}) => ({target, kind})), [
+    {target: "display", kind: "refresh"},
+    {target: "avr", kind: "refresh"},
+    {target: "source", kind: "refresh"},
+    {target: "lighting", kind: "refresh"},
+    {target: "backlighting", kind: "refresh"}
+  ]);
+  assert.equal(result.events.some(({theatre}) => theatre.kind === "recovery_required"), true);
+});
+
+test("recovery adopts one clean physical profile without issuing commands", () => {
+  const startup = apply(undefined, {kind: "startup"});
+  const observedAt = at(1).toISOString();
+  const result = apply(startup.state, {
+    kind: "recover",
+    reason: "startup",
+    observations: {
+      display: {observedAt, values: {mode: "tv"}},
+      avr: {observedAt, values: {power: "on", source: "shield"}},
+      source: {observedAt, values: {action: "activate", sourceId: "shield"}},
+      backlighting: {observedAt, values: {power: "on"}}
+    }
+  }, 1);
+
+  assert.equal(result.commands.length, 0);
+  assert.equal(result.state.desired?.activity, "tv_shield");
+  assert.equal(result.state.currentActivity, "tv_shield");
+  assert.equal(result.state.phase, "ready");
+  assert.equal(result.state.generation, 1);
+  assert.equal(result.state.metrics.recoveriesAdopted, 1);
+  assert.equal(result.state.metrics.lastOutcome, "recovery_adopted");
+});
+
+test("ambiguous startup recovery coordinates the configured Off activity", () => {
+  const observedAt = at(1).toISOString();
+  const result = apply(undefined, {
+    kind: "recover",
+    reason: "startup",
+    observations: {
+      display: {observedAt, values: {mode: "tv"}},
+      avr: {observedAt, values: {power: "standby"}},
+      source: {observedAt, values: {action: "deactivate"}},
+      backlighting: {observedAt, values: {power: "on"}}
+    }
+  }, 1);
+
+  assert.equal(result.state.desired?.activity, "off");
+  assert.equal(result.state.phase, "preparing");
+  assert.equal(result.commands.length, 5);
+  assert.equal(result.commands.every(({kind}) => kind === "intent"), true);
+  assert.equal(result.state.metrics.recoveriesSafeOff, 1);
+  assert.equal(result.events.some(({theatre}) => theatre.kind === "recovery_safe_off"), true);
+});
+
+test("ambiguous manual recovery holds ownership without issuing commands", () => {
+  let result = confirmActivity("tv_shield", 16);
+  result = target(result.state, "avr", "transitioning", 16, 2, {
+    classification: "manual_override"
+  });
+  const observedAt = at(2.1).toISOString();
+  result = apply(result.state, {
+    kind: "recover",
+    reason: "manual_override",
+    observations: {
+      display: {observedAt, values: {mode: "tv"}},
+      avr: {observedAt, values: {power: "on", source: "unknown"}},
+      source: {observedAt, values: {action: "deactivate"}},
+      backlighting: {observedAt, values: {power: "on"}}
+    }
+  }, 2.1);
+
+  assert.equal(result.state.phase, "manual_override");
+  assert.equal(result.commands.length, 0);
+  assert.equal(result.events.some(({theatre}) => theatre.kind === "recovery_ambiguous"), true);
+});
+
+test("metrics retain transition latency, retries, fallback use and target availability", () => {
+  let result = request(undefined, "tv_shield", 17);
+  result = target(result.state, "display", "transitioning", 17, 1, {
+    details: {metrics: {attempts: 2, fallbackUsed: true}}
+  });
+  result = target(result.state, "display", "ready", 17, 2, {
+    details: {metrics: {attempts: 2, fallbackUsed: true}}
+  });
+  result = target(result.state, "avr", "ready", 17, 2.1);
+  result = target(result.state, "backlighting", "ready", 17, 2.2);
+  result = target(result.state, "source", "ready", 17, 2.3);
+
+  assert.equal(result.state.metrics.requests, 1);
+  assert.equal(result.state.metrics.ready, 1);
+  assert.equal(result.state.metrics.lastTransitionMs, 2300);
+  assert.equal(result.state.metrics.maxTransitionMs, 2300);
+  assert.equal(result.state.metrics.targets.display.retries, 1);
+  assert.equal(result.state.metrics.targets.display.fallbackUses, 1);
+  assert.equal(result.state.metrics.targets.display.lastConfirmationMs, 2000);
+  assert.equal(result.state.metrics.targets.display.availability, "available");
 });

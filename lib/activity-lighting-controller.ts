@@ -103,6 +103,7 @@ export interface ActivityLightingOutputEvent {
       matched: number;
       preserved: number;
       expected: number;
+      metrics: {attempts: number; retries: number; fallbackUsed: boolean};
     };
     failure?: ActivityLightingFailure;
   };
@@ -435,7 +436,12 @@ export function transitionActivityLighting(
         profile: state.desired.profile,
         matched: counts.matched,
         preserved: counts.preserved,
-        expected: profileFor(state, config).targets.length
+        expected: profileFor(state, config).targets.length,
+        metrics: {
+          attempts: state.pending?.attempt ?? 0,
+          retries: Math.max(0, (state.pending?.attempt ?? 1) - 1),
+          fallbackUsed: false
+        }
       }
     };
     if (state.failure) theatre.failure = {...state.failure};

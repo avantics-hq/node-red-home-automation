@@ -92,6 +92,40 @@ export interface TheatreFailure {
   occurredAt: string;
 }
 
+export interface TheatreTargetMetrics {
+  attempts: number;
+  retries: number;
+  failures: number;
+  manualOverrides: number;
+  fallbackUses: number;
+  fallbackUsed: boolean;
+  lastConfirmationMs: number | null;
+  observationAgeMs: number | null;
+  availability: TheatreAvailability;
+}
+
+export interface TheatreMetrics {
+  requests: number;
+  ready: number;
+  failed: number;
+  superseded: number;
+  manualOverrides: number;
+  driftEvents: number;
+  recoveriesAdopted: number;
+  recoveriesSafeOff: number;
+  lastTransitionMs: number | null;
+  maxTransitionMs: number | null;
+  lastOutcome: string | null;
+  targets: Record<TheatreTarget, TheatreTargetMetrics>;
+}
+
+export interface RecoveryObservation {
+  observedAt: string;
+  values: Record<string, unknown>;
+}
+
+export type RecoveryObservations = Partial<Record<TheatreTarget, RecoveryObservation>>;
+
 export interface TheatreState {
   desired: TheatreDesired | null;
   currentActivity: string;
@@ -105,12 +139,14 @@ export interface TheatreState {
   availability: TheatreAvailability;
   transitionStartedAt: string | null;
   transitionCompletedAt: string | null;
+  metrics: TheatreMetrics;
 }
 
 export interface TheatreConfig {
   area: string;
   freshnessMs: number;
   activityProfiles: ActivityProfiles;
+  recoveryOffActivity?: string;
 }
 
 export type TheatreInputEvent =
@@ -132,7 +168,8 @@ export type TheatreInputEvent =
     details?: Record<string, unknown>;
   }
   | {kind: "startup" | "refresh"}
-  | {kind: "tick"; generation?: number};
+  | {kind: "tick"; generation?: number}
+  | {kind: "recover"; reason: "startup" | "manual_override"; observations: RecoveryObservations};
 
 export interface TheatreOutput {
   theatre: Record<string, unknown>;
@@ -211,6 +248,56 @@ function emptyRefreshPending(
     Record<TheatreTarget, boolean>;
 }
 
+function count(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+function nullableDuration(value: unknown): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function targetMetrics(
+  saved: Partial<Record<TheatreTarget, Partial<TheatreTargetMetrics>>> = {}
+): Record<TheatreTarget, TheatreTargetMetrics> {
+  return Object.fromEntries(TARGETS.map((target) => {
+    const metric = saved[target] || {};
+    const availability = typeof metric.availability === "string" &&
+      Object.hasOwn(AVAILABILITIES, metric.availability)
+      ? metric.availability as TheatreAvailability
+      : "unknown";
+    return [target, {
+      attempts: count(metric.attempts),
+      retries: count(metric.retries),
+      failures: count(metric.failures),
+      manualOverrides: count(metric.manualOverrides),
+      fallbackUses: count(metric.fallbackUses),
+      fallbackUsed: metric.fallbackUsed === true,
+      lastConfirmationMs: nullableDuration(metric.lastConfirmationMs),
+      observationAgeMs: nullableDuration(metric.observationAgeMs),
+      availability
+    }];
+  })) as Record<TheatreTarget, TheatreTargetMetrics>;
+}
+
+function createMetrics(saved: Partial<TheatreMetrics> = {}): TheatreMetrics {
+  return {
+    requests: count(saved.requests),
+    ready: count(saved.ready),
+    failed: count(saved.failed),
+    superseded: count(saved.superseded),
+    manualOverrides: count(saved.manualOverrides),
+    driftEvents: count(saved.driftEvents),
+    recoveriesAdopted: count(saved.recoveriesAdopted),
+    recoveriesSafeOff: count(saved.recoveriesSafeOff),
+    lastTransitionMs: nullableDuration(saved.lastTransitionMs),
+    maxTransitionMs: nullableDuration(saved.maxTransitionMs),
+    lastOutcome: typeof saved.lastOutcome === "string" ? saved.lastOutcome : null,
+    targets: targetMetrics(saved.targets)
+  };
+}
+
 export function createTheatreState(
   saved: Partial<TheatreState> = {},
   activityProfiles: ActivityProfiles = {}
@@ -240,17 +327,24 @@ export function createTheatreState(
       : null,
     transitionCompletedAt: typeof saved.transitionCompletedAt === "string"
       ? saved.transitionCompletedAt
-      : null
+      : null,
+    metrics: createMetrics(saved.metrics)
   };
 }
 
 export function normaliseConfig(
   config: Partial<TheatreConfig> & {activityProfiles?: unknown} = {}
 ): TheatreConfig {
+  const activityProfiles = normaliseActivityProfiles(config.activityProfiles);
+  const recoveryOffActivity = typeof config.recoveryOffActivity === "string" &&
+    config.recoveryOffActivity
+    ? config.recoveryOffActivity
+    : "off";
   return {
     area: typeof config.area === "string" && config.area ? config.area : "room",
     freshnessMs: Math.max(1000, Number(config.freshnessMs) || 30000),
-    activityProfiles: normaliseActivityProfiles(config.activityProfiles)
+    activityProfiles,
+    recoveryOffActivity
   };
 }
 
@@ -292,12 +386,16 @@ function targetRefreshCommands(desired: TheatreDesired): TargetCommand[] {
   return TARGETS.map((target) => targetCommand(target, "refresh", desired));
 }
 
+function targetProbeCommands(): TargetCommand[] {
+  return TARGETS.map((target) => targetCommand(target, "refresh", null));
+}
+
 function observationTime(targetState: {observedAt?: string} | null | undefined): number | null {
   const value = Date.parse(targetState?.observedAt || "");
   return Number.isFinite(value) ? value : null;
 }
 
-function isFresh(targetState: TargetState, nowMs: number, freshnessMs: number): boolean {
+function isFresh(targetState: {observedAt: string}, nowMs: number, freshnessMs: number): boolean {
   const observedAt = observationTime(targetState);
   return observedAt !== null && nowMs - observedAt <= freshnessMs && observedAt <= nowMs + 1000;
 }
@@ -326,9 +424,36 @@ function stateEvent(state: TheatreState, area: string): TheatreOutput {
       transitionCompletedAt: state.transitionCompletedAt,
       targets: emptyTargets(state.targets),
       failure: state.failure ? {...state.failure} : null,
-      degraded: state.degraded.map((entry) => ({...entry}))
+      degraded: state.degraded.map((entry) => ({...entry})),
+      metrics: createMetrics(state.metrics)
     }
   };
+}
+
+const RECOVERY_TARGETS: readonly TheatreTarget[] = ["display", "avr", "source", "backlighting"];
+
+function matchesExpected(expected: unknown, observed: unknown): boolean {
+  if (!expected || typeof expected !== "object" || Array.isArray(expected)) {
+    return Object.is(expected, observed);
+  }
+  if (!observed || typeof observed !== "object" || Array.isArray(observed)) return false;
+  return Object.entries(expected as Record<string, unknown>).every(([key, value]) =>
+    matchesExpected(value, (observed as Record<string, unknown>)[key]));
+}
+
+function recoveryMatches(
+  profile: ActivityProfile,
+  observations: RecoveryObservations,
+  nowMs: number,
+  freshnessMs: number
+): boolean {
+  return RECOVERY_TARGETS.every((target) => {
+    const observation = observations[target];
+    if (!observation || !isFresh(observation, nowMs, freshnessMs)) return false;
+    const expected = {...profile[target]};
+    if (target === "source") delete expected.readiness;
+    return matchesExpected(expected, observation.values);
+  });
 }
 
 export function transitionTheatre(
@@ -367,7 +492,67 @@ export function transitionTheatre(
     });
   }
 
+  function completeTransition(outcome: "ready" | "failed" | "manual_override") {
+    const startedAt = Date.parse(state.transitionStartedAt || "");
+    if (Number.isFinite(startedAt)) {
+      const duration = Math.max(0, nowMs - startedAt);
+      state.metrics.lastTransitionMs = duration;
+      state.metrics.maxTransitionMs = Math.max(state.metrics.maxTransitionMs || 0, duration);
+    }
+    state.metrics.lastOutcome = outcome;
+    if (outcome === "ready") state.metrics.ready += 1;
+    if (outcome === "failed") state.metrics.failed += 1;
+  }
+
+  function resetTransitionMetrics() {
+    for (const target of TARGETS) {
+      const metric = state.metrics.targets[target];
+      metric.attempts = 0;
+      metric.retries = 0;
+      metric.fallbackUsed = false;
+      metric.lastConfirmationMs = null;
+      metric.observationAgeMs = null;
+      metric.availability = "unknown";
+    }
+  }
+
+  function updateTargetMetrics(
+    target: TheatreTarget,
+    targetState: TargetState,
+    previous: TargetState | null
+  ) {
+    const metric = state.metrics.targets[target];
+    const details = targetState.details && typeof targetState.details === "object"
+      ? targetState.details
+      : {};
+    const detailMetrics = details.metrics && typeof details.metrics === "object" &&
+      !Array.isArray(details.metrics)
+      ? details.metrics as Record<string, unknown>
+      : {};
+    const attempts = count(detailMetrics.attempts ?? details.attempt);
+    metric.attempts = Math.max(metric.attempts, attempts);
+    metric.retries = Math.max(metric.retries, Math.max(0, attempts - 1));
+    const fallbackUsed = detailMetrics.fallbackUsed === true;
+    if (fallbackUsed && !metric.fallbackUsed) metric.fallbackUses += 1;
+    metric.fallbackUsed ||= fallbackUsed;
+    const observedAt = observationTime(targetState);
+    metric.observationAgeMs = observedAt === null ? null : Math.max(0, nowMs - observedAt);
+    if (targetState.status === "ready") {
+      const startedAt = Date.parse(state.transitionStartedAt || "");
+      metric.lastConfirmationMs = Number.isFinite(startedAt) && observedAt !== null
+        ? Math.max(0, observedAt - startedAt)
+        : null;
+      metric.availability = "available";
+    } else if (targetState.status === "failed" || targetState.status === "unavailable") {
+      metric.availability = "unavailable";
+      if (previous?.status !== targetState.status) metric.failures += 1;
+    } else {
+      metric.availability = "degraded";
+    }
+  }
+
   function fail(target: TheatreTarget, targetState: TargetState) {
+    const firstFailure = state.phase !== "failed";
     const failure = targetState.failure && typeof targetState.failure === "object"
       ? targetState.failure
       : {};
@@ -382,6 +567,7 @@ export function transitionTheatre(
     state.phase = "failed";
     state.availability = "unavailable";
     state.transitionCompletedAt = state.transitionCompletedAt || now.toISOString();
+    if (firstFailure) completeTransition("failed");
   }
 
   function reconcile() {
@@ -390,7 +576,7 @@ export function transitionTheatre(
     state.degraded = [];
 
     if (!state.desired) {
-      state.phase = "idle";
+      if (state.phase !== "recovering") state.phase = "idle";
       state.currentActivity = "unknown";
       state.availability = "unknown";
       return;
@@ -417,6 +603,23 @@ export function transitionTheatre(
       } else if (targetState.status !== "ready") {
         state.degraded.push({target, reason: targetState.failure?.reason || targetState.status});
       }
+    }
+
+    const manualTarget = TARGETS.find((target) => {
+      const targetState = state.targets[target];
+      return targetState?.classification === "manual_override" &&
+        isFresh(targetState, nowMs, config.freshnessMs);
+    });
+    if (manualTarget) {
+      state.phase = "manual_override";
+      state.currentActivity = "unknown";
+      state.availability = "degraded";
+      if (previousPhase !== "manual_override") {
+        completeTransition("manual_override");
+        emit("manual_override", {target: manualTarget});
+        trace("activity", "manual_override", null, {target: manualTarget});
+      }
+      return;
     }
 
     for (const target of REQUIRED_TARGETS) {
@@ -478,6 +681,7 @@ export function transitionTheatre(
     state.availability = state.degraded.length ? "degraded" : "available";
     if (previousPhase !== "ready" || previousCurrent !== state.currentActivity) {
       state.transitionCompletedAt = now.toISOString();
+      completeTransition("ready");
       emit("ready");
       trace("activity", "ready", null, {activity: state.currentActivity});
     }
@@ -526,6 +730,7 @@ export function transitionTheatre(
         supersededGeneration: state.desired.generation,
         supersededBy: event.requestId
       });
+      state.metrics.superseded += 1;
     }
     const requestedAt = event.requestedAt || now.toISOString();
     state.desired = {
@@ -544,6 +749,8 @@ export function transitionTheatre(
     state.availability = "unknown";
     state.transitionStartedAt = requestedAt;
     state.transitionCompletedAt = null;
+    state.metrics.requests += 1;
+    resetTransitionMetrics();
     commands.push(...targetIntentCommands(state.desired, config, previousDesired));
     trace("intent", "accepted", null, {activity: event.activity, generation: event.generation});
   }
@@ -583,6 +790,13 @@ export function transitionTheatre(
       failure: event.failure && typeof event.failure === "object" ? {...event.failure} : null,
       details: event.details && typeof event.details === "object" ? {...event.details} : null
     };
+    updateTargetMetrics(event.target, state.targets[event.target]!, previous);
+    if (classification === "manual_override" && previous?.classification !== classification) {
+      state.metrics.manualOverrides += 1;
+      state.metrics.targets[event.target].manualOverrides += 1;
+    } else if (classification === "drift" && previous?.classification !== classification) {
+      state.metrics.driftEvents += 1;
+    }
     state.refreshPending[event.target] = false;
     if (classification) {
       emit(classification, {target: event.target});
@@ -593,10 +807,108 @@ export function transitionTheatre(
     reconcile();
   }
 
+  function acceptRecovery(event: Extract<TheatreInputEvent, {kind: "recover"}>) {
+    if (!event.observations || typeof event.observations !== "object" ||
+      Array.isArray(event.observations)) {
+      throw new Error("recovery observations must be an object");
+    }
+    if (event.reason === "startup" && state.desired) {
+      trace("recovery", "ignored", "active-desired-state");
+      return;
+    }
+    if (event.reason === "manual_override" && state.phase !== "manual_override") {
+      trace("recovery", "ignored", "manual-override-cleared");
+      return;
+    }
+
+    const matches = Object.entries(config.activityProfiles)
+      .filter(([, profile]) => recoveryMatches(profile, event.observations, nowMs, config.freshnessMs))
+      .map(([activity]) => activity);
+    if (matches.length === 1) {
+      const activity = matches[0]!;
+      const generation = state.generation + 1;
+      const requestedAt = now.toISOString();
+      state.desired = {
+        requestId: `recovery-${event.reason}-${nowMs}`,
+        generation,
+        activity,
+        requestedAt
+      };
+      state.generation = generation;
+      state.targets = emptyTargets();
+      state.refreshPending = emptyRefreshPending();
+      state.failure = null;
+      state.blockedGeneration = null;
+      state.degraded = [];
+      state.transitionStartedAt = requestedAt;
+      state.transitionCompletedAt = requestedAt;
+      resetTransitionMetrics();
+      for (const target of TARGETS) {
+        const observation = event.observations[target];
+        state.targets[target] = {
+          status: "ready",
+          observedAt: observation?.observedAt || requestedAt,
+          classification: null,
+          failure: null,
+          details: {
+            recovery: observation?.values || {},
+            ownership: target === "lighting" && !observation ? "preserved" : "observed"
+          }
+        };
+        updateTargetMetrics(target, state.targets[target]!, null);
+      }
+      state.phase = "ready";
+      state.currentActivity = activity;
+      state.availability = "available";
+      state.metrics.recoveriesAdopted += 1;
+      completeTransition("ready");
+      state.metrics.lastOutcome = "recovery_adopted";
+      emit("recovery_adopted", {reason: event.reason, matchedActivity: activity});
+      trace("recovery", "adopted", null, {reason: event.reason, activity});
+      return;
+    }
+
+    if (event.reason === "startup") {
+      if (!Object.hasOwn(config.activityProfiles, config.recoveryOffActivity!)) {
+        throw new Error(`recovery off activity does not exist: ${config.recoveryOffActivity}`);
+      }
+      state.metrics.recoveriesSafeOff += 1;
+      acceptIntent({
+        kind: "intent",
+        requestId: `recovery-safe-off-${nowMs}`,
+        generation: state.generation + 1,
+        activity: config.recoveryOffActivity!,
+        requestedAt: now.toISOString()
+      });
+      emit("recovery_safe_off", {
+        matchCount: matches.length,
+        matchedActivities: matches
+      });
+      trace("recovery", "safe_off", matches.length ? "ambiguous" : "no-clean-match", {
+        matchedActivities: matches
+      });
+      return;
+    }
+
+    state.phase = "manual_override";
+    state.currentActivity = "unknown";
+    state.availability = "degraded";
+    state.metrics.lastOutcome = "manual_override";
+    emit("recovery_ambiguous", {
+      matchCount: matches.length,
+      matchedActivities: matches
+    });
+    trace("recovery", "held", matches.length ? "ambiguous" : "no-clean-match", {
+      matchedActivities: matches
+    });
+  }
+
   if (event.kind === "intent") {
     acceptIntent(event);
   } else if (event.kind === "target_state") {
     acceptTargetState(event);
+  } else if (event.kind === "recover") {
+    acceptRecovery(event);
   } else if (event.kind === "startup" || event.kind === "refresh") {
     state.targets = emptyTargets();
     state.refreshPending = emptyRefreshPending();
@@ -613,10 +925,13 @@ export function transitionTheatre(
         state.transitionCompletedAt = null;
       }
     } else {
-      state.phase = "idle";
+      commands.push(...targetProbeCommands());
+      for (const target of TARGETS) state.refreshPending[target] = true;
+      state.phase = "recovering";
       state.availability = "unknown";
+      emit("recovery_required", {reason: "startup"});
     }
-    trace(event.kind, state.desired ? "refreshing" : "idle");
+    trace(event.kind, state.desired ? "refreshing" : "recovering");
   } else if (event.kind === "tick") {
     if (Number.isInteger(event.generation) && state.desired && event.generation !== state.generation) {
       trace("tick", "ignored", "stale-generation", {generation: event.generation});

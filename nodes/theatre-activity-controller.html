@@ -6,6 +6,7 @@
       name: {value: ""},
       area: {value: "lounge", required: true},
       freshnessMs: {value: 30000, required: true, validate: RED.validators.number()},
+      recoveryOffActivity: {value: "off", required: true},
       activityProfiles: {value: "{}", required: true}
     },
     inputs: 1,
@@ -20,10 +21,12 @@
   <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
   <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area"></div>
   <div class="form-row"><label for="node-input-freshnessMs">Freshness ms</label><input type="number" id="node-input-freshnessMs"></div>
+  <div class="form-row"><label for="node-input-recoveryOffActivity">Recovery Off activity</label><input type="text" id="node-input-recoveryOffActivity"></div>
   <div class="form-row"><label for="node-input-activityProfiles">Profiles JSON</label><input type="text" id="node-input-activityProfiles"></div>
 </script>
 
 <script type="text/html" data-help-name="home-theatre-activity-controller">
   <p>Owns latest-request-wins whole-theatre activity state and aggregates generation-scoped target evidence.</p>
-  <p>Input <code>msg.theatre</code> accepts activity intent, target-state, startup, refresh and tick events. Output 1 emits semantic <code>msg.theatreCommand</code> messages for target owners. Output 2 emits activity events and a complete state snapshot. Device transports remain separate.</p>
+  <p>Input <code>msg.theatre</code> accepts activity intent, target-state, startup, refresh, recovery and tick events. Output 1 emits semantic <code>msg.theatreCommand</code> messages for target owners. Output 2 emits activity events and a complete state snapshot. Device transports remain separate.</p>
+  <p>Startup without persisted intent probes physical state. One fresh profile match is adopted without commands; zero or multiple matches invoke the configured coordinated Off activity. Manual overrides are held without corrective commands and adopted only when the physical state uniquely matches a profile.</p>
 </script>

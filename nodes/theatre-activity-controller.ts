@@ -21,6 +21,7 @@ interface TheatreActivityNodeConfig extends NodeDef {
   area?: string;
   freshnessMs?: number | string;
   activityProfiles?: string;
+  recoveryOffActivity?: string;
 }
 
 interface TheatreActivityNode extends Node {}
@@ -50,7 +51,8 @@ const registerTheatreActivityController: NodeInitializer = (RED) => {
     const controllerConfig: TheatreConfig = {
       area: config.area || "lounge",
       freshnessMs: Math.max(1000, number(config.freshnessMs, 30000)),
-      activityProfiles
+      activityProfiles,
+      recoveryOffActivity: config.recoveryOffActivity || "off"
     };
 
     function updateStatus(status: TheatreStatus) {
@@ -59,6 +61,8 @@ const registerTheatreActivityController: NodeInitializer = (RED) => {
         transitioning: {fill: "blue", shape: "dot"},
         confirming: {fill: "blue", shape: "ring"},
         waiting_for_source: {fill: "yellow", shape: "ring"},
+        recovering: {fill: "yellow", shape: "ring"},
+        manual_override: {fill: "yellow", shape: "ring"},
         ready: {fill: "green", shape: "dot"},
         failed: {fill: "red", shape: "ring"}
       };

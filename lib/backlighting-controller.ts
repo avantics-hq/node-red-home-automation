@@ -43,6 +43,8 @@ export interface BacklightingState {
   pending: BacklightingPending | null;
   failure: BacklightingFailure | null;
   blockedGeneration: number | null;
+  classification: "manual_override" | null;
+  lastAttempt: number;
 }
 
 export type BacklightingEvent =
@@ -83,7 +85,13 @@ export interface BacklightingOutputEvent {
     generation: number;
     status: string;
     observedAt: string;
-    details: {power: BacklightingPower; observedPower: BacklightingPower | null};
+    details: {
+      power: BacklightingPower;
+      observedPower: BacklightingPower | null;
+      recovery: Record<string, unknown>;
+      metrics: {attempts: number; retries: number; fallbackUsed: boolean};
+    };
+    classification?: "manual_override";
     failure?: BacklightingFailure;
   };
 }
@@ -104,7 +112,11 @@ function initialState(saved: Partial<BacklightingState> = {}): BacklightingState
     observed: saved.observed && typeof saved.observed === "object" ? {...saved.observed} : null,
     pending: saved.pending && typeof saved.pending === "object" ? {...saved.pending} : null,
     failure: saved.failure && typeof saved.failure === "object" ? {...saved.failure} : null,
-    blockedGeneration: Number.isInteger(saved.blockedGeneration) ? saved.blockedGeneration! : null
+    blockedGeneration: Number.isInteger(saved.blockedGeneration) ? saved.blockedGeneration! : null,
+    classification: saved.classification === "manual_override" ? "manual_override" : null,
+    lastAttempt: Number.isInteger(saved.lastAttempt) && (saved.lastAttempt ?? -1) >= 0
+      ? saved.lastAttempt!
+      : 0
   };
 }
 
@@ -171,6 +183,7 @@ export function transitionBacklighting(
     };
     state.phase = operation === "set_power" ? "transitioning" : "confirming";
     trace("command", "emitted", null, {operation, power: state.desired?.power, attempt});
+    state.lastAttempt = Math.max(state.lastAttempt, attempt);
   }
 
   function acceptIntent(intent: Extract<BacklightingEvent, {kind: "intent"}>) {
@@ -203,6 +216,8 @@ export function transitionBacklighting(
     state.pending = null;
     state.failure = null;
     state.blockedGeneration = null;
+    state.classification = null;
+    state.lastAttempt = 0;
     issue("set_power", 1);
     trace("intent", "accepted", null, {power: intent.power, generation: intent.generation});
   }
@@ -227,13 +242,26 @@ export function transitionBacklighting(
       trace("observation", "ignored", "out-of-order");
       return;
     }
+    const wasReady = state.phase === "ready" && !state.pending;
     state.observed = {power: observation.power, observedAt: observation.observedAt};
     if (observation.power === state.desired.power) {
       state.pending = null;
       state.failure = null;
       state.blockedGeneration = null;
+      state.classification = null;
       state.phase = "ready";
       trace("observation", "ready", null, {power: observation.power});
+    } else if (wasReady) {
+      state.pending = null;
+      state.classification = "manual_override";
+      state.phase = "manual_override";
+      trace("observation", "manual_override", null, {
+        expected: state.desired.power,
+        observed: observation.power
+      });
+    } else if (state.classification === "manual_override") {
+      state.pending = null;
+      state.phase = "manual_override";
     } else {
       state.phase = "confirming";
       trace("observation", "accepted", "power-mismatch", {
@@ -278,7 +306,13 @@ export function transitionBacklighting(
     state.observed = null;
     state.pending = null;
     if (state.desired) {
-      issue("observe", 0);
+      if (state.classification === "manual_override") {
+        commands.push(commandFor(state, "observe", 0));
+        state.pending = null;
+        state.phase = "manual_override";
+      } else {
+        issue("observe", 0);
+      }
       trace(event.kind, "observing", null, {power: state.desired.power});
     } else {
       trace(event.kind, "idle");
@@ -293,13 +327,26 @@ export function transitionBacklighting(
       target: "backlighting",
       requestId: state.desired.requestId,
       generation: state.generation,
-      status: state.phase === "failed" ? "failed" : state.phase === "ready" ? "ready" : state.phase,
+      status: state.phase === "failed"
+        ? "failed"
+        : state.phase === "ready"
+          ? "ready"
+          : state.phase === "manual_override"
+            ? "transitioning"
+            : state.phase,
       observedAt: now.toISOString(),
       details: {
         power: state.desired.power,
-        observedPower: state.observed?.power ?? null
+        observedPower: state.observed?.power ?? null,
+        recovery: state.observed ? {power: state.observed.power} : {},
+        metrics: {
+          attempts: state.lastAttempt,
+          retries: Math.max(0, state.lastAttempt - 1),
+          fallbackUsed: false
+        }
       }
     };
+    if (state.classification) theatre.classification = state.classification;
     if (state.failure) theatre.failure = {...state.failure};
     events.push({theatre});
   }

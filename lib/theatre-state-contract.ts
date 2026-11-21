@@ -1,6 +1,6 @@
 "use strict";
 
-import {TARGETS, type TheatreTarget} from "./theatre-activity-controller";
+import {TARGETS, type TheatreMetrics, type TheatreTarget} from "./theatre-activity-controller";
 
 const NAME = /^[a-z][a-z0-9_-]*$/;
 const REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
@@ -40,6 +40,7 @@ export interface TheatreStateSnapshot {
   targets: Partial<Record<TheatreTarget, Record<string, unknown> | null>>;
   failure: Record<string, unknown> | null;
   degraded: Array<Record<string, unknown>>;
+  metrics?: TheatreMetrics;
 }
 
 export interface TheatreStateContractMessage {
@@ -212,6 +213,22 @@ function discoveryPublications(config: TheatreStateContractConfig): ContractPubl
         entity_category: "diagnostic",
         device: controllerDevice
       }
+    },
+    {
+      component: "sensor",
+      objectId: `${area}_theatre_transition_metrics`,
+      payload: {
+        name: "Transition latency",
+        unique_id: `${area}_theatre_transition_metrics`,
+        default_entity_id: `sensor.${area}_theatre_transition_metrics`,
+        icon: "mdi:timer-check-outline",
+        state_topic: `${baseTopic}/metrics`,
+        value_template: "{{ value_json.lastTransitionMs if value_json.lastTransitionMs is not none else 'unknown' }}",
+        json_attributes_topic: `${baseTopic}/metrics`,
+        unit_of_measurement: "ms",
+        entity_category: "diagnostic",
+        device: controllerDevice
+      }
     }
   ];
   for (const target of TARGETS) {
@@ -255,7 +272,21 @@ function statePublications(
     publication(`${base}/current`, event.currentActivity),
     publication(`${base}/phase`, event.phase),
     publication(`${base}/failure`, event.failure),
-    publication(`${base}/availability`, event.availability)
+    publication(`${base}/availability`, event.availability),
+    publication(`${base}/metrics`, event.metrics || {
+      requests: 0,
+      ready: 0,
+      failed: 0,
+      superseded: 0,
+      manualOverrides: 0,
+      driftEvents: 0,
+      recoveriesAdopted: 0,
+      recoveriesSafeOff: 0,
+      lastTransitionMs: null,
+      maxTransitionMs: null,
+      lastOutcome: null,
+      targets: {}
+    })
   ];
   for (const target of TARGETS) {
     const health = event.targets[target];

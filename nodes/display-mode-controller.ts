@@ -37,6 +37,7 @@ interface DisplayControllerConfig extends NodeDef {
   maxAttempts?: number | string;
   projectorOnWatts?: number | string;
   projectorOffWatts?: number | string;
+  projectorPowerFallback?: boolean;
 }
 
 interface DisplayCredentials {
@@ -74,7 +75,8 @@ const registerDisplayModeController: NodeInitializer = (RED) => {
       projectorCooldownMs: number(config.projectorCooldownMs, 120000),
       maxAttempts: number(config.maxAttempts, 2),
       projectorOnWatts: number(config.projectorOnWatts, 20),
-      projectorOffWatts: number(config.projectorOffWatts, 10)
+      projectorOffWatts: number(config.projectorOffWatts, 10),
+      projectorPowerFallback: config.projectorPowerFallback === true
     };
 
     let transport: DisplayTransport;
@@ -98,6 +100,7 @@ const registerDisplayModeController: NodeInitializer = (RED) => {
         idle: {fill: "grey", shape: "dot"},
         transitioning: {fill: "blue", shape: "dot"},
         ready: {fill: "green", shape: "dot"},
+        manual_override: {fill: "yellow", shape: "ring"},
         failed: {fill: "red", shape: "ring"}
       };
       const appearance = appearances[status.phase] ?? {fill: "grey", shape: "ring"};

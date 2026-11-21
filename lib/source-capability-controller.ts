@@ -28,6 +28,7 @@ export interface SourceDescriptor {
   activation: SourceControlMode;
   deactivation: SourceControlMode;
   confirmation: SourceConfirmation;
+  fallback?: boolean;
 }
 
 export type SourceCapabilities = Record<string, SourceDescriptor>;
@@ -73,6 +74,9 @@ export interface SourceState {
   pending: SourcePending | null;
   failure: SourceFailure | null;
   blockedGeneration: number | null;
+  classification: "manual_override" | null;
+  lastAttempt: number;
+  fallbackUsed: boolean;
 }
 
 export type SourceEvent =
@@ -134,7 +138,8 @@ export function normaliseCapabilities(value: unknown): SourceCapabilities {
     sources[sourceId] = {
       activation: activation as SourceControlMode,
       deactivation: deactivation as SourceControlMode,
-      confirmation: confirmation as SourceConfirmation
+      confirmation: confirmation as SourceConfirmation,
+      ...(descriptor.fallback === true ? {fallback: true} : {})
     };
   }
   if (Object.keys(sources).length === 0) throw new Error("sources must not be empty");
@@ -165,7 +170,12 @@ function initialState(
     observed: saved.observed && typeof saved.observed === "object" ? {...saved.observed} : null,
     pending: saved.pending && typeof saved.pending === "object" ? {...saved.pending} : null,
     failure: saved.failure && typeof saved.failure === "object" ? {...saved.failure} : null,
-    blockedGeneration: Number.isInteger(saved.blockedGeneration) ? saved.blockedGeneration! : null
+    blockedGeneration: Number.isInteger(saved.blockedGeneration) ? saved.blockedGeneration! : null,
+    classification: saved.classification === "manual_override" ? "manual_override" : null,
+    lastAttempt: Number.isInteger(saved.lastAttempt) && (saved.lastAttempt ?? -1) >= 0
+      ? saved.lastAttempt!
+      : 0,
+    fallbackUsed: saved.fallbackUsed === true
   };
 }
 
@@ -186,6 +196,12 @@ export interface SourceOutputEvent {
     observedAt: string;
     sourceId: string | null;
     action: SourceAction;
+    classification?: "manual_override";
+    details: {
+      observedStatus: SourceObservationStatus | null;
+      recovery: Record<string, unknown>;
+      metrics: {attempts: number; retries: number; fallbackUsed: boolean};
+    };
     failure?: SourceFailure;
   };
 }
@@ -225,9 +241,23 @@ function targetEvent(state: SourceState, now: Date): SourceOutputEvent | null {
     status: targetStatus(state.phase),
     observedAt: iso(now),
     sourceId: state.desired.sourceId,
-    action: state.desired.action
+    action: state.desired.action,
+    details: {
+      observedStatus: state.observed?.status ?? null,
+      recovery: state.observed?.status === "active" || state.observed?.status === "available"
+        ? {action: "activate", sourceId: state.observed.sourceId}
+        : state.observed?.status === "inactive"
+          ? {action: "deactivate"}
+          : {},
+      metrics: {
+        attempts: state.lastAttempt,
+        retries: Math.max(0, state.lastAttempt - 1),
+        fallbackUsed: state.fallbackUsed
+      }
+    }
   };
   if (state.failure) theatre.failure = {...state.failure};
+  if (state.classification) theatre.classification = state.classification;
   return {theatre};
 }
 
@@ -296,6 +326,8 @@ export function transitionSource(
     state.phase = "transitioning";
     commands.push(command);
     trace("command", "emitted", null, {sourceId: state.desired?.sourceId ?? null, operation, attempt});
+    state.lastAttempt = Math.max(state.lastAttempt, attempt);
+    if (operation !== "observe" && descriptor()?.fallback === true) state.fallbackUsed = true;
   }
 
   function observationSatisfies(observation: SourceObservation | null): boolean {
@@ -319,11 +351,21 @@ export function transitionSource(
       state.pending = null;
       state.failure = null;
       state.blockedGeneration = null;
+      state.classification = null;
       state.phase = "ready";
       trace("observation", "ready", null, {
         sourceId: state.desired.sourceId,
         status: state.observed.status
       });
+    } else if (state.phase === "ready" && !state.pending) {
+      state.classification = "manual_override";
+      state.phase = "manual_override";
+      trace("observation", "manual_override", null, {
+        sourceId: state.desired.sourceId,
+        status: state.observed.status
+      });
+    } else if (state.classification === "manual_override") {
+      state.phase = "manual_override";
     } else if (state.phase !== "transitioning") {
       state.phase = "waiting_for_source";
     }
@@ -364,6 +406,9 @@ export function transitionSource(
     state.pending = null;
     state.failure = null;
     state.blockedGeneration = null;
+    state.classification = null;
+    state.lastAttempt = 0;
+    state.fallbackUsed = false;
     if (unknownSource) {
       markUnavailable("unknown-active-source");
       return;
@@ -466,7 +511,7 @@ export function transitionSource(
       } else {
         commands.push(commandFor(state, "observe"));
         state.pending = null;
-        state.phase = "confirming";
+        state.phase = state.classification === "manual_override" ? "manual_override" : "confirming";
         trace(event.kind, "querying", null, {sourceId: state.desired.sourceId});
       }
     } else {

@@ -15,7 +15,7 @@ Most home automations translate an event directly into a command. This package a
 - **Reliable AV transitions:** coordinate AVR inputs, TV power, projector warm-up and cooldown, and motorised screens from observed state rather than blind toggles.
 - **Honest source readiness:** model controllable, externally controlled, and unavailable playback sources without claiming success from an input selection alone.
 - **Owned theatre atmosphere:** apply activity lighting only to active, non-manual room lights and confirm TV backlighting independently.
-- **Recoverable automation:** keep reducers deterministic and persistable so Node-RED restarts can reconcile state safely.
+- **Recoverable automation:** adopt one fresh, uniquely matching physical activity after lost state; otherwise coordinate a safe Off request.
 
 ```mermaid
 flowchart LR
@@ -65,7 +65,7 @@ npm pack
 Install the resulting tarball through **Node-RED → Manage palette → Install → Upload module**, or from a Node-RED user directory:
 
 ```sh
-npm install /path/to/avantics-node-red-home-automation-1.8.1.tgz
+npm install /path/to/avantics-node-red-home-automation-1.9.0.tgz
 ```
 
 Add the installed nodes from the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.
@@ -73,8 +73,17 @@ Add the installed nodes from the Node-RED palette, then configure the room, devi
 The whole-theatre MQTT contract uses non-retained requests at
 `home/<area>/theatre/request`; every request supplies a unique `requestId` and an
 explicit configured activity. Controller output is retained under `desired`,
-`current`, `phase`, `failure`, `availability`, and `health/<target>`. Retained
-request messages are deliberately inert.
+`current`, `phase`, `failure`, `availability`, `metrics`, and
+`health/<target>`. Metrics expose transition latency and outcome counts plus
+per-target retry, fallback, confirmation-latency, failure, manual-override, and
+availability evidence. Retained request messages are deliberately inert.
+
+Unsolicited display, AVR, source, and backlighting changes latch manual
+ownership instead of issuing corrective commands. A newer explicit activity
+request resumes automation. Recovery adopts physical state only when fresh
+display, AVR, source, and backlighting evidence matches exactly one configured
+profile; missing or ambiguous startup evidence invokes the configured Off
+activity.
 
 ## Configuration and security
 
