@@ -631,16 +631,17 @@
           </div>
         </article>
 
-        <article class="phase active" data-phase="improvements">
-          <div class="phase-head"><div class="phase-number">12</div><div class="phase-title"><h3>Measured recovery and manual control</h3><p>Recover through stable contracts, preserve physical control and publish evidence.</p></div><span class="status active">In progress</span></div>
+        <article class="phase" data-phase="improvements">
+          <div class="phase-head"><div class="phase-number">12</div><div class="phase-title"><h3>Measured recovery and manual control</h3><p>Recover through stable contracts, preserve physical control and publish evidence.</p></div><span class="status complete">Complete</span></div>
           <div class="phase-body">
             <div class="tasks">
               <div class="task"><input id="p12-1" data-task="improve-recovery" type="checkbox" checked><label for="p12-1">Adopt one fresh physical profile match; otherwise coordinate the configured Off activity.</label></div>
               <div class="task"><input id="p12-2" data-task="improve-manual" type="checkbox" checked><label for="p12-2">Latch physical-remote changes as manual ownership without corrective commands.</label></div>
               <div class="task"><input id="p12-3" data-task="improve-metrics" type="checkbox" checked><label for="p12-3">Expose transition latency, outcomes, retries, fallbacks and target availability.</label></div>
-              <div class="task"><input id="p12-4" data-task="improve-proof" type="checkbox"><label for="p12-4">Deploy and prove clean adoption, ambiguous safe Off, manual control, metrics and restart behavior.</label></div>
+              <div class="task"><input id="p12-4" data-task="improve-proof" type="checkbox" checked><label for="p12-4">Deploy and prove clean adoption, ambiguous safe Off, manual control, metrics and restart behavior.</label></div>
             </div>
             <p class="note">Motion-aware shutdown remains deferred: the lounge has no reliable presence signal, so adding a timer now would weaken rather than improve ownership.</p>
+            <div class="gate-box"><strong>Gate passed:</strong> package 1.9.0 is deployed with a recovery coordinator and retained Home Assistant metrics discovery. Deployed-code probes proved clean physical-state adoption emits no commands, ambiguous startup recovery produces one five-target Off plan, and unsolicited AVR or display changes emit no corrective commands. A production restart preserved the active activity, returned all five targets to ready and published measured latency, retries, fallback use and availability.</div>
           </div>
         </article>
       </div>
