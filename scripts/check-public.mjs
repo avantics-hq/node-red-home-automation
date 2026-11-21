@@ -44,6 +44,17 @@ const contentRules = [
   }
 ];
 
+const pageRules = [
+  {
+    name: "deployment-specific room or device label in Pages",
+    pattern: /\b(?:Kitchen|Hallway|Lounge|Bravia|Denon|Shield|PlayStation|Shelly)\b/gi
+  },
+  {
+    name: "installation-status wording in Pages",
+    pattern: /\b(?:live|deployed|installed)\b/gi
+  }
+];
+
 const findings = [];
 for (const file of files) {
   if (forbiddenNames.some((pattern) => pattern.test(file))) {
@@ -63,8 +74,8 @@ for (const file of files) {
   if (content.includes(0)) continue;
 
   const text = content.toString("utf8");
-  const lines = text.split("\n");
-  for (const rule of contentRules) {
+  const activeRules = file.startsWith("docs/") ? [...contentRules, ...pageRules] : contentRules;
+  for (const rule of activeRules) {
     rule.pattern.lastIndex = 0;
     let match;
     while ((match = rule.pattern.exec(text)) !== null) {

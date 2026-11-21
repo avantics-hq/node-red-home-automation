@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="Programme overview for deterministic, state-aware Node-RED home automation components and their delivery roadmap.">
+  <meta name="description" content="Reusable deterministic Node-RED home-automation components and their public package roadmap.">
   <link rel="canonical" href="https://cptbucky.github.io/node-red-home-automation/">
-  <title>Smart Home Automation Programme</title>
+  <title>Node-RED Home Automation Components</title>
   <style>
     :root {
       --bg: #f4f6f8;
       --surface: #ffffff;
-      --surface-raised: #f8fafc;
+      --raised: #f8fafc;
       --text: #17202a;
       --muted: #5d6975;
       --border: #d8dee5;
@@ -19,18 +19,15 @@
       --accent-soft: #e9efff;
       --success: #18794e;
       --success-soft: #e7f6ee;
-      --warning: #9a6700;
-      --warning-soft: #fff4d6;
       --planned: #6e56cf;
       --planned-soft: #f0edff;
       --shadow: 0 18px 45px rgba(34, 46, 62, 0.1);
     }
-
     @media (prefers-color-scheme: dark) {
       :root {
         --bg: #101419;
         --surface: #171d24;
-        --surface-raised: #1d2530;
+        --raised: #1d2530;
         --text: #edf2f7;
         --muted: #aab5c2;
         --border: #303a47;
@@ -38,110 +35,75 @@
         --accent-soft: #202d58;
         --success: #72d6a4;
         --success-soft: #153b2b;
-        --warning: #f0c565;
-        --warning-soft: #453817;
         --planned: #b7a7ff;
         --planned-soft: #302957;
         --shadow: 0 18px 45px rgba(0, 0, 0, 0.28);
       }
     }
-
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      font: 16px/1.6 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     a { color: var(--accent); }
-    a:hover { text-decoration-thickness: 2px; }
     h1, h2, h3, p { margin-top: 0; }
-    h1 { max-width: 850px; margin-bottom: 18px; font-size: clamp(2.5rem, 6vw, 5.3rem); line-height: 0.98; letter-spacing: -0.055em; }
+    h1 { max-width: 860px; margin-bottom: 18px; font-size: clamp(2.6rem, 6vw, 5.3rem); line-height: 0.98; letter-spacing: -0.055em; }
     h2 { margin-bottom: 10px; font-size: clamp(1.65rem, 3vw, 2.35rem); line-height: 1.15; letter-spacing: -0.025em; }
-    h3 { margin-bottom: 6px; font-size: 1.03rem; line-height: 1.3; }
-    code { padding: 0.12em 0.35em; border-radius: 4px; background: var(--surface-raised); }
-
+    h3 { margin-bottom: 7px; font-size: 1.04rem; line-height: 1.3; }
     .shell { width: min(1120px, calc(100% - 40px)); margin: 0 auto; }
+    header, footer { background: var(--surface); }
+    header { border-bottom: 1px solid var(--border); }
     .site-nav { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 22px 0; }
-    .brand { color: var(--text); font-weight: 750; text-decoration: none; }
+    .brand { color: var(--text); font-weight: 760; text-decoration: none; }
     .nav-links { display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.9rem; }
     .nav-links a { color: var(--muted); text-decoration: none; }
     .nav-links a:hover { color: var(--text); }
-
-    header { border-bottom: 1px solid var(--border); background: var(--surface); }
     .hero { padding: 76px 0 82px; }
     .eyebrow { margin-bottom: 14px; color: var(--accent); font-size: 0.77rem; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase; }
-    .lead { max-width: 790px; margin-bottom: 26px; color: var(--muted); font-size: clamp(1.05rem, 2vw, 1.28rem); }
+    .lead { max-width: 780px; margin-bottom: 26px; color: var(--muted); font-size: clamp(1.05rem, 2vw, 1.28rem); }
     .pills { display: flex; flex-wrap: wrap; gap: 9px; }
-    .pill, .status {
-      display: inline-flex;
-      align-items: center;
-      width: fit-content;
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      font-size: 0.76rem;
-      font-weight: 750;
-      line-height: 1;
-    }
-    .pill { padding: 9px 12px; background: var(--surface-raised); color: var(--muted); }
+    .pill, .status { display: inline-flex; width: fit-content; border: 1px solid var(--border); border-radius: 999px; font-size: 0.76rem; font-weight: 750; line-height: 1; }
+    .pill { padding: 9px 12px; background: var(--raised); color: var(--muted); }
     .status { padding: 7px 10px; }
     .status.complete { border-color: color-mix(in srgb, var(--success) 35%, var(--border)); background: var(--success-soft); color: var(--success); }
-    .status.active { border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); background: var(--accent-soft); color: var(--accent); }
-    .status.next { border-color: color-mix(in srgb, var(--planned) 35%, var(--border)); background: var(--planned-soft); color: var(--planned); }
-    .status.blocked { border-color: color-mix(in srgb, var(--warning) 35%, var(--border)); background: var(--warning-soft); color: var(--warning); }
-
+    .status.available { border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); background: var(--accent-soft); color: var(--accent); }
+    .status.planned { border-color: color-mix(in srgb, var(--planned) 35%, var(--border)); background: var(--planned-soft); color: var(--planned); }
     main { padding: 62px 0 80px; }
     section + section { margin-top: 68px; }
     .section-intro { max-width: 760px; margin-bottom: 24px; color: var(--muted); }
-    .metrics, .portfolio, .roadmap, .delivery { display: grid; gap: 14px; }
+    .metrics, .components, .roadmap, .principles { display: grid; gap: 14px; }
     .metrics { grid-template-columns: repeat(4, 1fr); }
-    .portfolio { grid-template-columns: repeat(2, 1fr); }
-    .roadmap { grid-template-columns: repeat(4, 1fr); }
-    .delivery { grid-template-columns: repeat(4, 1fr); }
-    .metric, .component, .roadmap-column, .delivery-step, .boundary {
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      background: var(--surface);
-    }
+    .components { grid-template-columns: repeat(2, 1fr); }
+    .roadmap { grid-template-columns: repeat(3, 1fr); }
+    .principles { grid-template-columns: repeat(4, 1fr); }
+    .metric, .component, .roadmap-card, .principle, .boundary { border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
     .metric { padding: 21px; }
     .metric strong { display: block; font-size: 1.7rem; line-height: 1.1; }
     .metric span { display: block; margin-top: 7px; color: var(--muted); font-size: 0.86rem; }
-
-    .component { display: flex; flex-direction: column; min-height: 230px; padding: 24px; }
-    .component-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 22px; }
-    .component p { color: var(--muted); }
-    .component ul, .roadmap-column ul { margin: 0; padding-left: 19px; }
-    .component li + li, .roadmap-column li + li { margin-top: 7px; }
+    .component { display: flex; flex-direction: column; min-height: 225px; padding: 24px; }
+    .component.feature { box-shadow: var(--shadow); }
+    .component-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+    .component p, .component li, .roadmap-card p, .roadmap-card li, .principle p { color: var(--muted); font-size: 0.9rem; }
+    .component ul, .roadmap-card ul { margin: 8px 0 0; padding-left: 20px; }
     .component-link { margin-top: auto; padding-top: 18px; font-weight: 700; }
-    .feature { border-color: color-mix(in srgb, var(--success) 36%, var(--border)); box-shadow: var(--shadow); }
-
-    .roadmap-column { padding: 22px; }
-    .roadmap-column h3 { margin-top: 15px; }
-    .roadmap-column p, .roadmap-column li { color: var(--muted); font-size: 0.9rem; }
-    .roadmap-column li strong { color: var(--text); }
-
-    .delivery-step { padding: 22px; }
-    .delivery-step .number { display: block; margin-bottom: 24px; color: var(--accent); font-size: 0.78rem; font-weight: 800; letter-spacing: 0.12em; }
-    .delivery-step p { margin-bottom: 0; color: var(--muted); font-size: 0.9rem; }
-    .boundary { margin-top: 18px; padding: 22px 24px; background: var(--surface-raised); }
+    .roadmap-card, .principle { padding: 22px; }
+    .roadmap-card .status { margin-bottom: 14px; }
+    .principle p { margin-bottom: 0; }
+    .boundary { margin-top: 18px; padding: 22px 24px; background: var(--raised); }
     .boundary p { margin-bottom: 0; color: var(--muted); }
-
-    footer { border-top: 1px solid var(--border); background: var(--surface); }
+    footer { border-top: 1px solid var(--border); }
     footer .shell { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 18px; padding: 28px 0; color: var(--muted); font-size: 0.86rem; }
     footer nav { display: flex; flex-wrap: wrap; gap: 16px; }
-
     @media (max-width: 920px) {
-      .metrics, .roadmap, .delivery { grid-template-columns: repeat(2, 1fr); }
+      .metrics, .principles { grid-template-columns: repeat(2, 1fr); }
+      .roadmap { grid-template-columns: 1fr; }
     }
     @media (max-width: 700px) {
       .site-nav { align-items: flex-start; flex-direction: column; }
       .hero { padding: 52px 0 60px; }
-      .portfolio { grid-template-columns: 1fr; }
+      .components { grid-template-columns: 1fr; }
     }
     @media (max-width: 520px) {
       .shell { width: min(100% - 28px, 1120px); }
-      .metrics, .roadmap, .delivery { grid-template-columns: 1fr; }
+      .metrics, .principles { grid-template-columns: 1fr; }
       .component-head { flex-direction: column; }
     }
   </style>
@@ -153,23 +115,20 @@
         <a class="brand" href="./">Node-RED Home Automation</a>
         <div class="nav-links">
           <a href="#components">Components</a>
-          <a href="#roadmap">Roadmap</a>
-          <a href="home-theatre.html">Completed theatre programme</a>
+          <a href="#roadmap">Package roadmap</a>
+          <a href="home-theatre.html">Home-theatre capability</a>
           <a href="https://github.com/cptbucky/node-red-home-automation">GitHub</a>
         </div>
       </nav>
       <div class="hero">
-        <p class="eyebrow">Smart-home control programme</p>
-        <h1>Deterministic automation, component by component.</h1>
-        <p class="lead">
-          A public view of the reusable controllers, completed programmes and next improvements
-          built around explicit ownership, observed outcomes and recoverable state.
-        </p>
+        <p class="eyebrow">Reusable control library</p>
+        <h1>State-aware automation without hidden ownership.</h1>
+        <p class="lead">Deterministic TypeScript policies and thin Node-RED adapters for lighting, occupancy and coordinated media activities. This site documents package capabilities only.</p>
         <div class="pills">
-          <span class="pill">Home theatre complete</span>
-          <span class="pill">Shared room lighting live</span>
-          <span class="pill">Package 1.10.1</span>
-          <span class="pill">100 tests passing</span>
+          <span class="pill">Package 1.11.0</span>
+          <span class="pill">103 tests passing</span>
+          <span class="pill">11 reusable nodes</span>
+          <span class="pill">MIT licensed</span>
         </div>
       </div>
     </div>
@@ -177,147 +136,68 @@
 
   <main class="shell">
     <section aria-labelledby="status-title">
-      <h2 id="status-title">Programme status</h2>
-      <p class="section-intro">The theatre migration is complete. The programme now tracks reusable smart-home components and only promotes work with a clear owner, observable result and recovery path.</p>
+      <h2 id="status-title">Package at a glance</h2>
+      <p class="section-intro">The public project tracks reusable behavior, test evidence and source-level milestones. It intentionally contains no installation inventory or private automation topology.</p>
       <div class="metrics">
-        <div class="metric"><strong>1</strong><span>Completed end-to-end programme</span></div>
-        <div class="metric"><strong>3</strong><span>Rooms using shared lighting ownership</span></div>
-        <div class="metric"><strong>10</strong><span>Reusable Node-RED node types</span></div>
-        <div class="metric"><strong>1</strong><span>Transactional release path</span></div>
+        <div class="metric"><strong>11</strong><span>Node-RED node types</span></div>
+        <div class="metric"><strong>103</strong><span>Behavior-focused tests</span></div>
+        <div class="metric"><strong>5</strong><span>Home-theatre target classes</span></div>
+        <div class="metric"><strong>1</strong><span>Shared trace schema</span></div>
       </div>
     </section>
 
     <section id="components" aria-labelledby="components-title">
       <h2 id="components-title">Component portfolio</h2>
-      <p class="section-intro">Each component can progress independently while sharing the same reducer, adapter, evidence and release conventions.</p>
-      <div class="portfolio">
+      <p class="section-intro">Components share explicit ownership, semantic commands, observed completion and bounded recovery.</p>
+      <div class="components">
         <article class="component feature">
-          <div class="component-head">
-            <div><p class="eyebrow">Completed programme</p><h3>Home theatre activity control</h3></div>
-            <span class="status complete">Complete</span>
-          </div>
-          <p>One activity owner coordinates display, AVR, source, room lighting and backlighting from observed state. Legacy command paths are removed; recovery, operational objectives and manual-control UX are live.</p>
-          <a class="component-link" href="home-theatre.html">Read the completed 13-phase delivery record →</a>
+          <div class="component-head"><div><p class="eyebrow">Capability milestone</p><h3>Home-theatre orchestration</h3></div><span class="status complete">Complete</span></div>
+          <p>A latest-request-wins activity controller coordinates display, receiver, source, lighting and backlighting target owners without embedding transport-specific commands.</p>
+          <ul><li>Fresh observations gate completion</li><li>Stale generations are inert</li><li>Recovery and manual ownership are explicit</li></ul>
+          <a class="component-link" href="home-theatre.html">Read the capability reference →</a>
         </article>
-
         <article class="component">
-          <div class="component-head">
-            <div><p class="eyebrow">Reusable foundation</p><h3>Room lighting and occupancy</h3></div>
-            <span class="status active">Live</span>
-          </div>
-          <p>Shared occupancy fusion, motion policy and room controllers own circadian output, manual overrides, vacancy timing and rapid wall-switch gestures.</p>
-          <ul>
-            <li>Kitchen: motion plus presence hold</li>
-            <li>Hallway: PIR-only occupancy</li>
-            <li>Lounge: wall, schedule and activity intents</li>
-          </ul>
+          <div class="component-head"><div><p class="eyebrow">Lighting policies</p><h3>Room lighting control</h3></div><span class="status available">Available</span></div>
+          <p>One room controller owns adaptive output while independent switch, motion, schedule and activity policies emit semantic intent.</p>
+          <ul><li>Circadian brightness and colour temperature</li><li>Per-target manual ownership</li><li>Independent switch gestures and occupancy policy</li></ul>
         </article>
-
         <article class="component">
-          <div class="component-head">
-            <div><p class="eyebrow">Operational foundation</p><h3>Reliability and evidence</h3></div>
-            <span class="status active">Live</span>
-          </div>
-          <p>Bounded traces, explicit availability, transition metrics and rolling service objectives distinguish expected waiting, manual ownership and actionable failure.</p>
-          <ul>
-            <li>Latest request wins; stale work is inert</li>
-            <li>Completion requires fresh observations</li>
-            <li>Releases capture matching code, flow and smoke identities</li>
-          </ul>
+          <div class="component-head"><div><p class="eyebrow">Sensor policy</p><h3>Occupancy fusion</h3></div><span class="status available">Available</span></div>
+          <p>Combine motion triggers with optional presence hold while preserving unknown sensor states and preventing one source from clearing another.</p>
         </article>
-
         <article class="component">
-          <div class="component-head">
-            <div><p class="eyebrow">Product ergonomics</p><h3>Friendly activity profiles</h3></div>
-            <span class="status next">Next</span>
-          </div>
-          <p>Add deterministic shortcuts such as last-used source and lighting preference without hiding the resolved target activity or weakening explicit recovery choices.</p>
+          <div class="component-head"><div><p class="eyebrow">Operational evidence</p><h3>Metrics, traces and objectives</h3></div><span class="status available">Available</span></div>
+          <p>Bounded traces and rolling outcome evaluation expose transition latency, retries, fallbacks, target availability and actionable failure.</p>
         </article>
+      </div>
+    </section>
 
-        <article class="component">
-          <div class="component-head">
-            <div><p class="eyebrow">Capability hardening</p><h3>Media source observability</h3></div>
-            <span class="status next">Planned</span>
-          </div>
-          <p>Prove direct source transports and real readiness signals before replacing working fallbacks or claiming that an input selection means a player is ready.</p>
-        </article>
-
-        <article class="component">
-          <div class="component-head">
-            <div><p class="eyebrow">Separate programme</p><h3>Whole-home audio</h3></div>
-            <span class="status next">Discovery</span>
-          </div>
-          <p>Audit player, group and playback-readiness ownership before deciding whether existing audio integrations need a shared deterministic controller.</p>
-        </article>
+    <section aria-labelledby="principles-title">
+      <h2 id="principles-title">Design rules</h2>
+      <div class="principles">
+        <article class="principle"><h3>One owner</h3><p>Every controlled target has one normal command owner.</p></article>
+        <article class="principle"><h3>Semantic intent</h3><p>Policies request outcomes rather than transport operations.</p></article>
+        <article class="principle"><h3>Observed completion</h3><p>A command acknowledgement never substitutes for target state.</p></article>
+        <article class="principle"><h3>Bounded recovery</h3><p>Retries, timers, traces and failure paths remain finite.</p></article>
       </div>
     </section>
 
     <section id="roadmap" aria-labelledby="roadmap-title">
-      <h2 id="roadmap-title">Cross-component roadmap</h2>
-      <p class="section-intro">Ordered by product value rather than by available technology. Completed programmes remain stable unless operational evidence identifies a real regression.</p>
+      <h2 id="roadmap-title">Package roadmap</h2>
+      <p class="section-intro">Potential additions are evaluated as reusable capabilities, not as a record of any installation.</p>
       <div class="roadmap">
-        <article class="roadmap-column">
-          <span class="status complete">Complete</span>
-          <h3>Stable foundation</h3>
-          <ul>
-            <li><strong>Home theatre:</strong> full activity ownership and recovery</li>
-            <li><strong>Shared lighting:</strong> three live room controllers</li>
-            <li><strong>Operations:</strong> SLOs, release records and public safety scan</li>
-          </ul>
-        </article>
-        <article class="roadmap-column">
-          <span class="status active">Now</span>
-          <h3>Control ergonomics</h3>
-          <ul>
-            <li><strong>Friendly profiles:</strong> explicit convenience without hidden state</li>
-            <li><strong>Dashboard clarity:</strong> preserve one obvious recovery path</li>
-          </ul>
-        </article>
-        <article class="roadmap-column">
-          <span class="status next">Next</span>
-          <h3>Capability proof</h3>
-          <ul>
-            <li><strong>Source transport:</strong> compare direct control with measured fallback</li>
-            <li><strong>Player readiness:</strong> require a real power and availability signal</li>
-            <li><strong>Volume ownership:</strong> define remote and automation boundaries</li>
-          </ul>
-        </article>
-        <article class="roadmap-column">
-          <span class="status blocked">Evidence first</span>
-          <h3>Deferred work</h3>
-          <ul>
-            <li><strong>Motion-aware Off:</strong> blocked until reliable lounge presence exists</li>
-            <li><strong>Local light failover:</strong> requires broker-loss and reconciliation proof</li>
-            <li><strong>Whole-home audio:</strong> starts with ownership discovery</li>
-          </ul>
-        </article>
+        <article class="roadmap-card"><span class="status available">Current</span><h3>Consolidate examples</h3><p>Publish transport-neutral examples for room lighting, occupancy and activity contracts.</p></article>
+        <article class="roadmap-card"><span class="status planned">Next</span><h3>Profile ergonomics</h3><p>Add deterministic convenience profiles without hiding their resolved target state or recovery action.</p></article>
+        <article class="roadmap-card"><span class="status planned">Research</span><h3>Additional capabilities</h3><ul><li>Transport comparison and fallback evidence</li><li>Player readiness contracts</li><li>Volume ownership</li><li>Local lighting resilience</li><li>Grouped audio ownership</li></ul></article>
       </div>
-    </section>
-
-    <section aria-labelledby="delivery-title">
-      <h2 id="delivery-title">How changes become live</h2>
-      <p class="section-intro">The same delivery contract applies to every component.</p>
-      <div class="delivery">
-        <article class="delivery-step"><span class="number">01 · MODEL</span><h3>Define ownership</h3><p>Name desired state, observations, manual boundaries and safe failure before choosing a transport.</p></article>
-        <article class="delivery-step"><span class="number">02 · PROVE</span><h3>Test behavior</h3><p>Exercise transitions, stale work, restarts and failures in pure reducers and real adapters.</p></article>
-        <article class="delivery-step"><span class="number">03 · CUT OVER</span><h3>Migrate cleanly</h3><p>Move every caller to one owner, remove the obsolete path and preserve explicit user control.</p></article>
-        <article class="delivery-step"><span class="number">04 · OPERATE</span><h3>Measure outcomes</h3><p>Back up, deploy, reconcile, record the release and alert only on actionable failure.</p></article>
-      </div>
-      <div class="boundary">
-        <h3>Public repository boundary</h3>
-        <p>This site documents reusable behavior and general delivery status. Live flows, private hosts, entity identifiers, credentials, deployment coordinates and infrastructure operations remain outside the public repository.</p>
-      </div>
+      <div class="boundary"><h3>Public boundary</h3><p>Pages and repository documentation describe source code and generalized behavior only. Credentials, addresses, coordinates, entity identifiers, flow exports, installation inventory and operational records remain outside this repository.</p></div>
     </section>
   </main>
 
   <footer>
     <div class="shell">
-      <span>Updated 21 November 2026 · package 1.10.1</span>
-      <nav aria-label="Footer navigation">
-        <a href="home-theatre.html">Completed theatre programme</a>
-        <a href="https://github.com/cptbucky/node-red-home-automation#readme">Package overview</a>
-        <a href="https://github.com/cptbucky/node-red-home-automation">Source repository</a>
-      </nav>
+      <span>Package 1.11.0 · public capability documentation</span>
+      <nav aria-label="Footer navigation"><a href="home-theatre.html">Home-theatre capability</a><a href="https://github.com/cptbucky/node-red-home-automation#readme">Package overview</a><a href="https://github.com/cptbucky/node-red-home-automation">Source</a></nav>
     </div>
   </footer>
 </body>
