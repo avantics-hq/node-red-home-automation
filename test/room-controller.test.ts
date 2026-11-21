@@ -98,6 +98,50 @@ test("OFF clears manual state and TOGGLE resolves from desired state", () => {
   assert.equal(toggle.state.manual.cooking, false);
 });
 
+test("activity styling preserves manual and occupancy power ownership", () => {
+  let result = transitionRoom(undefined, {
+    lighting: {
+      kind: "intent",
+      targets: ["cooking"],
+      state: "ON",
+      source: "wall",
+      manual: true,
+      values: {brightness: 254}
+    }
+  }, config, now);
+  result.state.desired.dining = false;
+
+  result = transitionRoom(result.state, {
+    lighting: {
+      kind: "intent",
+      targets: ["cooking", "dining"],
+      state: "ON",
+      source: "activity",
+      values: {brightness: 64},
+      updateOnOnly: true,
+      preserveManual: true
+    }
+  }, config, new Date(now.getTime() + 100));
+  assert.equal(result.outputs.length, 0);
+  assert.equal(result.state.manual.cooking, true);
+  assert.equal(result.state.desired.dining, false);
+
+  result.state.manual.cooking = false;
+  result = transitionRoom(result.state, {
+    lighting: {
+      kind: "intent",
+      targets: ["cooking"],
+      state: "ON",
+      source: "activity",
+      values: {brightness: 64},
+      updateOnOnly: true,
+      preserveManual: true
+    }
+  }, config, new Date(now.getTime() + 200));
+  assert.equal(payload(result, 0).brightness, 64);
+  assert.equal(result.state.manual.cooking, false);
+});
+
 test("startup publishes stable discovery and state messages", () => {
   const result = transitionRoom(undefined, {lighting: {kind: "startup"}}, config, now);
   assert.equal(result.outputs.length, 2);

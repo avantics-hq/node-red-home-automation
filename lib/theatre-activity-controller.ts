@@ -2,8 +2,8 @@
 
 const PROFILE_NAME = /^[a-z][a-z0-9_-]*$/;
 export const TARGETS = ["display", "avr", "source", "lighting", "backlighting"] as const;
-const REQUIRED_TARGETS = ["display", "avr"] as const;
-const OPTIONAL_TARGETS = ["lighting", "backlighting"] as const;
+const REQUIRED_TARGETS = ["display", "avr", "backlighting"] as const;
+const OPTIONAL_TARGETS = ["lighting"] as const;
 
 export type TheatreTarget = typeof TARGETS[number];
 export type TargetStatus =
@@ -38,6 +38,10 @@ const AVAILABILITIES: Record<TheatreAvailability, true> = {
 };
 const SOURCE_ACTIONS: Record<string, true> = {activate: true, deactivate: true};
 const SOURCE_READINESS: Record<string, true> = {required: true, optional: true};
+const BACKLIGHTING_POWER: Record<ActivityBacklightingProfile["power"], true> = {
+  on: true,
+  off: true
+};
 
 export interface ActivitySourceProfile extends Record<string, unknown> {
   action: "activate" | "deactivate";
@@ -45,8 +49,18 @@ export interface ActivitySourceProfile extends Record<string, unknown> {
   sourceId?: string | null;
 }
 
+export interface ActivityLightingProfile extends Record<string, unknown> {
+  profile: string;
+}
+
+export interface ActivityBacklightingProfile extends Record<string, unknown> {
+  power: "on" | "off";
+}
+
 export type ActivityProfile = Record<TheatreTarget, Record<string, unknown>> & {
   source: ActivitySourceProfile;
+  lighting: ActivityLightingProfile;
+  backlighting: ActivityBacklightingProfile;
 };
 export type ActivityProfiles = Record<string, ActivityProfile>;
 
@@ -167,6 +181,14 @@ export function normaliseActivityProfiles(value: unknown): ActivityProfiles {
     if (source.action === "activate" &&
       (typeof source.sourceId !== "string" || !source.sourceId)) {
       throw new Error(`activity profile ${name} must define sourceId`);
+    }
+    const lighting = targets.lighting;
+    if (typeof lighting.profile !== "string" || !PROFILE_NAME.test(lighting.profile)) {
+      throw new Error(`activity profile ${name} has invalid lighting profile`);
+    }
+    const backlighting = targets.backlighting;
+    if (!Object.hasOwn(BACKLIGHTING_POWER, backlighting.power as PropertyKey)) {
+      throw new Error(`activity profile ${name} has invalid backlighting power`);
     }
     profiles[name] = targets as ActivityProfile;
   }

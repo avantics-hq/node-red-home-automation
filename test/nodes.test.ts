@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import {EventEmitter} from "node:events";
 import test from "node:test";
 import type {NodeInitializer} from "node-red";
+import registerActivityLighting from "../nodes/activity-lighting-controller";
+import registerBacklighting from "../nodes/backlighting-controller";
 import registerAvr from "../nodes/avr-controller";
 import registerMotion from "../nodes/motion-policy";
 import registerOccupancy from "../nodes/occupancy-fusion";
@@ -38,6 +40,10 @@ interface WireMessage {
   topic?: string;
   lighting?: Record<string, unknown>;
   avr_command?: Record<string, unknown>;
+  activityLighting?: Record<string, unknown>;
+  activityLightingCommand?: Record<string, unknown>;
+  backlighting?: Record<string, unknown>;
+  backlightingCommand?: Record<string, unknown>;
   sourceCommand?: Record<string, unknown>;
   theatre?: Record<string, unknown>;
 }
@@ -287,5 +293,99 @@ test("source adapter emits semantic commands and target-state evidence", async (
   const trace = traces(node);
   assert.equal(trace.at(-1)?.component, "source-capability-controller");
   assert.equal(trace.at(-1)?.outcome, "ready");
+  assert.equal(node.errors.length, 0);
+});
+
+test("activity lighting adapter preserves ownership and emits target evidence", async (t) => {
+  const {Constructor} = runtime(registerActivityLighting);
+  const node = new Constructor({
+    area: "lounge",
+    profiles: JSON.stringify({
+      tv: {targets: ["wall", "lamp"], values: {brightness: 64}}
+    }),
+    confirmationTimeoutMs: 15000,
+    maxAttempts: 2
+  });
+  t.after(() => close(node));
+
+  const intent = await receive<SendEnvelope>(node, {
+    activityLighting: {
+      kind: "intent",
+      requestId: "lighting-adapter-test",
+      generation: 1,
+      profile: "tv"
+    }
+  });
+  assert.equal(intent[0]?.[0]?.[0]?.lighting?.preserveManual, true);
+  assert.equal(intent[0]?.[0]?.[0]?.lighting?.updateOnOnly, true);
+  assert.equal(intent[1]?.[1]?.[0]?.theatre?.status, "transitioning");
+
+  const observedAt = new Date().toISOString();
+  await receive<SendEnvelope>(node, {
+    activityLighting: {
+      kind: "observed",
+      generation: 1,
+      target: "wall",
+      on: true,
+      manual: true,
+      values: {brightness: 254},
+      observedAt
+    }
+  });
+  const observed = await receive<SendEnvelope>(node, {
+    activityLighting: {
+      kind: "observed",
+      generation: 1,
+      target: "lamp",
+      on: false,
+      values: {},
+      observedAt
+    }
+  });
+  assert.equal(observed[0]?.[1]?.[0]?.theatre?.status, "ready");
+  assert.equal(traces(node).at(-1)?.component, "activity-lighting-controller");
+  assert.equal(node.errors.length, 0);
+});
+
+test("backlighting adapter waits for observed power before ready", async (t) => {
+  const {Constructor} = runtime(registerBacklighting);
+  const node = new Constructor({
+    area: "lounge",
+    pollMs: 2000,
+    confirmationTimeoutMs: 15000,
+    maxAttempts: 2
+  });
+  t.after(() => close(node));
+
+  const intent = await receive<SendEnvelope>(node, {
+    backlighting: {
+      kind: "intent",
+      requestId: "backlighting-adapter-test",
+      generation: 1,
+      power: "on"
+    }
+  });
+  assert.equal(intent[0]?.[0]?.[0]?.backlightingCommand?.operation, "set_power");
+  assert.equal(intent[1]?.[1]?.[0]?.theatre?.status, "transitioning");
+
+  const result = await receive<SendEnvelope>(node, {
+    backlighting: {
+      kind: "command_result",
+      generation: 1,
+      ok: true
+    }
+  });
+  assert.notEqual(result[0]?.[1]?.[0]?.theatre?.status, "ready");
+
+  const observed = await receive<SendEnvelope>(node, {
+    backlighting: {
+      kind: "observed",
+      generation: 1,
+      power: "on",
+      observedAt: new Date().toISOString()
+    }
+  });
+  assert.equal(observed[0]?.[1]?.[0]?.theatre?.status, "ready");
+  assert.equal(traces(node).at(-1)?.component, "backlighting-controller");
   assert.equal(node.errors.length, 0);
 });

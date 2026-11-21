@@ -365,8 +365,8 @@
       </p>
       <div class="meta-row">
         <span class="pill">Updated 21 November 2026</span>
-        <span class="pill">Package 1.6.0 · live deployment 1.3.1</span>
-        <span class="pill">Next: Phase 5 lighting and backlighting</span>
+        <span class="pill">Package 1.7.0 · live deployment 1.3.1</span>
+        <span class="pill">Next: Phase 6 state contract</span>
       </div>
     </div>
   </header>
@@ -396,8 +396,8 @@
     <section aria-labelledby="baseline-title">
       <h2 id="baseline-title">Current baseline</h2>
       <div class="summary-grid">
-        <div class="metric"><strong>63/63</strong><span>Package tests passing</span></div>
-        <div class="metric"><strong>3</strong><span>Deterministic target controllers packaged</span></div>
+        <div class="metric"><strong>77/77</strong><span>Package tests passing</span></div>
+        <div class="metric"><strong>5</strong><span>Deterministic target controllers packaged</span></div>
         <div class="metric"><strong>5</strong><span>Configured activity profiles</span></div>
         <div class="metric"><strong>1.3.1</strong><span>Installed Node-RED package</span></div>
       </div>
@@ -407,10 +407,10 @@
           <tbody>
             <tr><td>AVR power and source</td><td>Source-controlled, tested and live</td><td>Volume ownership and richer availability</td></tr>
             <tr><td>TV, projector and screen</td><td>Latest-request-wins controller is live</td><td>Explicit primary/fallback health</td></tr>
-            <tr><td>Whole activity</td><td>Config-driven controller and aggregator tested in strict TypeScript source package 1.6.0</td><td>Thin Node-RED wrapper and live wiring</td></tr>
+            <tr><td>Whole activity</td><td>Config-driven controller and aggregator tested in strict TypeScript source package 1.7.0</td><td>Thin Node-RED wrapper and live wiring</td></tr>
             <tr><td>Shield</td><td>Generic source contract; explicit Android TV Remote fallback selected</td><td>Wire and shadow-test the configured Shield entity</td></tr>
             <tr><td>PlayStation 5</td><td>Explicit unavailable capability; no invented power-on success</td><td>Remain <code>waiting_for_source</code> until a proved observation path exists</td></tr>
-            <tr><td>Lighting and backlighting</td><td>Independent working paths</td><td>Activity targets and confirmation</td></tr>
+            <tr><td>Lighting and backlighting</td><td>Semantic owners packaged with manual/occupancy preservation and observed confirmation</td><td>Wire deployment transports and shadow-test</td></tr>
             <tr><td>Home Assistant</td><td>Legacy routine topics</td><td>Activity requests, status and fault presentation</td></tr>
             <tr><td>Release process</td><td>Strict TypeScript build, compiled tests and Node-RED package smoke</td><td>Tracked release command and CI gates</td></tr>
             <tr><td>Legacy HA commands</td><td>Some command paths remain</td><td>IR-blaster, TV and projector ownership audit</td></tr>
@@ -544,18 +544,18 @@
         </article>
 
         <article class="phase" data-phase="lighting">
-          <div class="phase-head"><div class="phase-number">5</div><div class="phase-title"><h3>Lighting and backlighting targets</h3><p>Compose atmosphere without coupling occupancy to equipment sequencing.</p></div><span class="status next">Next</span></div>
+          <div class="phase-head"><div class="phase-number">5</div><div class="phase-title"><h3>Lighting and backlighting targets</h3><p>Compose atmosphere without coupling occupancy to equipment sequencing.</p></div><span class="status complete">Complete</span></div>
           <div class="phase-body">
             <div class="tasks">
-              <div class="task"><input id="p5-1" data-task="lighting-profiles" type="checkbox"><label for="p5-1">Define activity lighting and TV-backlight profiles as semantic targets.</label></div>
-              <div class="task"><input id="p5-2" data-task="lighting-overrides" type="checkbox"><label for="p5-2">Preserve manual and occupancy ownership; activity targets cannot silently override them.</label></div>
-              <div class="task"><input id="p5-3" data-task="lighting-confirm" type="checkbox"><label for="p5-3">Confirm mandatory backlighting state and expose optional room-light degradation.</label></div>
+              <div class="task"><input id="p5-1" data-task="lighting-profiles" type="checkbox" checked><label for="p5-1">Define activity lighting and TV-backlight profiles as semantic targets.</label></div>
+              <div class="task"><input id="p5-2" data-task="lighting-overrides" type="checkbox" checked><label for="p5-2">Preserve manual and occupancy ownership; activity targets cannot silently override them.</label></div>
+              <div class="task"><input id="p5-3" data-task="lighting-confirm" type="checkbox" checked><label for="p5-3">Confirm mandatory backlighting state and expose optional room-light degradation.</label></div>
             </div>
           </div>
         </article>
 
         <article class="phase" data-phase="state-contract">
-          <div class="phase-head"><div class="phase-number">6</div><div class="phase-title"><h3>MQTT and Home Assistant state contract</h3><p>Publish controller truth and remove inferred success.</p></div><span class="status planned">Planned</span></div>
+          <div class="phase-head"><div class="phase-number">6</div><div class="phase-title"><h3>MQTT and Home Assistant state contract</h3><p>Publish controller truth and remove inferred success.</p></div><span class="status next">Next</span></div>
           <div class="phase-body">
             <div class="tasks">
               <div class="task"><input id="p6-1" data-task="state-topics" type="checkbox"><label for="p6-1">Publish retained desired, current, phase, failure, availability and adapter-health state.</label></div>

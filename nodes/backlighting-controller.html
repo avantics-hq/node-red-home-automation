@@ -1,0 +1,31 @@
+<script type="text/javascript">
+  RED.nodes.registerType("home-backlighting-controller", {
+    category: "function",
+    color: "#c7d9f1",
+    defaults: {
+      name: {value: ""},
+      area: {value: "lounge", required: true},
+      pollMs: {value: 2000, required: true, validate: RED.validators.number()},
+      confirmationTimeoutMs: {value: 15000, required: true, validate: RED.validators.number()},
+      maxAttempts: {value: 2, required: true, validate: RED.validators.number()}
+    },
+    inputs: 1,
+    outputs: 2,
+    outputLabels: ["backlighting commands", "theatre target state"],
+    icon: "font-awesome/fa-television",
+    label: function() { return this.name || "TV backlighting"; }
+  });
+</script>
+
+<script type="text/html" data-template-name="home-backlighting-controller">
+  <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
+  <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area"></div>
+  <div class="form-row"><label for="node-input-pollMs">Poll ms</label><input type="number" id="node-input-pollMs"></div>
+  <div class="form-row"><label for="node-input-confirmationTimeoutMs">Confirm ms</label><input type="number" id="node-input-confirmationTimeoutMs"></div>
+  <div class="form-row"><label for="node-input-maxAttempts">Attempts</label><input type="number" id="node-input-maxAttempts"></div>
+</script>
+
+<script type="text/html" data-help-name="home-backlighting-controller">
+  <p>Owns semantic TV backlight power intent with bounded command retries and observation-gated confirmation.</p>
+  <p>Input <code>msg.backlighting</code> carries generation-scoped intent, observation, command result, refresh or tick events. Output 1 emits <code>msg.backlightingCommand</code> for the deployment transport. Output 2 emits mandatory theatre <code>target_state</code> evidence. A command acknowledgement never counts as confirmed power.</p>
+</script>

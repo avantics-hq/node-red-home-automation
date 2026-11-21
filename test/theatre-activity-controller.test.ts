@@ -102,6 +102,7 @@ function target(
 function confirmCore(state: Partial<TheatreState>, generation: number, seconds = 1) {
   let result = target(state, "display", "ready", generation, seconds);
   result = target(result.state, "avr", "ready", generation, seconds + 0.1);
+  result = target(result.state, "backlighting", "ready", generation, seconds + 0.2);
   return result;
 }
 
@@ -142,7 +143,20 @@ test("activity and source names are configuration-owned", () => {
     }),
     /source readiness/
   );
+  assert.throws(
+    () => normaliseActivityProfiles({
+      broken: {...customProfiles.movie_night, lighting: {profile: "not valid"}}
+    }),
+    /invalid lighting profile/
+  );
+  assert.throws(
+    () => normaliseActivityProfiles({
+      broken: {...customProfiles.movie_night, backlighting: {power: "toggle"}}
+    }),
+    /invalid backlighting power/
+  );
 });
+
 
 test("uses configured activity profiles as semantic target states", () => {
   const expected = {
@@ -298,6 +312,22 @@ test("optional lighting failures are visible degradation but do not lie about co
   assert.equal(eventDegraded?.[0]?.target, "lighting");
 });
 
+test("backlighting confirmation is mandatory and failure blocks the generation", () => {
+  let result = request(undefined, "tv_shield", 14);
+  result = target(result.state, "display", "ready", 14, 0.2);
+  result = target(result.state, "avr", "ready", 14, 0.3);
+  result = target(result.state, "source", "ready", 14, 0.4);
+  assert.equal(result.state.phase, "confirming");
+  assert.equal(result.state.currentActivity, "unknown");
+
+  result = target(result.state, "backlighting", "failed", 14, 0.5, {
+    failure: {operation: "set_power", reason: "confirmation-timeout"}
+  });
+  assert.equal(result.state.phase, "failed");
+  assert.equal(result.state.failure?.target, "backlighting");
+  assert.equal(result.state.blockedGeneration, 14);
+});
+
 test("fresh target drift removes ready state without creating a new activity", () => {
   let result = confirmActivity("tv_shield", 9);
   result = target(result.state, "display", "transitioning", 9, 2, {
@@ -344,7 +374,9 @@ test("stale observations trigger one refresh and cannot preserve ready", () => {
 
   assert.equal(result.state.phase, "confirming");
   assert.equal(result.state.currentActivity, "unknown");
-  assert.deepEqual(result.commands.map((command) => command.target).sort(), ["avr", "display", "source"]);
+  assert.deepEqual(result.commands.map((command) => command.target).sort(), [
+    "avr", "backlighting", "display", "source"
+  ]);
 
   result = apply(result.state, {kind: "tick", generation: 10}, 13);
   assert.equal(result.commands.length, 0);

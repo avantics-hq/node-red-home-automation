@@ -14,6 +14,7 @@ Most home automations translate an event directly into a command. This package a
 - **Adaptive lighting with manual ownership:** calculate circadian brightness and colour temperature without immediately overwriting wall-switch changes.
 - **Reliable AV transitions:** coordinate AVR inputs, TV power, projector warm-up and cooldown, and motorised screens from observed state rather than blind toggles.
 - **Honest source readiness:** model controllable, externally controlled, and unavailable playback sources without claiming success from an input selection alone.
+- **Owned theatre atmosphere:** apply activity lighting only to active, non-manual room lights and confirm TV backlighting independently.
 - **Recoverable automation:** keep reducers deterministic and persistable so Node-RED restarts can reconcile state safely.
 
 ```mermaid
@@ -37,6 +38,8 @@ flowchart LR
 | `home-avr-controller` | Controls AVR power, zones, and source selection from observed state. |
 | `home-display-mode-controller` | Coordinates TV, projector, and screen transitions. |
 | `home-source-capability-controller` | Tracks controllable, external, and unavailable media sources. |
+| `home-activity-lighting-controller` | Applies activity styles without taking room power or manual ownership. |
+| `home-backlighting-controller` | Owns TV-backlight power with observation-gated confirmation. |
 
 Pure TypeScript policy modules live in `lib/`; thin Node-RED runtime and editor adapters live in `nodes/`.
 
@@ -60,7 +63,7 @@ npm pack
 Install the resulting tarball through **Node-RED → Manage palette → Install → Upload module**, or from a Node-RED user directory:
 
 ```sh
-npm install /path/to/avantics-node-red-home-automation-1.6.0.tgz
+npm install /path/to/avantics-node-red-home-automation-1.7.0.tgz
 ```
 
 Add the installed nodes from the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.
