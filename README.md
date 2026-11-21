@@ -46,6 +46,8 @@ flowchart LR
 
 Pure TypeScript policy modules live in `lib/`; thin Node-RED runtime and editor adapters live in `nodes/`.
 
+Executable, deployment-neutral examples live in [`examples/`](examples/) and exercise the same reducers as the runtime adapters.
+
 ## Requirements
 
 - Node.js 20 or newer
@@ -66,7 +68,7 @@ npm pack
 Install the resulting tarball through **Node-RED → Manage palette → Install → Upload module**, or from a Node-RED user directory:
 
 ```sh
-npm install /path/to/avantics-node-red-home-automation-1.12.0.tgz
+npm install /path/to/avantics-node-red-home-automation-1.13.0.tgz
 ```
 
 Add the installed nodes from the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.
@@ -92,6 +94,25 @@ display, AVR, source, and backlighting evidence matches exactly one configured
 profile; missing or ambiguous startup evidence invokes the configured Off
 activity.
 
+## Contract examples
+
+Build and run all six public contracts:
+
+```sh
+npm run examples
+```
+
+| Example | Boundary demonstrated |
+|---|---|
+| [`occupancy-fusion.mjs`](examples/occupancy-fusion.mjs) | Motion establishes occupancy; optional presence can hold it. |
+| [`motion-lighting.mjs`](examples/motion-lighting.mjs) | Occupancy and illuminance produce semantic lighting intent. |
+| [`switch-gestures.mjs`](examples/switch-gestures.mjs) | Wall actions produce toggle or explicit manual-brightness intent. |
+| [`room-lighting.mjs`](examples/room-lighting.mjs) | The room owner converts semantic intent into a transport command. |
+| [`source-readiness.mjs`](examples/source-readiness.mjs) | Fresh application evidence confirms source readiness. |
+| [`theatre-activity.mjs`](examples/theatre-activity.mjs) | Coordinated activity waits for fresh target-owner evidence. |
+
+Each example uses synthetic identifiers and configuration, asserts its central invariant, and prints the complete input/output contract as JSON.
+
 ## Configuration and security
 
 The repository contains no home-network addresses, deployment coordinates, or live credentials. Device hosts and room coordinates are required configuration where applicable.
@@ -111,9 +132,10 @@ detectable parts of that boundary.
 ```sh
 npm ci
 npm test
+npm run examples
 ```
 
-The strict TypeScript build, compiled test suite, dependency audit, public-content scan, and secret scan run in CI. See [CONTRIBUTING.md](CONTRIBUTING.md) for local checks and the optional pre-commit setup.
+The strict TypeScript build, compiled test suite, executable contract examples, dependency audit, public-content scan, and secret scan run in CI. See [CONTRIBUTING.md](CONTRIBUTING.md) for local checks and the optional pre-commit setup.
 
 ## License
 

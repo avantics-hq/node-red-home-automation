@@ -1,6 +1,6 @@
 {
   "name": "@avantics/node-red-home-automation",
-  "version": "1.12.0",
+  "version": "1.13.0",
   "private": true,
   "description": "Deterministic home automation components for Node-RED",
   "keywords": [
@@ -24,12 +24,14 @@
   "types": "dist/lib/room-controller.d.ts",
   "files": [
     "dist/lib",
-    "dist/nodes"
+    "dist/nodes",
+    "examples"
   ],
   "scripts": {
     "clean": "node scripts/clean.mjs",
     "build": "npm run clean && tsc && node scripts/copy-node-html.mjs",
-    "test": "npm run build && node --test dist/test/*.test.js",
+    "test": "npm run build && node --test dist/test/*.test.js && node examples/run.mjs --verify",
+    "examples": "npm run build && node examples/run.mjs",
     "scan:public": "node scripts/check-public.mjs",
     "hooks:install": "git config core.hooksPath .githooks",
     "prepack": "npm run build"

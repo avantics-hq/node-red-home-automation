@@ -115,7 +115,8 @@
         <a class="brand" href="./">Node-RED Home Automation</a>
         <div class="nav-links">
           <a href="#components">Components</a>
-          <a href="#roadmap">Future roadmap</a>
+          <a href="contract-examples.html">Contract examples</a>
+          <a href="#roadmap">Roadmap</a>
           <a href="home-theatre.html">Home-theatre capability</a>
           <a href="https://github.com/cptbucky/node-red-home-automation">GitHub</a>
         </div>
@@ -125,7 +126,7 @@
         <h1>State-aware automation without hidden ownership.</h1>
         <p class="lead">Deterministic TypeScript policies and thin Node-RED adapters for lighting, occupancy and coordinated media activities. This site documents package capabilities only.</p>
         <div class="pills">
-          <span class="pill">Package 1.12.0</span>
+          <span class="pill">Package 1.13.0</span>
           <span class="pill">105 tests passing</span>
           <span class="pill">11 reusable nodes</span>
           <span class="pill">MIT licensed</span>
@@ -142,7 +143,7 @@
         <div class="metric"><strong>11</strong><span>Node-RED node types</span></div>
         <div class="metric"><strong>105</strong><span>Behavior-focused tests</span></div>
         <div class="metric"><strong>5</strong><span>Home-theatre target classes</span></div>
-        <div class="metric"><strong>1</strong><span>Shared trace schema</span></div>
+        <div class="metric"><strong>6</strong><span>Executable contract examples</span></div>
       </div>
     </section>
 
@@ -160,6 +161,12 @@
           <div class="component-head"><div><p class="eyebrow">Source policy</p><h3>Media-player readiness</h3></div><span class="status available">Available</span></div>
           <p>Gate source completion on fresh availability, active-device, application or playback evidence without moving transport logic into orchestration.</p>
           <ul><li>Configurable readiness depth</li><li>Application and playback evidence</li><li>Honest waiting and unavailable outcomes</li></ul>
+        </article>
+        <article class="component">
+          <div class="component-head"><div><p class="eyebrow">Consumer reference</p><h3>Contract examples</h3></div><span class="status available">Available</span></div>
+          <p>Run deterministic, transport-neutral examples for occupancy, lighting, switch gestures, source readiness and coordinated activities.</p>
+          <ul><li>Real reducer execution</li><li>Synthetic configuration</li><li>Asserted consumer-visible invariants</li></ul>
+          <a class="component-link" href="contract-examples.html">Explore the executable contracts →</a>
         </article>
         <article class="component">
           <div class="component-head"><div><p class="eyebrow">Lighting policies</p><h3>Room lighting control</h3></div><span class="status available">Available</span></div>
@@ -188,13 +195,13 @@
     </section>
 
     <section id="roadmap" aria-labelledby="roadmap-title">
-      <h2 id="roadmap-title">Future component roadmap</h2>
-      <p class="section-intro">Candidate components are ordered by reusable control value. Each must keep transport, policy, observed state and recovery explicit before it becomes part of the package.</p>
+      <h2 id="roadmap-title">Component roadmap</h2>
+      <p class="section-intro">Completed and candidate components are ordered by reusable control value. Each keeps transport, policy, observed state and recovery explicit before becoming part of the package.</p>
       <div class="roadmap">
-        <article class="roadmap-card"><span class="status available">Current</span><h3>Contract examples</h3><p>Publish transport-neutral examples for room lighting, occupancy, switch gestures and coordinated activities.</p></article>
-        <article class="roadmap-card"><span class="status planned">Next</span><h3>Volume ownership</h3><p>Coordinate absolute and relative volume changes while preserving external adjustments and defining safe bounds.</p></article>
-        <article class="roadmap-card"><span class="status planned">Planned</span><h3>Grouped audio</h3><p>Model membership, synchronization and partial failure without hiding which players are unavailable.</p></article>
-        <article class="roadmap-card"><span class="status planned">Research</span><h3>Local resilience</h3><p>Define deterministic fallback behavior for temporary controller, broker or transport loss without creating a second command owner.</p></article>
+        <article class="roadmap-card"><span class="status complete">Complete</span><h3>Contract examples</h3><p>Transport-neutral examples cover room lighting, occupancy, switch gestures, source readiness and coordinated activities.</p></article>
+        <article class="roadmap-card"><span class="status available">Current</span><h3>Volume ownership</h3><p>Coordinate absolute and relative volume changes while preserving external adjustments and defining safe bounds.</p></article>
+        <article class="roadmap-card"><span class="status planned">Next</span><h3>Grouped audio</h3><p>Model membership, synchronization and partial failure without hiding which players are unavailable.</p></article>
+        <article class="roadmap-card"><span class="status planned">Planned</span><h3>Local resilience</h3><p>Define deterministic fallback behavior for temporary controller, broker or transport loss without creating a second command owner.</p></article>
         <article class="roadmap-card"><span class="status planned">Deferred</span><h3>Infrared transport</h3><p>Retain the existing integration boundary unless direct local control provides enough operational value to justify another transport owner.</p></article>
       </div>
       <div class="boundary"><h3>Public boundary</h3><p>Pages and repository documentation describe source code and generalized behavior only. Credentials, addresses, coordinates, entity identifiers, flow exports, installation inventory and operational records remain outside this repository.</p></div>
@@ -203,8 +210,8 @@
 
   <footer>
     <div class="shell">
-      <span>Package 1.12.0 · public capability documentation</span>
-      <nav aria-label="Footer navigation"><a href="home-theatre.html">Home-theatre capability</a><a href="https://github.com/cptbucky/node-red-home-automation#readme">Package overview</a><a href="https://github.com/cptbucky/node-red-home-automation">Source</a></nav>
+      <span>Package 1.13.0 · public capability documentation</span>
+      <nav aria-label="Footer navigation"><a href="contract-examples.html">Contract examples</a><a href="home-theatre.html">Home-theatre capability</a><a href="https://github.com/cptbucky/node-red-home-automation#readme">Package overview</a><a href="https://github.com/cptbucky/node-red-home-automation">Source</a></nav>
     </div>
   </footer>
 </body>

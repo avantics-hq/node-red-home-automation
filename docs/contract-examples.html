@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Executable transport-neutral contract examples for deterministic Node-RED home-automation components.">
+  <link rel="canonical" href="https://cptbucky.github.io/node-red-home-automation/contract-examples.html">
+  <title>Home-Automation Contract Examples</title>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --surface: #ffffff;
+      --raised: #f8fafc;
+      --text: #17202a;
+      --muted: #5d6975;
+      --border: #d8dee5;
+      --accent: #315efb;
+      --accent-soft: #e9efff;
+      --success: #18794e;
+      --success-soft: #e7f6ee;
+      --shadow: 0 18px 45px rgba(34, 46, 62, 0.1);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #101419;
+        --surface: #171d24;
+        --raised: #1d2530;
+        --text: #edf2f7;
+        --muted: #aab5c2;
+        --border: #303a47;
+        --accent: #8aa4ff;
+        --accent-soft: #202d58;
+        --success: #72d6a4;
+        --success-soft: #153b2b;
+        --shadow: 0 18px 45px rgba(0, 0, 0, 0.28);
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    a { color: var(--accent); }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { max-width: 900px; margin-bottom: 18px; font-size: clamp(2.5rem, 6vw, 5rem); line-height: 1; letter-spacing: -0.05em; }
+    h2 { margin-bottom: 10px; font-size: clamp(1.6rem, 3vw, 2.25rem); line-height: 1.15; letter-spacing: -0.025em; }
+    h3 { margin-bottom: 7px; font-size: 1.05rem; }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+    .shell { width: min(1100px, calc(100% - 40px)); margin: 0 auto; }
+    header, footer { background: var(--surface); }
+    header { border-bottom: 1px solid var(--border); }
+    .site-nav { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 22px 0; }
+    .brand { color: var(--text); font-weight: 760; text-decoration: none; }
+    .site-nav div { display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.9rem; }
+    .site-nav div a { color: var(--muted); text-decoration: none; }
+    .hero { padding: 70px 0 76px; }
+    .eyebrow { margin-bottom: 14px; color: var(--accent); font-size: 0.77rem; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase; }
+    .lead { max-width: 800px; margin-bottom: 26px; color: var(--muted); font-size: clamp(1.05rem, 2vw, 1.25rem); }
+    .pills { display: flex; flex-wrap: wrap; gap: 9px; }
+    .pill { display: inline-flex; padding: 9px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--raised); color: var(--muted); font-size: 0.76rem; font-weight: 750; line-height: 1; }
+    .pill.complete { border-color: color-mix(in srgb, var(--success) 35%, var(--border)); background: var(--success-soft); color: var(--success); }
+    main { padding: 60px 0 78px; }
+    section + section { margin-top: 66px; }
+    .intro { max-width: 780px; margin-bottom: 24px; color: var(--muted); }
+    .examples, .rules { display: grid; gap: 14px; }
+    .examples { grid-template-columns: repeat(2, 1fr); }
+    .rules { grid-template-columns: repeat(3, 1fr); }
+    .example, .rule, .runner, .boundary { border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+    .example { min-width: 0; padding: 22px; }
+    .example.feature { box-shadow: var(--shadow); }
+    .example p, .rule p, .boundary p { color: var(--muted); font-size: 0.9rem; }
+    .example a { font-weight: 700; }
+    pre { margin: 16px 0; padding: 16px; overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--raised); color: var(--text); font-size: 0.79rem; line-height: 1.5; }
+    .rule { padding: 20px; }
+    .rule p, .boundary p { margin-bottom: 0; }
+    .runner { padding: 22px 24px; }
+    .runner pre { margin-bottom: 0; }
+    .boundary { padding: 22px 24px; background: var(--raised); }
+    footer { border-top: 1px solid var(--border); }
+    footer .shell { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 18px; padding: 28px 0; color: var(--muted); font-size: 0.86rem; }
+    footer nav { display: flex; flex-wrap: wrap; gap: 16px; }
+    @media (max-width: 800px) { .examples, .rules { grid-template-columns: 1fr; } }
+    @media (max-width: 650px) {
+      .site-nav { align-items: flex-start; flex-direction: column; }
+      .hero { padding: 48px 0 56px; }
+    }
+    @media (max-width: 440px) { .shell { width: min(100% - 28px, 1100px); } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="shell">
+      <nav class="site-nav" aria-label="Primary navigation">
+        <a class="brand" href="./">Node-RED Home Automation</a>
+        <div><a href="./">Component overview</a><a href="home-theatre.html">Home-theatre capability</a><a href="https://github.com/cptbucky/node-red-home-automation/tree/main/examples">Source examples</a></div>
+      </nav>
+      <div class="hero">
+        <p class="eyebrow">Executable public contracts</p>
+        <h1>Follow state, intent and evidence across component boundaries.</h1>
+        <p class="lead">Six deterministic examples call the same pure reducers used by the Node-RED adapters. Synthetic configuration keeps transport ownership visible without publishing installation topology.</p>
+        <div class="pills"><span class="pill complete">Milestone complete</span><span class="pill">Package 1.13.0</span><span class="pill">6 executable examples</span><span class="pill">Transport-neutral inputs</span></div>
+      </div>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section aria-labelledby="examples-title">
+      <h2 id="examples-title">Contract examples</h2>
+      <p class="intro">Each example declares configuration, applies deterministic inputs, asserts one consumer-visible invariant and returns its commands or outputs as JSON.</p>
+      <div class="examples">
+        <article class="example feature">
+          <p class="eyebrow">Sensor policy</p><h3>Occupancy fusion</h3>
+          <p>Motion establishes occupancy. Optional presence can hold it after motion clears, but cannot establish it alone.</p>
+          <pre><code>presence:on  → no output
+motion:on    → occupied:true
+motion:off   → held
+presence:off → occupied:false</code></pre>
+          <a href="https://github.com/cptbucky/node-red-home-automation/blob/main/examples/occupancy-fusion.mjs">Open executable example →</a>
+        </article>
+        <article class="example">
+          <p class="eyebrow">Motion policy</p><h3>Occupancy to lighting intent</h3>
+          <p>Dark, enabled occupancy produces semantic intent; it does not publish a device command.</p>
+          <pre><code>{ occupied: true, trigger: "motion" }
+→
+{ kind: "intent", state: "ON",
+  targets: ["ceiling", "worktop"] }</code></pre>
+          <a href="https://github.com/cptbucky/node-red-home-automation/blob/main/examples/motion-lighting.mjs">Open executable example →</a>
+        </article>
+        <article class="example">
+          <p class="eyebrow">Switch policy</p><h3>Explicit manual brightness</h3>
+          <p>A classified double action becomes one full-brightness intent with manual ownership.</p>
+          <pre><code>{ action: "double" }
+→
+{ state: "ON", manual: true,
+  values: { brightness: 254 } }</code></pre>
+          <a href="https://github.com/cptbucky/node-red-home-automation/blob/main/examples/switch-gestures.mjs">Open executable example →</a>
+        </article>
+        <article class="example">
+          <p class="eyebrow">Command owner</p><h3>Room lighting boundary</h3>
+          <p>The room controller converts semantic lighting intent into the sole transport command and records its policy source.</p>
+          <pre><code>{ kind: "intent", state: "ON",
+  source: "motion" }
+→
+{ topic: "demo/lighting/ceiling/set",
+  lighting_command: { source: "motion" } }</code></pre>
+          <a href="https://github.com/cptbucky/node-red-home-automation/blob/main/examples/room-lighting.mjs">Open executable example →</a>
+        </article>
+        <article class="example">
+          <p class="eyebrow">Readiness policy</p><h3>Media-source evidence</h3>
+          <p>Command success enters confirmation. Fresh active-application evidence is what satisfies application readiness.</p>
+          <pre><code>activate → command_result:ok → confirming
+observed:{ active, application, paused }
+→ ready</code></pre>
+          <a href="https://github.com/cptbucky/node-red-home-automation/blob/main/examples/source-readiness.mjs">Open executable example →</a>
+        </article>
+        <article class="example">
+          <p class="eyebrow">Coordination</p><h3>Theatre activity</h3>
+          <p>One activity request fans out semantic target intents and reaches ready only from fresh mandatory evidence.</p>
+          <pre><code>movie_night request
+→ display · receiver · source · lighting · backlighting
+→ fresh target evidence
+→ { phase: "ready", availability: "available" }</code></pre>
+          <a href="https://github.com/cptbucky/node-red-home-automation/blob/main/examples/theatre-activity.mjs">Open executable example →</a>
+        </article>
+      </div>
+    </section>
+
+    <section aria-labelledby="runner-title">
+      <h2 id="runner-title">Run the contracts</h2>
+      <p class="intro">The aggregate command compiles the package, executes all six examples and fails if an asserted invariant changes.</p>
+      <div class="runner"><pre><code>npm ci
+npm run examples</code></pre></div>
+    </section>
+
+    <section aria-labelledby="rules-title">
+      <h2 id="rules-title">What the examples preserve</h2>
+      <div class="rules">
+        <article class="rule"><h3>Policy before transport</h3><p>Sensor and user events become semantic outcomes before a target owner selects a protocol.</p></article>
+        <article class="rule"><h3>Evidence before ready</h3><p>Command acceptance never substitutes for a fresh observation of the required state.</p></article>
+        <article class="rule"><h3>Finite state</h3><p>Timers, retries, generations and traces remain bounded and stale work stays inert.</p></article>
+      </div>
+      <div class="boundary"><h3>Privacy boundary</h3><p>Every identifier, topic, profile, timestamp and coordinate in these examples is synthetic. The examples contain no device inventory, addresses, credentials, entity identifiers, flow exports or operational records.</p></div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="shell"><span>Package 1.13.0 · executable public contracts</span><nav aria-label="Footer navigation"><a href="./">Component overview</a><a href="home-theatre.html">Home-theatre capability</a><a href="https://github.com/cptbucky/node-red-home-automation/tree/main/examples">Example source</a></nav></div>
+  </footer>
+</body>
+</html>
