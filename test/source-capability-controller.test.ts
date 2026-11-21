@@ -15,6 +15,8 @@ import {
 const config: SourceConfig = {
   sources: {
     streamer: {activation: "command", deactivation: "command", confirmation: "active"},
+    player: {activation: "command", deactivation: "command", confirmation: "application"},
+    autoplay: {activation: "command", deactivation: "command", confirmation: "playing"},
     console: {activation: "external", deactivation: "unavailable", confirmation: "available"},
     legacy: {activation: "unavailable", deactivation: "unavailable", confirmation: "unavailable"}
   },
@@ -50,14 +52,16 @@ function observed(
   sourceId: string,
   status: "active" | "inactive" | "available" | "unavailable" | "unknown",
   generation: number,
-  seconds: number
+  seconds: number,
+  readiness: {application?: string | null; playback?: "playing" | "paused" | "idle" | "buffering" | "stopped" | "unknown"} = {}
 ) {
   return apply(state, {
     kind: "observed",
     sourceId,
     status,
     generation,
-    observedAt: at(seconds).toISOString()
+    observedAt: at(seconds).toISOString(),
+    ...readiness
   }, seconds);
 }
 
@@ -117,6 +121,58 @@ test("an externally controlled observable source waits and recovers", () => {
   assert.equal(result.state.phase, "waiting_for_source");
   result = observed(result.state, "console", "available", 1, 2);
   assert.equal(result.state.phase, "ready");
+});
+
+test("application readiness requires fresh active application evidence", () => {
+  let result = intent(undefined, "player");
+  result = apply(result.state, {
+    kind: "command_result",
+    sourceId: "player",
+    generation: 1,
+    ok: true
+  }, 0.1);
+  result = observed(result.state, "player", "active", 1, 0.2);
+  assert.equal(result.state.phase, "waiting_for_source");
+  assert.equal(theatreState(result).details.readiness.satisfied, false);
+
+  result = observed(result.state, "player", "active", 1, 0.3, {
+    application: "media.app",
+    playback: "paused"
+  });
+  assert.equal(result.state.phase, "ready");
+  assert.deepEqual(theatreState(result).details.readiness, {
+    required: "application",
+    available: true,
+    active: true,
+    application: "media.app",
+    playback: "paused",
+    satisfied: true
+  });
+
+  const later = apply(result.state, {kind: "tick", generation: 1}, 30);
+  assert.equal(theatreState(later).observedAt, at(0.3).toISOString());
+});
+
+test("playing readiness does not treat active or paused as playback", () => {
+  let result = intent(undefined, "autoplay");
+  result = apply(result.state, {
+    kind: "command_result",
+    sourceId: "autoplay",
+    generation: 1,
+    ok: true
+  }, 0.1);
+  result = observed(result.state, "autoplay", "active", 1, 0.2, {
+    application: "media.app",
+    playback: "paused"
+  });
+  assert.equal(result.state.phase, "waiting_for_source");
+
+  result = observed(result.state, "autoplay", "active", 1, 0.3, {
+    application: "media.app",
+    playback: "playing"
+  });
+  assert.equal(result.state.phase, "ready");
+  assert.equal(theatreState(result).details.readiness.playback, "playing");
 });
 
 test("an unobservable source reports unavailable instead of invented readiness", () => {

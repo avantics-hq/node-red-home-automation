@@ -40,7 +40,7 @@
 
 <script type="text/html" data-help-name="home-source-capability-controller">
   <p>Coordinates configured source capabilities without containing source names, entity IDs or transport logic.</p>
-  <p>Send <code>msg.sourceCapability</code> with <code>kind: "intent"</code>, a request ID, generation, source ID and <code>activate</code> or <code>deactivate</code> action. Send adapter observations with <code>kind: "observed"</code>, source ID, generation, timestamp and status.</p>
-  <p>Source JSON maps deployment-owned IDs to <code>activation</code>, <code>deactivation</code> and <code>confirmation</code> capabilities. Control values are <code>command</code>, <code>external</code> or <code>unavailable</code>. Confirmation values are <code>active</code>, <code>available</code> or <code>unavailable</code>.</p>
-  <p>Output 1 emits semantic commands for a separate transport adapter. Output 2 emits generation-scoped theatre <code>target_state</code> events.</p>
+  <p>Send <code>msg.sourceCapability</code> with <code>kind: "intent"</code>, a request ID, generation, source ID and <code>activate</code> or <code>deactivate</code> action. Adapter observations carry source status, timestamp, optional application identity and optional playback state.</p>
+  <p>Source JSON maps deployment-owned IDs to <code>activation</code>, <code>deactivation</code> and <code>confirmation</code> capabilities. Control values are <code>command</code>, <code>external</code> or <code>unavailable</code>. Confirmation values are <code>available</code>, <code>active</code>, <code>application</code>, <code>playing</code> or <code>unavailable</code>.</p>
+  <p>The reducer exposes each readiness layer separately and only reports ready when the configured layer has fresh evidence. Output 1 emits semantic commands for a separate transport adapter. Output 2 emits generation-scoped theatre <code>target_state</code> events.</p>
 </script>

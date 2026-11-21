@@ -38,7 +38,7 @@ flowchart LR
 | `home-room-lighting-controller` | Owns adaptive room commands, manual overrides, and lighting state. |
 | `home-avr-controller` | Controls AVR power, zones, and source selection from observed state. |
 | `home-display-mode-controller` | Coordinates TV, projector, and screen transitions. |
-| `home-source-capability-controller` | Tracks controllable, external, and unavailable media sources. |
+| `home-source-capability-controller` | Gates source readiness on fresh availability, active-device, application or playback evidence. |
 | `home-activity-lighting-controller` | Applies activity styles without taking room power or manual ownership. |
 | `home-backlighting-controller` | Owns TV-backlight power with observation-gated confirmation. |
 | `home-theatre-activity-controller` | Owns latest-request-wins activity state and aggregates target evidence. |
@@ -66,7 +66,7 @@ npm pack
 Install the resulting tarball through **Node-RED → Manage palette → Install → Upload module**, or from a Node-RED user directory:
 
 ```sh
-npm install /path/to/avantics-node-red-home-automation-1.11.0.tgz
+npm install /path/to/avantics-node-red-home-automation-1.12.0.tgz
 ```
 
 Add the installed nodes from the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.

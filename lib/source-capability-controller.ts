@@ -2,8 +2,9 @@
 
 export type SourceAction = "activate" | "deactivate";
 export type SourceControlMode = "command" | "external" | "unavailable";
-export type SourceConfirmation = "active" | "available" | "unavailable";
+export type SourceConfirmation = "active" | "available" | "application" | "playing" | "unavailable";
 export type SourceObservationStatus = "active" | "inactive" | "available" | "unavailable" | "unknown";
+export type SourcePlaybackState = "playing" | "paused" | "idle" | "buffering" | "stopped" | "unknown";
 
 const ACTIONS: Record<SourceAction, true> = {activate: true, deactivate: true};
 const CONTROL_MODES: Record<SourceControlMode, true> = {
@@ -14,6 +15,8 @@ const CONTROL_MODES: Record<SourceControlMode, true> = {
 const CONFIRMATIONS: Record<SourceConfirmation, true> = {
   active: true,
   available: true,
+  application: true,
+  playing: true,
   unavailable: true
 };
 const OBSERVATION_STATUSES: Record<SourceObservationStatus, true> = {
@@ -23,6 +26,15 @@ const OBSERVATION_STATUSES: Record<SourceObservationStatus, true> = {
   unavailable: true,
   unknown: true
 };
+const PLAYBACK_STATES: Record<SourcePlaybackState, true> = {
+  playing: true,
+  paused: true,
+  idle: true,
+  buffering: true,
+  stopped: true,
+  unknown: true
+};
+
 
 export interface SourceDescriptor {
   activation: SourceControlMode;
@@ -51,6 +63,8 @@ export interface SourceObservation {
   sourceId: string;
   status: SourceObservationStatus;
   observedAt: string;
+  application: string | null;
+  playback: SourcePlaybackState;
 }
 
 export interface SourcePending {
@@ -93,6 +107,8 @@ export type SourceEvent =
     sourceId: string;
     status: SourceObservationStatus;
     observedAt: string;
+    application?: string | null;
+    playback?: SourcePlaybackState;
   }
   | {
     kind: "command_result";
@@ -167,7 +183,17 @@ function initialState(
     desired,
     generation: Number.isInteger(saved.generation) && (saved.generation ?? -1) >= 0 ? saved.generation! : 0,
     phase: typeof saved.phase === "string" ? saved.phase : "idle",
-    observed: saved.observed && typeof saved.observed === "object" ? {...saved.observed} : null,
+    observed: saved.observed && typeof saved.observed === "object"
+      ? {
+          ...saved.observed,
+          application: typeof saved.observed.application === "string" && saved.observed.application
+            ? saved.observed.application
+            : null,
+          playback: Object.hasOwn(PLAYBACK_STATES, saved.observed.playback as PropertyKey)
+            ? saved.observed.playback as SourcePlaybackState
+            : "unknown"
+        }
+      : null,
     pending: saved.pending && typeof saved.pending === "object" ? {...saved.pending} : null,
     failure: saved.failure && typeof saved.failure === "object" ? {...saved.failure} : null,
     blockedGeneration: Number.isInteger(saved.blockedGeneration) ? saved.blockedGeneration! : null,
@@ -199,6 +225,14 @@ export interface SourceOutputEvent {
     classification?: "manual_override";
     details: {
       observedStatus: SourceObservationStatus | null;
+      readiness: {
+        required: SourceConfirmation;
+        available: boolean;
+        active: boolean;
+        application: string | null;
+        playback: SourcePlaybackState;
+        satisfied: boolean;
+      };
       recovery: Record<string, unknown>;
       metrics: {attempts: number; retries: number; fallbackUsed: boolean};
     };
@@ -230,20 +264,51 @@ function targetStatus(phase: string): string {
   if (phase === "transitioning") return "transitioning";
   return "confirming";
 }
+function descriptorFor(state: SourceState, sources: SourceCapabilities): SourceDescriptor | null {
+  if (!state.desired || state.desired.sourceId === null) return null;
+  return sources[state.desired.sourceId] ?? null;
+}
 
-function targetEvent(state: SourceState, now: Date): SourceOutputEvent | null {
+function readinessEvidence(
+  observation: SourceObservation | null,
+  required: SourceConfirmation
+) {
+  const available = observation?.status === "active" || observation?.status === "available";
+  const active = observation?.status === "active";
+  const application = observation?.application ?? null;
+  const playback = observation?.playback ?? "unknown";
+  const satisfied = required === "available"
+    ? available
+    : required === "active"
+      ? active
+      : required === "application"
+        ? active && application !== null
+        : required === "playing"
+          ? active && playback === "playing"
+          : false;
+  return {required, available, active, application, playback, satisfied};
+}
+
+
+function targetEvent(
+  state: SourceState,
+  now: Date,
+  sources: SourceCapabilities
+): SourceOutputEvent | null {
   if (!state.desired) return null;
+  const readiness = readinessEvidence(state.observed, descriptorFor(state, sources)?.confirmation ?? "unavailable");
   const theatre: SourceOutputEvent["theatre"] = {
     kind: "target_state",
     target: "source",
     requestId: state.desired.requestId,
     generation: state.generation,
     status: targetStatus(state.phase),
-    observedAt: iso(now),
+    observedAt: state.observed?.observedAt ?? iso(now),
     sourceId: state.desired.sourceId,
     action: state.desired.action,
     details: {
       observedStatus: state.observed?.status ?? null,
+      readiness,
       recovery: state.observed?.status === "active" || state.observed?.status === "available"
         ? {action: "activate", sourceId: state.observed.sourceId}
         : state.observed?.status === "inactive"
@@ -292,8 +357,7 @@ export function transitionSource(
   }
 
   function descriptor(): SourceDescriptor | null {
-    if (!state.desired || state.desired.sourceId === null) return null;
-    return config.sources[state.desired.sourceId] ?? null;
+    return descriptorFor(state, config.sources);
   }
 
   function markUnavailable(reason: string) {
@@ -333,12 +397,7 @@ export function transitionSource(
   function observationSatisfies(observation: SourceObservation | null): boolean {
     if (!state.desired || !observation) return false;
     if (state.desired.action === "deactivate") return observation.status === "inactive";
-    const confirmation = descriptor()?.confirmation;
-    if (confirmation === "active") return observation.status === "active";
-    if (confirmation === "available") {
-      return observation.status === "active" || observation.status === "available";
-    }
-    return false;
+    return readinessEvidence(observation, descriptor()?.confirmation ?? "unavailable").satisfied;
   }
 
   function reconcileObservation() {
@@ -353,9 +412,13 @@ export function transitionSource(
       state.blockedGeneration = null;
       state.classification = null;
       state.phase = "ready";
+      const readiness = readinessEvidence(state.observed, descriptor()?.confirmation ?? "unavailable");
       trace("observation", "ready", null, {
         sourceId: state.desired.sourceId,
-        status: state.observed.status
+        status: state.observed.status,
+        application: readiness.application,
+        playback: readiness.playback,
+        required: readiness.required
       });
     } else if (state.phase === "ready" && !state.pending) {
       state.classification = "manual_override";
@@ -447,10 +510,19 @@ export function transitionSource(
       trace("observation", "ignored", "out-of-order");
       return;
     }
+    const application = event.application == null
+      ? null
+      : typeof event.application === "string" && event.application.trim()
+        ? event.application.trim()
+        : null;
+    const playback = event.playback ?? "unknown";
+    if (!Object.hasOwn(PLAYBACK_STATES, playback)) throw new Error("unknown source playback state");
     state.observed = {
       sourceId: event.sourceId,
       status: event.status,
-      observedAt: event.observedAt
+      observedAt: event.observedAt,
+      application,
+      playback
     };
     reconcileObservation();
   }
@@ -521,7 +593,7 @@ export function transitionSource(
     throw new Error("unknown source capability event kind");
   }
 
-  const outputEvent = targetEvent(state, now);
+  const outputEvent = targetEvent(state, now, config.sources);
   if (outputEvent) events.push(outputEvent);
   return {state, commands, events, traces, status: statusFor(state)};
 }
