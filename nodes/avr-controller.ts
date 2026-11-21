@@ -21,6 +21,8 @@ interface AvrControllerConfig extends NodeDef {
   sources?: string;
   retryMs?: number | string;
   maxAttempts?: number | string;
+  minVolume?: number | string;
+  maxVolume?: number | string;
 }
 
 interface AvrControllerNode extends Node {}
@@ -59,7 +61,9 @@ const registerAvrController: NodeInitializer = (RED) => {
         area: config.area || "room",
         sources: parseSources(config.sources),
         retryMs: Math.max(250, number(config.retryMs, 2000)),
-        maxAttempts: Math.max(1, Math.floor(number(config.maxAttempts, 3)))
+        maxAttempts: Math.max(1, Math.floor(number(config.maxAttempts, 3))),
+        minVolume: number(config.minVolume, 0),
+        maxVolume: number(config.maxVolume, 60)
       };
     } catch (error) {
       node.status({fill: "red", shape: "ring", text: "invalid configuration"});

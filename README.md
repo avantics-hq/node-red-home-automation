@@ -15,6 +15,7 @@ Most home automations translate an event directly into a command. This package a
 - **Reliable AV transitions:** coordinate AVR inputs, TV power, projector warm-up and cooldown, and motorised screens from observed state rather than blind toggles.
 - **Honest source readiness:** model controllable, externally controlled, and unavailable playback sources without claiming success from an input selection alone.
 - **Owned theatre atmosphere:** apply activity lighting only to active, non-manual room lights and confirm TV backlighting independently.
+- **Bounded receiver volume:** coordinate absolute and relative requests through one transport owner while preserving later physical adjustments.
 - **Recoverable automation:** adopt one fresh, uniquely matching physical activity after lost state; otherwise coordinate a safe Off request.
 
 ```mermaid
@@ -36,7 +37,7 @@ flowchart LR
 | `home-motion-lighting-policy` | Converts occupancy and illuminance into lighting intent. |
 | `home-switch-lighting-policy` | Converts raw edges or pre-classified button actions into lighting intent without motion state. |
 | `home-room-lighting-controller` | Owns adaptive room commands, manual overrides, and lighting state. |
-| `home-avr-controller` | Controls AVR power, zones, and source selection from observed state. |
+| `home-avr-controller` | Owns AVR power, zones, source selection and bounded absolute or relative volume from observed state. |
 | `home-display-mode-controller` | Coordinates TV, projector, and screen transitions. |
 | `home-source-capability-controller` | Gates source readiness on fresh availability, active-device, application or playback evidence. |
 | `home-activity-lighting-controller` | Applies activity styles without taking room power or manual ownership. |
@@ -94,9 +95,30 @@ display, AVR, source, and backlighting evidence matches exactly one configured
 profile; missing or ambiguous startup evidence invokes the configured Off
 activity.
 
+## Receiver volume ownership
+
+Send semantic requests to the AVR controller rather than publishing protocol
+commands directly:
+
+```js
+msg.avr = {
+  kind: "volume",
+  requestId: "volume-control-1",
+  mode: "relative",
+  value: 1
+};
+```
+
+`mode` may be `absolute` or `relative`. The controller resolves relative input
+from fresh observed volume, accumulates rapid requests against the pending
+target, applies configured half-step bounds, retries through the existing
+bounded transport path, and confirms completion from fresh receiver evidence.
+Once confirmed, it releases the volume target; a later physical or external
+adjustment becomes the new baseline instead of being corrected.
+
 ## Contract examples
 
-Build and run all six public contracts:
+Build and run all seven public contracts:
 
 ```sh
 npm run examples
@@ -109,6 +131,7 @@ npm run examples
 | [`switch-gestures.mjs`](examples/switch-gestures.mjs) | Wall actions produce toggle or explicit manual-brightness intent. |
 | [`room-lighting.mjs`](examples/room-lighting.mjs) | The room owner converts semantic intent into a transport command. |
 | [`source-readiness.mjs`](examples/source-readiness.mjs) | Fresh application evidence confirms source readiness. |
+| [`volume-ownership.mjs`](examples/volume-ownership.mjs) | Bounded relative requests accumulate and release ownership after fresh confirmation. |
 | [`theatre-activity.mjs`](examples/theatre-activity.mjs) | Coordinated activity waits for fresh target-owner evidence. |
 
 Each example uses synthetic identifiers and configuration, asserts its central invariant, and prints the complete input/output contract as JSON.

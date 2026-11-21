@@ -22,6 +22,7 @@ node examples/source-readiness.mjs
 | [`switch-gestures.mjs`](switch-gestures.mjs) | A double action requests explicit manual full brightness. |
 | [`room-lighting.mjs`](room-lighting.mjs) | One room controller converts intent into the transport command. |
 | [`source-readiness.mjs`](source-readiness.mjs) | Fresh application evidence, not command success, confirms readiness. |
+| [`volume-ownership.mjs`](volume-ownership.mjs) | Relative requests accumulate, bounds apply, and fresh evidence releases ownership. |
 | [`theatre-activity.mjs`](theatre-activity.mjs) | A coordinated activity waits for fresh target-owner evidence. |
 
 Each example asserts its central invariant before returning the configuration, inputs, commands or effects, outputs, and invariant as JSON. Identifiers, topics, timestamps, coordinates, and profiles are synthetic.

@@ -11,6 +11,8 @@ export interface AvrConfig {
   sources: Record<string, string>;
   retryMs: number;
   maxAttempts: number;
+  minVolume: number;
+  maxVolume: number;
 }
 
 export interface AvrObserved {
@@ -28,6 +30,25 @@ export interface AvrDesired {
   power: AvrPower;
   source: string | null;
 }
+export type AvrVolumeMode = "absolute" | "relative";
+
+export interface AvrVolumeRequest {
+  requestId: string;
+  mode: AvrVolumeMode;
+  requested: number;
+  target: number | null;
+  bounded: boolean;
+}
+
+export interface AvrVolumeMetrics {
+  intents: number;
+  commands: number;
+  bounded: number;
+  confirmations: number;
+  externalChanges: number;
+  failures: number;
+}
+
 
 export interface AvrPending {
   operation: string;
@@ -53,6 +74,9 @@ export interface AvrState {
   blockedGeneration: number | null;
   querySentAt: number | null;
   classification: "manual_override" | null;
+  volumeRequest: AvrVolumeRequest | null;
+  recentVolumeRequestIds: string[];
+  volumeMetrics: AvrVolumeMetrics;
   lastAttempt: number;
 }
 
@@ -65,6 +89,12 @@ export type AvrInputEvent =
     generation: number;
     power: AvrPower;
     source?: string | null;
+  }
+  | {
+    kind: "volume";
+    requestId: string;
+    mode: AvrVolumeMode;
+    value: number;
   }
   | {kind: "tick"};
 
@@ -124,6 +154,10 @@ export function createAvrState(
 ): AvrState {
   const observed = saved.observed || {} as Partial<AvrObserved>;
   const seen = saved.seen || {} as Partial<Record<AvrField, boolean>>;
+  const volumeRequest = saved.volumeRequest && typeof saved.volumeRequest === "object"
+    ? saved.volumeRequest
+    : null;
+  const volumeMetrics = saved.volumeMetrics || {} as Partial<AvrVolumeMetrics>;
   return {
     observed: {
       power: observed.power === "on" || observed.power === "standby" ? observed.power : null,
@@ -147,6 +181,27 @@ export function createAvrState(
     blockedGeneration: Number.isInteger(saved.blockedGeneration) ? saved.blockedGeneration! : null,
     querySentAt: Number.isFinite(saved.querySentAt) ? saved.querySentAt! : null,
     classification: saved.classification === "manual_override" ? "manual_override" : null,
+    volumeRequest: volumeRequest && typeof volumeRequest.requestId === "string" &&
+      (volumeRequest.mode === "absolute" || volumeRequest.mode === "relative")
+      ? {
+        requestId: volumeRequest.requestId,
+        mode: volumeRequest.mode,
+        requested: Number(volumeRequest.requested) || 0,
+        target: Number.isFinite(volumeRequest.target) ? volumeRequest.target : null,
+        bounded: volumeRequest.bounded === true
+      }
+      : null,
+    recentVolumeRequestIds: Array.isArray(saved.recentVolumeRequestIds)
+      ? saved.recentVolumeRequestIds.filter((value): value is string => typeof value === "string").slice(-32)
+      : [],
+    volumeMetrics: {
+      intents: Number(volumeMetrics.intents) || 0,
+      commands: Number(volumeMetrics.commands) || 0,
+      bounded: Number(volumeMetrics.bounded) || 0,
+      confirmations: Number(volumeMetrics.confirmations) || 0,
+      externalChanges: Number(volumeMetrics.externalChanges) || 0,
+      failures: Number(volumeMetrics.failures) || 0
+    },
     lastAttempt: Number.isInteger(saved.lastAttempt) && (saved.lastAttempt ?? -1) >= 0
       ? saved.lastAttempt!
       : 0
@@ -158,6 +213,23 @@ function parseVolume(raw: string): number | null {
   if (raw.length === 2) return Number(raw);
   return Number(raw.slice(0, 2)) + Number(raw.slice(2)) / 10;
 }
+function roundVolume(value: number): number {
+  return Math.round(value * 2) / 2;
+}
+
+function sameVolume(left: number | null, right: number | null): boolean {
+  return left !== null && right !== null && Math.abs(left - right) < 0.001;
+}
+
+export function formatVolumeCommand(value: number): string {
+  const rounded = roundVolume(value);
+  if (!Number.isFinite(value) || rounded < 0 || rounded > 98 || Math.abs(value - rounded) > 0.001) {
+    throw new Error("volume must be a half-step between 0 and 98");
+  }
+  const whole = Math.floor(rounded).toString().padStart(2, "0");
+  return "MV" + whole + (Number.isInteger(rounded) ? "" : "5") + "\r";
+}
+
 
 export function parseAvrLine(
   value: unknown,
@@ -187,11 +259,22 @@ export function transitionAvr(
   rawConfig: Partial<AvrConfig>,
   nowValue: Date | string | number = new Date()
 ) {
-  const config = {
+  const rawMinVolume = Number(rawConfig.minVolume);
+  const rawMaxVolume = Number(rawConfig.maxVolume);
+  const minVolume = roundVolume(rawMinVolume);
+  const maxVolume = roundVolume(rawMaxVolume);
+  if (!Number.isFinite(rawMinVolume) || !Number.isFinite(rawMaxVolume) ||
+      Math.abs(rawMinVolume - minVolume) > 0.001 || Math.abs(rawMaxVolume - maxVolume) > 0.001 ||
+      minVolume < 0 || maxVolume > 98 || minVolume >= maxVolume) {
+    throw new Error("volume bounds must be half-step values between 0 and 98 with minimum below maximum");
+  }
+  const config: AvrConfig = {
     area: rawConfig.area || "room",
     sources: parseSources(rawConfig.sources),
     retryMs: Math.max(250, Number(rawConfig.retryMs) || 2000),
-    maxAttempts: Math.max(1, Math.floor(Number(rawConfig.maxAttempts) || 3))
+    maxAttempts: Math.max(1, Math.floor(Number(rawConfig.maxAttempts) || 3)),
+    minVolume,
+    maxVolume
   };
   const now = nowValue instanceof Date ? nowValue : new Date(nowValue);
   const nowMs = now.getTime();
@@ -210,6 +293,9 @@ export function transitionAvr(
     failure: state.failure,
     blockedGeneration: state.blockedGeneration,
     classification: state.classification,
+    volumeRequest: state.volumeRequest,
+    recentVolumeRequestIds: state.recentVolumeRequestIds,
+    volumeMetrics: state.volumeMetrics,
     lastAttempt: state.lastAttempt
   });
   let forceStateEvent = false;
@@ -244,6 +330,13 @@ export function transitionAvr(
 
   function operationSatisfied(operation: string): boolean {
     if (operation === "query") return hasFreshTargetState();
+    if (operation === "volume-query") {
+      return state.seen.power && state.seen.mainZone && state.seen.volume;
+    }
+    if (operation === "volume") {
+      return state.seen.volume &&
+        sameVolume(state.observed.volume, state.volumeRequest?.target ?? null);
+    }
     if (operation === "power-on") return state.seen.power && state.observed.power === "on";
     if (operation === "main-zone-on") return state.seen.mainZone && state.observed.mainZone === "on";
     if (operation === "source") {
@@ -253,13 +346,20 @@ export function transitionAvr(
     return false;
   }
 
+  function isVolumeOperation(operation: string): boolean {
+    return operation === "volume" || operation === "volume-query";
+  }
+
   function emitCommand(operation: string, payload: string, attempt: number) {
+    const volumeOperation = isVolumeOperation(operation);
     commands.push({
       payload,
       avrCommand: {
         area: config.area,
         operation,
-        requestId: state.desired?.requestId || null,
+        requestId: volumeOperation
+          ? state.volumeRequest?.requestId || null
+          : state.desired?.requestId || null,
         generation: state.desired?.generation ?? state.generation,
         attempt
       }
@@ -270,7 +370,10 @@ export function transitionAvr(
       attempt,
       deadlineAt: nowMs + config.retryMs
     };
-    state.phase = operation === "query" ? "discovering" : "transitioning";
+    state.phase = operation === "query" || operation === "volume-query"
+      ? "discovering"
+      : "transitioning";
+    if (operation === "volume") state.volumeMetrics.commands += 1;
     trace("command", "emitted", null, {operation, attempt});
     state.lastAttempt = Math.max(state.lastAttempt, attempt);
   }
@@ -298,20 +401,121 @@ export function transitionAvr(
       });
     }
   }
+  function clampVolume(value: number): {value: number; bounded: boolean} {
+    const rounded = roundVolume(value);
+    const bounded = Math.max(config.minVolume, Math.min(config.maxVolume, rounded));
+    return {value: bounded, bounded: Math.abs(bounded - value) > 0.001};
+  }
+
+  function completeVolume() {
+    const request = state.volumeRequest;
+    if (!request || request.target === null) return;
+    state.volumeMetrics.confirmations += 1;
+    if (state.pending && isVolumeOperation(state.pending.operation)) state.pending = null;
+    events.push({
+      avr: {
+        kind: "volume_ready",
+        area: config.area,
+        requestId: request.requestId,
+        volume: request.target,
+        bounded: request.bounded
+      }
+    });
+    trace("volume", "ready", null, {
+      requestId: request.requestId,
+      volume: request.target,
+      bounded: request.bounded
+    });
+    state.volumeRequest = null;
+    state.phase = state.classification === "manual_override"
+      ? "manual_override"
+      : state.desired && targetSatisfied()
+        ? "ready"
+        : "idle";
+  }
+
+  function abandonVolume(reason: string, observed: number | null = state.observed.volume) {
+    const request = state.volumeRequest;
+    if (!request) return;
+    if (state.pending && isVolumeOperation(state.pending.operation)) state.pending = null;
+    events.push({
+      avr: {
+        kind: "volume_manual_override",
+        area: config.area,
+        requestId: request.requestId,
+        reason,
+        observed,
+        target: request.target
+      }
+    });
+    trace("volume", "manual_override", reason, {
+      requestId: request.requestId,
+      observed,
+      target: request.target
+    });
+    state.volumeRequest = null;
+    state.phase = state.classification === "manual_override"
+      ? "manual_override"
+      : state.desired && targetSatisfied()
+        ? "ready"
+        : "idle";
+  }
+
+  function resolveRelativeVolume() {
+    const request = state.volumeRequest;
+    if (!request || request.mode !== "relative" || request.target !== null ||
+        !state.seen.volume || state.observed.volume === null) return;
+    const resolved = clampVolume(state.observed.volume + request.requested);
+    request.target = resolved.value;
+    request.bounded ||= resolved.bounded;
+    if (resolved.bounded) state.volumeMetrics.bounded += 1;
+  }
+
+  function reconcileVolume(allowQuery: boolean): boolean {
+    if (!state.volumeRequest) return false;
+    if (state.pending) return true;
+    if (!state.seen.power || !state.seen.mainZone || !state.seen.volume) {
+      if (allowQuery) emitCommand("volume-query", QUERY_COMMAND, 1);
+      return true;
+    }
+    if (state.observed.power !== "on" || state.observed.mainZone !== "on") {
+      const request = state.volumeRequest;
+      events.push({
+        avr: {
+          kind: "volume_rejected",
+          area: config.area,
+          requestId: request.requestId,
+          reason: "receiver-not-ready"
+        }
+      });
+      trace("volume", "rejected", "receiver-not-ready", {
+        requestId: request.requestId
+      });
+      state.volumeRequest = null;
+      return false;
+    }
+    resolveRelativeVolume();
+    if (state.volumeRequest.target !== null &&
+        sameVolume(state.observed.volume, state.volumeRequest.target)) {
+      completeVolume();
+      return false;
+    }
+    if (state.volumeRequest.target === null) return true;
+    emitCommand("volume", formatVolumeCommand(state.volumeRequest.target), 1);
+    return true;
+  }
+
 
   function reconcile(allowQuery = true) {
-    if (!state.desired) {
-      state.pending = null;
-      state.phase = Object.values(state.seen).some(Boolean) ? "idle" : "discovering";
-      return;
+    if (state.pending && operationSatisfied(state.pending.operation)) {
+      if (state.pending.operation === "volume") completeVolume();
+      else state.pending = null;
     }
+    if (state.pending) return;
 
-    if (state.classification === "manual_override") {
-      state.pending = null;
-      state.phase = "manual_override";
-      return;
-    }
-    if (!state.pending && state.phase === "ready" && hasFreshTargetState() && !targetSatisfied()) {
+    if (state.desired && state.classification !== "manual_override" &&
+        state.phase === "ready" && !state.volumeRequest &&
+        hasFreshTargetState() && !targetSatisfied()) {
       state.classification = "manual_override";
       state.phase = "manual_override";
       events.push({
@@ -324,31 +528,37 @@ export function transitionAvr(
         }
       });
       trace("observation", "manual_override");
+    }
+
+    if (state.desired && state.classification !== "manual_override" && !targetSatisfied()) {
+      if (state.blockedGeneration === state.desired.generation) return;
+      if (!hasFreshTargetState()) {
+        state.phase = "discovering";
+        if (allowQuery) emitCommand("query", QUERY_COMMAND, 1);
+        return;
+      }
+      if (state.desired.power === "standby") {
+        emitCommand("standby", "PWSTANDBY\r", 1);
+      } else if (state.observed.power !== "on") {
+        emitCommand("power-on", "PWON\r", 1);
+      } else if (state.observed.mainZone !== "on") {
+        emitCommand("main-zone-on", "ZMON\r", 1);
+      } else if (state.desired.source && state.observed.sourceCode !== desiredSourceCode()) {
+        emitCommand("source", "SI" + desiredSourceCode() + "\r", 1);
+      }
       return;
     }
 
-    if (state.pending && operationSatisfied(state.pending.operation)) state.pending = null;
-    if (targetSatisfied()) {
-      ready();
-      return;
-    }
-    if (state.blockedGeneration === state.desired.generation) return;
-    if (state.pending) return;
+    if (reconcileVolume(allowQuery)) return;
 
-    if (!hasFreshTargetState()) {
-      state.phase = "discovering";
-      if (allowQuery) emitCommand("query", QUERY_COMMAND, 1);
-      return;
-    }
-
-    if (state.desired.power === "standby") {
-      emitCommand("standby", "PWSTANDBY\r", 1);
-    } else if (state.observed.power !== "on") {
-      emitCommand("power-on", "PWON\r", 1);
-    } else if (state.observed.mainZone !== "on") {
-      emitCommand("main-zone-on", "ZMON\r", 1);
-    } else if (state.desired.source && state.observed.sourceCode !== desiredSourceCode()) {
-      emitCommand("source", "SI" + desiredSourceCode() + "\r", 1);
+    if (state.desired) {
+      if (state.classification === "manual_override") {
+        state.phase = "manual_override";
+      } else {
+        ready();
+      }
+    } else {
+      state.phase = Object.values(state.seen).some(Boolean) ? "idle" : "discovering";
     }
   }
 
@@ -360,12 +570,21 @@ export function transitionAvr(
     if (intent.source && !Object.hasOwn(config.sources, intent.source)) return "unknown-source";
     return null;
   }
+  function validateVolumeIntent(intent: Extract<AvrInputEvent, {kind: "volume"}>): string | null {
+    if (!intent.requestId || typeof intent.requestId !== "string") return "missing-request-id";
+    if (intent.mode !== "absolute" && intent.mode !== "relative") return "invalid-volume-mode";
+    if (!Number.isFinite(intent.value)) return "invalid-volume-value";
+    if (intent.mode === "relative" && intent.value === 0) return "zero-volume-delta";
+    return null;
+  }
 
   if (event.kind === "startup" || event.kind === "refresh") {
     const requestBlocked = state.desired &&
       state.blockedGeneration === state.desired.generation;
+    const abandonedVolumeRequest = state.volumeRequest?.requestId || null;
     state.seen = {power: false, mainZone: false, source: false, volume: false};
     state.pending = null;
+    state.volumeRequest = null;
     state.phase = requestBlocked ? "failed" : "discovering";
     state.querySentAt = nowMs;
     commands.push({
@@ -387,7 +606,9 @@ export function transitionAvr(
         deadlineAt: nowMs + config.retryMs
       };
     }
-    trace(event.kind, "querying", requestBlocked ? "request-remains-blocked" : null);
+    trace(event.kind, "querying", requestBlocked ? "request-remains-blocked" : null, {
+      abandonedVolumeRequest
+    });
     forceStateEvent = true;
   } else if (event.kind === "observed") {
     const value = event.line ?? msg.payload;
@@ -399,6 +620,7 @@ export function transitionAvr(
       recognised += 1;
       let previous: string | number | null;
       let current: string | number | null;
+      const wasFresh = state.seen[parsed.field];
       state.seen[parsed.field] = true;
       if (parsed.field === "source") {
         previous = state.observed.sourceCode;
@@ -417,6 +639,27 @@ export function transitionAvr(
         previous = state.observed.volume;
         state.observed.volume = parsed.value;
         current = parsed.value;
+        if (wasFresh && previous !== current) {
+          if (state.volumeRequest && state.pending?.operation === "volume" &&
+              !sameVolume(parsed.value, state.volumeRequest.target)) {
+            state.volumeMetrics.externalChanges += 1;
+            abandonVolume("unexpected-observation", parsed.value);
+          } else if (!state.volumeRequest) {
+            state.volumeMetrics.externalChanges += 1;
+            events.push({
+              avr: {
+                kind: "volume_external",
+                area: config.area,
+                previous,
+                observed: parsed.value
+              }
+            });
+            trace("volume", "external", null, {previous, observed: parsed.value});
+          } else if (state.volumeRequest.mode === "relative" &&
+              state.pending?.operation !== "volume") {
+            state.volumeRequest.target = null;
+          }
+        }
       }
       state.observed.at = now.toISOString();
       trace("observed", previous === current ? "unchanged" : "changed", null, {
@@ -501,37 +744,132 @@ export function transitionAvr(
       reconcile();
     }
     forceStateEvent = true;
+  } else if (event.kind === "volume") {
+    const reason = validateVolumeIntent(event);
+    if (reason) {
+      events.push({
+        avr: {
+          kind: "volume_rejected",
+          area: config.area,
+          requestId: event.requestId,
+          reason
+        }
+      });
+      trace("volume", "rejected", reason, {requestId: event.requestId});
+    } else if (state.recentVolumeRequestIds.includes(event.requestId)) {
+      trace("volume", "duplicate", null, {requestId: event.requestId});
+      reconcile();
+    } else {
+      const existing = state.volumeRequest;
+      let mode = event.mode;
+      let requested = event.value;
+      let target: number | null = null;
+      let bounded = false;
+      let boundedThisIntent = false;
+
+      if (event.mode === "absolute") {
+        const resolved = clampVolume(event.value);
+        target = resolved.value;
+        bounded = resolved.bounded;
+        boundedThisIntent = resolved.bounded;
+      } else if (existing?.target !== null && existing?.target !== undefined) {
+        const unresolvedTarget = existing.target + event.value;
+        const resolved = clampVolume(unresolvedTarget);
+        mode = existing.mode;
+        requested = existing.mode === "relative"
+          ? existing.requested + event.value
+          : unresolvedTarget;
+        target = resolved.value;
+        bounded = existing.bounded || resolved.bounded;
+        boundedThisIntent = resolved.bounded;
+      } else if (existing?.mode === "relative") {
+        requested = existing.requested + event.value;
+      } else if (state.seen.volume && state.observed.volume !== null) {
+        const resolved = clampVolume(state.observed.volume + event.value);
+        target = resolved.value;
+        bounded = resolved.bounded;
+        boundedThisIntent = resolved.bounded;
+      }
+
+      state.volumeRequest = {
+        requestId: event.requestId,
+        mode,
+        requested,
+        target,
+        bounded
+      };
+      state.recentVolumeRequestIds = [...state.recentVolumeRequestIds, event.requestId].slice(-32);
+      state.volumeMetrics.intents += 1;
+      if (boundedThisIntent) state.volumeMetrics.bounded += 1;
+      if (state.pending?.operation === "volume") state.pending = null;
+      trace("volume", "accepted", null, {
+        requestId: event.requestId,
+        mode: event.mode,
+        value: event.value,
+        target,
+        bounded
+      });
+      reconcile();
+    }
+    forceStateEvent = true;
   } else if (event.kind === "tick") {
     if (!state.pending) {
       reconcile();
     } else if (nowMs >= state.pending.deadlineAt) {
       if (operationSatisfied(state.pending.operation)) {
-        state.pending = null;
+        if (state.pending.operation === "volume") completeVolume();
+        else state.pending = null;
         reconcile();
       } else if (state.pending.attempt >= config.maxAttempts) {
         const failed = state.pending;
         state.pending = null;
-        state.phase = "failed";
-        state.failure = {
-          operation: failed.operation,
-          attempts: failed.attempt,
-          at: now.toISOString()
-        };
-        state.blockedGeneration = state.desired?.generation ?? null;
-        events.push({
-          avr: {
-            kind: "failed",
-            area: config.area,
-            requestId: state.desired?.requestId || null,
-            generation: state.desired?.generation ?? state.generation,
+        if (isVolumeOperation(failed.operation)) {
+          const requestId = state.volumeRequest?.requestId || null;
+          state.volumeMetrics.failures += 1;
+          state.volumeRequest = null;
+          state.phase = state.classification === "manual_override"
+            ? "manual_override"
+            : state.desired && targetSatisfied()
+              ? "ready"
+              : "idle";
+          events.push({
+            avr: {
+              kind: "volume_failed",
+              area: config.area,
+              requestId,
+              operation: failed.operation,
+              attempts: failed.attempt
+            }
+          });
+          trace("volume", "failed", "attempts-exhausted", {
+            requestId,
             operation: failed.operation,
             attempts: failed.attempt
-          }
-        });
-        trace("request", "failed", "attempts-exhausted", {
-          operation: failed.operation,
-          attempts: failed.attempt
-        });
+          });
+          reconcile(false);
+        } else {
+          state.phase = "failed";
+          state.failure = {
+            operation: failed.operation,
+            attempts: failed.attempt,
+            at: now.toISOString()
+          };
+          state.blockedGeneration = state.desired?.generation ?? null;
+          events.push({
+            avr: {
+              kind: "failed",
+              area: config.area,
+              requestId: state.desired?.requestId || null,
+              generation: state.desired?.generation ?? state.generation,
+              operation: failed.operation,
+              attempts: failed.attempt
+            }
+          });
+          trace("request", "failed", "attempts-exhausted", {
+            operation: failed.operation,
+            attempts: failed.attempt
+          });
+        }
       } else {
         emitCommand(state.pending.operation, state.pending.payload, state.pending.attempt + 1);
       }
@@ -549,6 +887,9 @@ export function transitionAvr(
     failure: state.failure,
     blockedGeneration: state.blockedGeneration,
     classification: state.classification,
+    volumeRequest: state.volumeRequest,
+    recentVolumeRequestIds: state.recentVolumeRequestIds,
+    volumeMetrics: state.volumeMetrics,
     lastAttempt: state.lastAttempt
   });
   if (forceStateEvent || before !== after) {
@@ -566,10 +907,16 @@ export function transitionAvr(
       } : null,
       failure: state.failure,
       classification: state.classification,
+      volume: {
+        request: state.volumeRequest ? {...state.volumeRequest} : null,
+        bounds: {minimum: config.minVolume, maximum: config.maxVolume},
+        metrics: {...state.volumeMetrics}
+      },
       metrics: {
         attempts: state.lastAttempt,
         retries: Math.max(0, state.lastAttempt - 1),
-        fallbackUsed: false
+        fallbackUsed: false,
+        volume: {...state.volumeMetrics}
       }
     };
     events.unshift({payload, avr: {kind: "state", ...payload}});

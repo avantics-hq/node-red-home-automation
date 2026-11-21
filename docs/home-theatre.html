@@ -109,7 +109,7 @@
         <p class="eyebrow">Public capability reference</p>
         <h1>Deterministic home-theatre activity orchestration.</h1>
         <p class="lead">A reusable controller contract for coordinating target owners from explicit activity requests and fresh observations. The capability milestone is complete in the source package; this page contains no installation record.</p>
-        <div class="pills"><span class="pill complete">Capability complete</span><span class="pill">Package 1.13.0</span><span class="pill">Latest request wins</span><span class="pill">Observed completion</span></div>
+        <div class="pills"><span class="pill complete">Capability complete</span><span class="pill">Package 1.14.0</span><span class="pill">Latest request wins</span><span class="pill">Observed completion</span></div>
       </div>
     </div>
   </header>
@@ -120,7 +120,7 @@
       <p class="intro">The activity layer emits semantic intent. Each target controller retains its own safe sequencing, transport and confirmation policy.</p>
       <div class="targets">
         <article class="target"><h3>Display</h3><p>Mode and power intent</p></article>
-        <article class="target"><h3>Receiver</h3><p>Power and source intent</p></article>
+        <article class="target"><h3>Receiver</h3><p>Power, source and bounded volume ownership</p></article>
         <article class="target"><h3>Media source</h3><p>Capability and readiness</p></article>
         <article class="target"><h3>Room lighting</h3><p>Ownership-preserving style</p></article>
         <article class="target"><h3>Backlighting</h3><p>Observed power state</p></article>
@@ -145,6 +145,7 @@
         <article class="card feature"><h3>Stale work is inert</h3><p>Timers, command results and observations carry generation identity and cannot complete a newer request.</p></article>
         <article class="card"><h3>Readiness is honest</h3><p>Mandatory targets require fresh observations. Unsupported or unobservable capabilities remain explicit.</p></article>
         <article class="card"><h3>Manual control is preserved</h3><p>Unsolicited target changes become ownership evidence rather than a reason to fight the user.</p></article>
+        <article class="card"><h3>Volume control has one owner</h3><p>Absolute and relative requests share receiver bounds, observed confirmation and an explicit release point for later manual adjustment.</p></article>
         <article class="card"><h3>Recovery is bounded</h3><p>Restart refreshes observations without blindly replaying state-changing commands.</p></article>
         <article class="card"><h3>Failure is actionable</h3><p>Retries, fallback use, target availability and transition latency remain visible through one state contract.</p></article>
         <article class="card"><h3>Policies stay transport-neutral</h3><p>Activity profiles name semantic outcomes; adapters own protocol-specific operations.</p></article>
