@@ -109,6 +109,7 @@ test("retained switch startup is inert, single edge toggles and double edge is f
     switchAt: timer.switchAt
   }, config, true, 2500);
   assert.equal(sendEffects(single)[0]?.lighting.state, "TOGGLE");
+  assert.equal(sendEffects(single)[0]?.lighting.person, true);
 
   const first = transitionMotion(single.state, {
     source: "switch",
@@ -120,6 +121,7 @@ test("retained switch startup is inert, single edge toggles and double edge is f
   }, config, true, 3200);
   assert.deepEqual(sendEffects(second)[0]?.lighting.values, {brightness: 254});
   assert.equal(sendEffects(second)[0]?.lighting.manual, true);
+  assert.equal(sendEffects(second)[0]?.lighting.person, true);
 });
 
 test("retained switch state re-baselines persisted motion policy state", () => {

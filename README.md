@@ -133,6 +133,15 @@ msg.lighting = {
 };
 ```
 
+`home-activity-lighting-controller` does this itself: while a profile is active
+it overrides that profile's lights under its configured owner (default
+`activity`), and when a new profile drops a light, including an off profile
+with no targets, it releases it. Give each activity-lighting node that feeds the
+same room controller its own Owner; with a shared name, one node's release
+hands back lights the other still holds. A flow that sets its own `owner` must
+set it on every lighting message from the node, releases included, or leave it
+to the node's Owner setting.
+
 Release overridden targets (default: all; with `owner`, only that owner's
 lights). Released lights that are on are restyled as a refresh would:
 
@@ -140,7 +149,15 @@ lights). Released lights that are on are restyled as a refresh would:
 msg.lighting = {kind: "release", targets: ["wall", "lamp"], owner: "theatre"};
 ```
 
-Switching a light off, from any source, returns it to `in-control`. On startup
+A held (`overridden`) light changes only for an intent with an `owner` (its own,
+or a newer owner who takes it over), a person (`manual: true`, an external
+command on the command topic, or a change seen at the light), or a release.
+Other intents, such as motion ON or OFF and owner-less values, leave it alone
+and are traced as `ignored held-by`; their other targets are still handled.
+The package's wall-switch policies mark presses with `person: true`. Owner-less
+intents, with or without values, reach a held light only with `manual: true` or
+`person: true`; a flow acting for a person, such as a dashboard, sets one.
+Switching a light off by its owner or a person returns it to `in-control`. On startup
 and whenever a target's state changes, the controller sends a retained message
 on its command output:
 

@@ -57,7 +57,11 @@
     <dt>manual</dt><dd>a person changed the light. Enabling circadian lighting returns manual lights to
       in-control.</dd>
   </dl>
-  <p>Switching a light off, by any source, returns it to in-control.</p>
+  <p>An overridden light changes only for an intent with an <code>owner</code> (its own, or a newer owner who takes
+    it over), a person (a <code>manual: true</code> intent, <code>person: true</code>, set by the wall-switch policies, an external command on the command topic, or a change
+    seen at the light), or a release. Any other intent, including motion ON or OFF and owner-less values, leaves it
+    alone and is traced as <code>ignored held-by</code>; other targets in the same intent are still handled.
+    Switching a light off by its owner or a person returns it to in-control.</p>
   <h3>Inputs</h3>
   <dl class="message-properties">
     <dt>lighting.owner <span class="property-type">string</span></dt>

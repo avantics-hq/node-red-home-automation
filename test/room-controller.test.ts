@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import {transitionSwitchPolicy} from "../lib/switch-policy";
 import {
   transitionRoom,
   type RoomConfig,
@@ -311,9 +312,9 @@ test("an overridden light keeps its owner's style through the periodic refresh",
 
   result = transitionRoom(result.state, {lighting: {kind: "refresh"}}, config, later2(90000));
   assert.equal(result.outputs.length, 0);
-  // A later non-owner ON (motion) neither restyles nor takes the light back.
+  // A later owner-less ON (motion) is ignored for the held light.
   result = transitionRoom(result.state, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, later2(91000));
-  assert.deepEqual(payload(result, 0), {state: "ON"});
+  assert.equal(result.outputs.length, 0);
   assert.equal(result.status.control.cooking, "overridden");
 });
 
@@ -337,10 +338,10 @@ test("releasing an overridden light restyles it and refresh resumes", () => {
   assert.equal(payload(result, 0).brightness, 254);
 });
 
-test("switching off an overridden light returns it to the room controller", () => {
+test("only the owner switching a held light off returns it to the room controller", () => {
   let result = transitionRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, now);
   result = ownedActivity(result.state, 1000);
-  result = transitionRoom(result.state, {lighting: {kind: "intent", targets: ["cooking"], state: "OFF", source: "motion"}}, config, later2(2000));
+  result = transitionRoom(result.state, {lighting: {kind: "intent", targets: ["cooking"], state: "OFF", source: "activity", owner: "theatre"}}, config, later2(2000));
   assert.equal(payload(result, 0).state, "OFF");
   assert.equal(result.status.control.cooking, "in-control");
   assert.equal(result.traces.some((entry) => entry.event === "control" && entry.reason === "off"), true);
@@ -375,4 +376,100 @@ test("state saved before control states existed loads as manual or in-control", 
   assert.deepEqual(result.status.control, {cooking: "manual", dining: "in-control"});
   assert.deepEqual(result.outputs.map((entry) => entry.lighting_command?.target), ["dining"]);
   assert.equal(Object.hasOwn(result.state, "manual"), false);
+});
+
+// The held-light rule: lamp held by "film".
+const heldConfig: RoomConfig = {...config, targets: [
+  {id: "lamp", stateTopic: "home/kitchen/light/lamp", commandTopic: "home/kitchen/light/lamp/set"},
+  {id: "wall", stateTopic: "home/kitchen/light/wall", commandTopic: "home/kitchen/light/wall/set"}
+]};
+
+function heldLamp() {
+  let result = transitionRoom(undefined, {lighting: {kind: "intent", targets: ["lamp", "wall"], state: "ON", source: "motion"}}, heldConfig, now);
+  result = transitionRoom(result.state, {
+    lighting: {kind: "intent", targets: ["lamp"], state: "ON", source: "activity", owner: "film", values: {brightness: 30}}
+  }, heldConfig, later2(1000));
+  assert.equal(result.status.control.lamp, "overridden");
+  return result;
+}
+
+function heldIntent(state: Parameters<typeof transitionRoom>[0], lighting: Record<string, unknown>, ms = 2000) {
+  return transitionRoom(state, {lighting: {kind: "intent", targets: ["lamp"], ...lighting}}, heldConfig, later2(ms));
+}
+
+function ignoredHeld(result: ReturnType<typeof transitionRoom>) {
+  return result.traces.filter((entry) => entry.reason === "held-by").map((entry) => [entry.details.target, entry.details.owner]);
+}
+
+test("a held light ignores owner-less automation", () => {
+  const held = heldLamp();
+  for (const lighting of [
+    {state: "ON", source: "motion"},
+    {state: "OFF", source: "motion"},
+    {state: "TOGGLE", source: "schedule"},
+    {state: "ON", source: "bedtime", values: {brightness: 40}},
+    {state: "ON", source: "activity", values: {brightness: 80}, updateOnOnly: true},
+    {state: "ON", source: "bedtime", values: {brightness: 5}, updateOffOnly: true}
+  ]) {
+    const result = heldIntent(held.state, lighting);
+    assert.equal(result.outputs.length, 0, JSON.stringify(lighting));
+    assert.deepEqual(result.state.control.lamp, {state: "overridden", owner: "film"});
+    assert.deepEqual(ignoredHeld(result), [["lamp", "film"]]);
+  }
+});
+
+test("a held light follows its owner, a newer owner, a person and a release", () => {
+  const held = heldLamp();
+  let result = heldIntent(held.state, {state: "ON", source: "activity", owner: "film", values: {brightness: 20}});
+  assert.equal(payload(result, 0).brightness, 20);
+
+  result = heldIntent(held.state, {state: "ON", source: "scene", owner: "reading", values: {brightness: 90}});
+  assert.equal(payload(result, 0).brightness, 90);
+  assert.deepEqual(result.state.control.lamp, {state: "overridden", owner: "reading"});
+
+  result = heldIntent(held.state, {state: "ON", source: "wall", manual: true, values: {brightness: 254}});
+  assert.equal(payload(result, 0).brightness, 254);
+  assert.equal(result.status.control.lamp, "manual");
+
+  result = transitionRoom(held.state, {lighting: {kind: "release", owner: "film"}}, heldConfig, later2(2000));
+  assert.equal(result.status.control.lamp, "in-control");
+  assert.equal(output(result, 0).lighting_command?.target, "lamp");
+  assert.equal(payload(result, 0).brightness, 254);
+});
+
+test("a wall-switch press reaches a held light like any person", () => {
+  // dev-review repro: a single press is an owner-less TOGGLE marked person: true.
+  const held = heldLamp();
+  const press = transitionSwitchPolicy(undefined, {source: "switch", payload: {state: true}}, {targets: ["lamp", "wall"], switchWindowMs: 500, switchFreshnessMs: 60000}, 0);
+  const single = transitionSwitchPolicy(press.state, {source: "switch-timer", generation: press.state.wallInput.generation, switchAt: press.state.wallInput.edgeAt}, {targets: ["lamp", "wall"], switchWindowMs: 500, switchFreshnessMs: 60000}, 600);
+  const sent = single.effects.find((effect) => effect.kind === "send");
+  assert.ok(sent && sent.kind === "send");
+  assert.equal(sent.message.lighting.person, true);
+  const result = transitionRoom(held.state, sent.message, heldConfig, later2(2000));
+  assert.deepEqual(result.outputs.filter((entry) => entry.lighting_command).map((entry) => [entry.lighting_command?.target, (entry.payload as Record<string, unknown>).state]), [["lamp", "OFF"], ["wall", "OFF"]]);
+  assert.equal(result.status.control.lamp, "in-control");
+  assert.deepEqual(ignoredHeld(result), []);
+
+  // The source alone is not a person.
+  const unmarked = heldIntent(held.state, {state: "TOGGLE", source: "wall"});
+  assert.deepEqual(ignoredHeld(unmarked), [["lamp", "film"]]);
+});
+
+test("switching a held light off at the bulb still frees it", () => {
+  const held = heldLamp();
+  // Confirm the owner's ON first, so the OFF report is a real external change.
+  let result = transitionRoom(held.state, {topic: "home/kitchen/light/lamp", payload: {state: "ON", brightness: 30}, lighting: {kind: "observed"}}, heldConfig, later2(1200));
+  result = transitionRoom(result.state, {topic: "home/kitchen/light/lamp", payload: {state: "OFF"}, lighting: {kind: "observed"}}, heldConfig, later2(60000));
+  assert.equal(result.outputs.filter((entry) => entry.lighting_command).length, 0);
+  assert.equal(result.status.control.lamp, "in-control");
+  assert.equal(result.state.desired.lamp, false);
+});
+
+test("a mixed intent changes only the lights that are not held", () => {
+  const held = heldLamp();
+  const result = transitionRoom(held.state, {lighting: {kind: "intent", targets: ["lamp", "wall"], state: "OFF", source: "motion"}}, heldConfig, later2(2000));
+  assert.deepEqual(result.outputs.filter((entry) => entry.lighting_command).map((entry) => entry.lighting_command?.target), ["wall"]);
+  assert.deepEqual(ignoredHeld(result), [["lamp", "film"]]);
+  assert.equal(result.status.control.lamp, "overridden");
+  assert.equal(result.state.desired.wall, false);
 });

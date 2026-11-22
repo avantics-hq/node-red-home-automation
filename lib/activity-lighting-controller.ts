@@ -14,6 +14,9 @@ export type ActivityLightingProfiles = Record<string, ActivityLightingProfile>;
 
 export interface ActivityLightingConfig {
   profiles: ActivityLightingProfiles;
+  // Room-controller owner for the lights this node styles; one per node, so a
+  // profile change keeps or releases lights under the same name.
+  owner: string;
   confirmationTimeoutMs: number;
   maxAttempts: number;
 }
@@ -45,8 +48,17 @@ export interface ActivityLightingFailure {
   occurredAt: string;
 }
 
+// The lights this node last overrode, kept apart from desired so a release
+// survives profiles being renamed or edited across a redeploy. targets null:
+// state saved before this was recorded, with a profile no longer configured.
+export interface ActivityLightingApplied {
+  profile: string;
+  targets: string[] | null;
+}
+
 export interface ActivityLightingState {
   desired: ActivityLightingDesired | null;
+  applied: ActivityLightingApplied | null;
   generation: number;
   phase: string;
   observed: Record<string, ActivityLightingObservation>;
@@ -82,7 +94,7 @@ export interface ActivityLightingMessage {
 }
 
 export interface ActivityLightingCommand {
-  operation: "apply" | "observe";
+  operation: "apply" | "observe" | "release";
   requestId: string;
   generation: number;
   profile: string;
@@ -160,8 +172,10 @@ export function normaliseLightingProfiles(value: unknown): ActivityLightingProfi
 export function normaliseActivityLightingConfig(
   config: Partial<ActivityLightingConfig> & {profiles?: unknown} = {}
 ): ActivityLightingConfig {
+  const owner = typeof config.owner === "string" ? config.owner.trim() : "";
   return {
     profiles: normaliseLightingProfiles(config.profiles),
+    owner: owner || "activity",
     confirmationTimeoutMs: Math.max(1000, Number(config.confirmationTimeoutMs) || 15000),
     maxAttempts: Math.max(1, Math.floor(Number(config.maxAttempts) || 2))
   };
@@ -174,8 +188,15 @@ function initialState(
   const desired = saved.desired && Object.hasOwn(profiles, saved.desired.profile)
     ? {...saved.desired}
     : null;
+  const legacyTargets = saved.desired ? profiles[saved.desired.profile]?.targets : undefined;
+  const applied = saved.applied && typeof saved.applied === "object"
+    ? {profile: saved.applied.profile, targets: Array.isArray(saved.applied.targets) ? [...saved.applied.targets] : null}
+    : saved.desired
+      ? {profile: saved.desired.profile, targets: legacyTargets ? [...legacyTargets] : null}
+      : null;
   return {
     desired,
+    applied,
     generation: Number.isInteger(saved.generation) && (saved.generation ?? -1) >= 0 ? saved.generation! : 0,
     phase: typeof saved.phase === "string" ? saved.phase : "idle",
     observed: Object.fromEntries(
@@ -216,6 +237,7 @@ function commandFor(
       state: "ON",
       values: {...profile.values},
       source: "activity",
+      owner: config.owner,
       updateOnOnly: true,
       preserveManual: true
     };
@@ -332,12 +354,32 @@ export function transitionActivityLighting(
       trace("intent", duplicate ? "duplicate" : "rejected", duplicate ? null : "generation-conflict");
       return;
     }
+    // Hand back lights this node overrode that the new profile does not style.
+    // Unknown applied targets release every light held under this owner.
+    const nextTargets = config.profiles[intent.profile]!.targets;
+    const previous = state.applied;
+    const released = previous?.targets === null ? null
+      : (previous?.targets ?? []).filter((target) => !nextTargets.includes(target));
+    state.applied = {profile: intent.profile, targets: [...nextTargets]};
     state.desired = {
       requestId: intent.requestId,
       generation: intent.generation,
       profile: intent.profile,
       requestedAt
     };
+    if (previous && (released === null || released.length)) {
+      commands.push({
+        operation: "release",
+        requestId: intent.requestId,
+        generation: intent.generation,
+        profile: previous.profile,
+        attempt: 1,
+        lighting: released === null
+          ? {kind: "release", owner: config.owner, source: "activity"}
+          : {kind: "release", owner: config.owner, targets: released, source: "activity"}
+      });
+      trace("command", "emitted", null, {operation: "release", profile: previous.profile, targets: released});
+    }
     state.generation = intent.generation;
     state.observed = {};
     state.pending = null;

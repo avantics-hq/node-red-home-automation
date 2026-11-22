@@ -20,6 +20,7 @@ import {
 interface ActivityLightingNodeConfig extends NodeDef {
   area?: string;
   profiles?: string;
+  owner?: string;
   confirmationTimeoutMs?: number | string;
   maxAttempts?: number | string;
 }
@@ -50,6 +51,7 @@ const registerActivityLightingController: NodeInitializer = (RED) => {
     }
     const controllerConfig: ActivityLightingConfig = {
       profiles,
+      owner: config.owner || "activity",
       confirmationTimeoutMs: number(config.confirmationTimeoutMs, 15000),
       maxAttempts: number(config.maxAttempts, 2)
     };
