@@ -1,0 +1,286 @@
+"use strict";
+
+import assert from "node:assert/strict";
+import test from "node:test";
+import {
+  transitionCover,
+  type CoverConfig,
+  type CoverEvent,
+  type CoverMotion,
+  type CoverState
+} from "../lib/cover-controller";
+
+const config: CoverConfig = {
+  positionTolerance: 2,
+  invert: false,
+  travelTimeoutMs: 30000,
+  maxAttempts: 2,
+  pollMs: 5000
+};
+const at = (seconds: number): Date =>
+  new Date(Date.parse("2026-11-21T16:00:00Z") + seconds * 1000);
+
+function apply(
+  state: Partial<CoverState> | undefined,
+  cover: CoverEvent,
+  seconds = 0,
+  overrides: Partial<CoverConfig> = {}
+) {
+  return transitionCover(state, {cover}, {...config, ...overrides}, at(seconds));
+}
+
+function setPosition(state: Partial<CoverState> | undefined, position: number, generation = 1, seconds = 0) {
+  return apply(state, {kind: "set_position", requestId: `cover-${generation}`, generation, position, source: "schedule"}, seconds);
+}
+
+function observe(
+  state: Partial<CoverState> | undefined,
+  position: number,
+  seconds: number,
+  motion?: CoverMotion,
+  overrides: Partial<CoverConfig> = {}
+) {
+  const event: CoverEvent = {kind: "observed", position, observedAt: at(seconds).toISOString()};
+  if (motion) event.motion = motion;
+  return apply(state, event, seconds, overrides);
+}
+
+test("cover commands a semantic position and confirms from a fresh settled observation", () => {
+  let result = setPosition(undefined, 40);
+  assert.deepEqual(result.commands, [{
+    operation: "set_position",
+    requestId: "cover-1",
+    generation: 1,
+    position: 40,
+    attempt: 1
+  }]);
+  assert.equal(result.state.phase, "moving");
+  assert.equal(result.state.desired?.source, "schedule");
+
+  result = apply(result.state, {kind: "command_result", generation: 1, ok: true}, 0.1);
+  assert.notEqual(result.events[0]?.theatre.status, "ready");
+
+  result = observe(result.state, 41, 10, "closing");
+  assert.equal(result.state.phase, "moving");
+
+  result = observe(result.state, 41, 12, "stopped");
+  assert.equal(result.state.phase, "ready");
+  assert.equal(result.events[0]?.theatre.status, "ready");
+  assert.equal(result.events[0]?.theatre.target, "cover");
+  assert.equal(result.events[0]?.theatre.details.observedPosition, 41);
+});
+
+test("open and close map to 100 and 0", () => {
+  const opened = apply(undefined, {kind: "open", requestId: "cover-open", generation: 1});
+  assert.equal(opened.commands[0]?.position, 100);
+  const closed = apply(opened.state, {kind: "close", requestId: "cover-close", generation: 2});
+  assert.equal(closed.commands[0]?.position, 0);
+  assert.equal(closed.state.desired?.position, 0);
+});
+
+test("observations older than the command or out of order cannot confirm", () => {
+  let result = setPosition(undefined, 0, 1, 10);
+
+  result = observe(result.state, 0, 5);
+  assert.equal(result.state.phase, "moving");
+  assert.equal(result.traces.at(-1)?.reason, "stale-observation");
+
+  result = observe(result.state, 50, 20, "closing");
+  result = observe(result.state, 0, 15);
+  assert.equal(result.state.phase, "moving");
+  assert.equal(result.state.observed?.position, 50);
+  assert.equal(result.traces.at(-1)?.reason, "out-of-order");
+});
+
+test("polling, retries and travel time are bounded", () => {
+  let result = setPosition(undefined, 100);
+  result = apply(result.state, {kind: "tick", generation: 1}, 5);
+  assert.deepEqual(result.commands.map(({operation}) => operation), ["observe"]);
+
+  result = apply(result.state, {kind: "tick", generation: 1}, 30);
+  assert.equal(result.commands[0]?.operation, "set_position");
+  assert.equal(result.commands[0]?.attempt, 2);
+
+  // An observation that predates the retry cannot confirm it.
+  result = observe(result.state, 100, 29);
+  assert.equal(result.state.phase, "moving");
+
+  result = apply(result.state, {kind: "tick", generation: 1}, 60);
+  assert.equal(result.commands.length, 0);
+  assert.equal(result.state.phase, "failed");
+  assert.equal(result.state.failure?.reason, "travel-timeout");
+  assert.equal(result.events[0]?.theatre.details.metrics.retries, 1);
+
+  result = apply(result.state, {kind: "tick", generation: 1}, 70);
+  assert.equal(result.commands.length, 0);
+  result = apply(result.state, {kind: "startup"}, 71);
+  assert.equal(result.commands.length, 0);
+  assert.equal(result.state.phase, "failed");
+});
+
+test("a failed command result retries once then fails", () => {
+  let result = setPosition(undefined, 100);
+  result = apply(result.state, {kind: "command_result", generation: 1, ok: false, reason: "publish-failed"}, 1);
+  assert.equal(result.commands[0]?.attempt, 2);
+  result = apply(result.state, {kind: "command_result", generation: 1, ok: false, reason: "publish-failed"}, 2);
+  assert.equal(result.state.phase, "failed");
+  assert.equal(result.state.failure?.reason, "publish-failed");
+});
+
+test("stop mid-travel confirms on reported stop and keeps the stopped position", () => {
+  let result = setPosition(undefined, 100);
+  result = observe(result.state, 30, 5, "opening");
+  result = apply(result.state, {kind: "stop", requestId: "cover-stop", generation: 2}, 6);
+  assert.deepEqual(result.commands, [{operation: "stop", requestId: "cover-stop", generation: 2, attempt: 1}]);
+  assert.equal(result.state.phase, "stopping");
+
+  result = observe(result.state, 37, 7, "opening");
+  assert.equal(result.state.phase, "stopping");
+  result = observe(result.state, 38, 8, "stopped");
+  assert.equal(result.state.phase, "ready");
+  assert.equal(result.state.desired?.position, 38);
+});
+
+test("stop without motion reports confirms on two equal fresh positions", () => {
+  let result = setPosition(undefined, 0);
+  result = apply(result.state, {kind: "stop", requestId: "cover-stop", generation: 2}, 3);
+  result = observe(result.state, 60, 4);
+  assert.equal(result.state.phase, "stopping");
+  result = observe(result.state, 58, 5);
+  assert.equal(result.state.phase, "stopping");
+  result = observe(result.state, 58, 6);
+  assert.equal(result.state.phase, "ready");
+  assert.equal(result.state.desired?.position, 58);
+});
+
+test("manual movement latches ownership without a corrective command; a newer intent resumes", () => {
+  let result = setPosition(undefined, 100);
+  result = observe(result.state, 100, 20, "stopped");
+  assert.equal(result.state.phase, "ready");
+
+  result = observe(result.state, 99, 30);
+  assert.equal(result.state.phase, "ready");
+
+  result = observe(result.state, 40, 40, "closing");
+  assert.equal(result.state.phase, "manual_override");
+  assert.equal(result.commands.length, 0);
+  assert.equal(result.events[0]?.theatre.classification, "manual_override");
+
+  result = observe(result.state, 100, 50);
+  assert.equal(result.state.phase, "manual_override");
+  assert.equal(result.commands.length, 0);
+
+  result = setPosition(result.state, 20, 2, 60);
+  assert.equal(result.state.classification, null);
+  assert.equal(result.commands[0]?.position, 20);
+  result = observe(result.state, 20, 80);
+  assert.equal(result.state.phase, "ready");
+});
+
+test("newer intents supersede; stale and conflicting generations are inert", () => {
+  let result = setPosition(undefined, 100, 3);
+  result = setPosition(result.state, 0, 2, 1);
+  assert.equal(result.commands.length, 0);
+  assert.equal(result.traces.at(-1)?.reason, "stale-generation");
+
+  result = apply(result.state, {kind: "close", requestId: "other", generation: 3}, 2);
+  assert.equal(result.commands.length, 0);
+  assert.equal(result.traces.at(-1)?.reason, "generation-conflict");
+
+  result = setPosition(result.state, 50, 4, 3);
+  assert.equal(result.commands[0]?.position, 50);
+  result = apply(result.state, {kind: "tick", generation: 3}, 10);
+  assert.equal(result.commands.length, 0);
+  result = observe(result.state, 100, 11);
+  assert.notEqual(result.state.phase, "ready");
+});
+
+test("restart re-observes without replaying a move", () => {
+  let result = setPosition(undefined, 70);
+  result = apply(result.state, {kind: "startup"}, 5);
+  assert.deepEqual(result.commands.map(({operation}) => operation), ["observe"]);
+  assert.equal(result.state.phase, "confirming");
+  result = observe(result.state, 70, 6);
+  assert.equal(result.state.phase, "ready");
+
+  result = apply(result.state, {kind: "refresh"}, 100);
+  assert.deepEqual(result.commands.map(({operation}) => operation), ["observe"]);
+  result = observe(result.state, 10, 101);
+  assert.equal(result.state.phase, "manual_override");
+  assert.equal(result.commands.length, 0);
+});
+
+test("invert normalises device positions at the boundary", () => {
+  const inverted = {invert: true};
+  let result = apply(undefined, {kind: "open", requestId: "cover-open", generation: 1}, 0, inverted);
+  assert.equal(result.state.desired?.position, 100);
+  assert.equal(result.commands[0]?.position, 0);
+
+  result = observe(result.state, 0, 10, "stopped", inverted);
+  assert.equal(result.state.phase, "ready");
+  assert.equal(result.state.observed?.position, 100);
+  assert.equal(result.events[0]?.theatre.details.observedPosition, 100);
+});
+
+test("invalid input is rejected", () => {
+  assert.throws(() => setPosition(undefined, 101), /0 to 100/);
+  assert.throws(() => apply(undefined, {kind: "open", requestId: "", generation: 1}), /requestId/);
+  assert.throws(() => observe(undefined, -1, 1), /0 to 100/);
+});
+
+test("a cover stopped short after moving latches manual ownership and is not retried", () => {
+  let result = observe(undefined, 100, 0, "stopped");
+  result = setPosition(result.state, 0, 1, 1);
+  assert.equal(result.events[0]?.theatre.status, "transitioning");
+
+  result = observe(result.state, 80, 5, "closing");
+  result = observe(result.state, 60, 10, "stopped");
+  assert.equal(result.state.phase, "manual_override");
+  assert.equal(result.state.pending, null);
+  assert.equal(result.traces.at(-1)?.reason, "stopped-short");
+  assert.equal(result.events[0]?.theatre.status, "transitioning");
+
+  result = apply(result.state, {kind: "tick", generation: 1}, 40);
+  assert.equal(result.commands.length, 0);
+
+  result = setPosition(result.state, 0, 2, 50);
+  assert.equal(result.commands[0]?.position, 0);
+  assert.equal(result.state.classification, null);
+});
+
+test("a cover without motion reports that stops short is also not retried", () => {
+  let result = observe(undefined, 100, 0);
+  result = setPosition(result.state, 0, 1, 1);
+  result = observe(result.state, 70, 5);
+  result = observe(result.state, 60, 10);
+  assert.equal(result.state.phase, "moving");
+  result = observe(result.state, 60, 15);
+  assert.equal(result.state.phase, "manual_override");
+  result = apply(result.state, {kind: "tick", generation: 1}, 40);
+  assert.equal(result.commands.length, 0);
+});
+
+test("a cover that never moved is retried as a lost command", () => {
+  let result = observe(undefined, 100, 0, "stopped");
+  result = setPosition(result.state, 0, 1, 1);
+  result = observe(result.state, 100, 5, "stopped");
+  result = observe(result.state, 100, 10, "stopped");
+  assert.equal(result.state.phase, "moving");
+  result = apply(result.state, {kind: "tick", generation: 1}, 31);
+  assert.equal(result.commands[0]?.operation, "set_position");
+  assert.equal(result.commands[0]?.attempt, 2);
+});
+
+test("target_state status only uses theatre target statuses", () => {
+  const allowed = new Set(["discovering", "transitioning", "confirming", "ready", "waiting_for_source", "failed", "unavailable"]);
+  let result = setPosition(undefined, 50);
+  const statuses = [result.events[0]?.theatre.status];
+  result = apply(result.state, {kind: "stop", requestId: "cover-stop", generation: 2}, 1);
+  statuses.push(result.events[0]?.theatre.status);
+  result = apply(result.state, {kind: "startup"}, 2);
+  statuses.push(result.events[0]?.theatre.status);
+  result = observe(result.state, 50, 3, "stopped");
+  statuses.push(result.events[0]?.theatre.status);
+  assert.deepEqual(statuses, ["transitioning", "transitioning", "confirming", "ready"]);
+  for (const status of statuses) assert.ok(allowed.has(status!));
+});
