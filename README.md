@@ -52,7 +52,7 @@ Executable, deployment-neutral examples live in [`examples/`](examples/) and exe
 
 ## Requirements
 
-- Node.js 24 or newer
+- Node.js 22.9 or newer
 - Node-RED 5.0.x
 
 ## Install
