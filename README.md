@@ -1,10 +1,10 @@
 # Node-RED Home Automation
 
-[![CI](https://github.com/cptbucky/node-red-home-automation/actions/workflows/ci.yml/badge.svg)](https://github.com/cptbucky/node-red-home-automation/actions/workflows/ci.yml)
+[![CI](https://github.com/avantics-hq/node-red-home-automation/actions/workflows/ci.yml/badge.svg)](https://github.com/avantics-hq/node-red-home-automation/actions/workflows/ci.yml)
 
 State-aware Node-RED controllers for reliable lighting and home-theatre automation.
 
-**[View the smart-home programme and completed project records →](https://cptbucky.github.io/node-red-home-automation/)**
+**[View the smart-home programme and completed project records →](https://avantics-hq.github.io/node-red-home-automation/)**
 
 Most home automations translate an event directly into a command. This package adds a deterministic control layer between them: it tracks desired and observed state, preserves manual control, confirms outcomes, retries bounded failures, and rejects stale work.
 
@@ -60,7 +60,7 @@ Executable, deployment-neutral examples live in [`examples/`](examples/) and exe
 The package is currently distributed from source rather than npm:
 
 ```sh
-git clone https://github.com/cptbucky/node-red-home-automation.git
+git clone https://github.com/avantics-hq/node-red-home-automation.git
 cd node-red-home-automation
 npm ci
 npm test

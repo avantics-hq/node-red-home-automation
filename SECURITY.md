@@ -10,7 +10,7 @@ the latest tagged release is supported.
 Use GitHub's **Security → Report a vulnerability** form to open a private
 security advisory with the maintainer:
 
-https://github.com/cptbucky/node-red-home-automation/security/advisories/new
+https://github.com/avantics-hq/node-red-home-automation/security/advisories/new
 
 Include the affected component and version, impact, reproduction steps, and any
 suggested mitigation. Remove credentials, private addresses, entity IDs, flow

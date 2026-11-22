@@ -13,11 +13,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cptbucky/node-red-home-automation.git"
+    "url": "git+https://github.com/avantics-hq/node-red-home-automation.git"
   },
-  "homepage": "https://github.com/cptbucky/node-red-home-automation#readme",
+  "homepage": "https://github.com/avantics-hq/node-red-home-automation#readme",
   "bugs": {
-    "url": "https://github.com/cptbucky/node-red-home-automation/issues"
+    "url": "https://github.com/avantics-hq/node-red-home-automation/issues"
   },
   "license": "MIT",
   "main": "dist/lib/room-controller.js",
