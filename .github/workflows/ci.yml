@@ -144,19 +144,25 @@ jobs:
           sha256sum "${package_file}" > "${package_file}.sha256"
           echo "file=${package_file}" >> "${GITHUB_OUTPUT}"
 
-      - name: Publish to npm
+      - name: Stage npm release
         shell: bash
         env:
           PACKAGE_FILE: ${{ steps.package.outputs.file }}
         run: |
           name="$(node -p "require('./package.json').name")"
           version="$(node -p "require('./package.json').version")"
-          # A missing package or version is not an error here: it means publish.
+          # A missing package or version is not an error here: it means stage.
           if published="$(npm view "${name}@${version}" version 2>/dev/null)" && [ "${published}" = "${version}" ]; then
-            echo "${name}@${version} is already on npm; skipping publish."
-          else
-            npm publish "${PACKAGE_FILE}" --access public
+            echo "${name}@${version} is already on npm; skipping staging."
+            exit 0
           fi
+          # The CI token cannot list staged versions, so an earlier run's staged
+          # copy is only detected when the registry refuses this one.
+          if ! npm stage publish "${PACKAGE_FILE}" --access public; then
+            echo "::error::Staging ${name}@${version} failed. If an earlier run already staged it, approve or reject that copy on npmjs.com (Staged Packages tab) instead of re-running."
+            exit 1
+          fi
+          echo "::notice::Staged ${name}@${version}. It is not public until a maintainer approves it with 2FA: npmjs.com > the package > Staged Packages, or npm stage approve <stage-id>."
 
       - name: Create GitHub release
         env:

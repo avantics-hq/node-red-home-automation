@@ -71,17 +71,20 @@ Merged `main` changes run CI and publish Pages. Package releases are intentional
 1. Commit the package version and complete the deployment smoke.
 2. Create and push the matching `v<version>` tag.
 3. The same CI workflow repeats the package gates, validates the tag against
-   `package.json`, publishes that tarball to npm through trusted publishing
+   `package.json`, stages that tarball on npm through trusted publishing
    (skipped when the version is already on npm), and creates a GitHub Release
    containing the tarball and its SHA-256 checksum.
+4. A maintainer approves the staged version with 2FA, on npmjs.com (the
+   package's Staged Packages tab) or with `npm stage approve <stage-id>`. The
+   npm version is live only after approval.
 
-npm publishing uses GitHub's OIDC token, with no stored npm token. One-time
-setup, done once by an npm owner of `@avantics`: publish the first version by
-hand with 2FA (npm only accepts a trusted publisher for an existing package),
-then on npmjs.com add a GitHub Actions trusted publisher for owner
-`avantics-hq`, repository `node-red-home-automation`, workflow `ci.yml` and
-environment `npm-publish`, and set publishing access to require 2FA and
-disallow tokens.
+npm staging uses GitHub's OIDC token, with no stored npm token. One-time setup,
+done once by an npm owner of `@avantics`: publish the first version by hand with
+2FA (npm only accepts a trusted publisher for an existing package), then on
+npmjs.com add a GitHub Actions trusted publisher for owner `avantics-hq`,
+repository `node-red-home-automation`, workflow `ci.yml` and environment
+`npm-publish`, allowing staged publishing only, and set publishing access to
+require 2FA and disallow tokens.
 
 Documentation-only commits do not receive package tags or releases.
 
