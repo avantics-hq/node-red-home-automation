@@ -76,6 +76,15 @@ Merged `main` changes run CI and publish Pages. Package releases are intentional
 
 Documentation-only commits do not receive package tags or releases.
 
+Versions follow semantic versioning: fixes bump the patch number, compatible
+features the minor, and breaking changes the major. Cut a release when a group
+of user-noticeable fixes or a feature has merged, not on every merge. The
+version-bump pull request updates every place that names the current version:
+`package.json`, both root entries in `package-lock.json` (`npm version <x.y.z>
+--no-git-tag-version`), the README install line, the version placeholder in
+`.github/ISSUE_TEMPLATE/bug.yml`, and the "Package x.y.z" labels in
+`docs/index.html`, `docs/contract-examples.html` and `docs/home-theatre.html`.
+
 ## Repository boundaries
 
 - Keep device addresses, precise coordinates, credentials, exported flows, and deployment state out of the repository.
