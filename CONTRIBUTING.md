@@ -72,7 +72,7 @@ npm audit --audit-level=high
 npm test
 ```
 
-The public-content scan rejects credential-like files, private network addresses, absolute user-home paths, high-precision location defaults, and private-key blocks.
+The public-content scan rejects credential-like files, private network addresses (IPv4, CGNAT, private IPv6, .local and .lan names), MAC addresses, email addresses outside reserved example domains, Zigbee IEEE addresses, Home Assistant entity ids, Zigbee2MQTT device topics, absolute user-home paths, high-precision coordinates, exported flow identifiers, and private-key blocks.
 
 ## Public reports and dependency updates
 
