@@ -59,7 +59,7 @@ export interface MotionTrace {
 }
 
 export function booleanOn(value: unknown): boolean {
-  return value === true || value === "on";
+  return value === true || (typeof value === "string" && value.toLowerCase() === "on");
 }
 
 function finiteNumber(value: unknown): number | null {
@@ -217,8 +217,9 @@ export function transitionMotion(
         targets: config.onTargets
       });
     } else {
-      scheduleOffTimer();
-      trace("occupancy", "schedule-off", null, {
+      if (enabled()) scheduleOffTimer();
+      else cancelOffTimer("motion-disabled");
+      trace("occupancy", enabled() ? "schedule-off" : "suppressed", enabled() ? null : "disabled", {
         occupied: false,
         areaEnabled: state.areaEnabled,
         globalEnabled: nextGlobalEnabled,
@@ -245,6 +246,14 @@ export function transitionMotion(
   } else if (source === "off-timer") {
     if (input.generation !== state.offTimerGeneration || state.offTimerDueAt === null) {
       trace("off-timer", "ignored", "stale-generation", {generation: input.generation});
+    } else if (!enabled()) {
+      // The global switch is shared, so a timer scheduled before another node
+      // disabled motion can still fire here.
+      state.offTimerDueAt = null;
+      trace("off-timer", "suppressed", "disabled", {
+        areaEnabled: state.areaEnabled,
+        globalEnabled: nextGlobalEnabled
+      });
     } else {
       state.offTimerDueAt = null;
       emitIntent(lightingIntent(config.offTargets, "OFF", "motion"), "off-timer");

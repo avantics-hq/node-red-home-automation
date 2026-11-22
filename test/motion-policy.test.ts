@@ -153,3 +153,64 @@ test("retained switch state re-baselines persisted motion policy state", () => {
   }, config, true, 2500);
   assert.equal(sendEffects(stale).length, 0);
 });
+
+function scheduled(result: ReturnType<typeof transitionMotion>) {
+  return result.effects.find(
+    (effect): effect is Extract<MotionEffect, {kind: "schedule-off-timer"}> => effect.kind === "schedule-off-timer"
+  );
+}
+
+test("a vacancy while motion is disabled schedules no off-timer", () => {
+  let area = transitionMotion(undefined, {source: "area-enabled", payload: "off"}, config, true, 1000);
+  area = transitionMotion(area.state, {source: "occupancy", payload: {occupied: false}}, config, true, 2000);
+  assert.equal(scheduled(area), undefined);
+  assert.equal(area.state.offTimerDueAt, null);
+  const suppressed = area.traces.find((entry) => entry.event === "occupancy");
+  assert.equal(suppressed?.outcome, "suppressed");
+  assert.equal(suppressed?.reason, "disabled");
+
+  const global = transitionMotion(undefined, {source: "occupancy", payload: {occupied: false}}, config, false, 2000);
+  assert.equal(scheduled(global), undefined);
+  assert.equal(global.traces.find((entry) => entry.event === "occupancy")?.reason, "disabled");
+});
+
+test("an off-timer that fires after motion is disabled globally emits nothing", () => {
+  // Two nodes share the global switch; only node A receives global-enabled.
+  const nodeB = transitionMotion(undefined, {source: "occupancy", payload: {occupied: false}}, config, true, 1000);
+  const timer = scheduled(nodeB);
+  assert.ok(timer);
+  const nodeA = transitionMotion(undefined, {source: "global-enabled", payload: "off"}, config, true, 2000);
+  assert.equal(nodeA.globalEnabled, false);
+
+  const fired = transitionMotion(nodeB.state, {source: "off-timer", generation: timer.generation}, config, nodeA.globalEnabled, 31_000);
+  assert.equal(sendEffects(fired).length, 0);
+  assert.equal(fired.state.offTimerDueAt, null);
+  const suppressed = fired.traces.find((entry) => entry.event === "off-timer");
+  assert.equal(suppressed?.outcome, "suppressed");
+  assert.equal(suppressed?.reason, "disabled");
+});
+
+test("ON in any case enables motion; other values disable it", () => {
+  for (const payload of ["ON", "On", "on", true]) {
+    const result = transitionMotion(undefined, {source: "area-enabled", payload}, config, true, 1000);
+    assert.equal(result.status.enabled, true, String(payload));
+    assert.equal(transitionMotion(undefined, {source: "global-enabled", payload}, config, false, 1000).globalEnabled, true);
+  }
+  for (const payload of ["OFF", "off", false, "true", 1]) {
+    assert.equal(transitionMotion(undefined, {source: "area-enabled", payload}, config, true, 1000).status.enabled, false);
+  }
+});
+
+test("re-enabling motion switches nothing off; a later vacancy schedules OFF as before", () => {
+  let result = transitionMotion(undefined, {source: "area-enabled", payload: "off"}, config, true, 1000);
+  result = transitionMotion(result.state, {source: "occupancy", payload: {occupied: false}}, config, true, 2000);
+  result = transitionMotion(result.state, {source: "area-enabled", payload: "ON"}, config, true, 3000);
+  assert.equal(sendEffects(result).length, 0);
+  assert.equal(scheduled(result), undefined);
+
+  result = transitionMotion(result.state, {source: "occupancy", payload: {occupied: false}}, config, true, 4000);
+  const timer = scheduled(result);
+  assert.equal(timer?.delayMs, 30_000);
+  result = transitionMotion(result.state, {source: "off-timer", generation: timer?.generation}, config, true, 34_000);
+  assert.deepEqual(sendEffects(result).map((message) => message.lighting.state), ["OFF"]);
+});
