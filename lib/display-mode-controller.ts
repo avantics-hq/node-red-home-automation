@@ -1,6 +1,6 @@
 "use strict";
 
-import {boundObservedAt, parseObservedAt} from "./observation-time";
+import {boundObservedAt, isOutOfOrder, parseObservedAt} from "./observation-time";
 
 export type DisplayMode = "off" | "tv" | "projector";
 export type DisplayDevice = "tv" | "screen" | "projector";
@@ -244,25 +244,31 @@ function operationSatisfied(
   }
 }
 
+// A finite number, or the default for missing or unusable input.
+function setting(value: unknown, fallback: number): number {
+  const parsed = Number(value ?? fallback);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 export function normaliseConfig(config: Partial<DisplayConfig> = {}): DisplayConfig {
-  const projectorWarmupMs = Math.max(1000, Number(config.projectorWarmupMs ?? 60000));
+  const projectorWarmupMs = Math.max(1000, setting(config.projectorWarmupMs, 60000));
   return {
-    screenOpenPosition: Number(config.screenOpenPosition ?? 82),
-    screenTolerance: Math.max(0, Number(config.screenTolerance ?? 2)),
-    pollMs: Math.max(250, Number(config.pollMs ?? 2000)),
-    queryTimeoutMs: Math.max(1000, Number(config.queryTimeoutMs ?? 5000)),
-    tvTimeoutMs: Math.max(1000, Number(config.tvTimeoutMs ?? 30000)),
-    screenTimeoutMs: Math.max(1000, Number(config.screenTimeoutMs ?? 65000)),
+    screenOpenPosition: setting(config.screenOpenPosition, 82),
+    screenTolerance: Math.max(0, setting(config.screenTolerance, 2)),
+    pollMs: Math.max(250, setting(config.pollMs, 2000)),
+    queryTimeoutMs: Math.max(1000, setting(config.queryTimeoutMs, 5000)),
+    tvTimeoutMs: Math.max(1000, setting(config.tvTimeoutMs, 30000)),
+    screenTimeoutMs: Math.max(1000, setting(config.screenTimeoutMs, 65000)),
     projectorWarmupMs,
     projectorMinimumWarmupMs: Math.min(
       projectorWarmupMs,
-      Math.max(0, Number(config.projectorMinimumWarmupMs ?? 15000))
+      Math.max(0, setting(config.projectorMinimumWarmupMs, 15000))
     ),
-    projectorShutdownConfirmMs: Math.max(1000, Number(config.projectorShutdownConfirmMs ?? 5000)),
-    projectorCooldownMs: Math.max(1000, Number(config.projectorCooldownMs ?? 120000)),
-    maxAttempts: Math.max(1, Math.floor(Number(config.maxAttempts ?? 2))),
-    projectorOnWatts: Number(config.projectorOnWatts ?? 20),
-    projectorOffWatts: Number(config.projectorOffWatts ?? 10),
+    projectorShutdownConfirmMs: Math.max(1000, setting(config.projectorShutdownConfirmMs, 5000)),
+    projectorCooldownMs: Math.max(1000, setting(config.projectorCooldownMs, 120000)),
+    maxAttempts: Math.max(1, Math.floor(setting(config.maxAttempts, 2))),
+    projectorOnWatts: setting(config.projectorOnWatts, 20),
+    projectorOffWatts: setting(config.projectorOffWatts, 10),
     projectorPowerFallback: config.projectorPowerFallback === true
   };
 }
@@ -466,13 +472,18 @@ export function transitionDisplay(
       trace("observation", "ignored", "stale-generation", {device, generation: event.generation});
       return;
     }
-    // No ordering check here (B8); a future time still counts as now.
+    // A future time counts as now; a reading older than the stored one (an
+    // overlapping poll answering late) is ignored.
     const reportedMs = event.observedAt ? parseObservedAt(event.observedAt) : null;
     const bounded = reportedMs === null ? null : boundObservedAt(event.observedAt!, reportedMs, now.getTime());
     if (bounded?.skewed) {
       trace("observation", "adjusted", "clock-skew", {device, reported: event.observedAt, usedAt: bounded.observedAt});
     }
     const observedAt = bounded ? bounded.observedAt : event.observedAt || iso(now);
+    if (isOutOfOrder(parseObservedAt(observedAt) ?? now.getTime(), state.observed[device]?.observedAt, now.getTime())) {
+      trace("observation", "ignored", "out-of-order", {device});
+      return;
+    }
     const source = event.source || "unknown";
     if (device === "tv") {
       if (event.power !== "on" && event.power !== "standby") throw new Error("invalid TV power observation");
@@ -583,11 +594,20 @@ export function transitionDisplay(
   if (!event || typeof event.kind !== "string") throw new Error("msg.display.kind is required");
 
   if (event.kind === "startup") {
+    // A projector power operation in flight cannot be repeated safely (a
+    // second toggle can switch a warming lamp off), so it survives startup
+    // and is only re-observed; everything else is rediscovered.
+    const inFlight = state.pending && !state.pending.retryable ? state.pending : null;
     state.pending = null;
     state.seen = {tv: false, screen: false, projector: false};
     state.querying = {tv: false, screen: false, projector: false};
     beginDiscovery();
-    trace("startup", "querying");
+    if (inFlight) {
+      const deadlineAt = Math.max(inFlight.deadlineAt, now.getTime() + config.queryTimeoutMs);
+      state.pending = {...inFlight, deadlineAt, nextAt: Math.min(deadlineAt, now.getTime() + config.pollMs)};
+      state.phase = "transitioning";
+    }
+    trace("startup", "querying", inFlight ? "projector-operation-kept" : null);
   } else if (event.kind === "intent") {
     if (!Object.hasOwn(MODES, event.mode)) throw new Error("display mode must be off, tv or projector");
     if (typeof event.requestId !== "string" || !event.requestId) throw new Error("display requestId is required");

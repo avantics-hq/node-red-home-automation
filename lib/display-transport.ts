@@ -153,11 +153,17 @@ export class DisplayTransport {
       }
       if (command.device === "screen" && command.operation === "query_position") {
         const body = await this.shellyGet(this.screenHost, "Cover.GetStatus?id=0");
+        const position = body.current_pos;
+        if (typeof position !== "number" || !Number.isFinite(position) || position < 0 || position > 100) {
+          const error = new Error("Shelly cover reported no usable position") as CodedError;
+          error.code = "invalid_screen_position";
+          throw error;
+        }
         return {
           display: {
             kind: "observed",
             device: "screen",
-            position: Number(body.current_pos),
+            position,
             state: String(body.state || "unknown"),
             source: "shelly-cover",
             ...common
@@ -170,11 +176,17 @@ export class DisplayTransport {
       }
       if (command.device === "projector" && command.operation === "query_power") {
         const body = await this.shellyGet(this.projectorMeterHost, "Switch.GetStatus?id=1");
+        const watts = body.apower;
+        if (typeof watts !== "number" || !Number.isFinite(watts) || watts < 0) {
+          const error = new Error("Shelly switch reported no usable power") as CodedError;
+          error.code = "invalid_projector_power";
+          throw error;
+        }
         return {
           display: {
             kind: "observed",
             device: "projector",
-            watts: Number(body.apower),
+            watts,
             source: "shelly-power",
             ...common
           }

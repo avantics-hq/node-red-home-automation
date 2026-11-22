@@ -97,3 +97,22 @@ test("transport failures are classified without leaking credentials or response 
   assert.equal(JSON.stringify(result).includes("test-secret"), false);
   assert.equal(JSON.stringify(result).includes("sensitive"), false);
 });
+
+test("unusable Shelly replies are transport failures, never position 0 or NaN", async () => {
+  const replies: Record<string, unknown> = {cover: {current_pos: null, state: "stopped"}, power: {}};
+  const display = transport(fakeFetch(async (request) => {
+    const url = new URL(request.url);
+    if (url.pathname.endsWith("Cover.GetStatus")) return json(replies.cover);
+    if (url.pathname.endsWith("Switch.GetStatus")) return json(replies.power);
+    return json({}, 404);
+  }));
+  const base = {generation: 7};
+  const screen = await display.execute({...base, device: "screen", operation: "query_position"});
+  const projector = await display.execute({...base, device: "projector", operation: "query_power"});
+  assert.deepEqual(screen?.display, {kind: "transport_failed", device: "screen", operation: "query_position", generation: 7, reason: "invalid_screen_position"});
+  assert.deepEqual(projector?.display, {kind: "transport_failed", device: "projector", operation: "query_power", generation: 7, reason: "invalid_projector_power"});
+
+  replies.cover = {current_pos: 101};
+  const outOfRange = await display.execute({...base, device: "screen", operation: "query_position"});
+  assert.equal(outOfRange?.display?.kind, "transport_failed");
+});

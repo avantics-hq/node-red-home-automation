@@ -685,7 +685,8 @@ test("display adapter recovers a projector start that timed out during a restart
   const state = savedState(before);
   before.context().set("state", {
     ...state,
-    pending: {...(state.pending as Record<string, unknown>), deadlineAt: Date.now() - 1000, nextAt: Date.now() - 1000}
+    // Downtime longer than the warm-up: its deadline and minimum have passed.
+    pending: {...(state.pending as Record<string, unknown>), deadlineAt: Date.now() - 1000, nextAt: Date.now() - 1000, readyAt: Date.now() - 1000}
   });
   devices.watts = 300;
 
@@ -703,9 +704,9 @@ test("display adapter recovers a projector start that timed out during a restart
   assert.equal(traces(after).some((entry) => entry.outcome === "failed"), false);
 });
 
-test("display adapter redeploy during warm-up toggles the projector as main does", async (t) => {
-  // Display mode keeps main's redeploy behaviour: nothing at construction, and
-  // the flow's startup re-issues the start (a known gap tracked with the projector work).
+test("display adapter redeploy during warm-up never toggles the projector again", async (t) => {
+  // dev-review: a startup during warm-up used to re-issue the start toggle,
+  // switching the warming projector off. The start in flight is now kept.
   const {Constructor, devices} = await displayStartingProjector(t);
   devices.watts = 5;
 
@@ -715,7 +716,8 @@ test("display adapter redeploy during warm-up toggles the projector as main does
   assert.equal(powerToggles(after), 0);
   await receive<SendEnvelope>(after, {display: {kind: "startup"}});
   await wait(300);
-  assert.equal(powerToggles(after), 1);
+  assert.equal(powerToggles(after), 0);
+  assert.equal((savedState(after).pending as Record<string, unknown>).operation, "projector_start");
 });
 
 test("AVR adapter recovers a source change whose retries ran out during a restart", async (t) => {
