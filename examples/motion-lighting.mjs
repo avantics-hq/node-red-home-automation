@@ -9,7 +9,8 @@ export function run() {
     offTargets: ["ceiling", "worktop", "accent"],
     defaultIlluminanceCutoff: 120,
     defaultDelaySeconds: 45,
-    switchWindowMs: 500
+    switchWindowMs: 500,
+    switchFreshnessMs: 60_000
   };
   const inputs = [
     {source: "illuminance", payload: 35},

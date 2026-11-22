@@ -9,7 +9,8 @@
       offTargets: {value: "[\"main\"]", required: true},
       defaultDelaySeconds: {value: 120, required: true, validate: RED.validators.number()},
       defaultIlluminanceCutoff: {value: 10, required: true, validate: RED.validators.number()},
-      switchWindowMs: {value: 500, required: true, validate: RED.validators.number()}
+      switchWindowMs: {value: 500, required: true, validate: RED.validators.number()},
+      switchFreshnessSeconds: {value: 3600, required: true, validate: RED.validators.number()}
     },
     inputs: 1,
     outputs: 1,
@@ -26,8 +27,9 @@
   <div class="form-row"><label for="node-input-defaultDelaySeconds">Vacancy seconds</label><input type="number" id="node-input-defaultDelaySeconds"></div>
   <div class="form-row"><label for="node-input-defaultIlluminanceCutoff">Lux cutoff</label><input type="number" id="node-input-defaultIlluminanceCutoff"></div>
   <div class="form-row"><label for="node-input-switchWindowMs">Switch window ms</label><input type="number" id="node-input-switchWindowMs"></div>
+  <div class="form-row"><label for="node-input-switchFreshnessSeconds">Switch freshness seconds</label><input type="number" id="node-input-switchFreshnessSeconds"></div>
 </script>
 
 <script type="text/html" data-help-name="home-motion-lighting-policy">
-  <p>Turns normalised occupancy, illuminance, enable-state and wall-switch events into <code>msg.lighting</code> intents.</p>
+  <p>Turns normalised occupancy, illuminance, enable-state and wall-switch events into <code>msg.lighting</code> intents. Raw wall state preserves a persisted baseline, treats retained observations as inert re-baselines and exposes fresh, stale, unavailable or awaiting-baseline status. Send availability as <code>msg.source = "switch-availability"</code>.</p>
 </script>

@@ -1,16 +1,19 @@
 "use strict";
+import {
+  createWallInputState,
+  transitionWallInput,
+  wallInputStatus,
+  type WallInputConfig,
+  type WallInputState
+} from "./wall-input";
 
-export interface SwitchPolicyConfig {
+
+export interface SwitchPolicyConfig extends WallInputConfig {
   targets: string[];
-  switchWindowMs: number;
 }
 
 export interface SwitchPolicyState {
-  switchStateKnown: boolean;
-  switchState: boolean;
-  generation: number;
-  switchAt: number;
-  timerDueAt: number | null;
+  wallInput: WallInputState;
 }
 
 export interface SwitchPolicyInput {
@@ -19,6 +22,7 @@ export interface SwitchPolicyInput {
   retain?: boolean;
   generation?: number;
   switchAt?: number;
+  observedAt?: unknown;
 }
 
 export interface SwitchLightingIntent {
@@ -45,12 +49,21 @@ export interface SwitchPolicyTrace {
 }
 
 export function createSwitchPolicyState(saved: Partial<SwitchPolicyState> = {}): SwitchPolicyState {
+  const legacy = saved as Partial<SwitchPolicyState> & {
+    switchStateKnown?: boolean;
+    switchState?: boolean;
+    generation?: number;
+    switchAt?: number;
+    timerDueAt?: number | null;
+  };
   return {
-    switchStateKnown: saved.switchStateKnown === true,
-    switchState: saved.switchState === true,
-    generation: Number(saved.generation) || 0,
-    switchAt: Number(saved.switchAt) || 0,
-    timerDueAt: typeof saved.timerDueAt === "number" ? saved.timerDueAt : null
+    wallInput: createWallInputState(saved.wallInput ?? {
+      baselineKnown: legacy.switchStateKnown,
+      value: legacy.switchState,
+      generation: legacy.generation,
+      edgeAt: legacy.switchAt,
+      timerDueAt: legacy.timerDueAt
+    })
   };
 }
 
@@ -85,9 +98,10 @@ export function transitionSwitchPolicy(
   }
 
   function cancelTimer(reason: string | null) {
-    const wasActive = Number(state.timerDueAt) > now;
-    state.generation += 1;
-    state.timerDueAt = null;
+    const wasActive = Number(state.wallInput.timerDueAt) > now;
+    state.wallInput.generation += 1;
+    state.wallInput.edgeAt = 0;
+    state.wallInput.timerDueAt = null;
     effects.push({kind: "cancel-switch-timer"});
     if (wasActive && reason) trace("switch-timer", "cancelled", reason);
   }
@@ -101,44 +115,40 @@ export function transitionSwitchPolicy(
     });
   }
 
-  if (input.source === "switch") {
-    const nextState = input.payload && typeof input.payload === "object"
-      ? (input.payload as Record<string, unknown>).state
-      : undefined;
-    if (typeof nextState !== "boolean") {
-      trace("switch", "ignored", "invalid-state");
-    } else {
-      const firstState = !state.switchStateKnown;
-      const changed = firstState || nextState !== state.switchState;
-      state.switchStateKnown = true;
-      state.switchState = nextState;
-      if (input.retain === true) {
-        if (state.timerDueAt !== null || state.switchAt) {
-          state.switchAt = 0;
-          cancelTimer("retained-baseline");
-        }
-        trace("switch", "ignored", "retained-baseline", {changed});
-      } else if (!changed) {
-        trace("switch", "ignored", "unchanged");
-      } else if (state.switchAt && now - state.switchAt <= config.switchWindowMs) {
-        state.switchAt = 0;
-        cancelTimer("double-edge");
-        emit(intent(config.targets, "ON", true), "switch");
-      } else {
-        cancelTimer("new-edge");
-        state.switchAt = now;
-        state.timerDueAt = now + config.switchWindowMs;
-        effects.push({
-          kind: "schedule-switch-timer",
-          delayMs: config.switchWindowMs,
-          generation: state.generation,
-          switchAt: now
-        });
-        trace("switch-timer", "scheduled", null, {
-          dueAt: new Date(state.timerDueAt).toISOString(),
-          targets: config.targets
-        });
-      }
+  if (
+    input.source === "switch-startup" ||
+    input.source === "switch" ||
+    input.source === "switch-availability" ||
+    input.source === "switch-timer"
+  ) {
+    const wallInput = transitionWallInput(
+      state.wallInput,
+      input.source === "switch-startup"
+        ? {kind: "startup"}
+        : input.source === "switch"
+          ? {
+            kind: "observation",
+            payload: input.payload,
+            retain: input.retain,
+            observedAt: input.observedAt
+          }
+          : input.source === "switch-availability"
+            ? {kind: "availability", payload: input.payload}
+            : {
+              kind: "timer",
+              generation: input.generation,
+              edgeAt: input.switchAt
+            },
+      config,
+      now
+    );
+    state.wallInput = wallInput.state;
+    effects.push(...wallInput.effects);
+    traces.push(...wallInput.traces);
+    if (wallInput.gesture === "single") {
+      emit(intent(config.targets, "TOGGLE"), "switch");
+    } else if (wallInput.gesture === "double") {
+      emit(intent(config.targets, "ON", true), "switch");
     }
   } else if (input.source === "switch-action") {
     const action = String(
@@ -149,26 +159,19 @@ export function transitionSwitchPolicy(
     if (input.retain === true) {
       trace("switch-action", "ignored", "retained-message", {action});
     } else if (action === "single" || action === "double") {
-      state.switchAt = 0;
       cancelTimer("explicit-action");
       emit(intent(config.targets, action === "single" ? "TOGGLE" : "ON", action === "double"), "switch-action");
     } else {
       trace("switch-action", "ignored", "unsupported-action", {action});
     }
-  } else if (input.source === "switch-timer") {
-    const current = input.generation === state.generation &&
-      input.switchAt === state.switchAt &&
-      state.timerDueAt !== null;
-    if (!current) {
-      trace("switch-timer", "ignored", "stale-generation", {generation: input.generation});
-    } else {
-      state.switchAt = 0;
-      state.timerDueAt = null;
-      emit(intent(config.targets, "TOGGLE"), "switch-timer");
-    }
   } else {
     trace("message", "ignored", "unsupported-source", {source: input.source});
   }
 
-  return {state, effects, traces};
+  return {
+    state,
+    effects,
+    traces,
+    status: wallInputStatus(state.wallInput, config.switchFreshnessMs, now)
+  };
 }

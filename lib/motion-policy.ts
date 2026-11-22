@@ -1,11 +1,17 @@
 "use strict";
+import {
+  createWallInputState,
+  transitionWallInput,
+  wallInputStatus,
+  type WallInputConfig,
+  type WallInputState
+} from "./wall-input";
 
-export interface MotionConfig {
+export interface MotionConfig extends WallInputConfig {
   defaultIlluminanceCutoff: number;
   defaultDelaySeconds: number;
   onTargets: string[];
   offTargets: string[];
-  switchWindowMs: number;
 }
 
 export interface MotionState {
@@ -13,17 +19,14 @@ export interface MotionState {
   illuminance: number | null;
   illuminanceCutoff: number;
   delaySeconds: number;
-  switchStateKnown: boolean;
-  switchState: boolean | null;
-  switchGeneration: number;
-  switchAt: number;
-  switchTimerDueAt: number | null;
+  wallInput: WallInputState;
   offTimerGeneration: number;
   offTimerDueAt: number | null;
 }
 
 export interface MotionInput {
   source: string;
+  observedAt?: unknown;
   payload?: unknown;
   generation?: number;
   switchAt?: number;
@@ -67,16 +70,25 @@ export function createMotionState(
   config: MotionConfig,
   saved: Partial<MotionState> = {}
 ): MotionState {
+  const legacy = saved as Partial<MotionState> & {
+    switchStateKnown?: boolean;
+    switchState?: boolean | null;
+    switchGeneration?: number;
+    switchAt?: number;
+    switchTimerDueAt?: number | null;
+  };
   return {
     areaEnabled: saved.areaEnabled !== false,
     illuminance: saved.illuminance ?? null,
     illuminanceCutoff: saved.illuminanceCutoff ?? config.defaultIlluminanceCutoff,
     delaySeconds: saved.delaySeconds ?? config.defaultDelaySeconds,
-    switchStateKnown: saved.switchStateKnown === true,
-    switchState: saved.switchState ?? null,
-    switchGeneration: Number(saved.switchGeneration) || 0,
-    switchAt: Number(saved.switchAt) || 0,
-    switchTimerDueAt: Number(saved.switchTimerDueAt) || null,
+    wallInput: createWallInputState(saved.wallInput ?? {
+      baselineKnown: legacy.switchStateKnown,
+      value: legacy.switchState === true,
+      generation: legacy.switchGeneration,
+      edgeAt: legacy.switchAt,
+      timerDueAt: legacy.switchTimerDueAt
+    }),
     offTimerGeneration: Number(saved.offTimerGeneration) || 0,
     offTimerDueAt: Number(saved.offTimerDueAt) || null
   };
@@ -143,13 +155,6 @@ export function transitionMotion(
     });
   }
 
-  function cancelSwitchTimer(reason: string | null) {
-    const wasActive = Number(state.switchTimerDueAt) > now;
-    state.switchGeneration += 1;
-    state.switchTimerDueAt = null;
-    effects.push({kind: "cancel-switch-timer"});
-    if (wasActive && reason) trace("switch-timer", "cancelled", reason);
-  }
 
   function emitIntent(message: LightingIntent, event = "intent") {
     effects.push({kind: "send", message});
@@ -243,59 +248,50 @@ export function transitionMotion(
       state.offTimerDueAt = null;
       emitIntent(lightingIntent(config.offTargets, "OFF", "motion"), "off-timer");
     }
-  } else if (source === "switch") {
-    const nextState = payload && typeof payload === "object"
-      ? (payload as Record<string, unknown>).state
-      : undefined;
-    if (typeof nextState === "boolean") {
-      const firstState = !state.switchStateKnown;
-      const changed = firstState || nextState !== state.switchState;
-      state.switchStateKnown = true;
-      state.switchState = nextState;
-      if (input.retain === true) {
-        if (state.switchTimerDueAt !== null || state.switchAt) {
-          state.switchAt = 0;
-          cancelSwitchTimer("retained-baseline");
-        }
-        trace("switch", "ignored", "retained-baseline", {changed});
-      } else if (changed) {
-        cancelOffTimer("wall-switch");
-        const previousAt = state.switchAt;
-        if (previousAt && now - previousAt <= config.switchWindowMs) {
-          state.switchAt = 0;
-          cancelSwitchTimer("double-edge");
-          emitIntent(lightingIntent(config.onTargets, "ON", "wall", {
-            manual: true,
-            values: {brightness: 254}
-          }), "switch");
-        } else {
-          state.switchAt = now;
-          cancelSwitchTimer("new-edge");
-          state.switchAt = now;
-          state.switchTimerDueAt = now + config.switchWindowMs;
-          effects.push({
-            kind: "schedule-switch-timer",
-            delayMs: config.switchWindowMs,
-            generation: state.switchGeneration,
-            switchAt: now
-          });
-          trace("switch-timer", "scheduled", null, {
-            dueAt: new Date(state.switchTimerDueAt).toISOString(),
-            targets: config.onTargets
-          });
-        }
-      } else {
-        trace("switch", "ignored", "unchanged");
-      }
-    }
-  } else if (source === "switch-timer") {
-    const current = input.generation === state.switchGeneration && input.switchAt === state.switchAt;
-    if (!current || state.switchTimerDueAt === null) {
-      trace("switch-timer", "ignored", "stale-generation", {generation: input.generation});
-    } else {
-      state.switchAt = 0;
-      state.switchTimerDueAt = null;
-      emitIntent(lightingIntent(config.onTargets, "TOGGLE", "wall"), "switch-timer");
+  } else if (
+    source === "switch-startup" ||
+    source === "switch" ||
+    source === "switch-availability" ||
+    source === "switch-timer"
+  ) {
+    const wallInput = transitionWallInput(
+      state.wallInput,
+      source === "switch-startup"
+        ? {kind: "startup"}
+        : source === "switch"
+          ? {
+            kind: "observation",
+            payload,
+            retain: input.retain,
+            observedAt: input.observedAt
+          }
+          : source === "switch-availability"
+            ? {kind: "availability", payload}
+            : {
+              kind: "timer",
+              generation: input.generation,
+              edgeAt: input.switchAt
+            },
+      config,
+      now
+    );
+    state.wallInput = wallInput.state;
+    effects.push(...wallInput.effects);
+    traces.push(...wallInput.traces);
+
+    const startedGesture = source === "switch" && (
+      wallInput.gesture === "double" ||
+      wallInput.effects.some((effect) => effect.kind === "schedule-switch-timer")
+    );
+    if (startedGesture) cancelOffTimer("wall-switch");
+
+    if (wallInput.gesture === "single") {
+      emitIntent(lightingIntent(config.onTargets, "TOGGLE", "wall"), "switch");
+    } else if (wallInput.gesture === "double") {
+      emitIntent(lightingIntent(config.onTargets, "ON", "wall", {
+        manual: true,
+        values: {brightness: 254}
+      }), "switch");
     }
   }
 
@@ -307,7 +303,8 @@ export function transitionMotion(
     status: {
       enabled: enabled(),
       illuminance: state.illuminance,
-      delaySeconds: state.delaySeconds
+      delaySeconds: state.delaySeconds,
+      switch: wallInputStatus(state.wallInput, config.switchFreshnessMs, now)
     }
   };
 }

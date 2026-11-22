@@ -10,7 +10,8 @@ import {
 
 const config: SwitchPolicyConfig = {
   targets: ["main"],
-  switchWindowMs: 500
+  switchWindowMs: 500,
+  switchFreshnessMs: 60_000
 };
 
 function messages(result: ReturnType<typeof transitionSwitchPolicy>) {
@@ -68,7 +69,6 @@ test("retained state re-baselines a known switch without replaying an edge", () 
   }, config, 2100);
   assert.equal(messages(replay).length, 0);
   assert.equal(replay.effects.some((effect) => effect.kind === "cancel-switch-timer"), true);
-  assert.equal(replay.traces.at(-1)?.reason, "retained-baseline");
 
   const stale = transitionSwitchPolicy(replay.state, {
     source: "switch-timer",

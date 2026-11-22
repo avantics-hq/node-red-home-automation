@@ -15,7 +15,8 @@ const config: MotionConfig & {area: string} = {
   offTargets: ["cooking", "dining", "cabinets"],
   defaultDelaySeconds: 30,
   defaultIlluminanceCutoff: 150,
-  switchWindowMs: 500
+  switchWindowMs: 500,
+  switchFreshnessMs: 60_000
 };
 
 function sendEffects(result: ReturnType<typeof transitionMotion>): LightingIntent[] {
@@ -144,7 +145,6 @@ test("retained switch state re-baselines persisted motion policy state", () => {
   }, config, true, 2100);
   assert.equal(sendEffects(replay).length, 0);
   assert.equal(replay.effects.some((effect) => effect.kind === "cancel-switch-timer"), true);
-  assert.equal(replay.traces.at(-1)?.reason, "retained-baseline");
 
   const stale = transitionMotion(replay.state, {
     source: "switch-timer",

@@ -12,6 +12,7 @@ Most home automations translate an event directly into a command. This package a
 
 - **Occupancy without flicker:** combine PIR motion with optional presence sensing before changing room state.
 - **Adaptive lighting with manual ownership:** calculate circadian brightness and colour temperature without immediately overwriting wall-switch changes.
+- **Honest wall inputs:** preserve restart baselines while exposing unconfirmed, stale and unavailable physical-input evidence.
 - **Reliable AV transitions:** coordinate AVR inputs, TV power, projector warm-up and cooldown, and motorised screens from observed state rather than blind toggles.
 - **Honest source readiness:** model controllable, externally controlled, and unavailable playback sources without claiming success from an input selection alone.
 - **Owned theatre atmosphere:** apply activity lighting only to active, non-manual room lights and confirm TV backlighting independently.
@@ -34,8 +35,8 @@ flowchart LR
 | Node | Purpose |
 |---|---|
 | `home-occupancy-fusion` | Combines PIR motion with optional presence sensing. |
-| `home-motion-lighting-policy` | Converts occupancy and illuminance into lighting intent. |
-| `home-switch-lighting-policy` | Converts raw edges or pre-classified button actions into lighting intent without motion state. |
+| `home-motion-lighting-policy` | Converts occupancy and illuminance into lighting intent with observable wall-input baselines. |
+| `home-switch-lighting-policy` | Converts raw edges or pre-classified button actions into lighting intent while exposing input freshness and availability. |
 | `home-room-lighting-controller` | Owns adaptive room commands, manual overrides, and lighting state. |
 | `home-avr-controller` | Owns AVR power, zones, source selection and bounded absolute or relative volume from observed state. |
 | `home-display-mode-controller` | Coordinates TV, projector, and screen transitions. |
@@ -69,7 +70,7 @@ npm pack
 Install the resulting tarball through **Node-RED → Manage palette → Install → Upload module**, or from a Node-RED user directory:
 
 ```sh
-npm install /path/to/avantics-node-red-home-automation-1.15.0.tgz
+npm install /path/to/avantics-node-red-home-automation-1.16.0.tgz
 ```
 
 Add the installed nodes from the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.
@@ -89,10 +90,14 @@ evaluation; active timeouts and explicit failures breach immediately. Expected
 operational failures. Retained request messages are deliberately inert.
 
 MQTT state topics may be retained so controllers can rebuild observed state
-after a restart. Command and request topics must not be retained. Reducers
-consume duplicate observations directly: repeated values update or preserve
-their semantic state without replaying commands, while retained switch input
-re-establishes a baseline and cancels any pending edge sequence.
+after a restart. Command and request topics must not be retained. Raw wall-input
+reducers preserve a persisted baseline but report it as unconfirmed until this
+runtime receives an observation. A first-ever observation and every retained
+observation establish an inert baseline; duplicate observations refresh
+freshness without replaying commands. Send source `switch-availability`
+to invalidate a disconnected input baseline. An observation timestamp may be
+supplied as `msg.observedAt` or `msg.payload.observedAt`; otherwise only live,
+non-retained observations receive the current timestamp.
 
 Unsolicited display, AVR, source, and backlighting changes latch manual
 ownership instead of issuing corrective commands. A newer explicit activity

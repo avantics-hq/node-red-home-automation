@@ -4,7 +4,7 @@ import {assert, runWhenMain} from "./_shared.mjs";
 export const name = "switch-gestures";
 
 export function run() {
-  const configuration = {targets: ["ceiling"], switchWindowMs: 500};
+  const configuration = {targets: ["ceiling"], switchWindowMs: 500, switchFreshnessMs: 60_000};
   const input = {source: "switch-action", payload: {action: "double"}};
   const result = transitionSwitchPolicy(undefined, input, configuration, 1000);
   const outputs = result.effects
