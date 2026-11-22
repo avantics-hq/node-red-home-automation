@@ -7,6 +7,7 @@ interface SunCalcApi {
     sunset: Date;
     nadir: Date;
   };
+  getPosition(date: Date, latitude: number, longitude: number): {altitude: number};
 }
 
 const SunCalc: SunCalcApi = require("suncalc");
@@ -146,7 +147,21 @@ export function createRoomState(
   };
 }
 
+const validTime = (at: unknown): at is Date => at instanceof Date && Number.isFinite(at.getTime());
+
 export function sunPosition(now: Date, config: Pick<RoomConfig, "latitude" | "longitude">): number {
+  // Polar day or night: no sunrise or sunset today. Follow a smooth daily
+  // curve peaking at solar noon, on the day side (0 to 1) when the sun is up
+  // at noon and on the night side (-1 to 0) when it is not.
+  const today = new Date(now);
+  today.setHours(12, 0, 0, 0);
+  const todayTimes = SunCalc.getTimes(today, config.latitude, config.longitude);
+  if (!validTime(todayTimes.sunrise) || !validTime(todayTimes.sunset)) {
+    const noon = validTime(todayTimes.solarNoon) ? todayTimes.solarNoon.getTime() : today.getTime();
+    const daily = (1 + Math.cos(2 * Math.PI * (now.getTime() - noon) / 86_400_000)) / 2;
+    const sunUp = SunCalc.getPosition(new Date(noon), config.latitude, config.longitude).altitude > 0;
+    return sunUp ? daily : daily - 1;
+  }
   const events: Array<{name: string; at: number}> = [];
   for (const dayOffset of [-1, 0, 1]) {
     const date = new Date(now);
@@ -159,7 +174,7 @@ export function sunPosition(now: Date, config: Pick<RoomConfig, "latitude" | "lo
       ["sunset", times.sunset],
       ["midnight", times.nadir]
     ] as const) {
-      if (at instanceof Date && Number.isFinite(at.getTime())) events.push({name, at: at.getTime()});
+      if (validTime(at)) events.push({name, at: at.getTime()});
     }
   }
   events.sort((left, right) => left.at - right.at);

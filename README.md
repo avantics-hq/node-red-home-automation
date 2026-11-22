@@ -80,6 +80,9 @@ The nodes come in three groups. Each group has an importable example flow
 Motion, presence, illuminance and wall switches drive one room's lights, with
 circadian styling and manual ownership. Wire occupancy fusion into the motion
 policy, and the motion and switch policies into the room controller.
+Circadian levels follow the sun at the room's coordinates; in polar day or
+night, when the sun doesn't rise or set, they follow a smooth daily curve
+peaking at solar noon on the day or night side.
 Example: [`Room lighting.json`](examples/Room%20lighting.json).
 
 | Node | Purpose |

@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {transitionSwitchPolicy} from "../lib/switch-policy";
 import {
+  adaptivePayload,
+  sunPosition,
   transitionRoom,
   type RoomConfig,
   type RoomOutput
@@ -472,4 +474,28 @@ test("a mixed intent changes only the lights that are not held", () => {
   assert.deepEqual(ignoredHeld(result), [["lamp", "film"]]);
   assert.equal(result.status.control.lamp, "overridden");
   assert.equal(result.state.desired.wall, false);
+});
+
+test("circadian levels follow the sun through polar night and midnight sun", () => {
+  // A generic high latitude with no sunrise in December and no sunset in June.
+  const polar = {...config, latitude: 78.2, longitude: 15};
+  const level = (iso: string) => adaptivePayload("ON", false, false, new Date(iso), polar);
+  const kelvin = (payload: ReturnType<typeof level>) => Math.round(1_000_000 / Number(payload.color_temp));
+
+  // dev-review repro: polar night 03:00 was full brightness at about 4000 K.
+  const night = level("2026-12-21T03:00:00Z");
+  assert.ok(Number(night.brightness) < 254, `polar night brightness ${night.brightness}`);
+  assert.equal(kelvin(night), polar.minColorTempKelvin);
+  // Midnight sun 21:00 was brightness 9.
+  assert.equal(level("2026-06-21T21:00:00Z").brightness, 254);
+
+  // Continuous across the whole day in both seasons: no jump between samples.
+  for (const day of ["2026-12-21", "2026-06-21"]) {
+    let previous = sunPosition(new Date(`${day}T00:00:00Z`), polar);
+    for (let minute = 5; minute <= 24 * 60; minute += 5) {
+      const current = sunPosition(new Date(Date.parse(`${day}T00:00:00Z`) + minute * 60_000), polar);
+      assert.ok(Math.abs(current - previous) < 0.02, `${day} +${minute} min: ${previous} -> ${current}`);
+      previous = current;
+    }
+  }
 });
