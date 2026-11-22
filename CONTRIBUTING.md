@@ -17,11 +17,13 @@ Push the topic branch and open a pull request. GitHub may merge it only after
 the required `test` job passes. Pages deployment runs after the accepted commit
 reaches `main`; it is not a second acceptance gate.
 
-After merge, remove the worktree and its local branch:
+After GitHub reports the pull request merged, remove the worktree and its local
+branch. Squash merging does not make the topic commit an ancestor of `main`, so
+the local branch removal is intentionally forced:
 
 ```sh
 git worktree remove ../node-red-home-automation-<name>
-git branch -d <type>/<name>
+git branch -D <type>/<name>
 ```
 
 ## Local checks
