@@ -328,3 +328,64 @@ test("unsolicited AVR source changes latch manual ownership without fighting the
   assert.equal(result.state.phase, "ready");
   assert.equal(result.state.classification, null);
 });
+
+function volume(state: Partial<AvrState>, requestId: string, mode: "absolute" | "relative", value: number, seconds: number) {
+  return transitionAvr(state, {avr: {kind: "volume", requestId, mode, value}}, config, at(seconds));
+}
+
+const volumeKinds = (result: ReturnType<typeof transitionAvr>) =>
+  result.events.map((message) => message.avr.kind).filter((kind) => String(kind).startsWith("volume"));
+
+test("a volume request is never confirmed by a reading from before the last command", () => {
+  // dev-review repro: at 40, absolute 45 sends MV45; absolute 40 must not report ready from the old 40.
+  let result = volume(readyState("PWON\rZMON\rSISAT/CBL\rMV40\r"), "abs-45", "absolute", 45, 1);
+  assert.equal(result.commands[0]?.payload, "MV45\r");
+  result = volume(result.state, "abs-40", "absolute", 40, 1.05);
+  assert.deepEqual(volumeKinds(result), []);
+  assert.equal(result.commands[0]?.avrCommand.operation, "volume-query");
+  // The receiver reports where the first command took it, then the new target.
+  result = observed(result.state, "MV45", 1.2);
+  assert.equal(result.commands[0]?.payload, "MV40\r");
+  result = observed(result.state, "MV40", 1.4);
+  assert.deepEqual(volumeKinds(result), ["volume_ready"]);
+  assert.equal(result.state.volumeMetrics.externalChanges, 0);
+
+  // Relative +10 then -10 lands back on the stale reading the same way.
+  let relative = volume(readyState("PWON\rZMON\rSISAT/CBL\rMV40\r"), "rel-up", "relative", 10, 1);
+  assert.equal(relative.commands[0]?.payload, "MV50\r");
+  relative = volume(relative.state, "rel-down", "relative", -10, 1.05);
+  assert.deepEqual(volumeKinds(relative), []);
+  relative = observed(relative.state, "MV50", 1.2);
+  assert.equal(relative.commands[0]?.payload, "MV40\r");
+});
+
+test("a volume request after a failed activity is sent or rejected, not left waiting", () => {
+  let result = transitionAvr(readyState(), {
+    avr: {kind: "intent", requestId: "request-4", generation: 4, power: "on", source: "playstation"}
+  }, config, at(0));
+  for (const seconds of [1, 2, 3]) result = transitionAvr(result.state, {avr: {kind: "tick"}}, config, at(seconds));
+  assert.equal(result.state.phase, "failed");
+
+  result = volume(result.state, "after-failure", "absolute", 35, 4);
+  assert.equal(result.commands[0]?.payload, "MV35\r");
+  assert.equal(result.state.phase, "failed");
+  result = observed(result.state, "MV35", 4.2);
+  assert.deepEqual(volumeKinds(result), ["volume_ready"]);
+  assert.equal(result.state.phase, "failed");
+
+  // With the receiver off, the request is rejected straight away.
+  result = observed(result.state, "PWSTANDBY", 5);
+  result = volume(result.state, "receiver-off", "absolute", 30, 6);
+  assert.equal(result.events.find((message) => message.avr.kind === "volume_rejected")?.avr.reason, "receiver-not-ready");
+});
+
+test("a restart reports a pending volume request as failed instead of dropping it", () => {
+  let result = volume(readyState("PWON\rZMON\rSISAT/CBL\rMV40\r"), "before-restart", "absolute", 45, 1);
+  result = transitionAvr(result.state, {avr: {kind: "startup"}}, config, at(2));
+  const failed = result.events.find((message) => message.avr.kind === "volume_failed");
+  assert.equal(failed?.avr.requestId, "before-restart");
+  assert.equal(failed?.avr.reason, "restart");
+  assert.equal(result.state.volumeRequest, null);
+  assert.equal(result.state.volumeMetrics.failures, 1);
+  assert.equal(result.commands.filter((command) => command.payload.startsWith("MV4")).length, 0);
+});
