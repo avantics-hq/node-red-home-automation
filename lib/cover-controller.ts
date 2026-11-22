@@ -292,6 +292,7 @@ export function transitionCover(
     }
     const position = config.invert ? 100 - devicePosition : devicePosition;
     const motion = observation.motion ?? null;
+    const previous = state.observed;
     state.observed = {position, motion, observedAt: observation.observedAt};
     if (!state.desired) return;
 
@@ -347,10 +348,13 @@ export function transitionCover(
     const within = Math.abs(position - state.desired.position) <= config.positionTolerance;
     if (state.phase === "ready" && !within) {
       latchManual(null, state.desired.position, position);
-    } else if (state.phase === "manual_override" && within && !moving) {
-      // Back at this generation's target (or a stopped-short latch that was
-      // really still travelling): nothing to own, so the cover is ready again.
-      ready(state.desired.position);
+    } else if (state.phase === "manual_override" && within) {
+      // Settled back at this generation's target (or a stopped-short latch that
+      // was really still travelling): nothing to own, so the cover is ready
+      // again. A hand move passing through the target is not settled.
+      const settled = motion === "stopped" || (motion === null && previous !== null
+        && previous.position === position && observedAt - Date.parse(previous.observedAt) >= config.settleMs);
+      if (settled) ready(state.desired.position);
     }
   }
 

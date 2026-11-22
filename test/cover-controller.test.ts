@@ -310,8 +310,38 @@ test("a fresh observation at the target returns a manual cover to ready", () => 
   result = observe(result.state, 70, 12, "opening");
   assert.equal(result.state.phase, "manual_override");
   result = observe(result.state, 100, 15);
+  assert.equal(result.state.phase, "manual_override");
+  result = observe(result.state, 100, 20);
   assert.equal(result.state.phase, "ready");
   assert.equal(result.state.classification, null);
+  assert.equal(result.commands.length, 0);
+
+  let reported = observe(undefined, 0, 0);
+  reported = setPosition(reported.state, 100, 1, 1);
+  reported = observe(reported.state, 30, 5, "stopped");
+  assert.equal(reported.state.phase, "manual_override");
+  reported = observe(reported.state, 100, 12, "stopped");
+  assert.equal(reported.state.phase, "ready");
+});
+
+test("a hand move passing through the target does not report ready", () => {
+  // dev-review repro: no motion reports, settleMs 5000.
+  let result = setPosition(undefined, 50);
+  result = observe(result.state, 50, 20);
+  assert.equal(result.state.phase, "ready");
+  result = observe(result.state, 80, 30);
+  assert.equal(result.state.phase, "manual_override");
+  result = observe(result.state, 51, 31);
+  assert.equal(result.state.phase, "manual_override");
+  assert.equal(result.events[0]?.theatre.status, "transitioning");
+  result = observe(result.state, 51, 33);
+  assert.equal(result.state.phase, "manual_override");
+  result = observe(result.state, 20, 34);
+  assert.equal(result.state.phase, "manual_override");
+  assert.equal(result.commands.length, 0);
+  result = observe(result.state, 50, 40);
+  result = observe(result.state, 50, 45);
+  assert.equal(result.state.phase, "ready");
   assert.equal(result.commands.length, 0);
 });
 
