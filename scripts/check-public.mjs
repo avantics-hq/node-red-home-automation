@@ -39,6 +39,14 @@ const contentRules = [
     pattern: /gitlab\.com\/cptbucky\//gi
   },
   {
+    name: "Home Assistant entity identifier",
+    pattern: /\b(?:binary_sensor|device_tracker|input_boolean|input_number|input_select|media_player)\.[a-z0-9_]+\b/g
+  },
+  {
+    name: "Node-RED flow or node identifier",
+    pattern: /\b[a-f0-9]{16}\b/g
+  },
+  {
     name: "private key block",
     pattern: /-----BEGIN (?:RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----/g
   }

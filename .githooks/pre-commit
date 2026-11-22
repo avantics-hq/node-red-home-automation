@@ -2,6 +2,11 @@
 set -eu
 
 node scripts/check-public.mjs --staged
+
+boundary_scan=$(git config --get hooks.publicBoundaryScan || true)
+if [ -n "$boundary_scan" ]; then
+  "$boundary_scan" --public-repo "$PWD" --staged
+fi
 npm audit --audit-level=high
 npm test
 
