@@ -60,11 +60,13 @@ type RuntimeConstructor = new (config: Record<string, unknown>) => RuntimeNode;
 function runtime(register: NodeInitializer): {Constructor: RuntimeConstructor} {
   let Constructor: RuntimeConstructor | undefined;
   const globalValues = new Map<string, unknown>([["MOTION_ENABLED_STATE", true]]);
+  // Shared by every node built from this runtime, as Node-RED keeps a node's
+  // memory context across a redeploy.
+  const values = new Map<string, unknown>();
   const RED = {
     nodes: {
       createNode(node: RuntimeNode) {
         const emitter = new EventEmitter();
-        const values = new Map<string, unknown>();
         node.on = emitter.on.bind(emitter);
         node.emit = emitter.emit.bind(emitter);
         node.sent = [];
@@ -515,4 +517,107 @@ test("theatre state adapter bridges non-retained requests and retained HA truth"
   assert.equal(phase?.retain, true);
   assert.equal(traces(node).at(-1)?.component, "theatre-state-contract");
   assert.equal(node.errors.length, 0);
+});
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function savedState(node: RuntimeNode): Record<string, unknown> {
+  return node.context().get("state") as Record<string, unknown>;
+}
+
+const motionConfig = {
+  area: "kitchen",
+  onTargets: "[\"cooking\"]",
+  offTargets: "[\"cooking\"]",
+  defaultDelaySeconds: 0.2,
+  defaultIlluminanceCutoff: 150,
+  switchWindowMs: 500
+};
+
+test("motion adapter re-arms a pending off-timer after a redeploy", async (t) => {
+  const {Constructor} = runtime(registerMotion);
+  const before = new Constructor(motionConfig);
+  await receive<WireMessage>(before, {source: "occupancy", payload: {occupied: false}});
+  assert.equal(typeof savedState(before).offTimerDueAt, "number");
+  await close(before);
+
+  const after = new Constructor(motionConfig);
+  t.after(() => close(after));
+  assert.equal(after.sent.length, 0);
+  await wait(400);
+  assert.deepEqual((after.sent as WireMessage[]).map((message) => message.lighting?.state), ["OFF"]);
+  assert.equal(savedState(after).offTimerDueAt, null);
+});
+
+test("motion adapter fires an off-timer that fell due during the restart straight away", async (t) => {
+  const {Constructor} = runtime(registerMotion);
+  const before = new Constructor({...motionConfig, defaultDelaySeconds: 30});
+  await receive<WireMessage>(before, {source: "occupancy", payload: {occupied: false}});
+  await close(before);
+  before.context().set("state", {...savedState(before), offTimerDueAt: Date.now() - 1000});
+
+  const after = new Constructor({...motionConfig, defaultDelaySeconds: 30});
+  t.after(() => close(after));
+  await wait(50);
+  assert.deepEqual((after.sent as WireMessage[]).map((message) => message.lighting?.state), ["OFF"]);
+});
+
+test("motion adapter arms nothing at startup without a pending off-timer", async (t) => {
+  const {Constructor} = runtime(registerMotion);
+  const before = new Constructor(motionConfig);
+  await receive<WireMessage>(before, {source: "occupancy", payload: {occupied: false}});
+  await receive<WireMessage>(before, {source: "occupancy", payload: {occupied: true}});
+  assert.equal(savedState(before).offTimerDueAt, null);
+  await close(before);
+
+  const after = new Constructor(motionConfig);
+  t.after(() => close(after));
+  await wait(400);
+  assert.equal(after.sent.length, 0);
+});
+
+test("activity lighting adapter ticks a deadline that passed during a redeploy", async (t) => {
+  const {Constructor} = runtime(registerActivityLighting);
+  const lightingConfig = {
+    area: "lounge",
+    profiles: JSON.stringify({tv: {targets: ["wall"], values: {brightness: 64}}}),
+    confirmationTimeoutMs: 15000,
+    maxAttempts: 1
+  };
+  const before = new Constructor(lightingConfig);
+  await receive<SendEnvelope>(before, {
+    activityLighting: {kind: "intent", requestId: "lighting-redeploy", generation: 1, profile: "tv"}
+  });
+  await close(before);
+  const state = savedState(before);
+  const pending = state.pending as Record<string, unknown>;
+  before.context().set("state", {...state, pending: {...pending, deadlineAt: Date.now() - 1000}});
+
+  const after = new Constructor(lightingConfig);
+  t.after(() => close(after));
+  await wait(50);
+  const statuses = (after.sent as SendEnvelope[]).map((envelope) => envelope[1]?.[0]?.theatre?.status);
+  assert.deepEqual(statuses, ["failed"]);
+  assert.equal(traces(after).at(-1)?.component, "activity-lighting-controller");
+});
+
+test("backlighting adapter re-arms its next poll after a redeploy", async (t) => {
+  const {Constructor} = runtime(registerBacklighting);
+  const backlightingConfig = {area: "lounge", pollMs: 2000, confirmationTimeoutMs: 15000, maxAttempts: 2};
+  const before = new Constructor(backlightingConfig);
+  await receive<SendEnvelope>(before, {
+    backlighting: {kind: "intent", requestId: "backlighting-redeploy", generation: 1, power: "on"}
+  });
+  await close(before);
+  const state = savedState(before);
+  const pending = state.pending as Record<string, unknown>;
+  before.context().set("state", {...state, pending: {...pending, nextAt: Date.now() + 100}});
+
+  const after = new Constructor(backlightingConfig);
+  t.after(() => close(after));
+  assert.equal(after.sent.length, 0);
+  await wait(300);
+  const operations = (after.sent as SendEnvelope[]).flatMap((envelope) => envelope[0] ?? [])
+    .map((message) => message.backlightingCommand?.operation);
+  assert.deepEqual(operations, ["observe"]);
 });

@@ -154,6 +154,10 @@ const registerDisplayModeController: NodeInitializer = (RED) => {
       return result;
     }
 
+    // Context survives a redeploy but timers do not: pick up any pending deadline.
+    const savedState = context.get("state") as DisplayState | undefined;
+    if (savedState) schedule(savedState);
+
     node.on("input", (msg, send, done) => {
       try {
         process({

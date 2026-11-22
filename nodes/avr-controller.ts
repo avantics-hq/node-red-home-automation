@@ -124,6 +124,10 @@ const registerAvrController: NodeInitializer = (RED) => {
       return result;
     }
 
+    // Context survives a redeploy but timers do not: pick up any pending deadline.
+    const savedState = context.get("state") as AvrState | undefined;
+    if (savedState) scheduleRetry(savedState);
+
     node.on("input", (msg, send, done) => {
       try {
         process({
