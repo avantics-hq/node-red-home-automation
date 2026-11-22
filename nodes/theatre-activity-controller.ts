@@ -108,7 +108,8 @@ const registerTheatreActivityController: NodeInitializer = (RED) => {
 
     timer = setInterval(() => {
       const saved = context.get("state") as Partial<TheatreState> | undefined;
-      if (!saved?.desired) return;
+      // Recovering has no desired activity yet but still needs ticks to time out.
+      if (!saved?.desired && saved?.phase !== "recovering") return;
       try {
         process({theatre: {kind: "tick", generation: saved.generation}}, node.send.bind(node));
       } catch (error) {

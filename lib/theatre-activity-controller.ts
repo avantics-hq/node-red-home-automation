@@ -128,13 +128,20 @@ export interface RecoveryObservation {
 
 export type RecoveryObservations = Partial<Record<TheatreTarget, RecoveryObservation>>;
 
+// A refresh sent to a target owner and not yet answered.
+export interface RefreshPending {
+  sentAt: number;
+  attempts: number;
+  exhausted: boolean;
+}
+
 export interface TheatreState {
   desired: TheatreDesired | null;
   currentActivity: string;
   generation: number;
   phase: string;
   targets: Record<TheatreTarget, TargetState | null>;
-  refreshPending: Record<TheatreTarget, boolean>;
+  refreshPending: Record<TheatreTarget, RefreshPending | null>;
   failure: TheatreFailure | null;
   blockedGeneration: number | null;
   degraded: Array<{target: TheatreTarget; reason: string}>;
@@ -243,11 +250,22 @@ function emptyTargets(
   ])) as Record<TheatreTarget, TargetState | null>;
 }
 
+// A refresh is re-sent at this many attempts at most before the target is
+// reported as not responding.
+const REFRESH_ATTEMPTS = 3;
+
 function emptyRefreshPending(
-  saved: Partial<Record<TheatreTarget, boolean>> = {}
-): Record<TheatreTarget, boolean> {
-  return Object.fromEntries(TARGETS.map((target) => [target, saved[target] === true])) as
-    Record<TheatreTarget, boolean>;
+  saved: Partial<Record<TheatreTarget, RefreshPending | boolean | null>> = {}
+): Record<TheatreTarget, RefreshPending | null> {
+  return Object.fromEntries(TARGETS.map((target) => {
+    const entry = saved[target];
+    // Saved before retries existed: pending with no send time, so it retries.
+    if (entry === true) return [target, {sentAt: 0, attempts: 1, exhausted: false}];
+    if (entry && typeof entry === "object" && Number.isFinite(entry.sentAt) && Number.isInteger(entry.attempts)) {
+      return [target, {sentAt: entry.sentAt, attempts: entry.attempts, exhausted: entry.exhausted === true}];
+    }
+    return [target, null];
+  })) as Record<TheatreTarget, RefreshPending | null>;
 }
 
 function count(value: unknown): number {
@@ -640,8 +658,20 @@ export function transitionTheatre(
       return;
     }
 
+    // Once this activity is ready, a confirmed target that is only due for
+    // re-confirmation keeps it ready; the staleness shows in degraded.
+    const holdReady = previousPhase === "ready" && previousCurrent === state.desired.activity;
+    const unverified = (target: TheatreTarget) => {
+      state.degraded.push({target, reason: state.refreshPending[target]?.exhausted ? "no-response" : "stale"});
+    };
+
     for (const target of REQUIRED_TARGETS) {
       const targetState = state.targets[target];
+      if (targetState && holdReady && targetState.status === "ready" &&
+        !isFresh(targetState, nowMs, config.freshnessMs)) {
+        unverified(target);
+        continue;
+      }
       if (!targetState || !isFresh(targetState, nowMs, config.freshnessMs)) {
         state.phase = "confirming";
         state.currentActivity = "unknown";
@@ -660,7 +690,10 @@ export function transitionTheatre(
 
     if (sourceProfile.readiness === "required") {
       const source = state.targets.source;
-      if (!source || !isFresh(source, nowMs, config.freshnessMs) || source.status !== "ready") {
+      const staleButHeld = source && holdReady && source.status === "ready" &&
+        !isFresh(source, nowMs, config.freshnessMs);
+      if (staleButHeld) unverified("source");
+      else if (!source || !isFresh(source, nowMs, config.freshnessMs) || source.status !== "ready") {
         state.phase = "waiting_for_source";
         state.currentActivity = "unknown";
         state.availability = "degraded";
@@ -680,10 +713,57 @@ export function transitionTheatre(
     state.currentActivity = state.desired.activity;
     state.availability = state.degraded.length ? "degraded" : "available";
     if (previousPhase !== "ready" || previousCurrent !== state.currentActivity) {
-      state.transitionCompletedAt = now.toISOString();
-      completeTransition("ready");
+      // Only the first ready of a generation completes its transition.
+      if (state.transitionCompletedAt === null) {
+        state.transitionCompletedAt = now.toISOString();
+        completeTransition("ready");
+      }
       emit("ready");
       trace("activity", "ready", null, {activity: state.currentActivity});
+    }
+  }
+
+  // Refresh each confirmed target at half its freshness window, so a settled
+  // activity stays fresh, and re-send an unanswered refresh a bounded number
+  // of times before reporting the target as not responding.
+  function tickRefreshes() {
+    const intervalMs = config.freshnessMs / 2;
+    for (const target of TARGETS) {
+      const pending = state.refreshPending[target];
+      if (pending) {
+        if (pending.exhausted || nowMs - pending.sentAt < intervalMs) continue;
+        if (pending.attempts < REFRESH_ATTEMPTS) {
+          commands.push(targetCommand(target, "refresh", state.desired));
+          state.refreshPending[target] = {sentAt: nowMs, attempts: pending.attempts + 1, exhausted: false};
+          trace("refresh", "retried", null, {target, attempt: pending.attempts + 1});
+        } else {
+          pending.exhausted = true;
+          noResponse(target);
+        }
+        continue;
+      }
+      const targetState = state.targets[target];
+      const observedAt = observationTime(targetState);
+      if (state.desired && targetState && observedAt !== null && nowMs - observedAt >= intervalMs) {
+        commands.push(targetCommand(target, "refresh", state.desired));
+        state.refreshPending[target] = {sentAt: nowMs, attempts: 1, exhausted: false};
+      }
+    }
+  }
+
+  function noResponse(target: TheatreTarget) {
+    state.metrics.targets[target].availability = "unavailable";
+    trace("refresh", "no-response", null, {target, attempts: REFRESH_ATTEMPTS});
+    // Before the activity first completes, an owner that never answers is
+    // unavailable; afterwards it shows as degraded and does not undo ready.
+    if (state.desired && state.transitionCompletedAt === null) {
+      state.targets[target] = {
+        status: "unavailable",
+        observedAt: now.toISOString(),
+        classification: null,
+        failure: {operation: "refresh", reason: "no-response", occurredAt: now.toISOString()},
+        details: null
+      };
     }
   }
 
@@ -799,7 +879,7 @@ export function transitionTheatre(
     } else if (classification === "drift" && previous?.classification !== classification) {
       state.metrics.driftEvents += 1;
     }
-    state.refreshPending[event.target] = false;
+    state.refreshPending[event.target] = null;
     if (classification) {
       emit(classification, {target: event.target});
       trace("target-state", "classified", classification, {target: event.target});
@@ -916,7 +996,7 @@ export function transitionTheatre(
     state.refreshPending = emptyRefreshPending();
     if (state.desired) {
       commands.push(...targetRefreshCommands(state.desired));
-      for (const target of TARGETS) state.refreshPending[target] = true;
+      for (const target of TARGETS) state.refreshPending[target] = {sentAt: nowMs, attempts: 1, exhausted: false};
       state.phase = state.blockedGeneration === state.generation ? "failed" : "confirming";
       state.currentActivity = "unknown";
       state.availability = state.blockedGeneration === state.generation
@@ -928,7 +1008,7 @@ export function transitionTheatre(
       }
     } else {
       commands.push(...targetProbeCommands());
-      for (const target of TARGETS) state.refreshPending[target] = true;
+      for (const target of TARGETS) state.refreshPending[target] = {sentAt: nowMs, attempts: 1, exhausted: false};
       state.phase = "recovering";
       state.availability = "unknown";
       emit("recovery_required", {reason: "startup"});
@@ -938,14 +1018,15 @@ export function transitionTheatre(
     if (Number.isInteger(event.generation) && state.desired && event.generation !== state.generation) {
       trace("tick", "ignored", "stale-generation", {generation: event.generation});
     } else {
-      for (const target of TARGETS) {
-        const targetState = state.targets[target];
-        if (targetState && !isFresh(targetState, nowMs, config.freshnessMs) && !state.refreshPending[target]) {
-          commands.push(targetCommand(target, "refresh", state.desired));
-          state.refreshPending[target] = true;
-        }
+      tickRefreshes();
+      if (!state.desired && state.phase === "recovering" &&
+        TARGETS.every((target) => state.refreshPending[target]?.exhausted === true)) {
+        // Nobody supplied recovery observations: fall back as for no evidence.
+        trace("recovery", "timed-out", "no-observations");
+        acceptRecovery({kind: "recover", reason: "startup", observations: {}});
+      } else {
+        reconcile();
       }
-      reconcile();
     }
   } else {
     throw new Error("unknown theatre event kind");
