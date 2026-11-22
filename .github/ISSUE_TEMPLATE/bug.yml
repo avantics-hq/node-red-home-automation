@@ -14,7 +14,7 @@ body:
     attributes:
       label: Package version
       description: The tagged release or commit that exhibits the problem.
-      placeholder: v2.0.1
+      placeholder: v2.0.2
     validations:
       required: true
 

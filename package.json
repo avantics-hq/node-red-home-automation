@@ -1,7 +1,6 @@
 {
   "name": "@avantics/node-red-home-automation",
-  "version": "2.0.1",
-  "private": true,
+  "version": "2.0.2",
   "description": "Deterministic home automation components for Node-RED",
   "keywords": [
     "node-red",
@@ -20,12 +19,11 @@
     "url": "https://github.com/avantics-hq/node-red-home-automation/issues"
   },
   "license": "MIT",
-  "main": "dist/lib/room-controller.js",
-  "types": "dist/lib/room-controller.d.ts",
   "files": [
     "dist/lib",
     "dist/nodes",
-    "examples"
+    "examples",
+    "!dist/**/*.js.map"
   ],
   "scripts": {
     "clean": "node scripts/clean.mjs",
@@ -43,6 +41,7 @@
     "node": ">=24"
   },
   "node-red": {
+    "version": ">=5.0.0",
     "nodes": {
       "home-occupancy-fusion": "dist/nodes/occupancy-fusion.js",
       "home-motion-lighting-policy": "dist/nodes/motion-policy.js",
