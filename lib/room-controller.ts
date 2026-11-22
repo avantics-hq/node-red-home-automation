@@ -44,6 +44,10 @@ export interface RoomObservation {
 export interface ExpectedCommand {
   fingerprint: string;
   expires: number;
+  // Power state this command sets, while no state report has confirmed it yet.
+  on?: boolean;
+  // The command topic echo has been seen; the entry now only marks the command in flight.
+  echoed?: boolean;
 }
 
 export interface RoomState {
@@ -116,7 +120,7 @@ export function createRoomState(
     desired: {...(saved.desired || {})},
     manual: {...(saved.manual || {})},
     expected: Object.fromEntries(
-      Object.entries(saved.expected || {}).map(([target, entries]) => [target, [...entries]])
+      Object.entries(saved.expected || {}).map(([target, entries]) => [target, entries.map((entry) => ({...entry}))])
     ),
     circadianEnabled: saved.circadianEnabled !== false,
     sleeping: saved.sleeping === undefined ? config.initialSleep : saved.sleeping === true
@@ -208,8 +212,25 @@ export function transitionRoom(
 
   function rememberExpected(targetId: string, payload: unknown) {
     const queue = (state.expected[targetId] || []).filter((entry) => entry.expires > nowMs);
-    queue.push({fingerprint: fingerprint(payload), expires: nowMs + 5000});
+    const entry: ExpectedCommand = {fingerprint: fingerprint(payload), expires: nowMs + 5000};
+    const requested = payload && typeof payload === "object"
+      ? String((payload as Record<string, unknown>).state || "").toUpperCase()
+      : "";
+    if (requested === "ON" || requested === "OFF") entry.on = requested === "ON";
+    queue.push(entry);
     state.expected[targetId] = queue.slice(-8);
+  }
+
+  // Whether a state report is stale against the controller's own command in
+  // flight. A report that matches the newest unconfirmed command confirms it.
+  function contradictsOwnCommand(targetId: string, observedOn: boolean): boolean {
+    const queue = (state.expected[targetId] || []).filter((entry) => entry.expires > nowMs);
+    const latest = queue.filter((entry) => entry.on !== undefined).at(-1);
+    if (latest && latest.on === observedOn) {
+      for (const entry of queue) delete entry.on;
+    }
+    state.expected[targetId] = queue.filter((entry) => entry.on !== undefined || entry.echoed !== true);
+    return latest !== undefined && latest.on !== observedOn;
   }
 
   function command(targetId: string, payload: unknown, source: string): RoomOutput | null {
@@ -332,8 +353,13 @@ export function transitionRoom(
           state: nextOn ? "ON" : "OFF"
         });
       }
-      if (!Object.hasOwn(state.desired, target.id)) state.desired[target.id] = nextOn;
-      if (!nextOn) state.manual[target.id] = false;
+      if (contradictsOwnCommand(target.id, nextOn)) {
+        trace("state-observed", "ignored", "own-command-in-flight", {target: target.id, state: nextOn ? "ON" : "OFF"});
+      } else {
+        // A change the controller didn't cause becomes the intended state.
+        state.desired[target.id] = nextOn;
+        if (!nextOn) state.manual[target.id] = false;
+      }
     }
   } else if (event.kind === "command-observed") {
     const target = event.target ? targetById[event.target] : targetForTopic(msg.topic, "commandTopic");
@@ -341,9 +367,12 @@ export function transitionRoom(
     const payload = parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : null;
     if (msg.retain !== true && event.retained !== true && target && payload) {
       const queue = (state.expected[target.id] || []).filter((entry) => entry.expires > nowMs);
-      const ownIndex = queue.findIndex((entry) => entry.fingerprint === fingerprint(payload));
-      if (ownIndex >= 0) {
-        queue.splice(ownIndex, 1);
+      const ownIndex = queue.findIndex((entry) => entry.echoed !== true && entry.fingerprint === fingerprint(payload));
+      const own = queue[ownIndex];
+      if (own) {
+        // Keep an unconfirmed power command as in flight for state reports.
+        if (own.on === undefined) queue.splice(ownIndex, 1);
+        else own.echoed = true;
         state.expected[target.id] = queue;
       } else {
         state.expected[target.id] = queue;
