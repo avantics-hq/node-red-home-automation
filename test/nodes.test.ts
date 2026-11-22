@@ -785,3 +785,41 @@ test("a flow startup after the construction startup changes nothing but repeats 
     projectorCooldownMs: 5000, maxAttempts: 2, projectorOnWatts: 20, projectorOffWatts: 10, projectorPowerFallback: false
   }, {mode: "projector"});
 });
+
+test("wired contract and activity controller never lose a request to a recovery generation", async (t) => {
+  // Wired as in examples/Home theatre activity.json: contract output 1 to the
+  // controller, controller output 2 back to the contract. The user's request
+  // reaches the contract before the controller's recovery snapshot does.
+  const profiles = JSON.stringify({
+    off: {display: {mode: "off"}, avr: {power: "off"}, source: {action: "deactivate", readiness: "optional"}, lighting: {profile: "off"}, backlighting: {power: "off"}},
+    tv: {display: {mode: "tv"}, avr: {power: "on", source: "shield"}, source: {action: "activate", sourceId: "streamer", readiness: "required"}, lighting: {profile: "tv"}, backlighting: {power: "on"}}
+  });
+  const contract = new (runtime(registerTheatreStateContract).Constructor)({
+    area: "room", displayName: "Room", baseTopic: "home/room/theatre", discoveryPrefix: "homeassistant", activities: "[\"off\",\"tv\"]"
+  });
+  const controller = new (runtime(registerTheatreActivity).Constructor)({
+    area: "room", freshnessMs: 30000, recoveryOffActivity: "off", activityProfiles: profiles
+  });
+  t.after(() => close(contract));
+  t.after(() => close(controller));
+  const output = (envelopes: SendEnvelope[], index: number) => envelopes.flatMap((envelope) => envelope[index] ?? []);
+
+  await receive<SendEnvelope>(controller, {theatre: {kind: "startup"}});
+  const recovery = await receive<SendEnvelope>(controller, {theatre: {kind: "recover", reason: "startup", observations: {}}});
+  const snapshots = output(recovery, 1);
+
+  const requested = await receive<SendEnvelope>(contract, {topic: "home/room/theatre/request", payload: {requestId: "user-request-1", activity: "tv"}});
+  const intents = output(requested, 0);
+  assert.equal(intents.length, 1);
+  let answer: SendEnvelope[] = [];
+  for (const intent of intents) answer = await receive<SendEnvelope>(controller, intent as Record<string, unknown>);
+  assert.equal(output(answer, 1).some((message) => message.theatre?.kind === "rejected"), false);
+  const state = controller.context().get("state") as {desired: {requestId: string; activity: string; generation: number}};
+  assert.equal(state.desired.requestId, "user-request-1");
+  assert.equal(state.desired.activity, "tv");
+
+  // The late recovery snapshots and the new state then reach the contract in order.
+  for (const message of [...snapshots, ...output(answer, 1)]) await receive<SendEnvelope>(contract, message as Record<string, unknown>);
+  const contractState = contract.context().get("state") as {generation: number};
+  assert.equal(contractState.generation, state.desired.generation);
+});
