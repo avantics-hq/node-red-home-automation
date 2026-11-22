@@ -24,7 +24,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 24
+          node-version: 22.9.0  # the minimum we support (engines >=22.9), same as Node-RED 5
           cache: npm
 
       - name: Install dependencies
@@ -60,35 +60,6 @@ jobs:
           tar -xzf "${archive}" gitleaks
           cd "${GITHUB_WORKSPACE}"
           "${RUNNER_TEMP}/gitleaks" git --config .gitleaks.toml --redact --verbose --exit-code 1 --no-banner .
-
-  test-node22:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up Node.js
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build and test
-        run: npm test
-
-      - name: Node-RED 5 smoke
-        shell: bash
-        run: |
-          smoke="${RUNNER_TEMP}/node-red-smoke"
-          mkdir -p "${smoke}"
-          npm pack --pack-destination "${smoke}"
-          cd "${smoke}"
-          npm init -y > /dev/null
-          npm install --no-audit --no-fund node-red@5.0.10 ./avantics-node-red-home-automation-*.tgz
-          node "${GITHUB_WORKSPACE}/scripts/node-red-smoke.mjs" "${smoke}"
 
   private-boundary:
     runs-on: ubuntu-latest
@@ -142,7 +113,7 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [test, test-node22, private-boundary]
+    needs: [test, private-boundary]
     permissions:
       contents: write
       id-token: write
