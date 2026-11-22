@@ -9,12 +9,18 @@ import registerBacklighting from "../nodes/backlighting-controller";
 import registerTheatreActivity from "../nodes/theatre-activity-controller";
 import registerTheatreStateContract from "../nodes/theatre-state-contract";
 import registerAvr from "../nodes/avr-controller";
+import registerDisplay from "../nodes/display-mode-controller";
 import registerMotion from "../nodes/motion-policy";
 import registerSwitch from "../nodes/switch-policy";
 import registerOccupancy from "../nodes/occupancy-fusion";
 import registerRoom from "../nodes/room-controller";
 import registerSource from "../nodes/source-capability-controller";
 import type {TraceRecord} from "../lib/bounded-trace";
+import {transitionActivityLighting} from "../lib/activity-lighting-controller";
+import {transitionAvr} from "../lib/avr-controller";
+import {transitionBacklighting} from "../lib/backlighting-controller";
+import {transitionDisplay} from "../lib/display-mode-controller";
+import {transitionSource} from "../lib/source-capability-controller";
 
 interface RuntimeContext {
   get(key: string): unknown;
@@ -57,7 +63,10 @@ interface WireMessage {
 type SendEnvelope = Array<WireMessage[] | null>;
 type RuntimeConstructor = new (config: Record<string, unknown>) => RuntimeNode;
 
-function runtime(register: NodeInitializer): {Constructor: RuntimeConstructor} {
+function runtime(
+  register: NodeInitializer,
+  credentials: Record<string, string> = {}
+): {Constructor: RuntimeConstructor} {
   let Constructor: RuntimeConstructor | undefined;
   const globalValues = new Map<string, unknown>([["MOTION_ENABLED_STATE", true]]);
   // Shared by every node built from this runtime, as Node-RED keeps a node's
@@ -66,6 +75,7 @@ function runtime(register: NodeInitializer): {Constructor: RuntimeConstructor} {
   const RED = {
     nodes: {
       createNode(node: RuntimeNode) {
+        (node as RuntimeNode & {credentials: Record<string, string>}).credentials = credentials;
         const emitter = new EventEmitter();
         node.on = emitter.on.bind(emitter);
         node.emit = emitter.emit.bind(emitter);
@@ -576,7 +586,7 @@ test("motion adapter arms nothing at startup without a pending off-timer", async
   assert.equal(after.sent.length, 0);
 });
 
-test("activity lighting adapter ticks a deadline that passed during a redeploy", async (t) => {
+test("activity lighting adapter re-observes a deadline that passed during a redeploy", async (t) => {
   const {Constructor} = runtime(registerActivityLighting);
   const lightingConfig = {
     area: "lounge",
@@ -595,13 +605,15 @@ test("activity lighting adapter ticks a deadline that passed during a redeploy",
 
   const after = new Constructor(lightingConfig);
   t.after(() => close(after));
+  assert.equal(after.sent.length, 0);
   await wait(50);
-  const statuses = (after.sent as SendEnvelope[]).map((envelope) => envelope[1]?.[0]?.theatre?.status);
-  assert.deepEqual(statuses, ["failed"]);
-  assert.equal(traces(after).at(-1)?.component, "activity-lighting-controller");
+  const envelopes = after.sent as SendEnvelope[];
+  assert.deepEqual(envelopes.flatMap((envelope) => envelope[0] ?? []).map((message) => message.activityLightingCommand?.operation), ["observe"]);
+  assert.deepEqual(envelopes.map((envelope) => envelope[1]?.[0]?.theatre?.status).filter(Boolean), ["confirming"]);
+  assert.equal(traces(after).at(-1)?.event, "startup");
 });
 
-test("backlighting adapter re-arms its next poll after a redeploy", async (t) => {
+test("backlighting adapter re-observes a pending command after a redeploy", async (t) => {
   const {Constructor} = runtime(registerBacklighting);
   const backlightingConfig = {area: "lounge", pollMs: 2000, confirmationTimeoutMs: 15000, maxAttempts: 2};
   const before = new Constructor(backlightingConfig);
@@ -616,8 +628,126 @@ test("backlighting adapter re-arms its next poll after a redeploy", async (t) =>
   const after = new Constructor(backlightingConfig);
   t.after(() => close(after));
   assert.equal(after.sent.length, 0);
-  await wait(300);
+  await wait(50);
   const operations = (after.sent as SendEnvelope[]).flatMap((envelope) => envelope[0] ?? [])
     .map((message) => message.backlightingCommand?.operation);
   assert.deepEqual(operations, ["observe"]);
+  assert.equal((savedState(after).pending as Record<string, unknown>).operation, "observe");
+});
+
+test("display adapter recovers a projector start that timed out during a restart", async (t) => {
+  // dev-review repro: the projector warmed up while Node-RED was down.
+  const realFetch = globalThis.fetch;
+  let watts = 2;
+  globalThis.fetch = (async (url: string | URL | Request) => {
+    const key = String(url instanceof Request ? url.url : url);
+    const body = key.includes("sony")
+      ? {result: [{status: "standby"}], id: 50}
+      : key.includes("Cover.GetStatus")
+        ? {current_pos: 100, state: "stopped"}
+        : {apower: watts};
+    return new Response(JSON.stringify(body), {status: 200});
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = realFetch;
+  });
+  const {Constructor} = runtime(registerDisplay, {tvPsk: "synthetic"});
+  const displayConfig = {
+    area: "lounge",
+    tvHost: "tv.invalid",
+    screenHost: "screen.invalid",
+    projectorMeterHost: "projector.invalid",
+    screenOpenPosition: 100
+  };
+  const before = new Constructor(displayConfig);
+  await receive<SendEnvelope>(before, {display: {kind: "intent", requestId: "display-restart", generation: 1, mode: "projector"}});
+  await wait(200);
+  assert.equal((savedState(before).pending as Record<string, unknown>).operation, "projector_start");
+  await close(before);
+  const state = savedState(before);
+  before.context().set("state", {
+    ...state,
+    pending: {...(state.pending as Record<string, unknown>), deadlineAt: Date.now() - 1000, nextAt: Date.now() - 1000}
+  });
+  watts = 300;
+
+  const after = new Constructor(displayConfig);
+  t.after(() => close(after));
+  await wait(300);
+  assert.equal(savedState(after).failure, null);
+  await receive<SendEnvelope>(after, {display: {kind: "startup"}});
+  await wait(300);
+  const recovered = savedState(after);
+  assert.equal(recovered.phase, "ready");
+  assert.equal(recovered.failure, null);
+  assert.equal(recovered.blockedGeneration, null);
+  const sent = after.sent as Array<Array<Record<string, unknown> | null>>;
+  assert.equal(sent.filter((envelope) => envelope[0]?.payload === "power").length, 0);
+  assert.equal(traces(after).some((entry) => entry.outcome === "failed"), false);
+});
+
+test("AVR adapter recovers a source change whose retries ran out during a restart", async (t) => {
+  const {Constructor} = runtime(registerAvr);
+  const avrConfig = {area: "lounge", sources: "{\"shield\":\"SAT/CBL\",\"playstation\":\"GAME\"}", retryMs: 1000, maxAttempts: 3};
+  const before = new Constructor(avrConfig);
+  await receive<SendEnvelope>(before, {avr: {kind: "observed", line: "PWON\rZMON\rSISAT/CBL\rMV31\r"}});
+  await receive<SendEnvelope>(before, {avr: {kind: "intent", requestId: "avr-restart", generation: 1, power: "on", source: "playstation"}});
+  await close(before);
+  const state = savedState(before);
+  before.context().set("state", {
+    ...state,
+    pending: {...(state.pending as Record<string, unknown>), attempt: 3, deadlineAt: Date.now() - 1000}
+  });
+
+  const after = new Constructor(avrConfig);
+  t.after(() => close(after));
+  await wait(50);
+  await receive<SendEnvelope>(after, {avr: {kind: "startup"}});
+  await receive<SendEnvelope>(after, {avr: {kind: "observed", line: "PWON\rZMON\rSIGAME\rMV31\r"}});
+  const recovered = savedState(after);
+  assert.equal(recovered.phase, "ready");
+  assert.equal(recovered.blockedGeneration, null);
+  assert.equal(traces(after).some((entry) => entry.outcome === "failed"), false);
+  const statuses = (after.sent as SendEnvelope[]).flatMap((envelope) => envelope[1] ?? [])
+    .map((message) => message.theatre?.status);
+  assert.equal(statuses.includes("failed"), false);
+});
+
+test("a flow startup after the construction startup changes nothing but repeats discovery", () => {
+  // Same clock for both, so a harmless second startup reproduces the first exactly.
+  const now = new Date("2026-11-21T10:00:00Z");
+  const later = new Date("2026-11-21T10:05:00Z");
+  const twice = (
+    name: string,
+    transition: (saved: unknown, msg: Record<string, unknown>, config: unknown, at: Date) => {state: unknown; commands: unknown; events: unknown},
+    key: string,
+    config: unknown,
+    intent: Record<string, unknown>
+  ) => {
+    const pending = transition(undefined, {[key]: {kind: "intent", requestId: name, generation: 1, ...intent}}, config, now).state;
+    const first = transition(pending, {[key]: {kind: "startup"}}, config, later);
+    const second = transition(first.state, {[key]: {kind: "startup"}}, config, later);
+    assert.deepEqual(second.state, first.state, name);
+    assert.deepEqual(second.commands, first.commands, name);
+    assert.deepEqual(second.events, first.events, name);
+  };
+  type Loose = Parameters<typeof twice>[1];
+  twice("activity", transitionActivityLighting as unknown as Loose, "activityLighting", {
+    profiles: {tv: {targets: ["wall"], values: {brightness: 64}}}, confirmationTimeoutMs: 15000, maxAttempts: 2
+  }, {profile: "tv"});
+  twice("backlighting", transitionBacklighting as unknown as Loose, "backlighting", {
+    pollMs: 2000, confirmationTimeoutMs: 15000, maxAttempts: 2
+  }, {power: "on"});
+  twice("source", transitionSource as unknown as Loose, "sourceCapability", {
+    sources: {streamer: {activation: "command", deactivation: "command", confirmation: "active"}},
+    pollMs: 2000, confirmationTimeoutMs: 15000, maxAttempts: 2
+  }, {sourceId: "streamer", action: "activate"});
+  twice("avr", transitionAvr as unknown as Loose, "avr", {
+    area: "lounge", sources: {shield: "SAT/CBL", playstation: "GAME"}, retryMs: 1000, maxAttempts: 3, minVolume: 0, maxVolume: 60
+  }, {power: "on", source: "playstation"});
+  twice("display", transitionDisplay as unknown as Loose, "display", {
+    screenOpenPosition: 82, screenTolerance: 2, pollMs: 1000, queryTimeoutMs: 1000, tvTimeoutMs: 4000,
+    screenTimeoutMs: 5000, projectorWarmupMs: 4000, projectorMinimumWarmupMs: 3000, projectorShutdownConfirmMs: 2000,
+    projectorCooldownMs: 5000, maxAttempts: 2, projectorOnWatts: 20, projectorOffWatts: 10, projectorPowerFallback: false
+  }, {mode: "projector"});
 });
