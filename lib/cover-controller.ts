@@ -15,6 +15,9 @@ export interface CoverConfig {
   travelTimeoutMs: number;
   maxAttempts: number;
   pollMs: number;
+  // Without motion reports, a cover counts as settled only when the same
+  // position is reported at least this long apart.
+  settleMs: number;
 }
 
 export interface CoverDesired {
@@ -39,8 +42,10 @@ export interface CoverPending {
   issuedAt: number;
   deadlineAt: number;
   nextAt: number;
-  // Last fresh position seen since the command, to detect a stable position.
+  // Last fresh position seen since the command, and the observation time it
+  // was first seen at, to detect a settled cover without motion reports.
   stablePosition: number | null;
+  stableSince: number | null;
   // Observed position when the command was issued, if known.
   startPosition: number | null;
   // Fresh evidence that the cover moved since the command was issued.
@@ -119,12 +124,14 @@ export interface CoverOutputEvent {
 
 export function normaliseCoverConfig(config: Partial<CoverConfig> = {}): CoverConfig {
   const tolerance = Number(config.positionTolerance);
+  const pollMs = Math.max(250, Number(config.pollMs) || 5000);
   return {
     positionTolerance: Number.isFinite(tolerance) && tolerance >= 0 ? Math.min(tolerance, 50) : 2,
     invert: config.invert === true,
     travelTimeoutMs: Math.max(1000, Number(config.travelTimeoutMs) || 90000),
     maxAttempts: Math.max(1, Math.floor(Number(config.maxAttempts) || 2)),
-    pollMs: Math.max(250, Number(config.pollMs) || 5000)
+    pollMs,
+    settleMs: Math.max(250, Number(config.settleMs) || pollMs)
   };
 }
 
@@ -203,6 +210,7 @@ export function transitionCover(
       deadlineAt: nowMs + config.travelTimeoutMs,
       nextAt: nowMs + config.pollMs,
       stablePosition: null,
+      stableSince: null,
       startPosition: state.observed?.position ?? null,
       moved: false,
       verifying
@@ -294,51 +302,63 @@ export function transitionCover(
         trace("observation", "ignored", "stale-observation");
         return;
       }
+      const changed = pending.stablePosition !== null && pending.stablePosition !== position;
+      if (pending.stablePosition !== position) {
+        pending.stablePosition = position;
+        pending.stableSince = observedAt;
+      }
+      // A duplicate report mid-travel is not a stop: without motion reports,
+      // the same position must hold for settleMs.
+      const settled = motion === "stopped"
+        || (motion === null && observedAt - (pending.stableSince ?? observedAt) >= config.settleMs);
       if (pending.operation === "stop" || (pending.operation === "observe" && state.desired.position === null)) {
-        const stable = motion === "stopped" || (motion === null && pending.stablePosition === position);
-        if (stable) {
+        if (settled) {
           ready(position);
         } else {
-          pending.stablePosition = position;
           trace("observation", "accepted", "still-moving", {position, motion});
         }
         return;
       }
       const target = state.desired.position!;
       const within = Math.abs(position - target) <= config.positionTolerance;
-      const settled = motion === "stopped" || (motion === null && pending.stablePosition === position);
-      if (moving
-        || (pending.startPosition !== null && Math.abs(position - pending.startPosition) > config.positionTolerance)
-        || (pending.stablePosition !== null && pending.stablePosition !== position)) {
+      if (moving || changed
+        || (pending.startPosition !== null && Math.abs(position - pending.startPosition) > config.positionTolerance)) {
         pending.moved = true;
       }
-      pending.stablePosition = position;
       if (within && !moving) {
         ready(target);
-      } else if (pending.operation === "set_position" && pending.moved && settled) {
+      } else if (pending.verifying && !moving) {
+        latchManual("moved-while-offline", target, position);
+      } else if (settled && pending.operation === "observe") {
+        // Restart mid-travel and the cover has stopped off target: it answered,
+        // so this is not a confirmation timeout.
+        latchManual("stopped-while-offline", target, position);
+      } else if (settled && pending.operation === "set_position" && pending.moved) {
         // Stopped short after moving: a person or an obstruction stopped it.
         // Never retry against that; a newer intent resumes automation.
-        state.pending = null;
-        state.classification = "manual_override";
-        state.phase = "manual_override";
-        trace("observation", "manual_override", "stopped-short", {expected: target, observed: position});
-      } else if (pending.verifying && !moving) {
-        state.pending = null;
-        state.classification = "manual_override";
-        state.phase = "manual_override";
-        trace("observation", "manual_override", "moved-while-offline", {expected: target, observed: position});
+        latchManual("stopped-short", target, position);
       } else {
         trace("observation", "accepted", "position-mismatch", {expected: target, observed: position, motion});
       }
       return;
     }
 
-    if (state.phase === "ready" && state.desired.position !== null
-      && Math.abs(position - state.desired.position) > config.positionTolerance) {
-      state.classification = "manual_override";
-      state.phase = "manual_override";
-      trace("observation", "manual_override", null, {expected: state.desired.position, observed: position});
+    if (state.desired.position === null) return;
+    const within = Math.abs(position - state.desired.position) <= config.positionTolerance;
+    if (state.phase === "ready" && !within) {
+      latchManual(null, state.desired.position, position);
+    } else if (state.phase === "manual_override" && within && !moving) {
+      // Back at this generation's target (or a stopped-short latch that was
+      // really still travelling): nothing to own, so the cover is ready again.
+      ready(state.desired.position);
     }
+  }
+
+  function latchManual(reason: string | null, expected: number, observed: number) {
+    state.pending = null;
+    state.classification = "manual_override";
+    state.phase = "manual_override";
+    trace("observation", "manual_override", reason, {expected, observed});
   }
 
   if (event.kind === "set_position" || event.kind === "open" || event.kind === "close" || event.kind === "stop") {

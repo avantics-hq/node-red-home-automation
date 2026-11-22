@@ -15,7 +15,8 @@ const config: CoverConfig = {
   invert: false,
   travelTimeoutMs: 30000,
   maxAttempts: 2,
-  pollMs: 5000
+  pollMs: 5000,
+  settleMs: 5000
 };
 const at = (seconds: number): Date =>
   new Date(Date.parse("2026-11-21T16:00:00Z") + seconds * 1000);
@@ -141,7 +142,7 @@ test("stop mid-travel confirms on reported stop and keeps the stopped position",
   assert.equal(result.state.desired?.position, 38);
 });
 
-test("stop without motion reports confirms on two equal fresh positions", () => {
+test("stop without motion reports confirms once a position holds for the settle interval", () => {
   let result = setPosition(undefined, 0);
   result = apply(result.state, {kind: "stop", requestId: "cover-stop", generation: 2}, 3);
   result = observe(result.state, 60, 4);
@@ -149,6 +150,8 @@ test("stop without motion reports confirms on two equal fresh positions", () => 
   result = observe(result.state, 58, 5);
   assert.equal(result.state.phase, "stopping");
   result = observe(result.state, 58, 6);
+  assert.equal(result.state.phase, "stopping");
+  result = observe(result.state, 58, 10);
   assert.equal(result.state.phase, "ready");
   assert.equal(result.state.desired?.position, 58);
 });
@@ -166,7 +169,7 @@ test("manual movement latches ownership without a corrective command; a newer in
   assert.equal(result.commands.length, 0);
   assert.equal(result.events[0]?.theatre.classification, "manual_override");
 
-  result = observe(result.state, 100, 50);
+  result = observe(result.state, 60, 50);
   assert.equal(result.state.phase, "manual_override");
   assert.equal(result.commands.length, 0);
 
@@ -283,4 +286,51 @@ test("target_state status only uses theatre target statuses", () => {
   statuses.push(result.events[0]?.theatre.status);
   assert.deepEqual(statuses, ["transitioning", "transitioning", "confirming", "ready"]);
   for (const status of statuses) assert.ok(allowed.has(status!));
+});
+
+test("a duplicate report mid-travel without motion does not latch manual ownership", () => {
+  // dev-review repro: two equal readings 0.2 s apart while still travelling.
+  let result = observe(undefined, 0, 0);
+  result = setPosition(result.state, 100, 1, 0.01);
+  result = observe(result.state, 30, 5);
+  assert.equal(result.traces.at(-1)?.reason, "position-mismatch");
+  result = observe(result.state, 30, 5.2);
+  assert.equal(result.state.phase, "moving");
+  result = observe(result.state, 70, 10);
+  result = observe(result.state, 100, 15);
+  assert.equal(result.state.phase, "ready");
+});
+
+test("a fresh observation at the target returns a manual cover to ready", () => {
+  let result = observe(undefined, 0, 0);
+  result = setPosition(result.state, 100, 1, 1);
+  result = observe(result.state, 30, 5);
+  result = observe(result.state, 30, 10);
+  assert.equal(result.state.phase, "manual_override");
+  result = observe(result.state, 70, 12, "opening");
+  assert.equal(result.state.phase, "manual_override");
+  result = observe(result.state, 100, 15);
+  assert.equal(result.state.phase, "ready");
+  assert.equal(result.state.classification, null);
+  assert.equal(result.commands.length, 0);
+});
+
+test("restart mid-travel that finds the cover stopped off target latches manual, not a timeout", () => {
+  let result = observe(undefined, 0, 0);
+  result = setPosition(result.state, 100, 1, 1);
+  result = apply(result.state, {kind: "startup"}, 3);
+  assert.deepEqual(result.commands.map(({operation}) => operation), ["observe"]);
+  result = observe(result.state, 40, 4);
+  assert.equal(result.state.phase, "confirming");
+  result = observe(result.state, 40, 9);
+  assert.equal(result.state.phase, "manual_override");
+  assert.equal(result.traces.at(-1)?.reason, "stopped-while-offline");
+  result = apply(result.state, {kind: "tick", generation: 1}, 40);
+  assert.equal(result.commands.length, 0);
+  assert.equal(result.state.failure, null);
+
+  let reported = setPosition(undefined, 100, 1, 1);
+  reported = apply(reported.state, {kind: "startup"}, 3);
+  reported = observe(reported.state, 40, 4, "stopped");
+  assert.equal(reported.state.phase, "manual_override");
 });
