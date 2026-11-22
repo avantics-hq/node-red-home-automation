@@ -63,7 +63,7 @@
     .pill, .status { display: inline-flex; width: fit-content; border: 1px solid var(--border); border-radius: 999px; font-size: 0.76rem; font-weight: 750; line-height: 1; }
     .pill { padding: 9px 12px; background: var(--raised); color: var(--muted); }
     .status { padding: 7px 10px; }
-    .status.complete { border-color: color-mix(in srgb, var(--success) 35%, var(--border)); background: var(--success-soft); color: var(--success); }
+    .status.complete, .status.released { border-color: color-mix(in srgb, var(--success) 35%, var(--border)); background: var(--success-soft); color: var(--success); }
     .status.available { border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); background: var(--accent-soft); color: var(--accent); }
     .status.planned { border-color: color-mix(in srgb, var(--planned) 35%, var(--border)); background: var(--planned-soft); color: var(--planned); }
     main { padding: 62px 0 80px; }
@@ -152,38 +152,38 @@
       <p class="section-intro">Portfolio badges show whether a capability is released in the package. Roadmap badges show delivery state. Components share explicit ownership, semantic commands, observed completion and bounded recovery.</p>
       <div class="components">
         <article class="component feature">
-          <div class="component-head"><div><p class="eyebrow">Capability milestone</p><h3>Home-theatre orchestration</h3></div><span class="status complete">Released</span></div>
+          <div class="component-head"><div><p class="eyebrow">Capability milestone</p><h3>Home-theatre orchestration</h3></div><span class="status released">Released</span></div>
           <p>A latest-request-wins activity controller coordinates display, receiver, source, lighting and backlighting target owners without embedding transport-specific commands.</p>
           <ul><li>Fresh observations gate completion</li><li>Stale generations are inert</li><li>Recovery and manual ownership are explicit</li></ul>
           <a class="component-link" href="home-theatre.html">Read the capability reference →</a>
         </article>
         <article class="component">
-          <div class="component-head"><div><p class="eyebrow">Source policy</p><h3>Media-player readiness</h3></div><span class="status available">Released</span></div>
+          <div class="component-head"><div><p class="eyebrow">Source policy</p><h3>Media-player readiness</h3></div><span class="status released">Released</span></div>
           <p>Gate source completion on fresh availability, active-device, application or playback evidence without moving transport logic into orchestration.</p>
           <ul><li>Configurable readiness depth</li><li>Application and playback evidence</li><li>Honest waiting and unavailable outcomes</li></ul>
         </article>
         <article class="component">
-          <div class="component-head"><div><p class="eyebrow">Receiver policy</p><h3>Volume ownership</h3></div><span class="status available">Released</span></div>
+          <div class="component-head"><div><p class="eyebrow">Receiver policy</p><h3>Volume ownership</h3></div><span class="status released">Released</span></div>
           <p>One AVR controller coordinates bounded absolute and relative volume requests without fighting later physical adjustments.</p>
           <ul><li>Rapid relative input accumulates</li><li>Configured half-step safety bounds</li><li>Fresh observation confirms and releases ownership</li></ul>
         </article>
         <article class="component">
-          <div class="component-head"><div><p class="eyebrow">Consumer reference</p><h3>Contract examples</h3></div><span class="status available">Released</span></div>
+          <div class="component-head"><div><p class="eyebrow">Consumer reference</p><h3>Contract examples</h3></div><span class="status released">Released</span></div>
           <p>Run deterministic, transport-neutral examples for occupancy, lighting, switch gestures, source readiness, volume ownership and coordinated activities.</p>
           <ul><li>Real reducer execution</li><li>Synthetic configuration</li><li>Asserted consumer-visible invariants</li></ul>
           <a class="component-link" href="contract-examples.html">Explore the executable contracts →</a>
         </article>
         <article class="component">
-          <div class="component-head"><div><p class="eyebrow">Lighting policies</p><h3>Room lighting control</h3></div><span class="status available">Released</span></div>
+          <div class="component-head"><div><p class="eyebrow">Lighting policies</p><h3>Room lighting control</h3></div><span class="status released">Released</span></div>
           <p>One room controller owns adaptive output while independent switch, motion, schedule and activity policies emit semantic intent.</p>
           <ul><li>Circadian brightness and colour temperature</li><li>Per-target manual ownership</li><li>Reducer-owned duplicate and retained-state handling</li><li>Restart baseline, freshness and availability evidence</li><li>Independent switch gestures and occupancy policy</li></ul>
         </article>
         <article class="component">
-          <div class="component-head"><div><p class="eyebrow">Sensor policy</p><h3>Occupancy fusion</h3></div><span class="status available">Released</span></div>
+          <div class="component-head"><div><p class="eyebrow">Sensor policy</p><h3>Occupancy fusion</h3></div><span class="status released">Released</span></div>
           <p>Combine motion triggers with optional presence hold while preserving unknown sensor states and preventing one source from clearing another.</p>
         </article>
         <article class="component">
-          <div class="component-head"><div><p class="eyebrow">Operational evidence</p><h3>Metrics, traces and objectives</h3></div><span class="status available">Released</span></div>
+          <div class="component-head"><div><p class="eyebrow">Operational evidence</p><h3>Metrics, traces and objectives</h3></div><span class="status released">Released</span></div>
           <p>Bounded traces and rolling outcome evaluation expose transition latency, retries, fallbacks, target availability and actionable failure.</p>
         </article>
       </div>
