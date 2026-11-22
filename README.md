@@ -147,7 +147,7 @@ tarball through **Manage palette → Install → Upload module**, or with:
 npm install /path/to/avantics-node-red-home-automation-2.1.0.tgz
 ```
 
-Add the installed nodes from the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.
+Add the installed nodes from the **home automation** section of the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.
 
 The whole-theatre MQTT contract uses non-retained requests at
 `home/<area>/theatre/request`; every request supplies a unique `requestId` and an
