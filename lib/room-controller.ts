@@ -349,6 +349,13 @@ export function transitionRoom(
 
     for (const targetId of targets) {
       if (!targetById[targetId]) continue;
+      // A held light changes only for an owner (its own or a newer one), a
+      // person (manual: true) or a release; any other intent leaves it alone.
+      const held = state.control[targetId];
+      if (held?.state === "overridden" && !owner && event.manual !== true) {
+        trace("intent", "ignored", "held-by", {target: targetId, owner: held.owner, source: event.source || "intent"});
+        continue;
+      }
       const wasOn = intendedOn(targetId);
       const resolvedState = requestedState === "TOGGLE" ? (wasOn ? "OFF" : "ON") : requestedState;
       if (event.updateOnOnly === true && !wasOn) continue;

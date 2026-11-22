@@ -149,7 +149,12 @@ lights). Released lights that are on are restyled as a refresh would:
 msg.lighting = {kind: "release", targets: ["wall", "lamp"], owner: "theatre"};
 ```
 
-Switching a light off, from any source, returns it to `in-control`. On startup
+A held (`overridden`) light changes only for an intent with an `owner` (its own,
+or a newer owner who takes it over), a person (`manual: true`, an external
+command on the command topic, or a change seen at the light), or a release.
+Other intents, such as motion ON or OFF and owner-less values, leave it alone
+and are traced as `ignored held-by`; their other targets are still handled.
+Switching a light off by its owner or a person returns it to `in-control`. On startup
 and whenever a target's state changes, the controller sends a retained message
 on its command output:
 
