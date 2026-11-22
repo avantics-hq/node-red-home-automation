@@ -234,6 +234,7 @@ function operationSatisfied(
     case "screen_open": return screenAtPosition(observed.screen, config.screenOpenPosition, config.screenTolerance);
     case "screen_close": return screenAtPosition(observed.screen, 0, config.screenTolerance);
     case "projector_start": return observed.projector?.power === "on";
+    case "projector_settle": return observed.projector?.power === "on" || observed.projector?.power === "standby";
     case "projector_shutdown_observe":
     case "projector_shutdown_confirm":
     case "projector_cooldown": return observed.projector?.power === "standby";
@@ -378,6 +379,23 @@ export function transitionDisplay(
     }
   }
 
+  // A reading between projectorOffWatts and projectorOnWatts is a lamp warming
+  // up or cooling down: re-query at pollMs until it settles, never toggle on it.
+  // Either phase may legitimately last up to its own timeout.
+  function awaitProjectorPower() {
+    state.pending = {
+      device: "projector",
+      operation: "projector_settle",
+      command: queryFor(state, "projector"),
+      attempt: 1,
+      retryable: false,
+      deadlineAt: now.getTime() + Math.max(config.projectorWarmupMs, config.projectorCooldownMs),
+      nextAt: now.getTime() + config.pollMs
+    };
+    state.phase = "transitioning";
+    trace("projector", "settling", null, {watts: state.observed.projector?.watts ?? null});
+  }
+
   function markReady() {
     if (state.phase !== "ready") {
       state.phase = "ready";
@@ -412,8 +430,7 @@ export function transitionDisplay(
       if (state.observed.tv?.power !== "on") return issueTv("on");
       if (state.observed.projector?.power !== "standby") {
         if (state.observed.projector?.power === "on") return issueProjectorShutdown();
-        state.seen.projector = false;
-        return beginDiscovery();
+        return awaitProjectorPower();
       }
       if (!screenAtPosition(state.observed.screen, 0, config.screenTolerance)) return issueScreen(0);
       return markReady();
@@ -426,8 +443,7 @@ export function transitionDisplay(
       }
       if (state.observed.projector?.power !== "on") {
         if (state.observed.projector?.power === "standby") return issueProjectorStart();
-        state.seen.projector = false;
-        return beginDiscovery();
+        return awaitProjectorPower();
       }
       return markReady();
     }
@@ -435,8 +451,7 @@ export function transitionDisplay(
     if (state.observed.tv?.power !== "standby") return issueTv("standby");
     if (state.observed.projector?.power !== "standby") {
       if (state.observed.projector?.power === "on") return issueProjectorShutdown();
-      state.seen.projector = false;
-      return beginDiscovery();
+      return awaitProjectorPower();
     }
     if (!screenAtPosition(state.observed.screen, 0, config.screenTolerance)) return issueScreen(0);
     return markReady();
@@ -545,7 +560,11 @@ export function transitionDisplay(
         state.lastAttempt = Math.max(state.lastAttempt, attempt);
         return;
       }
-      return fail(pending.device, pending.operation, "confirmation-timeout");
+      return fail(
+        pending.device,
+        pending.operation,
+        pending.operation === "projector_settle" ? "projector-power-unsettled" : "confirmation-timeout"
+      );
     }
 
     commands.push(queryFor(state, pending.device));

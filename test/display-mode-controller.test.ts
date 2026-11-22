@@ -209,3 +209,85 @@ test("unsolicited display changes latch manual ownership without corrective comm
     "query_power"
   ]);
 });
+
+// Answers every projector power query instantly (a zero-latency relay) and
+// ticks every 100 ms, counting projector queries and power toggles.
+function runProjector(
+  result: ReturnType<typeof transitionDisplay>,
+  from: number,
+  to: number,
+  watts: (seconds: number) => number,
+  generation = 1
+) {
+  let queries = 0;
+  let toggles = 0;
+  let steps = 0;
+  const count = (entry: ReturnType<typeof transitionDisplay>) => {
+    queries += entry.commands.filter((item) => item.device === "projector" && item.operation === "query_power").length;
+    toggles += entry.commands.filter((item) => item.operation === "power_toggle").length;
+  };
+  for (let tick = from; tick < to; tick = Math.round((tick + 0.1) * 10) / 10) {
+    result = apply(result.state, {kind: "tick", generation}, tick);
+    count(result);
+    while (result.commands.some((item) => item.device === "projector" && item.operation === "query_power")) {
+      assert.ok(++steps < 2000, "projector queries keep answering each other");
+      result = observe(result.state, "projector", {watts: watts(tick)}, tick, generation);
+      count(result);
+    }
+  }
+  return {result, queries, toggles};
+}
+
+test("a projector reading between the power thresholds re-polls at pollMs, not in a loop", () => {
+  // dev-review repro: 869 queries in 1 s at 15 W.
+  const start = discover("projector", 1, [
+    [0.1, "tv", {power: "standby"}],
+    [0.2, "screen", {position: 82, state: "stopped"}],
+    [0.3, "projector", {watts: 15}]
+  ]);
+  assert.equal(start.state.pending?.operation, "projector_settle");
+  const {queries, toggles, result} = runProjector(start, 0.4, 3.4, () => 15);
+  assert.ok(queries <= 3, `${queries} queries in 3 s at pollMs 1 s`);
+  assert.equal(toggles, 0);
+  assert.equal(result.state.phase, "transitioning");
+});
+
+test("an in-band projector that settles on becomes ready without a toggle", () => {
+  const start = discover("projector", 1, [
+    [0.1, "tv", {power: "standby"}],
+    [0.2, "screen", {position: 82, state: "stopped"}],
+    [0.3, "projector", {watts: 15}]
+  ]);
+  const {result, toggles} = runProjector(start, 0.4, 3.4, (seconds) => (seconds < 1.5 ? 15 : 155));
+  assert.equal(result.state.phase, "ready");
+  assert.equal(result.state.pending, null);
+  assert.equal(toggles, 0);
+});
+
+test("an in-band projector that settles in standby follows the standby path", () => {
+  // Off mode: a cooling projector that reaches standby needs nothing more.
+  const start = discover("off", 1, [
+    [0.1, "tv", {power: "standby"}],
+    [0.2, "screen", {position: 0, state: "closed"}],
+    [0.3, "projector", {watts: 15}]
+  ]);
+  assert.equal(start.state.pending?.operation, "projector_settle");
+  const {result, toggles} = runProjector(start, 0.4, 3.4, (seconds) => (seconds < 1.5 ? 15 : 2));
+  assert.equal(result.state.phase, "ready");
+  assert.equal(toggles, 0);
+});
+
+test("a projector stuck between the power thresholds fails at the deadline", () => {
+  const start = discover("projector", 1, [
+    [0.1, "tv", {power: "standby"}],
+    [0.2, "screen", {position: 82, state: "stopped"}],
+    [0.3, "projector", {watts: 15}]
+  ]);
+  // Deadline: the longer of warm-up (4 s) and cool-down (5 s) after the reading.
+  const {result, queries, toggles} = runProjector(start, 0.4, 6, () => 15);
+  assert.equal(result.state.phase, "failed");
+  assert.equal(result.state.failure?.reason, "projector-power-unsettled");
+  assert.equal(result.state.failure?.operation, "projector_settle");
+  assert.ok(queries <= 6, `${queries} queries before the deadline`);
+  assert.equal(toggles, 0);
+});
