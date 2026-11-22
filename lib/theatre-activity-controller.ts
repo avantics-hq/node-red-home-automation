@@ -1,5 +1,7 @@
 "use strict";
 
+import {boundObservedAt, isFresh as isFreshAt, isOutOfOrder, parseObservedAt} from "./observation-time";
+
 const PROFILE_NAME = /^[a-z][a-z0-9_-]*$/;
 export const TARGETS = ["display", "avr", "source", "lighting", "backlighting"] as const;
 const REQUIRED_TARGETS = ["display", "avr", "backlighting"] as const;
@@ -391,13 +393,11 @@ function targetProbeCommands(): TargetCommand[] {
 }
 
 function observationTime(targetState: {observedAt?: string} | null | undefined): number | null {
-  const value = Date.parse(targetState?.observedAt || "");
-  return Number.isFinite(value) ? value : null;
+  return typeof targetState?.observedAt === "string" ? parseObservedAt(targetState.observedAt) : null;
 }
 
 function isFresh(targetState: {observedAt: string}, nowMs: number, freshnessMs: number): boolean {
-  const observedAt = observationTime(targetState);
-  return observedAt !== null && nowMs - observedAt <= freshnessMs && observedAt <= nowMs + 1000;
+  return isFreshAt(observationTime(targetState), nowMs, freshnessMs);
 }
 
 function statusFor(state: TheatreState) {
@@ -774,9 +774,11 @@ export function transitionTheatre(
     }
 
     const previous = state.targets[event.target];
-    const eventTime = observationTime(event);
-    const previousTime = observationTime(previous);
-    if (previous && eventTime !== null && previousTime !== null && eventTime < previousTime) {
+    const bounded = boundObservedAt(event.observedAt, observationTime(event)!, nowMs);
+    if (bounded.skewed) {
+      trace("target-state", "adjusted", "clock-skew", {target: event.target, reported: event.observedAt, usedAt: bounded.observedAt});
+    }
+    if (previous && isOutOfOrder(bounded.ms, previous.observedAt, nowMs)) {
       trace("target-state", "ignored", "out-of-order", {target: event.target});
       return;
     }
@@ -785,7 +787,7 @@ export function transitionTheatre(
     const classification = event.classification || (drifted ? "drift" : null);
     state.targets[event.target] = {
       status: event.status,
-      observedAt: event.observedAt,
+      observedAt: bounded.observedAt,
       classification,
       failure: event.failure && typeof event.failure === "object" ? {...event.failure} : null,
       details: event.details && typeof event.details === "object" ? {...event.details} : null

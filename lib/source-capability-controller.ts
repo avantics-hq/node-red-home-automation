@@ -1,5 +1,7 @@
 "use strict";
 
+import {boundObservedAt, isOutOfOrder, parseObservedAt} from "./observation-time";
+
 export type SourceAction = "activate" | "deactivate";
 export type SourceControlMode = "command" | "external" | "unavailable";
 export type SourceConfirmation = "active" | "available" | "application" | "playing" | "unavailable";
@@ -499,14 +501,15 @@ export function transitionSource(
     }
     if (!Object.hasOwn(config.sources, event.sourceId)) throw new Error("unknown sourceId");
     if (!Object.hasOwn(OBSERVATION_STATUSES, event.status)) throw new Error("unknown source observation status");
-    const observedAt = Date.parse(event.observedAt || "");
-    if (!Number.isFinite(observedAt)) throw new Error("source observedAt must be an ISO timestamp");
+    const parsedAt = parseObservedAt(event.observedAt);
+    if (parsedAt === null || typeof event.observedAt !== "string") throw new Error("source observedAt must be an ISO timestamp");
     if (!state.desired || event.generation !== state.generation || event.sourceId !== state.desired.sourceId) {
       trace("observation", "ignored", "stale-generation", {generation: event.generation});
       return;
     }
-    const previousAt = Date.parse(state.observed?.observedAt || "");
-    if (Number.isFinite(previousAt) && observedAt < previousAt) {
+    const bounded = boundObservedAt(event.observedAt, parsedAt, nowMs);
+    if (bounded.skewed) trace("observation", "adjusted", "clock-skew", {reported: event.observedAt, usedAt: bounded.observedAt});
+    if (isOutOfOrder(bounded.ms, state.observed?.observedAt, nowMs)) {
       trace("observation", "ignored", "out-of-order");
       return;
     }
@@ -520,7 +523,7 @@ export function transitionSource(
     state.observed = {
       sourceId: event.sourceId,
       status: event.status,
-      observedAt: event.observedAt,
+      observedAt: bounded.observedAt,
       application,
       playback
     };

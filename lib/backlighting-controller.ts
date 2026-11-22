@@ -1,5 +1,7 @@
 "use strict";
 
+import {boundObservedAt, isOutOfOrder, parseObservedAt} from "./observation-time";
+
 export type BacklightingPower = "on" | "off";
 
 const POWERS: Record<BacklightingPower, true> = {on: true, off: true};
@@ -227,23 +229,26 @@ export function transitionBacklighting(
       throw new Error("backlighting observation generation must be a positive integer");
     }
     if (!Object.hasOwn(POWERS, observation.power)) throw new Error("unknown observed backlighting power");
-    const observedAt = Date.parse(observation.observedAt || "");
-    if (!Number.isFinite(observedAt)) throw new Error("backlighting observedAt must be an ISO timestamp");
+    const parsedAt = parseObservedAt(observation.observedAt);
+    if (parsedAt === null || typeof observation.observedAt !== "string") {
+      throw new Error("backlighting observedAt must be an ISO timestamp");
+    }
     if (!state.desired || observation.generation !== state.generation) {
       trace("observation", "ignored", "stale-generation");
       return;
     }
-    if (observedAt < Date.parse(state.desired.requestedAt)) {
+    const bounded = boundObservedAt(observation.observedAt, parsedAt, nowMs);
+    if (bounded.skewed) trace("observation", "adjusted", "clock-skew", {reported: observation.observedAt, usedAt: bounded.observedAt});
+    if (bounded.ms < Date.parse(state.desired.requestedAt)) {
       trace("observation", "ignored", "stale-observation");
       return;
     }
-    const previousAt = Date.parse(state.observed?.observedAt || "");
-    if (Number.isFinite(previousAt) && observedAt < previousAt) {
+    if (isOutOfOrder(bounded.ms, state.observed?.observedAt, nowMs)) {
       trace("observation", "ignored", "out-of-order");
       return;
     }
     const wasReady = state.phase === "ready" && !state.pending;
-    state.observed = {power: observation.power, observedAt: observation.observedAt};
+    state.observed = {power: observation.power, observedAt: bounded.observedAt};
     if (observation.power === state.desired.power) {
       state.pending = null;
       state.failure = null;

@@ -1,5 +1,7 @@
 "use strict";
 
+import {CLOCK_SKEW_MS, parseObservedAt} from "./observation-time";
+
 export interface WallInputConfig {
   switchWindowMs: number;
   switchFreshnessMs: number;
@@ -63,12 +65,8 @@ function observationTimestamp(input: Extract<WallInputInput, {kind: "observation
   const payloadTimestamp = input.payload && typeof input.payload === "object"
     ? (input.payload as Record<string, unknown>).observedAt
     : undefined;
-  const candidate = input.observedAt ?? payloadTimestamp;
-  if (typeof candidate === "number" && Number.isFinite(candidate) && candidate >= 0) return candidate;
-  if (typeof candidate === "string") {
-    const parsed = Date.parse(candidate);
-    if (Number.isFinite(parsed)) return parsed;
-  }
+  const parsed = parseObservedAt(input.observedAt ?? payloadTimestamp);
+  if (parsed !== null) return parsed;
   return input.retain === true ? null : now;
 }
 
@@ -179,7 +177,12 @@ export function transitionWallInput(
         state.rebaselineRequired;
       state.available = true;
       state.sessionObserved = true;
-      state.observedAt = observationTimestamp(input, now);
+      const reportedAt = observationTimestamp(input, now);
+      // A time beyond the skew limit counts as observed now.
+      state.observedAt = reportedAt !== null && reportedAt > now + CLOCK_SKEW_MS ? now : reportedAt;
+      if (state.observedAt !== reportedAt) {
+        trace("switch", "adjusted", "clock-skew", {reported: reportedAt, usedAt: now});
+      }
       state.baselineKnown = true;
       state.rebaselineRequired = false;
       state.value = nextState;
