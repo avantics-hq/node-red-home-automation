@@ -1,5 +1,9 @@
 title = "node-red-home-automation gitleaks configuration"
 
+# Keep gitleaks' built-in rules; without this, this file replaces them with none.
+[extend]
+useDefault = true
+
 [[allowlists]]
 description = "Synthetic credential used only by transport leakage tests"
 regexes = [
