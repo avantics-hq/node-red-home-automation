@@ -48,8 +48,17 @@ export interface ActivityLightingFailure {
   occurredAt: string;
 }
 
+// The lights this node last overrode, kept apart from desired so a release
+// survives profiles being renamed or edited across a redeploy. targets null:
+// state saved before this was recorded, with a profile no longer configured.
+export interface ActivityLightingApplied {
+  profile: string;
+  targets: string[] | null;
+}
+
 export interface ActivityLightingState {
   desired: ActivityLightingDesired | null;
+  applied: ActivityLightingApplied | null;
   generation: number;
   phase: string;
   observed: Record<string, ActivityLightingObservation>;
@@ -179,8 +188,15 @@ function initialState(
   const desired = saved.desired && Object.hasOwn(profiles, saved.desired.profile)
     ? {...saved.desired}
     : null;
+  const legacyTargets = saved.desired ? profiles[saved.desired.profile]?.targets : undefined;
+  const applied = saved.applied && typeof saved.applied === "object"
+    ? {profile: saved.applied.profile, targets: Array.isArray(saved.applied.targets) ? [...saved.applied.targets] : null}
+    : saved.desired
+      ? {profile: saved.desired.profile, targets: legacyTargets ? [...legacyTargets] : null}
+      : null;
   return {
     desired,
+    applied,
     generation: Number.isInteger(saved.generation) && (saved.generation ?? -1) >= 0 ? saved.generation! : 0,
     phase: typeof saved.phase === "string" ? saved.phase : "idle",
     observed: Object.fromEntries(
@@ -338,27 +354,31 @@ export function transitionActivityLighting(
       trace("intent", duplicate ? "duplicate" : "rejected", duplicate ? null : "generation-conflict");
       return;
     }
-    // Hand back lights the previous profile styled that the new one does not.
-    const previous = state.desired ? config.profiles[state.desired.profile] : undefined;
+    // Hand back lights this node overrode that the new profile does not style.
+    // Unknown applied targets release every light held under this owner.
     const nextTargets = config.profiles[intent.profile]!.targets;
-    const released = previous ? previous.targets.filter((target) => !nextTargets.includes(target)) : [];
-    const previousProfile = state.desired?.profile ?? null;
+    const previous = state.applied;
+    const released = previous?.targets === null ? null
+      : (previous?.targets ?? []).filter((target) => !nextTargets.includes(target));
+    state.applied = {profile: intent.profile, targets: [...nextTargets]};
     state.desired = {
       requestId: intent.requestId,
       generation: intent.generation,
       profile: intent.profile,
       requestedAt
     };
-    if (released.length && previousProfile) {
+    if (previous && (released === null || released.length)) {
       commands.push({
         operation: "release",
         requestId: intent.requestId,
         generation: intent.generation,
-        profile: previousProfile,
+        profile: previous.profile,
         attempt: 1,
-        lighting: {kind: "release", owner: config.owner, targets: released, source: "activity"}
+        lighting: released === null
+          ? {kind: "release", owner: config.owner, source: "activity"}
+          : {kind: "release", owner: config.owner, targets: released, source: "activity"}
       });
-      trace("command", "emitted", null, {operation: "release", profile: previousProfile, targets: released});
+      trace("command", "emitted", null, {operation: "release", profile: previous.profile, targets: released});
     }
     state.generation = intent.generation;
     state.observed = {};

@@ -231,3 +231,26 @@ test("activity lighting holds its room lights through refresh and hands them bac
   room = transitionRoom(room.state, {lighting: {kind: "refresh"}}, roomConfig, noon(190));
   assert.equal(commanded(room).length, 2);
 });
+
+test("release uses the lights actually applied, even after profiles change on a redeploy", () => {
+  const applied = intent(undefined, "tv", 1, 0).state;
+  assert.deepEqual(applied.applied, {profile: "tv", targets: ["wall", "lamp"]});
+
+  // Redeploy with tv renamed to cinema: the saved desired profile is gone.
+  const renamed = {...config, profiles: {off: config.profiles.off!, cinema: config.profiles.tv!}};
+  let result = transitionActivityLighting(applied, {activityLighting: {kind: "intent", requestId: "off-2", generation: 2, profile: "off"}}, renamed, at(10));
+  assert.deepEqual(releases(result), [{kind: "release", owner: "lounge-activity", targets: ["wall", "lamp"], source: "activity"}]);
+  assert.equal(result.commands[0]?.profile, "tv");
+
+  // Redeploy with tv edited to [wall]: lamp is still released.
+  const edited = {...config, profiles: {...config.profiles, tv: {targets: ["wall"], values: {brightness: 64}}}};
+  result = transitionActivityLighting(applied, {activityLighting: {kind: "intent", requestId: "off-2", generation: 2, profile: "off"}}, edited, at(10));
+  assert.deepEqual(releases(result), [{kind: "release", owner: "lounge-activity", targets: ["wall", "lamp"], source: "activity"}]);
+
+  // State saved before applied existed, with its profile no longer configured:
+  // release every light held under this owner.
+  const legacy = {...applied, applied: undefined, desired: {...applied.desired!, profile: "retired"}};
+  result = transitionActivityLighting(legacy, {activityLighting: {kind: "intent", requestId: "off-2", generation: 2, profile: "off"}}, config, at(10));
+  assert.deepEqual(releases(result), [{kind: "release", owner: "lounge-activity", source: "activity"}]);
+  assert.equal(result.commands[0]?.profile, "retired");
+});

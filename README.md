@@ -136,7 +136,11 @@ msg.lighting = {
 `home-activity-lighting-controller` does this itself: while a profile is active
 it overrides that profile's lights under its configured owner (default
 `activity`), and when a new profile drops a light, including an off profile
-with no targets, it releases it.
+with no targets, it releases it. Give each activity-lighting node that feeds the
+same room controller its own Owner; with a shared name, one node's release
+hands back lights the other still holds. A flow that sets its own `owner` must
+set it on every lighting message from the node, releases included, or leave it
+to the node's Owner setting.
 
 Release overridden targets (default: all; with `owner`, only that owner's
 lights). Released lights that are on are restyled as a refresh would:
