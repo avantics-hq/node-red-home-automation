@@ -635,41 +635,59 @@ test("backlighting adapter re-observes a pending command after a redeploy", asyn
   assert.equal((savedState(after).pending as Record<string, unknown>).operation, "observe");
 });
 
-test("display adapter recovers a projector start that timed out during a restart", async (t) => {
-  // dev-review repro: the projector warmed up while Node-RED was down.
+// Fake TV, screen and projector meter: TV in standby, screen open, projector at `watts`.
+function fakeDisplayDevices(t: {after(fn: () => void): void}) {
   const realFetch = globalThis.fetch;
-  let watts = 2;
+  const devices = {watts: 2};
   globalThis.fetch = (async (url: string | URL | Request) => {
     const key = String(url instanceof Request ? url.url : url);
     const body = key.includes("sony")
       ? {result: [{status: "standby"}], id: 50}
       : key.includes("Cover.GetStatus")
         ? {current_pos: 100, state: "stopped"}
-        : {apower: watts};
+        : {apower: devices.watts};
     return new Response(JSON.stringify(body), {status: 200});
   }) as typeof fetch;
   t.after(() => {
     globalThis.fetch = realFetch;
   });
+  return devices;
+}
+
+const displayConfig = {
+  area: "lounge",
+  tvHost: "tv.invalid",
+  screenHost: "screen.invalid",
+  projectorMeterHost: "projector.invalid",
+  screenOpenPosition: 100
+};
+
+function powerToggles(node: RuntimeNode): number {
+  return (node.sent as Array<Array<Record<string, unknown> | null>>)
+    .filter((envelope) => envelope[0]?.payload === "power").length;
+}
+
+async function displayStartingProjector(t: {after(fn: () => void): void}) {
+  const devices = fakeDisplayDevices(t);
   const {Constructor} = runtime(registerDisplay, {tvPsk: "synthetic"});
-  const displayConfig = {
-    area: "lounge",
-    tvHost: "tv.invalid",
-    screenHost: "screen.invalid",
-    projectorMeterHost: "projector.invalid",
-    screenOpenPosition: 100
-  };
   const before = new Constructor(displayConfig);
   await receive<SendEnvelope>(before, {display: {kind: "intent", requestId: "display-restart", generation: 1, mode: "projector"}});
   await wait(200);
   assert.equal((savedState(before).pending as Record<string, unknown>).operation, "projector_start");
+  assert.equal(powerToggles(before), 1);
   await close(before);
+  return {Constructor, before, devices};
+}
+
+test("display adapter recovers a projector start that timed out during a restart", async (t) => {
+  // dev-review repro: the projector warmed up while Node-RED was down.
+  const {Constructor, before, devices} = await displayStartingProjector(t);
   const state = savedState(before);
   before.context().set("state", {
     ...state,
     pending: {...(state.pending as Record<string, unknown>), deadlineAt: Date.now() - 1000, nextAt: Date.now() - 1000}
   });
-  watts = 300;
+  devices.watts = 300;
 
   const after = new Constructor(displayConfig);
   t.after(() => close(after));
@@ -681,9 +699,23 @@ test("display adapter recovers a projector start that timed out during a restart
   assert.equal(recovered.phase, "ready");
   assert.equal(recovered.failure, null);
   assert.equal(recovered.blockedGeneration, null);
-  const sent = after.sent as Array<Array<Record<string, unknown> | null>>;
-  assert.equal(sent.filter((envelope) => envelope[0]?.payload === "power").length, 0);
+  assert.equal(powerToggles(after), 0);
   assert.equal(traces(after).some((entry) => entry.outcome === "failed"), false);
+});
+
+test("display adapter redeploy during warm-up toggles the projector as main does", async (t) => {
+  // Display mode keeps main's redeploy behaviour: nothing at construction, and
+  // the flow's startup re-issues the start (a known gap tracked with the projector work).
+  const {Constructor, devices} = await displayStartingProjector(t);
+  devices.watts = 5;
+
+  const after = new Constructor(displayConfig);
+  t.after(() => close(after));
+  await wait(300);
+  assert.equal(powerToggles(after), 0);
+  await receive<SendEnvelope>(after, {display: {kind: "startup"}});
+  await wait(300);
+  assert.equal(powerToggles(after), 1);
 });
 
 test("AVR adapter recovers a source change whose retries ran out during a restart", async (t) => {
