@@ -48,4 +48,27 @@
 
 <script type="text/html" data-help-name="home-room-lighting-controller">
   <p>Owns room MQTT commands, adaptive colour and brightness, manual overrides, discovery and bounded tracing.</p>
+  <h3>Control state</h3>
+  <p>Each target has one control state:</p>
+  <dl class="message-properties">
+    <dt>in-control</dt><dd>circadian lighting may style and refresh the light. This is the default.</dd>
+    <dt>overridden</dt><dd>another owner, such as an activity or a scene, holds the light. Refresh and circadian
+      changes leave it alone until that owner releases it.</dd>
+    <dt>manual</dt><dd>a person changed the light. Enabling circadian lighting returns manual lights to
+      in-control.</dd>
+  </dl>
+  <p>Switching a light off, by any source, returns it to in-control.</p>
+  <h3>Inputs</h3>
+  <dl class="message-properties">
+    <dt>lighting.owner <span class="property-type">string</span></dt>
+    <dd>on an <code>intent</code> that switches targets on, marks them overridden by this owner. With
+      <code>preserveManual: true</code>, manual lights are skipped.</dd>
+    <dt>lighting.kind = "release"</dt>
+    <dd>returns overridden <code>targets</code> (default: all) to in-control. With <code>owner</code>, only lights
+      held by that owner are released. Released lights that are on are restyled as a refresh would.</dd>
+  </dl>
+  <h3>Outputs</h3>
+  <p>On startup and whenever a target's control state changes, a retained message is sent with topic
+    <code>home/&lt;area&gt;/lighting/&lt;target&gt;/control</code> and payload
+    <code>{"state": "in-control" | "overridden" | "manual", "owner": string | null}</code>.</p>
 </script>

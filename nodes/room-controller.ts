@@ -102,7 +102,8 @@ const registerRoomController: NodeInitializer = (RED) => {
         shape: "dot",
         text: (status.circadianEnabled
           ? (status.sleeping ? "sleep" : "circadian")
-          : "manual only") + " · " + status.onCount + " on · " + status.manualCount + " manual"
+          : "manual only") + " · " + status.onCount + " on · " + status.manualCount + " manual" +
+          (status.overriddenCount ? " · " + status.overriddenCount + " overridden" : "")
       });
     }
 
