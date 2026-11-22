@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import {transitionSwitchPolicy} from "../lib/switch-policy";
 import {
   transitionRoom,
   type RoomConfig,
@@ -405,7 +406,7 @@ test("a held light ignores owner-less automation", () => {
   for (const lighting of [
     {state: "ON", source: "motion"},
     {state: "OFF", source: "motion"},
-    {state: "TOGGLE", source: "wall"},
+    {state: "TOGGLE", source: "schedule"},
     {state: "ON", source: "bedtime", values: {brightness: 40}},
     {state: "ON", source: "activity", values: {brightness: 80}, updateOnOnly: true},
     {state: "ON", source: "bedtime", values: {brightness: 5}, updateOffOnly: true}
@@ -434,6 +435,24 @@ test("a held light follows its owner, a newer owner, a person and a release", ()
   assert.equal(result.status.control.lamp, "in-control");
   assert.equal(output(result, 0).lighting_command?.target, "lamp");
   assert.equal(payload(result, 0).brightness, 254);
+});
+
+test("a wall-switch press reaches a held light like any person", () => {
+  // dev-review repro: a single press is an owner-less TOGGLE marked person: true.
+  const held = heldLamp();
+  const press = transitionSwitchPolicy(undefined, {source: "switch", payload: {state: true}}, {targets: ["lamp", "wall"], switchWindowMs: 500, switchFreshnessMs: 60000}, 0);
+  const single = transitionSwitchPolicy(press.state, {source: "switch-timer", generation: press.state.wallInput.generation, switchAt: press.state.wallInput.edgeAt}, {targets: ["lamp", "wall"], switchWindowMs: 500, switchFreshnessMs: 60000}, 600);
+  const sent = single.effects.find((effect) => effect.kind === "send");
+  assert.ok(sent && sent.kind === "send");
+  assert.equal(sent.message.lighting.person, true);
+  const result = transitionRoom(held.state, sent.message, heldConfig, later2(2000));
+  assert.deepEqual(result.outputs.filter((entry) => entry.lighting_command).map((entry) => [entry.lighting_command?.target, (entry.payload as Record<string, unknown>).state]), [["lamp", "OFF"], ["wall", "OFF"]]);
+  assert.equal(result.status.control.lamp, "in-control");
+  assert.deepEqual(ignoredHeld(result), []);
+
+  // The source alone is not a person.
+  const unmarked = heldIntent(held.state, {state: "TOGGLE", source: "wall"});
+  assert.deepEqual(ignoredHeld(unmarked), [["lamp", "film"]]);
 });
 
 test("switching a held light off at the bulb still frees it", () => {

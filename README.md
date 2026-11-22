@@ -154,6 +154,9 @@ or a newer owner who takes it over), a person (`manual: true`, an external
 command on the command topic, or a change seen at the light), or a release.
 Other intents, such as motion ON or OFF and owner-less values, leave it alone
 and are traced as `ignored held-by`; their other targets are still handled.
+The package's wall-switch policies mark presses with `person: true`. Owner-less
+intents, with or without values, reach a held light only with `manual: true` or
+`person: true`; a flow acting for a person, such as a dashboard, sets one.
 Switching a light off by its owner or a person returns it to `in-control`. On startup
 and whenever a target's state changes, the controller sends a retained message
 on its command output:

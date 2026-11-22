@@ -297,9 +297,10 @@ export function transitionMotion(
     if (startedGesture) cancelOffTimer("wall-switch");
 
     if (wallInput.gesture === "single") {
-      emitIntent(lightingIntent(config.onTargets, "TOGGLE", "wall"), "switch");
+      emitIntent(lightingIntent(config.onTargets, "TOGGLE", "wall", {person: true}), "switch");
     } else if (wallInput.gesture === "double") {
       emitIntent(lightingIntent(config.onTargets, "ON", "wall", {
+        person: true,
         manual: true,
         values: {brightness: 254}
       }), "switch");

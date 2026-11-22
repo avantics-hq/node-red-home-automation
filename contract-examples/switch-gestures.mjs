@@ -17,6 +17,7 @@ export function run() {
       targets: ["ceiling"],
       state: "ON",
       source: "wall",
+      person: true,
       manual: true,
       values: {brightness: 254}
     }

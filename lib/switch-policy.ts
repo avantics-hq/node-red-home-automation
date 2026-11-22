@@ -32,6 +32,7 @@ export interface SwitchLightingIntent {
     targets: string[];
     state: "ON" | "TOGGLE";
     source: "wall";
+    person: true;
     manual?: boolean;
     values?: {brightness: number};
   };
@@ -79,6 +80,7 @@ function intent(
       targets: [...targets],
       state,
       source: "wall",
+      person: true,
       ...(manual ? {manual: true, values: {brightness: 254}} : {})
     }
   };

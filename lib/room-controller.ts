@@ -75,6 +75,8 @@ export interface LightingEvent {
   updateOffOnly?: boolean;
   preserveManual?: boolean;
   manual?: boolean;
+  // A person asked for this (a wall-switch press); it reaches held lights.
+  person?: boolean;
   owner?: string;
   source?: string;
   refresh?: boolean;
@@ -350,9 +352,11 @@ export function transitionRoom(
     for (const targetId of targets) {
       if (!targetById[targetId]) continue;
       // A held light changes only for an owner (its own or a newer one), a
-      // person (manual: true) or a release; any other intent leaves it alone.
+      // person (manual: true or person: true) or a release; any other intent
+      // leaves it alone.
       const held = state.control[targetId];
-      if (held?.state === "overridden" && !owner && event.manual !== true) {
+      const person = event.manual === true || event.person === true;
+      if (held?.state === "overridden" && !owner && !person) {
         trace("intent", "ignored", "held-by", {target: targetId, owner: held.owner, source: event.source || "intent"});
         continue;
       }
