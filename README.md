@@ -1,6 +1,7 @@
 # Node-RED Home Automation
 
 [![CI](https://github.com/avantics-hq/node-red-home-automation/actions/workflows/ci.yml/badge.svg)](https://github.com/avantics-hq/node-red-home-automation/actions/workflows/ci.yml)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-support-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/avantics)
 
 State-aware Node-RED controllers for reliable lighting and home-theatre automation.
 
