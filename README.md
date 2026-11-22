@@ -38,10 +38,10 @@ flowchart LR
     CON[theatre-state-contract]
     ACT[theatre-activity-controller]
     ROUTE{{your flow: route by target}}
+    AL[activity-lighting-controller]
   end
   subgraph Eq[Theatre equipment]
     EQ[avr / display-mode /<br/>source-capability /<br/>backlighting controllers]
-    AL[activity-lighting-controller]
   end
   LIGHTS[(Lights, e.g. Zigbee2MQTT)]
   DEV[(Device transports)]
@@ -67,9 +67,8 @@ flowchart LR
   AL -- held-light intents --> ROOM
 ```
 
-Every controller inside works the same way: it keeps the desired and the observed
-state, sends semantic commands, and reports done only when fresh observations
-confirm them.
+Each controller keeps the desired and the observed state, sends semantic
+commands, and reports done only when fresh observations confirm them.
 
 ## Included nodes
 
