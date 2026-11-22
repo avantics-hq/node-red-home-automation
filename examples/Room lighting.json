@@ -1,0 +1,214 @@
+[
+  {
+    "id": "example-room-lighting-room-lighting-example",
+    "type": "comment",
+    "name": "Room lighting example",
+    "info": "Motion and illuminance feed occupancy fusion and the motion policy; a wall switch feeds the switch policy. Both send lighting intents to the room controller, which owns the light's commands.\n\nReplace the inject nodes with your sensors and wire the room controller's output to your MQTT broker. Set the room's latitude and longitude before deploying.",
+    "x": 170,
+    "y": 40,
+    "wires": []
+  },
+  {
+    "id": "example-room-lighting-motion-detected",
+    "type": "inject",
+    "name": "motion detected",
+    "props": [
+      {
+        "p": "payload",
+        "v": "{\"motion\":true}",
+        "vt": "json"
+      },
+      {
+        "p": "source",
+        "v": "motion",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 150,
+    "y": 100,
+    "wires": [
+      [
+        "example-room-lighting-occupancy-fusion"
+      ]
+    ]
+  },
+  {
+    "id": "example-room-lighting-illuminance-5-lx",
+    "type": "inject",
+    "name": "illuminance 5 lx",
+    "props": [
+      {
+        "p": "payload",
+        "v": "5",
+        "vt": "num"
+      },
+      {
+        "p": "source",
+        "v": "illuminance",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 150,
+    "y": 160,
+    "wires": [
+      [
+        "example-room-lighting-motion-lighting-policy"
+      ]
+    ]
+  },
+  {
+    "id": "example-room-lighting-wall-switch-edge",
+    "type": "inject",
+    "name": "wall switch edge",
+    "props": [
+      {
+        "p": "payload",
+        "v": "{\"state\":true}",
+        "vt": "json"
+      },
+      {
+        "p": "source",
+        "v": "switch",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 150,
+    "y": 220,
+    "wires": [
+      [
+        "example-room-lighting-switch-lighting-policy"
+      ]
+    ]
+  },
+  {
+    "id": "example-room-lighting-room-startup",
+    "type": "inject",
+    "name": "room startup",
+    "props": [
+      {
+        "p": "lighting",
+        "v": "{\"kind\":\"startup\"}",
+        "vt": "json"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 150,
+    "y": 280,
+    "wires": [
+      [
+        "example-room-lighting-room-lighting-controller"
+      ]
+    ]
+  },
+  {
+    "id": "example-room-lighting-occupancy-fusion",
+    "type": "home-occupancy-fusion",
+    "name": "",
+    "area": "room",
+    "presenceMode": "none",
+    "x": 380,
+    "y": 100,
+    "wires": [
+      [
+        "example-room-lighting-motion-lighting-policy"
+      ]
+    ]
+  },
+  {
+    "id": "example-room-lighting-motion-lighting-policy",
+    "type": "home-motion-lighting-policy",
+    "name": "",
+    "area": "room",
+    "onTargets": "[\"main\"]",
+    "offTargets": "[\"main\"]",
+    "defaultDelaySeconds": 120,
+    "defaultIlluminanceCutoff": 10,
+    "switchWindowMs": 500,
+    "switchFreshnessSeconds": 3600,
+    "x": 620,
+    "y": 140,
+    "wires": [
+      [
+        "example-room-lighting-room-lighting-controller"
+      ]
+    ]
+  },
+  {
+    "id": "example-room-lighting-switch-lighting-policy",
+    "type": "home-switch-lighting-policy",
+    "name": "",
+    "area": "room",
+    "targets": "[\"main\"]",
+    "switchWindowMs": 500,
+    "switchFreshnessSeconds": 3600,
+    "x": 380,
+    "y": 220,
+    "wires": [
+      [
+        "example-room-lighting-room-lighting-controller"
+      ]
+    ]
+  },
+  {
+    "id": "example-room-lighting-room-lighting-controller",
+    "type": "home-room-lighting-controller",
+    "name": "",
+    "area": "room",
+    "displayName": "Room",
+    "targets": "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]",
+    "latitude": 0,
+    "longitude": 0,
+    "minBrightnessPct": 1,
+    "maxBrightnessPct": 100,
+    "minColorTempKelvin": 2000,
+    "maxColorTempKelvin": 5500,
+    "sleepBrightnessPct": 1,
+    "sleepColorTempKelvin": 1000,
+    "initialTransitionSeconds": 1,
+    "refreshTransitionSeconds": 45,
+    "refreshSeconds": 90,
+    "initialSleep": false,
+    "x": 880,
+    "y": 180,
+    "wires": [
+      [
+        "example-room-lighting-room-commands"
+      ]
+    ]
+  },
+  {
+    "id": "example-room-lighting-room-commands",
+    "type": "debug",
+    "name": "room commands",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 1100,
+    "y": 180,
+    "wires": []
+  }
+]

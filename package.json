@@ -23,13 +23,14 @@
     "dist/lib",
     "dist/nodes",
     "examples",
+    "contract-examples",
     "!dist/**/*.js.map"
   ],
   "scripts": {
     "clean": "node scripts/clean.mjs",
     "build": "npm run clean && tsc && node scripts/copy-node-html.mjs",
-    "test": "npm run build && node --test dist/test/*.test.js && node examples/run.mjs --verify",
-    "examples": "npm run build && node examples/run.mjs",
+    "test": "npm run build && node --test dist/test/*.test.js && node contract-examples/run.mjs --verify",
+    "examples": "npm run build && node contract-examples/run.mjs",
     "scan:public": "node scripts/check-public.mjs",
     "hooks:install": "git config core.hooksPath .githooks",
     "prepack": "npm run build"
