@@ -14,8 +14,8 @@ npm run hooks:install
 ```
 
 Push the topic branch and open a pull request. GitHub may merge it only after
-the required `test` job passes. Pages deployment runs after the accepted commit
-reaches `main`; it is not a second acceptance gate.
+the required `test` and `private-boundary` checks pass. Pages deployment runs
+after the accepted commit reaches `main`; it is not a second acceptance gate.
 
 After GitHub reports the pull request merged, remove the worktree and its local
 branch. Squash merging does not make the topic commit an ancestor of `main`, so
