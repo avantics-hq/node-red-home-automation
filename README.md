@@ -41,8 +41,10 @@ flowchart LR
     AL[activity-lighting-controller]
   end
   subgraph Eq[Theatre equipment]
-    EQ[avr / display-mode /<br/>source-capability /<br/>backlighting controllers]
+    EQS[source-capability /<br/>backlighting controllers]
+    EQX[avr / display-mode<br/>controllers]
   end
+  TRANS{{your flow: translate<br/>to target state}}
   LIGHTS[(Lights, e.g. Zigbee2MQTT)]
   DEV[(Device transports)]
   STATE[(Retained theatre state<br/>and HA discovery)]
@@ -59,10 +61,14 @@ flowchart LR
   ACT -- state snapshot --> CON
   CON --> STATE
   ACT -- theatreCommand --> ROUTE
-  ROUTE --> EQ
+  ROUTE --> EQS
+  ROUTE --> EQX
   ROUTE --> AL
-  EQ -- device commands --> DEV
-  EQ -. target state .-> ACT
+  EQS -- device commands --> DEV
+  EQX -- device commands --> DEV
+  EQS -. target state .-> ACT
+  EQX -. avr / display events .-> TRANS
+  TRANS -. target state .-> ACT
   AL -. target state .-> ACT
   AL -- held-light intents --> ROOM
 ```
@@ -110,8 +116,22 @@ activity controller plans each target and sends `msg.theatreCommand` messages.
 Your flow routes each command by its `target` (`avr`, `display`, `source`,
 `lighting`, `backlighting`) to the matching controller's input
 (`msg.avr`, `msg.display`, `msg.sourceCapability`, `msg.activityLighting`,
-`msg.backlighting`), and wires each controller's output 2 back to the activity
-controller. Activity lighting feeds the room lighting controller.
+`msg.backlighting`). The activity controller learns each target's progress from
+`msg.theatre = {kind: "target_state", target, generation, status, observedAt}`
+messages:
+
+- Source capability, backlighting and activity lighting emit these on output 2:
+  wire it straight back to the activity controller.
+- The AVR and display controllers emit their own `msg.avr` and `msg.display`
+  events on output 2. Your flow translates them into `target_state` for the
+  `avr` and `display` targets (with the request's `generation` and a `status`
+  such as `ready`, `transitioning` or `failed`).
+- The display controller has no `refresh` event. Route a display refresh as
+  `msg.display = {kind: "startup"}`, which re-queries the TV, screen and
+  projector, or don't route it. A startup during projector warm-up can repeat
+  the projector's power toggle.
+
+Activity lighting feeds the room lighting controller.
 Example: [`Home theatre activity.json`](examples/Home%20theatre%20activity.json).
 
 | Node | Purpose |
