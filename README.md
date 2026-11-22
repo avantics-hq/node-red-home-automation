@@ -22,30 +22,103 @@ Most home automations translate an event directly into a command. This package a
 
 ```mermaid
 flowchart LR
-  E[Events and requests] --> N[Node-RED adapter]
-  N --> R[Deterministic reducer]
-  R --> C[Semantic commands]
-  C --> D[Device or transport]
-  D --> O[Observed state]
-  O --> N
-  R --> S[Status and trace events]
+  subgraph In[Inputs]
+    SENS[Motion and presence sensors]
+    LUX[Illuminance]
+    WALL[Wall switches]
+    REQ[Theatre request<br/>MQTT .../theatre/request]
+  end
+  subgraph Room[Room lighting]
+    OCC[occupancy-fusion]
+    MOT[motion-lighting-policy]
+    SW[switch-lighting-policy]
+    ROOM[room-lighting-controller]
+  end
+  subgraph Act[Theatre activities]
+    CON[theatre-state-contract]
+    ACT[theatre-activity-controller]
+    ROUTE{{your flow: route by target}}
+    AL[activity-lighting-controller]
+  end
+  subgraph Eq[Theatre equipment]
+    EQ[avr / display-mode /<br/>source-capability /<br/>backlighting controllers]
+  end
+  LIGHTS[(Lights, e.g. Zigbee2MQTT)]
+  DEV[(Device transports)]
+  STATE[(Retained theatre state<br/>and HA discovery)]
+
+  SENS --> OCC --> MOT
+  LUX --> MOT
+  WALL --> SW
+  MOT --> ROOM
+  SW --> ROOM
+  ROOM -- set commands --> LIGHTS
+  LIGHTS -. observed state .-> ROOM
+  REQ --> CON
+  CON -- activity intent --> ACT
+  ACT -- state snapshot --> CON
+  CON --> STATE
+  ACT -- theatreCommand --> ROUTE
+  ROUTE --> EQ
+  ROUTE --> AL
+  EQ -- device commands --> DEV
+  EQ -. target state .-> ACT
+  AL -. target state .-> ACT
+  AL -- held-light intents --> ROOM
 ```
 
+Each controller keeps the desired and the observed state, sends semantic
+commands, and reports done only when fresh observations confirm them.
+
 ## Included nodes
+
+The nodes come in three groups. Each group has an importable example flow
+(**Import → Examples** in the Node-RED editor).
+
+### Room lighting
+
+Motion, presence, illuminance and wall switches drive one room's lights, with
+circadian styling and manual ownership. Wire occupancy fusion into the motion
+policy, and the motion and switch policies into the room controller.
+Example: [`Room lighting.json`](examples/Room%20lighting.json).
 
 | Node | Purpose |
 |---|---|
 | `home-occupancy-fusion` | Combines PIR motion with optional presence sensing. |
 | `home-motion-lighting-policy` | Converts occupancy and illuminance into lighting intent with observable wall-input baselines. |
 | `home-switch-lighting-policy` | Converts raw edges or pre-classified button actions into lighting intent while exposing input freshness and availability. |
-| `home-room-lighting-controller` | Owns adaptive room commands, manual overrides, and lighting state. |
+| `home-room-lighting-controller` | Owns the room's light commands, adaptive styling, manual and held lights, and lighting state. |
+
+### Home theatre equipment
+
+Each controller owns one kind of device. It accepts a generation-scoped intent,
+sends commands for your device transport on output 1, and reports target state
+on output 2. Example: [`Home theatre equipment.json`](examples/Home%20theatre%20equipment.json).
+
+| Node | Purpose |
+|---|---|
 | `home-avr-controller` | Owns AVR power, zones, source selection and bounded absolute or relative volume from observed state. |
 | `home-display-mode-controller` | Coordinates TV, projector, and screen transitions. |
 | `home-source-capability-controller` | Gates source readiness on fresh availability, active-device, application or playback evidence. |
-| `home-activity-lighting-controller` | Applies activity styles without taking room power or manual ownership. |
 | `home-backlighting-controller` | Owns TV-backlight power with observation-gated confirmation. |
-| `home-theatre-activity-controller` | Owns latest-request-wins activity state and aggregates target evidence. |
+
+### Theatre activities
+
+One request, such as "tv" or "off", drives every target. The state contract
+turns MQTT requests into activity intents and publishes retained state; the
+activity controller plans each target and sends `msg.theatreCommand` messages.
+Your flow routes each command by its `target` (`avr`, `display`, `source`,
+`lighting`, `backlighting`) to the matching controller's input
+(`msg.avr`, `msg.display`, `msg.sourceCapability`, `msg.activityLighting`,
+`msg.backlighting`), and wires each controller's output 2 back to the activity
+controller. Activity lighting feeds the room lighting controller.
+Example: [`Home theatre activity.json`](examples/Home%20theatre%20activity.json).
+
+| Node | Purpose |
+|---|---|
 | `home-theatre-state-contract` | Bridges non-retained activity requests to retained MQTT truth and HA discovery. |
+| `home-theatre-activity-controller` | Owns latest-request-wins activity state and aggregates target evidence. |
+| `home-activity-lighting-controller` | Applies activity styles to room lights and holds them while the activity is active. |
 
 Pure TypeScript policy modules live in `lib/`; thin Node-RED runtime and editor adapters live in `nodes/`.
 
