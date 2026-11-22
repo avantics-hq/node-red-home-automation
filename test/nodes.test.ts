@@ -808,18 +808,23 @@ test("wired contract and activity controller never lose a request to a recovery 
   const recovery = await receive<SendEnvelope>(controller, {theatre: {kind: "recover", reason: "startup", observations: {}}});
   const snapshots = output(recovery, 1);
 
-  const requested = await receive<SendEnvelope>(contract, {topic: "home/room/theatre/request", payload: {requestId: "user-request-1", activity: "tv"}});
-  const intents = output(requested, 0);
-  assert.equal(intents.length, 1);
-  let answer: SendEnvelope[] = [];
-  for (const intent of intents) answer = await receive<SendEnvelope>(controller, intent as Record<string, unknown>);
-  assert.equal(output(answer, 1).some((message) => message.theatre?.kind === "rejected"), false);
+  // Two back-to-back requests reach the contract before any snapshot does.
+  const first = await receive<SendEnvelope>(contract, {topic: "home/room/theatre/request", payload: {requestId: "user-request-1", activity: "tv"}});
+  const second = await receive<SendEnvelope>(contract, {topic: "home/room/theatre/request", payload: {requestId: "user-request-2", activity: "off"}});
+  const intents = [...output(first, 0), ...output(second, 0)];
+  assert.equal(intents.length, 2);
+  const states: Array<Record<string, unknown>> = [];
+  for (const intent of intents) {
+    const answer = await receive<SendEnvelope>(controller, intent as Record<string, unknown>);
+    assert.equal(output(answer, 1).some((message) => message.theatre?.kind === "rejected"), false);
+    states.push(...output(answer, 1) as Array<Record<string, unknown>>);
+  }
   const state = controller.context().get("state") as {desired: {requestId: string; activity: string; generation: number}};
-  assert.equal(state.desired.requestId, "user-request-1");
-  assert.equal(state.desired.activity, "tv");
+  assert.equal(state.desired.requestId, "user-request-2");
+  assert.equal(state.desired.activity, "off");
 
-  // The late recovery snapshots and the new state then reach the contract in order.
-  for (const message of [...snapshots, ...output(answer, 1)]) await receive<SendEnvelope>(contract, message as Record<string, unknown>);
+  // The late recovery snapshots and the new states then reach the contract in order.
+  for (const message of [...snapshots, ...states]) await receive<SendEnvelope>(contract, message as Record<string, unknown>);
   const contractState = contract.context().get("state") as {generation: number};
   assert.equal(contractState.generation, state.desired.generation);
 });

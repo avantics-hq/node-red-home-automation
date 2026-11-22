@@ -139,10 +139,10 @@ export interface TheatreState {
   desired: TheatreDesired | null;
   currentActivity: string;
   generation: number;
-  // The highest generation given to a request from outside (not recovery).
-  // A new request numbered above it is never lost to a generation the
-  // controller used meanwhile; it is given the next free one instead.
-  lastRequestGeneration: number;
+  // The highest generation proposed by a request from outside (not
+  // recovery). A new request proposing more than that is never lost to a
+  // generation the controller used meanwhile; it gets the next free one.
+  lastProposedGeneration: number;
   phase: string;
   targets: Record<TheatreTarget, TargetState | null>;
   refreshPending: Record<TheatreTarget, RefreshPending | null>;
@@ -337,8 +337,8 @@ export function createTheatreState(
       ? saved.currentActivity
       : "unknown",
     generation: Number.isInteger(saved.generation) && (saved.generation ?? -1) >= 0 ? saved.generation! : 0,
-    lastRequestGeneration: Number.isInteger(saved.lastRequestGeneration)
-      ? saved.lastRequestGeneration!
+    lastProposedGeneration: Number.isInteger(saved.lastProposedGeneration)
+      ? saved.lastProposedGeneration!
       : savedDesired && !savedDesired.requestId.startsWith("recovery-") && Number.isInteger(savedDesired.generation)
         ? savedDesired.generation
         : 0,
@@ -796,7 +796,7 @@ export function transitionTheatre(
     let generation = event.generation;
     const taken = generation < state.generation || (generation === state.generation && state.desired !== null);
     if (taken && !internal && state.desired?.requestId !== event.requestId &&
-      event.generation > state.lastRequestGeneration) {
+      event.generation > state.lastProposedGeneration) {
       generation = state.generation + 1;
       trace("intent", "reassigned", "generation-taken", {requestId: event.requestId, proposed: event.generation, assigned: generation});
     } else if (event.generation < state.generation) {
@@ -837,7 +837,7 @@ export function transitionTheatre(
       requestedAt
     };
     state.generation = generation;
-    if (!internal) state.lastRequestGeneration = Math.max(state.lastRequestGeneration, generation);
+    if (!internal) state.lastProposedGeneration = Math.max(state.lastProposedGeneration, event.generation);
     state.phase = "preparing";
     state.currentActivity = "unknown";
     state.targets = emptyTargets();

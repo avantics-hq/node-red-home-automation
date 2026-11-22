@@ -651,6 +651,13 @@ test("a request is never lost to a generation the controller used for recovery",
   assert.equal(result.traces.some((entry) => entry.outcome === "reassigned"), true);
   assert.equal(result.commands.every((command) => command.generation === 2), true);
 
+  // Back-to-back requests before any snapshot syncs the contract: it proposes
+  // 2 for the next one, which is now taken too, and must not be lost.
+  const quick = request(result.state, "off", 2, 2.1, "user-request-quick");
+  assert.equal(quick.events.some(({theatre}) => theatre.kind === "rejected"), false);
+  assert.equal(quick.state.desired?.requestId, "user-request-quick");
+  assert.equal(quick.state.generation, 3);
+
   // The contract learns 2 from the snapshot and proposes 3 next: used as given.
   result = request(result.state, "off", 3, 3, "user-request-2");
   assert.equal(result.state.generation, 3);
