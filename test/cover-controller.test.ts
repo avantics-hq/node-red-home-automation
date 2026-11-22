@@ -87,7 +87,8 @@ test("observations older than the command or out of order cannot confirm", () =>
   assert.equal(result.traces.at(-1)?.reason, "stale-observation");
 
   result = observe(result.state, 50, 20, "closing");
-  result = observe(result.state, 0, 15);
+  // A report observed at 15 s that arrives after the 20 s one.
+  result = apply(result.state, {kind: "observed", position: 0, observedAt: at(15).toISOString()}, 21);
   assert.equal(result.state.phase, "moving");
   assert.equal(result.state.observed?.position, 50);
   assert.equal(result.traces.at(-1)?.reason, "out-of-order");

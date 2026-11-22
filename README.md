@@ -174,7 +174,9 @@ Send source `switch-availability` to invalidate a disconnected input baseline;
 the first recovered observation then re-baselines without a gesture. An
 observation timestamp may be supplied as `msg.observedAt` or
 `msg.payload.observedAt`; otherwise only live, non-retained observations receive
-the current timestamp.
+the current timestamp. Across all controllers, an observation time more than one
+second ahead of Node-RED's clock is treated as observed on receipt and traced as
+`clock-skew`, so one device with a wrong clock cannot hold back later reports.
 
 Unsolicited display, AVR, source, and backlighting changes latch manual
 ownership instead of issuing corrective commands. A newer explicit activity

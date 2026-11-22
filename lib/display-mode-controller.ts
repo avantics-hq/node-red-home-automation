@@ -1,5 +1,7 @@
 "use strict";
 
+import {boundObservedAt, parseObservedAt} from "./observation-time";
+
 export type DisplayMode = "off" | "tv" | "projector";
 export type DisplayDevice = "tv" | "screen" | "projector";
 
@@ -464,7 +466,13 @@ export function transitionDisplay(
       trace("observation", "ignored", "stale-generation", {device, generation: event.generation});
       return;
     }
-    const observedAt = event.observedAt || iso(now);
+    // No ordering check here (B8); a future time still counts as now.
+    const reportedMs = event.observedAt ? parseObservedAt(event.observedAt) : null;
+    const bounded = reportedMs === null ? null : boundObservedAt(event.observedAt!, reportedMs, now.getTime());
+    if (bounded?.skewed) {
+      trace("observation", "adjusted", "clock-skew", {device, reported: event.observedAt, usedAt: bounded.observedAt});
+    }
+    const observedAt = bounded ? bounded.observedAt : event.observedAt || iso(now);
     const source = event.source || "unknown";
     if (device === "tv") {
       if (event.power !== "on" && event.power !== "standby") throw new Error("invalid TV power observation");

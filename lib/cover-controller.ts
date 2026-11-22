@@ -1,5 +1,7 @@
 "use strict";
 
+import {boundObservedAt, isOutOfOrder, parseObservedAt} from "./observation-time";
+
 // Positions inside the reducer always mean 0 = closed, 100 = open. With
 // `invert`, device positions are converted on the way in (observations) and
 // on the way out (set_position commands), so the adapter never needs to know.
@@ -283,17 +285,21 @@ export function transitionCover(
     if (observation.motion !== undefined && !Object.hasOwn(MOTIONS, observation.motion)) {
       throw new Error("unknown observed cover motion");
     }
-    const observedAt = Date.parse(observation.observedAt || "");
-    if (!Number.isFinite(observedAt)) throw new Error("cover observedAt must be an ISO timestamp");
-    const previousAt = Date.parse(state.observed?.observedAt || "");
-    if (Number.isFinite(previousAt) && observedAt < previousAt) {
+    const parsedAt = parseObservedAt(observation.observedAt);
+    if (parsedAt === null || typeof observation.observedAt !== "string") {
+      throw new Error("cover observedAt must be an ISO timestamp");
+    }
+    const bounded = boundObservedAt(observation.observedAt, parsedAt, nowMs);
+    if (bounded.skewed) trace("observation", "adjusted", "clock-skew", {reported: observation.observedAt, usedAt: bounded.observedAt});
+    if (isOutOfOrder(bounded.ms, state.observed?.observedAt, nowMs)) {
       trace("observation", "ignored", "out-of-order");
       return;
     }
+    const observedAt = bounded.ms;
     const position = config.invert ? 100 - devicePosition : devicePosition;
     const motion = observation.motion ?? null;
     const previous = state.observed;
-    state.observed = {position, motion, observedAt: observation.observedAt};
+    state.observed = {position, motion, observedAt: bounded.observedAt};
     if (!state.desired) return;
 
     const pending = state.pending;

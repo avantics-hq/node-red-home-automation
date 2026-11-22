@@ -1,5 +1,6 @@
 "use strict";
 
+import {boundObservedAt, isOutOfOrder, parseObservedAt} from "./observation-time";
 import type {LightingEvent} from "./room-controller";
 
 const PROFILE_NAME = /^[a-z][a-z0-9_-]*$/;
@@ -395,8 +396,10 @@ export function transitionActivityLighting(
       throw new Error("activity lighting observation generation must be a positive integer");
     }
     if (!TARGET_NAME.test(observation.target)) throw new Error("invalid activity lighting target");
-    const observedAt = Date.parse(observation.observedAt || "");
-    if (!Number.isFinite(observedAt)) throw new Error("activity lighting observedAt must be an ISO timestamp");
+    const parsedAt = parseObservedAt(observation.observedAt);
+    if (parsedAt === null || typeof observation.observedAt !== "string") {
+      throw new Error("activity lighting observedAt must be an ISO timestamp");
+    }
     if (!state.desired || observation.generation !== state.generation) {
       trace("observation", "ignored", "stale-generation");
       return;
@@ -406,12 +409,13 @@ export function transitionActivityLighting(
       trace("observation", "ignored", "not-profile-target", {target: observation.target});
       return;
     }
-    if (observedAt < Date.parse(state.desired.requestedAt)) {
+    const bounded = boundObservedAt(observation.observedAt, parsedAt, nowMs);
+    if (bounded.skewed) trace("observation", "adjusted", "clock-skew", {reported: observation.observedAt, usedAt: bounded.observedAt});
+    if (bounded.ms < Date.parse(state.desired.requestedAt)) {
       trace("observation", "ignored", "stale-observation", {target: observation.target});
       return;
     }
-    const previousAt = Date.parse(state.observed[observation.target]?.observedAt || "");
-    if (Number.isFinite(previousAt) && observedAt < previousAt) {
+    if (isOutOfOrder(bounded.ms, state.observed[observation.target]?.observedAt, nowMs)) {
       trace("observation", "ignored", "out-of-order", {target: observation.target});
       return;
     }
@@ -421,7 +425,7 @@ export function transitionActivityLighting(
       manual: observation.manual === true,
       available: observation.available !== false,
       values: observation.values && typeof observation.values === "object" ? {...observation.values} : {},
-      observedAt: observation.observedAt
+      observedAt: bounded.observedAt
     };
     trace("observation", "accepted", null, {target: observation.target});
     reconcile();
