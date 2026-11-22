@@ -126,10 +126,9 @@ messages:
   events on output 2. Your flow translates them into `target_state` for the
   `avr` and `display` targets (with the request's `generation` and a `status`
   such as `ready`, `transitioning` or `failed`).
-- The display controller has no `refresh` event. Route a display refresh as
-  `msg.display = {kind: "startup"}`, which re-queries the TV, screen and
-  projector, or don't route it. A startup during projector warm-up can repeat
-  the projector's power toggle.
+- The display controller has no `refresh` event: don't route display refreshes
+  to it. Until it reports target state itself, the display target is confirmed
+  only by your flow's translation of its events.
 
 Activity lighting feeds the room lighting controller.
 Example: [`Home theatre activity.json`](examples/Home%20theatre%20activity.json).
