@@ -109,6 +109,47 @@ display, AVR, source, and backlighting evidence matches exactly one configured
 profile; missing or ambiguous startup evidence invokes the configured Off
 activity.
 
+## Room light control
+
+The room lighting controller gives each target one control state:
+
+- `in-control`: circadian lighting may style and refresh the light (the default).
+- `overridden`: another owner, such as an activity or a scene, holds the light;
+  refresh and circadian changes leave it alone until it is released.
+- `manual`: a person changed the light.
+
+Add `owner` to an intent to override the targets it switches on. With
+`preserveManual: true`, manual lights are skipped:
+
+```js
+msg.lighting = {
+  kind: "intent",
+  targets: ["wall", "lamp"],
+  state: "ON",
+  source: "activity",
+  owner: "theatre",
+  values: {brightness: 64, color_temp: 400},
+  preserveManual: true
+};
+```
+
+Release overridden targets (default: all; with `owner`, only that owner's
+lights). Released lights that are on are restyled as a refresh would:
+
+```js
+msg.lighting = {kind: "release", targets: ["wall", "lamp"], owner: "theatre"};
+```
+
+Switching a light off, from any source, returns it to `in-control`. On startup
+and whenever a target's state changes, the controller sends a retained message
+on its command output:
+
+```js
+{topic: "home/<area>/lighting/<target>/control", payload: {state: "overridden", owner: "theatre"}, retain: true}
+```
+
+Flows that filter that output by topic must pass the `/control` topics through.
+
 ## Receiver volume ownership
 
 Send semantic requests to the AVR controller rather than publishing protocol

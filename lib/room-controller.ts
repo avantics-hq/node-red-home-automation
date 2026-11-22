@@ -50,10 +50,16 @@ export interface ExpectedCommand {
   echoed?: boolean;
 }
 
+// Who controls a light. A target with no entry is "in-control": circadian may
+// style and refresh it. "overridden": another owner (an activity, a scene)
+// holds it until released. "manual": a person changed it.
+export type TargetControlState = "in-control" | "overridden" | "manual";
+export type TargetControl = {state: "manual"} | {state: "overridden"; owner: string};
+
 export interface RoomState {
   observed: Record<string, RoomObservation>;
   desired: Record<string, boolean>;
-  manual: Record<string, boolean>;
+  control: Record<string, TargetControl>;
   expected: Record<string, ExpectedCommand[]>;
   circadianEnabled: boolean;
   sleeping: boolean;
@@ -69,6 +75,7 @@ export interface LightingEvent {
   updateOffOnly?: boolean;
   preserveManual?: boolean;
   manual?: boolean;
+  owner?: string;
   source?: string;
   refresh?: boolean;
   retained?: boolean;
@@ -111,14 +118,24 @@ export function fingerprint(payload: unknown): string {
   return JSON.stringify(stable(payload));
 }
 
+function savedControl(saved: Partial<RoomState> & {manual?: Record<string, boolean>}): Record<string, TargetControl> {
+  if (saved.control) {
+    return Object.fromEntries(Object.entries(saved.control).map(([target, entry]) => [target, {...entry}]));
+  }
+  // State saved before control states existed: manual: true means manual.
+  return Object.fromEntries(Object.entries(saved.manual || {})
+    .filter(([, manual]) => manual === true)
+    .map(([target]) => [target, {state: "manual" as const}]));
+}
+
 export function createRoomState(
   config: RoomConfig,
-  saved: Partial<RoomState> = {}
+  saved: Partial<RoomState> & {manual?: Record<string, boolean>} = {}
 ): RoomState {
   return {
     observed: {...(saved.observed || {})},
     desired: {...(saved.desired || {})},
-    manual: {...(saved.manual || {})},
+    control: savedControl(saved),
     expected: Object.fromEntries(
       Object.entries(saved.expected || {}).map(([target, entries]) => [target, entries.map((entry) => ({...entry}))])
     ),
@@ -205,6 +222,35 @@ export function transitionRoom(
     return config.targets.find((target) => target[field] === topic);
   }
 
+  const controlChanged = new Set<string>();
+
+  function controlOf(targetId: string): TargetControlState {
+    return state.control[targetId]?.state ?? "in-control";
+  }
+
+  function setControl(targetId: string, next: TargetControl | null, reason: string) {
+    const previous = state.control[targetId] ?? null;
+    if (JSON.stringify(previous) === JSON.stringify(next)) return;
+    if (next) state.control[targetId] = next;
+    else delete state.control[targetId];
+    controlChanged.add(targetId);
+    trace("control", "changed", reason, {
+      target: targetId,
+      state: next?.state ?? "in-control",
+      owner: next?.state === "overridden" ? next.owner : null,
+      previous: previous?.state ?? "in-control"
+    });
+  }
+
+  function controlMessage(targetId: string): RoomOutput {
+    const entry = state.control[targetId];
+    return {
+      topic: "home/" + config.area + "/lighting/" + targetId + "/control",
+      payload: {state: entry?.state ?? "in-control", owner: entry?.state === "overridden" ? entry.owner : null},
+      retain: true
+    };
+  }
+
   function intendedOn(targetId: string): boolean {
     if (Object.hasOwn(state.desired, targetId)) return state.desired[targetId] === true;
     return state.observed[targetId]?.on === true;
@@ -281,7 +327,7 @@ export function transitionRoom(
     if (!state.circadianEnabled) return [];
     const commands: Array<RoomOutput | null> = [];
     for (const target of config.targets) {
-      if (!intendedOn(target.id) || state.manual[target.id] === true) continue;
+      if (!intendedOn(target.id) || controlOf(target.id) !== "in-control") continue;
       commands.push(command(
         target.id,
         adaptivePayload("ON", true, state.sleeping, now, config),
@@ -299,6 +345,7 @@ export function transitionRoom(
     if (!["ON", "OFF", "TOGGLE"].includes(requestedState)) return [];
     const commands: Array<RoomOutput | null> = [];
     const manualValues = event.values && typeof event.values === "object" ? event.values : null;
+    const owner = typeof event.owner === "string" && event.owner ? event.owner : null;
 
     for (const targetId of targets) {
       if (!targetById[targetId]) continue;
@@ -306,10 +353,14 @@ export function transitionRoom(
       const resolvedState = requestedState === "TOGGLE" ? (wasOn ? "OFF" : "ON") : requestedState;
       if (event.updateOnOnly === true && !wasOn) continue;
       if (event.updateOffOnly === true && wasOn) continue;
-      if (event.preserveManual === true && state.manual[targetId] === true) continue;
-      if (resolvedState === "OFF") state.manual[targetId] = false;
-      if (event.manual === true || (manualValues && event.source !== "activity")) {
-        state.manual[targetId] = true;
+      if (event.preserveManual === true && controlOf(targetId) === "manual") continue;
+      if (resolvedState === "OFF") {
+        // An off light has no style to protect: it returns to the room controller.
+        setControl(targetId, null, "off");
+      } else if (owner) {
+        setControl(targetId, {state: "overridden", owner}, "owner-intent");
+      } else if (event.manual === true || (manualValues && event.source !== "activity")) {
+        setControl(targetId, {state: "manual"}, "manual-intent");
       }
 
       let payload: Record<string, unknown>;
@@ -320,7 +371,7 @@ export function transitionRoom(
         if (!Object.hasOwn(payload, "transition")) {
           payload.transition = config.initialTransitionSeconds;
         }
-      } else if (state.circadianEnabled && state.manual[targetId] !== true) {
+      } else if (state.circadianEnabled && controlOf(targetId) === "in-control") {
         payload = adaptivePayload("ON", event.refresh === true, state.sleeping, now, config);
       } else {
         payload = {state: "ON"};
@@ -334,6 +385,7 @@ export function transitionRoom(
   const event: LightingEvent = msg.lighting || {};
   if (event.kind === "startup") {
     outputs.push(...discoveryMessages());
+    for (const target of config.targets) controlChanged.add(target.id);
   } else if (event.kind === "observed") {
     const target = event.target ? targetById[event.target] : targetForTopic(msg.topic, "stateTopic");
     const parsed = parsePayload(msg.payload);
@@ -358,7 +410,7 @@ export function transitionRoom(
       } else {
         // A change the controller didn't cause becomes the intended state.
         state.desired[target.id] = nextOn;
-        if (!nextOn) state.manual[target.id] = false;
+        if (!nextOn) setControl(target.id, null, "observed-off");
       }
     }
   } else if (event.kind === "command-observed") {
@@ -383,12 +435,12 @@ export function transitionRoom(
         ];
         if (requestedState === "OFF") {
           state.desired[target.id] = false;
-          state.manual[target.id] = false;
+          setControl(target.id, null, "external-off");
         } else if (requestedState === "ON") {
           state.desired[target.id] = true;
           if (fields.some((field) => Object.hasOwn(payload, field))) {
-            state.manual[target.id] = true;
-          } else if (state.circadianEnabled && state.manual[target.id] !== true) {
+            setControl(target.id, {state: "manual"}, "external-values");
+          } else if (state.circadianEnabled && controlOf(target.id) === "in-control") {
             const corrective = command(
               target.id,
               adaptivePayload("ON", false, state.sleeping, now, config),
@@ -402,7 +454,7 @@ export function transitionRoom(
         trace("external-command", "observed", null, {
           target: target.id,
           state: requestedState || "UNKNOWN",
-          manual: state.manual[target.id] === true
+          control: controlOf(target.id)
         });
       }
     }
@@ -418,7 +470,10 @@ export function transitionRoom(
       retain: true
     });
     if (state.circadianEnabled) {
-      state.manual = {};
+      // Enabling circadian takes back manual lights; other owners keep theirs.
+      for (const target of config.targets) {
+        if (controlOf(target.id) === "manual") setControl(target.id, null, "circadian-enabled");
+      }
       outputs.push(...refreshCommands("circadian-enabled"));
     }
   } else if (event.kind === "sleep") {
@@ -428,6 +483,19 @@ export function transitionRoom(
     outputs.push(...refreshCommands("sleep-policy"));
   } else if (event.kind === "refresh") {
     outputs.push(...refreshCommands("periodic-refresh"));
+  } else if (event.kind === "release") {
+    // Hand overridden lights back; an owner name releases only that owner's lights.
+    const targets = Array.isArray(event.targets) ? event.targets : config.targets.map((target) => target.id);
+    const owner = typeof event.owner === "string" && event.owner ? event.owner : null;
+    for (const targetId of targets) {
+      const entry = state.control[targetId];
+      if (!targetById[targetId] || entry?.state !== "overridden" || (owner && entry.owner !== owner)) continue;
+      setControl(targetId, null, "released");
+      if (state.circadianEnabled && intendedOn(targetId)) {
+        const restyle = command(targetId, adaptivePayload("ON", true, state.sleeping, now, config), event.source || "release");
+        if (restyle) outputs.push(restyle);
+      }
+    }
   } else if (event.kind === "intent") {
     outputs.push(...emitIntent(event));
     const commands = outputs.flatMap((message) => {
@@ -450,8 +518,14 @@ export function transitionRoom(
     });
   }
 
+  for (const target of config.targets) {
+    if (controlChanged.has(target.id)) outputs.push(controlMessage(target.id));
+  }
+
   const onCount = Object.values(state.desired).filter(Boolean).length;
-  const manualCount = Object.values(state.manual).filter(Boolean).length;
+  const control = Object.fromEntries(config.targets.map((target) => [target.id, controlOf(target.id)]));
+  const manualCount = Object.values(control).filter((entry) => entry === "manual").length;
+  const overriddenCount = Object.values(control).filter((entry) => entry === "overridden").length;
   return {
     state,
     outputs,
@@ -460,7 +534,9 @@ export function transitionRoom(
       circadianEnabled: state.circadianEnabled,
       sleeping: state.sleeping,
       onCount,
-      manualCount
+      manualCount,
+      overriddenCount,
+      control
     }
   };
 }
