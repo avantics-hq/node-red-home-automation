@@ -1,6 +1,41 @@
 # Contributing
 
-## Branch and worktree workflow
+Contributions are welcome. Everyone taking part follows the
+[Code of Conduct](CODE_OF_CONDUCT.md). Report security vulnerabilities
+privately, as described in [SECURITY.md](SECURITY.md), not in a public issue.
+
+## Contributing from a fork
+
+1. Fork the repository and create a branch from `main`.
+2. Install and enable the local checks:
+
+   ```sh
+   npm ci
+   npm run hooks:install
+   ```
+
+3. Make your change and run `npm test` (build, unit tests and contract
+   examples). If you changed a node or an example flow, also run the Node-RED
+   smoke that CI runs, which loads the packed package and every example flow in
+   an embedded Node-RED:
+
+   ```sh
+   smoke="$(mktemp -d)"
+   npm pack --pack-destination "$smoke"
+   (cd "$smoke" && npm init -y > /dev/null && \
+     npm install --no-audit --no-fund node-red@5.0.10 ./avantics-node-red-home-automation-*.tgz)
+   node scripts/node-red-smoke.mjs "$smoke"
+   ```
+
+4. Open a pull request against `main` and fill in the template.
+
+The required `test` and `private-boundary` checks must pass before a pull
+request can merge. Pull requests are squash-merged. Follow the
+[repository boundaries](#repository-boundaries): no device addresses, precise
+coordinates, credentials, exported flows or deployment state, and synthetic
+values in tests and examples.
+
+## Maintainer worktree workflow
 
 `main` accepts pull requests only. Start each change from the current remote
 `main` in a separate worktree:
