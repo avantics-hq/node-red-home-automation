@@ -126,8 +126,8 @@
         <h1>State-aware automation without hidden ownership.</h1>
         <p class="lead">Deterministic TypeScript policies and thin Node-RED adapters for lighting, occupancy and coordinated media activities. This site documents package capabilities only.</p>
         <div class="pills">
-          <span class="pill">Package 2.0.3</span>
-          <span class="pill">160 tests passing</span>
+          <span class="pill">Package 2.1.0</span>
+          <span class="pill">174 tests passing</span>
           <span class="pill">11 reusable nodes</span>
           <span class="pill">MIT licensed</span>
         </div>
@@ -141,7 +141,7 @@
       <p class="section-intro">The public project tracks reusable behavior, test evidence and source-level milestones. It intentionally contains no installation inventory or private automation topology.</p>
       <div class="metrics">
         <div class="metric"><strong>11</strong><span>Node-RED node types</span></div>
-        <div class="metric"><strong>160</strong><span>Behavior-focused tests</span></div>
+        <div class="metric"><strong>174</strong><span>Behavior-focused tests</span></div>
         <div class="metric"><strong>5</strong><span>Home-theatre target classes</span></div>
         <div class="metric"><strong>7</strong><span>Executable contract examples</span></div>
       </div>
@@ -207,7 +207,7 @@
         <article class="roadmap-card"><span class="status complete">Milestone complete</span><h3>Volume ownership</h3><p>Absolute and relative requests share one bounded command owner, confirm from fresh evidence and preserve external adjustments.</p></article>
         <article class="roadmap-card"><span class="status complete">Milestone complete</span><h3>Switch-state observability</h3><p>Wall-input reducers preserve restart baselines, distinguish retained replay, refresh duplicate evidence and expose freshness or explicit unavailability.</p></article>
         <article class="roadmap-card"><span class="status complete">Milestone complete</span><h3>Package distribution</h3><p>Tagged releases are staged on npm from CI with signed provenance and published only after maintainer approval, alongside a checksummed GitHub Release.</p></article>
-        <article class="roadmap-card"><span class="status available">In progress</span><h3>Reliability fixes</h3><p>A full review of the package is being worked through in small releases. Shipped so far: lights follow their observed state, disabled motion stays disabled, pending deadlines survive a restart, and power readings between thresholds no longer flood the device. Next: every controlled target reports whether it is in control, overridden or manual, followed by the remaining stuck-state and timing fixes.</p></article>
+        <article class="roadmap-card"><span class="status available">In progress</span><h3>Reliability fixes</h3><p>A full review of the package is being worked through in small releases. Shipped so far: lights follow their observed state, disabled motion stays disabled, pending deadlines survive a restart, power readings between thresholds no longer flood the device, and every room light reports whether it is in control, held by an owner or set by hand, with activities holding their lights until they end. Next: the remaining stuck-state and timing fixes.</p></article>
         <article class="roadmap-card"><span class="status available">Next</span><h3>Device-agnostic core</h3><p>Separate decision logic from devices. Policies and controllers speak a neutral vocabulary of targets, intents and observations; a translation layer maps them to specific protocols, vendors and dashboards. Each part stays usable on its own, defaults name no rooms or devices, and powered devices are modelled from observed power.</p></article>
         <article class="roadmap-card"><span class="status available">In progress</span><h3>Blind and cover control</h3><p>The cover controller is in the package: one observed-state owner per cover, semantic position and stop intents, bounded movement and manual ownership. Next: the Node-RED node and editor, built on the device-agnostic core, then honest group partial failure.</p></article>
         <article class="roadmap-card"><span class="status planned">Planned</span><h3>Scenes with restore</h3><p>A scene temporarily owns a set of targets, such as lights or motion enablement, and records their observed state. Ending it, by request, a safety timer or a configured trigger, restores every target. Overlapping scenes stack: the newest owns shared targets and hands them back to the one beneath.</p></article>
@@ -220,7 +220,7 @@
 
   <footer>
     <div class="shell">
-      <span>Package 2.0.3 · public capability documentation</span>
+      <span>Package 2.1.0 · public capability documentation</span>
       <nav aria-label="Footer navigation"><a href="contract-examples.html">Contract examples</a><a href="home-theatre.html">Home-theatre capability</a><a href="https://github.com/avantics-hq/node-red-home-automation#readme">Package overview</a><a href="https://github.com/avantics-hq/node-red-home-automation">Source</a></nav>
     </div>
   </footer>
