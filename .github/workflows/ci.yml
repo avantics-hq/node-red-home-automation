@@ -156,9 +156,10 @@ jobs:
             echo "${name}@${version} is already on npm; skipping staging."
             exit 0
           fi
+          # "./" keeps npm from reading "release/<file>.tgz" as a GitHub repository.
           # The CI token cannot list staged versions, so an earlier run's staged
           # copy is only detected when the registry refuses this one.
-          if ! npm stage publish "${PACKAGE_FILE}" --access public; then
+          if ! npm stage publish "./${PACKAGE_FILE}" --access public; then
             echo "::error::Staging ${name}@${version} failed. If an earlier run already staged it, approve or reject that copy on npmjs.com (Staged Packages tab) instead of re-running."
             exit 1
           fi
