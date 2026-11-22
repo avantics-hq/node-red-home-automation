@@ -57,20 +57,20 @@ Executable, deployment-neutral examples live in [`examples/`](examples/) and exe
 
 ## Install
 
-The package is currently distributed from source rather than npm:
+In Node-RED, open **Manage palette → Install** and search for
+`@avantics/node-red-home-automation`. Or install it from your Node-RED user
+directory (usually `~/.node-red`) and restart Node-RED:
 
 ```sh
-git clone https://github.com/avantics-hq/node-red-home-automation.git
-cd node-red-home-automation
-npm ci
-npm test
-npm pack
+npm install @avantics/node-red-home-automation
 ```
 
-Install the resulting tarball through **Node-RED → Manage palette → Install → Upload module**, or from a Node-RED user directory:
+Each [GitHub Release](https://github.com/avantics-hq/node-red-home-automation/releases)
+also attaches the package tarball and its SHA-256 checksum. Install a downloaded
+tarball through **Manage palette → Install → Upload module**, or with:
 
 ```sh
-npm install /path/to/avantics-node-red-home-automation-2.0.1.tgz
+npm install /path/to/avantics-node-red-home-automation-2.0.2.tgz
 ```
 
 Add the installed nodes from the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.
