@@ -1,5 +1,29 @@
 # Contributing
 
+## Branch and worktree workflow
+
+`main` accepts pull requests only. Start each change from the current remote
+`main` in a separate worktree:
+
+```sh
+git fetch origin main
+git worktree add -b <type>/<name> ../node-red-home-automation-<name> origin/main
+cd ../node-red-home-automation-<name>
+npm ci
+npm run hooks:install
+```
+
+Push the topic branch and open a pull request. GitHub may merge it only after
+the required `test` job passes. Pages deployment runs after the accepted commit
+reaches `main`; it is not a second acceptance gate.
+
+After merge, remove the worktree and its local branch:
+
+```sh
+git worktree remove ../node-red-home-automation-<name>
+git branch -d <type>/<name>
+```
+
 ## Local checks
 
 Install dependencies and run the same package checks used by CI:
@@ -24,19 +48,23 @@ Dependabot checks npm and GitHub Actions weekly. Action dependencies remain
 pinned to immutable commit revisions; the adjacent version comments document
 the reviewed release.
 
-## Pre-commit hook
+## Local hooks
 
-Enable the versioned hook once per clone:
+Enable the versioned hooks once per clone or worktree:
 
 ```sh
 npm run hooks:install
 ```
 
-The hook runs the public-content scan, dependency audit, strict TypeScript build, and compiled tests. It also scans staged changes with `gitleaks` when the binary is installed. CI always runs the full `gitleaks` scan.
+The pre-commit hook runs the public-content scan, dependency audit, strict
+TypeScript build, and compiled tests. It also scans staged changes with
+`gitleaks` when the binary is installed. CI always runs the full `gitleaks`
+scan. The pre-push hook rejects direct updates to `main`; merge through the
+protected branch instead.
 
 ## Releases
 
-`main` pushes run CI and publish Pages. Package releases are intentional:
+Merged `main` changes run CI and publish Pages. Package releases are intentional:
 
 1. Commit the package version and complete the deployment smoke.
 2. Create and push the matching `v<version>` tag.
