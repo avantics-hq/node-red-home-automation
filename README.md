@@ -133,6 +133,11 @@ msg.lighting = {
 };
 ```
 
+`home-activity-lighting-controller` does this itself: while a profile is active
+it overrides that profile's lights under its configured owner (default
+`activity`), and when a new profile drops a light, including an off profile
+with no targets, it releases it.
+
 Release overridden targets (default: all; with `owner`, only that owner's
 lights). Released lights that are on are restyled as a refresh would:
 

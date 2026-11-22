@@ -3,12 +3,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  normaliseActivityLightingConfig,
   normaliseLightingProfiles,
   transitionActivityLighting,
   type ActivityLightingConfig,
   type ActivityLightingEvent,
   type ActivityLightingState
 } from "../lib/activity-lighting-controller";
+import {transitionRoom, type RoomConfig, type RoomState} from "../lib/room-controller";
 
 const config: ActivityLightingConfig = {
   profiles: {
@@ -16,6 +18,7 @@ const config: ActivityLightingConfig = {
     tv: {targets: ["wall", "lamp"], values: {brightness: 64, color_temp: 400}},
     projector: {targets: ["wall"], values: {brightness: 10}}
   },
+  owner: "lounge-activity",
   confirmationTimeoutMs: 5000,
   maxAttempts: 2
 };
@@ -67,6 +70,7 @@ test("activity profiles style only active non-manual room lights", () => {
     state: "ON",
     values: {brightness: 64, color_temp: 400},
     source: "activity",
+    owner: "lounge-activity",
     updateOnOnly: true,
     preserveManual: true
   });
@@ -144,4 +148,86 @@ test("restart observes restored lighting intent without reapplying a profile", (
   assert.deepEqual(result.commands.map(({operation}) => operation), ["observe"]);
   assert.equal(result.commands[0]?.lighting, undefined);
   assert.equal(result.state.phase, "confirming");
+});
+
+function releases(result: ReturnType<typeof transitionActivityLighting>) {
+  return result.commands.filter((command) => command.operation === "release").map((command) => command.lighting);
+}
+
+test("the owner defaults to one name per node", () => {
+  assert.equal(normaliseActivityLightingConfig({profiles: config.profiles}).owner, "activity");
+  assert.equal(normaliseActivityLightingConfig({profiles: config.profiles, owner: "  "}).owner, "activity");
+  assert.equal(normaliseActivityLightingConfig({profiles: config.profiles, owner: "den"}).owner, "den");
+});
+
+test("a new profile releases only the lights it no longer styles", () => {
+  let result = intent(undefined, "tv", 1, 0);
+  assert.deepEqual(releases(result), []);
+
+  // tv (wall, lamp) -> projector (wall): lamp is released, wall re-overridden.
+  result = intent(result.state, "projector", 2, 10);
+  assert.deepEqual(result.commands.map((command) => command.operation), ["release", "apply"]);
+  assert.deepEqual(releases(result), [{kind: "release", owner: "lounge-activity", targets: ["lamp"], source: "activity"}]);
+  assert.equal(result.commands[0]?.profile, "tv");
+  assert.deepEqual(result.commands[1]?.lighting?.targets, ["wall"]);
+  assert.equal(result.commands[1]?.lighting?.owner, "lounge-activity");
+
+  // projector -> off (no targets): everything is released, nothing applied.
+  result = intent(result.state, "off", 3, 20);
+  assert.deepEqual(result.commands.map((command) => command.operation), ["release"]);
+  assert.deepEqual(releases(result), [{kind: "release", owner: "lounge-activity", targets: ["wall"], source: "activity"}]);
+
+  // The same profile again, a stale or conflicting intent: nothing released.
+  result = intent(result.state, "tv", 4, 30);
+  const same = intent(result.state, "tv", 5, 40);
+  assert.deepEqual(releases(same), []);
+  assert.deepEqual(releases(intent(same.state, "off", 4, 50)), []);
+  assert.deepEqual(releases(apply(same.state, {kind: "intent", requestId: "other", generation: 5, profile: "off"}, 60)), []);
+});
+
+test("activity lighting holds its room lights through refresh and hands them back", () => {
+  const roomConfig: RoomConfig = {
+    area: "lounge",
+    displayName: "Lounge",
+    targets: [
+      {id: "wall", stateTopic: "lounge/wall", commandTopic: "lounge/wall/set"},
+      {id: "lamp", stateTopic: "lounge/lamp", commandTopic: "lounge/lamp/set"}
+    ],
+    latitude: 51.5074,
+    longitude: -0.1278,
+    minBrightnessPct: 1,
+    maxBrightnessPct: 100,
+    minColorTempKelvin: 2000,
+    maxColorTempKelvin: 5500,
+    sleepBrightnessPct: 1,
+    sleepColorTempKelvin: 1000,
+    initialTransitionSeconds: 1,
+    refreshTransitionSeconds: 45,
+    initialSleep: false
+  };
+  const noon = (seconds: number) => new Date(Date.parse("2026-06-21T12:00:00Z") + seconds * 1000);
+  let room = transitionRoom(undefined, {lighting: {kind: "intent", targets: ["wall", "lamp"], state: "ON", source: "motion"}}, roomConfig, noon(0));
+  const feed = (lighting: ReturnType<typeof transitionActivityLighting>, seconds: number) => {
+    for (const command of lighting.commands) {
+      if (command.lighting) room = transitionRoom(room.state as Partial<RoomState>, {lighting: command.lighting}, roomConfig, noon(seconds));
+    }
+    return room;
+  };
+  const commanded = (result: typeof room) => result.outputs.filter((entry) => entry.lighting_command)
+    .map((entry) => [entry.lighting_command?.target, (entry.payload as Record<string, unknown>).brightness]);
+
+  let activity = intent(undefined, "tv", 1, 0);
+  room = feed(activity, 1);
+  assert.deepEqual(commanded(room), [["wall", 64], ["lamp", 64]]);
+  assert.deepEqual(room.status.control, {wall: "overridden", lamp: "overridden"});
+  room = transitionRoom(room.state, {lighting: {kind: "refresh"}}, roomConfig, noon(90));
+  assert.deepEqual(commanded(room), []);
+
+  // Ending the activity releases both lights and the room controller restyles them.
+  activity = intent(activity.state, "off", 2, 100);
+  room = feed(activity, 100);
+  assert.deepEqual(commanded(room), [["wall", 254], ["lamp", 254]]);
+  assert.deepEqual(room.status.control, {wall: "in-control", lamp: "in-control"});
+  room = transitionRoom(room.state, {lighting: {kind: "refresh"}}, roomConfig, noon(190));
+  assert.equal(commanded(room).length, 2);
 });
