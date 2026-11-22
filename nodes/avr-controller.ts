@@ -124,6 +124,19 @@ const registerAvrController: NodeInitializer = (RED) => {
       return result;
     }
 
+    // Context survives a redeploy but timers do not. Recover a pending
+    // transition with the reducer's own startup (re-observe, never replay)
+    // rather than ticking old state; a later startup from the flow repeats it.
+    if ((context.get("state") as Partial<AvrState> | undefined)?.pending) {
+      retryTimer = setTimeout(() => {
+        try {
+          process({avr: {kind: "startup"}}, node.send.bind(node));
+        } catch (error) {
+          node.error(error);
+        }
+      }, 0);
+    }
+
     node.on("input", (msg, send, done) => {
       try {
         process({

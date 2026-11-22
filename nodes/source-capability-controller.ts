@@ -108,6 +108,19 @@ const registerSourceCapabilityController: NodeInitializer = (RED) => {
       return result;
     }
 
+    // Context survives a redeploy but timers do not. Recover a pending
+    // transition with the reducer's own startup (re-observe, never replay)
+    // rather than ticking old state; a later startup from the flow repeats it.
+    if ((context.get("state") as Partial<SourceState> | undefined)?.pending) {
+      timer = setTimeout(() => {
+        try {
+          process({sourceCapability: {kind: "startup"}}, node.send.bind(node));
+        } catch (error) {
+          node.error(error);
+        }
+      }, 0);
+    }
+
     node.on("input", (msg, send, done) => {
       try {
         process({

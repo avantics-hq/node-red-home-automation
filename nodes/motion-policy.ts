@@ -110,6 +110,18 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
       });
     }
 
+    function armOffTimer(delayMs: number, generation: number) {
+      clearTimeout(offTimer);
+      offTimer = setTimeout(() => {
+        offTimer = undefined;
+        try {
+          process({source: "off-timer", generation}, node.send.bind(node));
+        } catch (error) {
+          node.error(error);
+        }
+      }, delayMs);
+    }
+
     function process(input: MotionInput, send: Send) {
       if (input.source === "switch" || input.source === "switch-availability") {
         wallInputRelevant = true;
@@ -132,15 +144,7 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
           clearTimeout(offTimer);
           offTimer = undefined;
         } else if (effect.kind === "schedule-off-timer") {
-          clearTimeout(offTimer);
-          offTimer = setTimeout(() => {
-            offTimer = undefined;
-            try {
-              process({source: "off-timer", generation: effect.generation}, node.send.bind(node));
-            } catch (error) {
-              node.error(error);
-            }
-          }, effect.delayMs);
+          armOffTimer(effect.delayMs, effect.generation);
         } else if (effect.kind === "cancel-switch-timer") {
           clearTimeout(switchTimer);
           switchTimer = undefined;
@@ -167,6 +171,12 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
     }
 
     process({source: "switch-startup"}, node.send.bind(node));
+    // Context survives a redeploy but timers do not. switch-startup drops a
+    // half-finished switch gesture by design; a pending off-timer is re-armed.
+    const savedState = context.get("state") as Partial<MotionState> | undefined;
+    if (typeof savedState?.offTimerDueAt === "number") {
+      armOffTimer(Math.max(0, savedState.offTimerDueAt - Date.now()), Number(savedState.offTimerGeneration) || 0);
+    }
     statusTimer = setInterval(() => {
       const saved = context.get("state") as Partial<MotionState> | undefined;
       updateStatus({
