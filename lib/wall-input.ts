@@ -11,6 +11,7 @@ export interface WallInputState {
   observedAt: number | null;
   sessionObserved: boolean;
   available: boolean | null;
+  rebaselineRequired: boolean;
   generation: number;
   edgeAt: number;
   timerDueAt: number | null;
@@ -18,7 +19,7 @@ export interface WallInputState {
 
 export type WallInputInput =
   | {kind: "startup"}
-  | {kind: "observation"; payload?: unknown; retain?: boolean; observedAt?: unknown}
+  | {kind: "observation"; payload?: unknown; retain?: boolean; baseline?: boolean; observedAt?: unknown}
   | {kind: "availability"; payload?: unknown}
   | {kind: "timer"; generation?: number; edgeAt?: number};
 
@@ -51,6 +52,7 @@ export function createWallInputState(saved: Partial<WallInputState> = {}): WallI
       : null,
     sessionObserved: saved.sessionObserved === true,
     available: typeof saved.available === "boolean" ? saved.available : null,
+    rebaselineRequired: saved.rebaselineRequired === true,
     generation: Number(saved.generation) || 0,
     edgeAt: Number(saved.edgeAt) || 0,
     timerDueAt: typeof saved.timerDueAt === "number" ? saved.timerDueAt : null
@@ -157,6 +159,7 @@ export function transitionWallInput(
       if (!nextAvailability) {
         state.baselineKnown = false;
         state.sessionObserved = false;
+        state.rebaselineRequired = true;
         state.edgeAt = 0;
         cancelTimer("input-unavailable");
       }
@@ -170,19 +173,23 @@ export function transitionWallInput(
       trace("switch", "ignored", "invalid-state");
     } else {
       const firstState = !state.baselineKnown;
-      const changed = !firstState && nextState !== state.value;
+      const changed = firstState || nextState !== state.value;
+      const shouldBaseline = input.retain === true ||
+        input.baseline === true ||
+        state.rebaselineRequired;
       state.available = true;
       state.sessionObserved = true;
       state.observedAt = observationTimestamp(input, now);
       state.baselineKnown = true;
+      state.rebaselineRequired = false;
       state.value = nextState;
 
-      if (input.retain === true || firstState) {
+      if (shouldBaseline) {
         if (state.timerDueAt !== null || state.edgeAt) {
           state.edgeAt = 0;
-          cancelTimer(input.retain === true ? "retained-baseline" : "initial-baseline");
+          cancelTimer(input.retain === true ? "retained-baseline" : "explicit-baseline");
         }
-        trace("switch", "baseline", input.retain === true ? "retained-observation" : "initial-observation", {
+        trace("switch", "baseline", input.retain === true ? "retained-observation" : "explicit-observation", {
           changed,
           observedAt: state.observedAt
         });

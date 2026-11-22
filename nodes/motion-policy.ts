@@ -183,6 +183,7 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
           source: String(msg.source ?? ""),
           payload: msg.payload,
           retain: msg.retain === true,
+          baseline: msg.baseline === true,
           observedAt: msg.observedAt
         }, send);
         done();

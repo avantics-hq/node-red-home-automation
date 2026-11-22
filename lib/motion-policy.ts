@@ -27,6 +27,7 @@ export interface MotionState {
 export interface MotionInput {
   source: string;
   observedAt?: unknown;
+  baseline?: boolean;
   payload?: unknown;
   generation?: number;
   switchAt?: number;
@@ -263,6 +264,7 @@ export function transitionMotion(
             kind: "observation",
             payload,
             retain: input.retain,
+            baseline: input.baseline,
             observedAt: input.observedAt
           }
           : source === "switch-availability"

@@ -48,26 +48,28 @@ test("startup preserves a persisted baseline but exposes it as unconfirmed until
   assert.ok(scheduled(edge));
 });
 
-test("a deployment without persisted state establishes an inert first baseline", () => {
+test("a first live edge remains actionable when no persisted or retained baseline exists", () => {
   const first = transitionWallInput(undefined, {
     kind: "observation",
     payload: {state: true}
   }, config, 1000);
-  assert.equal(first.gesture, null);
-  assert.equal(scheduled(first), undefined);
+  const timer = scheduled(first);
+  assert.ok(timer);
   assert.equal(first.status.phase, "fresh");
 
-  const edge = transitionWallInput(first.state, {
-    kind: "observation",
-    payload: {state: false}
-  }, config, 1100);
-  assert.ok(scheduled(edge));
+  const elapsed = transitionWallInput(first.state, {
+    kind: "timer",
+    generation: timer.generation,
+    edgeAt: timer.switchAt
+  }, config, 1500);
+  assert.equal(elapsed.gesture, "single");
 });
 
 test("retained state cancels a pending gesture and is stale without an observation timestamp", () => {
   const baseline = transitionWallInput(undefined, {
     kind: "observation",
-    payload: {state: false}
+    payload: {state: false},
+    baseline: true
   }, config, 1000);
   const edge = transitionWallInput(baseline.state, {
     kind: "observation",
@@ -89,7 +91,8 @@ test("retained state cancels a pending gesture and is stale without an observati
 test("reported unavailability invalidates the baseline and recovery re-baselines without a gesture", () => {
   const baseline = transitionWallInput(undefined, {
     kind: "observation",
-    payload: {state: false}
+    payload: {state: false},
+    baseline: true
   }, config, 1000);
   const unavailable = transitionWallInput(baseline.state, {
     kind: "availability",

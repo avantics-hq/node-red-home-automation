@@ -25,5 +25,5 @@
 </script>
 
 <script type="text/html" data-help-name="home-switch-lighting-policy">
-  <p>Turns raw switch edges or pre-classified single/double actions into <code>msg.lighting</code> intents without occupancy or motion state. Raw wall state preserves a persisted baseline, treats retained observations as inert re-baselines and exposes fresh, stale, unavailable or awaiting-baseline status. Send availability as <code>msg.source = "switch-availability"</code>.</p>
+  <p>Turns raw switch edges or pre-classified single/double actions into <code>msg.lighting</code> intents without occupancy or motion state. Raw wall state preserves a persisted baseline, treats retained observations as inert re-baselines and exposes fresh, stale, unavailable or awaiting-baseline status. Send availability as <code>msg.source = "switch-availability"</code>; mark a polled snapshot with <code>msg.baseline = true</code>.</p>
 </script>

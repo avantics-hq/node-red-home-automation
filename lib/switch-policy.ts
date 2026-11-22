@@ -20,6 +20,7 @@ export interface SwitchPolicyInput {
   source: string;
   payload?: unknown;
   retain?: boolean;
+  baseline?: boolean;
   generation?: number;
   switchAt?: number;
   observedAt?: unknown;
@@ -130,6 +131,7 @@ export function transitionSwitchPolicy(
             kind: "observation",
             payload: input.payload,
             retain: input.retain,
+            baseline: input.baseline,
             observedAt: input.observedAt
           }
           : input.source === "switch-availability"

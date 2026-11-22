@@ -70,7 +70,7 @@ npm pack
 Install the resulting tarball through **Node-RED → Manage palette → Install → Upload module**, or from a Node-RED user directory:
 
 ```sh
-npm install /path/to/avantics-node-red-home-automation-1.16.0.tgz
+npm install /path/to/avantics-node-red-home-automation-1.16.1.tgz
 ```
 
 Add the installed nodes from the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.
@@ -92,12 +92,15 @@ operational failures. Retained request messages are deliberately inert.
 MQTT state topics may be retained so controllers can rebuild observed state
 after a restart. Command and request topics must not be retained. Raw wall-input
 reducers preserve a persisted baseline but report it as unconfirmed until this
-runtime receives an observation. A first-ever observation and every retained
-observation establish an inert baseline; duplicate observations refresh
-freshness without replaying commands. Send source `switch-availability`
-to invalidate a disconnected input baseline. An observation timestamp may be
-supplied as `msg.observedAt` or `msg.payload.observedAt`; otherwise only live,
-non-retained observations receive the current timestamp.
+runtime receives an observation. Retained observations and messages marked
+`msg.baseline = true` establish an inert baseline; duplicate observations
+refresh freshness without replaying commands. When no baseline exists, a live
+non-retained state change remains an actionable edge for event-only inputs.
+Send source `switch-availability` to invalidate a disconnected input baseline;
+the first recovered observation then re-baselines without a gesture. An
+observation timestamp may be supplied as `msg.observedAt` or
+`msg.payload.observedAt`; otherwise only live, non-retained observations receive
+the current timestamp.
 
 Unsolicited display, AVR, source, and backlighting changes latch manual
 ownership instead of issuing corrective commands. A newer explicit activity
