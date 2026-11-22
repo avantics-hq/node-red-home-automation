@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+
+while read -r _local_ref _local_oid remote_ref _remote_oid; do
+  if [ "$remote_ref" = "refs/heads/main" ]; then
+    echo "Direct pushes to main are disabled; push a topic branch and merge its pull request." >&2
+    exit 1
+  fi
+done
