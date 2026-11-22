@@ -24,7 +24,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
@@ -35,6 +35,17 @@ jobs:
 
       - name: Build and test
         run: npm test
+
+      - name: Node-RED 5 smoke
+        shell: bash
+        run: |
+          smoke="${RUNNER_TEMP}/node-red-smoke"
+          mkdir -p "${smoke}"
+          npm pack --pack-destination "${smoke}"
+          cd "${smoke}"
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund node-red@5.0.10 ./avantics-node-red-home-automation-*.tgz
+          node "${GITHUB_WORKSPACE}/scripts/node-red-smoke.mjs" "${smoke}"
 
       - name: Scan secrets
         uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
@@ -52,7 +63,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Scan public content
         run: npm run scan:public
@@ -104,7 +115,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
