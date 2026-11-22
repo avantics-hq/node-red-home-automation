@@ -30,6 +30,20 @@ flowchart LR
   R --> S[Status and trace events]
 ```
 
+## Control authority
+
+Home Assistant is a user interface and integration adapter, not the automation
+source of truth. It may collect user intent and present observed state, but
+reducers and controllers own desired state, sequencing, bounded recovery and
+completion. Device observations are evidence rather than commands or assumed
+truth.
+
+Prefer direct local device evidence when it is stable and maintainable. A Home
+Assistant entity remains a valid transport when it is the only practical or
+better-supported integration; the component contract must still distinguish
+intent, observation, availability and ownership.
+
+
 ## Included nodes
 
 | Node | Purpose |
