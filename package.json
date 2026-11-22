@@ -10,6 +10,7 @@
     "home-theatre",
     "mqtt"
   ],
+  "funding": "https://ko-fi.com/avantics",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/avantics-hq/node-red-home-automation.git"

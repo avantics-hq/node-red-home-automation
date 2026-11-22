@@ -1,0 +1,16 @@
+## What changes for a user
+
+<!-- Before and after, in a sentence or two. Link the issue if there is one. -->
+
+## How it was tested
+
+<!-- Commands you ran and what you saw. -->
+
+- [ ] `npm test` passes (build, unit tests and contract examples)
+- [ ] If nodes changed: the Node-RED smoke passes (see CONTRIBUTING.md)
+
+## Checklist
+
+- [ ] No private details: hosts, IP addresses, coordinates, Home Assistant entity IDs, flow exports or credentials
+- [ ] README, node help text and examples updated where behaviour or messages changed
+- [ ] Pages roadmap card updated if this changes a milestone's state

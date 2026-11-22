@@ -1,0 +1,55 @@
+---
+name: Feature request
+description: Suggest new or changed package behavior
+title: "[Feature]: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion. This public repository contains reusable package behavior only. Remove credentials, private addresses, entity IDs, flow exports, and installation topology from everything you share.
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: What are you trying to achieve?
+      description: Describe the outcome you want in your home, not the implementation.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: The node or nodes this affects.
+      multiple: true
+      options:
+        - Occupancy fusion
+        - Motion lighting policy
+        - Switch lighting policy
+        - Room lighting controller
+        - AVR controller
+        - Display mode controller
+        - Source capability controller
+        - Activity lighting controller
+        - Backlighting controller
+        - Theatre activity controller
+        - Theatre state contract
+        - A new node
+        - Examples or documentation
+    validations:
+      required: true
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Current workaround
+      description: How you handle this today, if at all.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I removed credentials and private installation details.
+          required: true
