@@ -120,7 +120,7 @@ export function createRoomState(
     desired: {...(saved.desired || {})},
     manual: {...(saved.manual || {})},
     expected: Object.fromEntries(
-      Object.entries(saved.expected || {}).map(([target, entries]) => [target, [...entries]])
+      Object.entries(saved.expected || {}).map(([target, entries]) => [target, entries.map((entry) => ({...entry}))])
     ),
     circadianEnabled: saved.circadianEnabled !== false,
     sleeping: saved.sleeping === undefined ? config.initialSleep : saved.sleeping === true

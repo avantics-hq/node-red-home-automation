@@ -253,3 +253,22 @@ test("restored state with expected entries from before in-flight tracking adopts
   result = transitionRoom(result.state, {lighting: {kind: "refresh"}}, config, later(90000));
   assert.equal(result.outputs.length, 0);
 });
+
+test("the reducer does not mutate the saved state it is given", () => {
+  let result = observeState(undefined, false, 0);
+  result = transitionRoom(result.state, {
+    lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}
+  }, config, later(1000));
+  const ownPayload = output(result, 0).payload;
+  const beforeEcho = structuredClone(result.state);
+  const echoed = transitionRoom(result.state, {
+    topic: "home/kitchen/light/group/cooking/set",
+    payload: ownPayload,
+    lighting: {kind: "command-observed", target: "cooking"}
+  }, config, later(1050));
+  assert.deepEqual(result.state, beforeEcho);
+
+  const beforeReport = structuredClone(echoed.state);
+  observeState(echoed.state, true, 1400);
+  assert.deepEqual(echoed.state, beforeReport);
+});
