@@ -12,7 +12,7 @@ Run one example and inspect its complete JSON contract:
 
 ```sh
 npm run build
-node examples/source-readiness.mjs
+node contract-examples/source-readiness.mjs
 ```
 
 | Example | Contract demonstrated |

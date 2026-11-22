@@ -48,7 +48,7 @@ flowchart LR
 
 Pure TypeScript policy modules live in `lib/`; thin Node-RED runtime and editor adapters live in `nodes/`.
 
-Executable, deployment-neutral examples live in [`examples/`](examples/) and exercise the same reducers as the runtime adapters.
+Importable example flows for the Node-RED editor live in [`examples/`](examples/) (**Import → Examples**). Executable, deployment-neutral contract examples live in [`contract-examples/`](contract-examples/) and exercise the same reducers as the runtime adapters.
 
 ## Requirements
 
@@ -181,13 +181,13 @@ npm run examples
 
 | Example | Boundary demonstrated |
 |---|---|
-| [`occupancy-fusion.mjs`](examples/occupancy-fusion.mjs) | Motion establishes occupancy; optional presence can hold it. |
-| [`motion-lighting.mjs`](examples/motion-lighting.mjs) | Occupancy and illuminance produce semantic lighting intent. |
-| [`switch-gestures.mjs`](examples/switch-gestures.mjs) | Wall actions produce toggle or explicit manual-brightness intent. |
-| [`room-lighting.mjs`](examples/room-lighting.mjs) | The room owner converts semantic intent into a transport command. |
-| [`source-readiness.mjs`](examples/source-readiness.mjs) | Fresh application evidence confirms source readiness. |
-| [`volume-ownership.mjs`](examples/volume-ownership.mjs) | Bounded relative requests accumulate and release ownership after fresh confirmation. |
-| [`theatre-activity.mjs`](examples/theatre-activity.mjs) | Coordinated activity waits for fresh target-owner evidence. |
+| [`occupancy-fusion.mjs`](contract-examples/occupancy-fusion.mjs) | Motion establishes occupancy; optional presence can hold it. |
+| [`motion-lighting.mjs`](contract-examples/motion-lighting.mjs) | Occupancy and illuminance produce semantic lighting intent. |
+| [`switch-gestures.mjs`](contract-examples/switch-gestures.mjs) | Wall actions produce toggle or explicit manual-brightness intent. |
+| [`room-lighting.mjs`](contract-examples/room-lighting.mjs) | The room owner converts semantic intent into a transport command. |
+| [`source-readiness.mjs`](contract-examples/source-readiness.mjs) | Fresh application evidence confirms source readiness. |
+| [`volume-ownership.mjs`](contract-examples/volume-ownership.mjs) | Bounded relative requests accumulate and release ownership after fresh confirmation. |
+| [`theatre-activity.mjs`](contract-examples/theatre-activity.mjs) | Coordinated activity waits for fresh target-owner evidence. |
 
 Each example uses synthetic identifiers and configuration, asserts its central invariant, and prints the complete input/output contract as JSON.
 

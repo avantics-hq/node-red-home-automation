@@ -1,12 +1,14 @@
 // Loads the packed package in an embedded Node-RED runtime and checks that
-// every node type in package.json registered. No HTTP server is started.
+// every node type in package.json registered, then deploys each packaged
+// example flow and checks that every node in it is created. No HTTP server is
+// started.
 //
 // Usage: node scripts/node-red-smoke.mjs <dir>
 // <dir> holds node-red and the packed package in node_modules and is used as
 // the Node-RED userDir.
 import {createRequire} from "node:module";
-import {readFileSync} from "node:fs";
-import {resolve} from "node:path";
+import {readdirSync, readFileSync} from "node:fs";
+import {dirname, join, resolve} from "node:path";
 
 const userDir = resolve(process.argv[2] || "");
 if (!process.argv[2]) throw new Error("usage: node scripts/node-red-smoke.mjs <dir>");
@@ -52,15 +54,41 @@ try {
   }, null, 2));
   const missing = expected.filter((type) => !registered.includes(type));
   if (errors.length || missing.length) failure = `missing: ${missing.join(", ") || "none"}; errors: ${errors.length}`;
+  if (!failure) failure = await checkExamples();
 } catch (error) {
   failure = error instanceof Error ? error.message : String(error);
 } finally {
   await RED.stop().catch(() => {});
 }
 
+// Deploys each example flow on its own tab. A node the runtime could not
+// create, or an unexpected "invalid configuration" status, fails the smoke.
+// The display controller needs device hosts, which the examples leave blank.
+async function checkExamples() {
+  const expectedInvalid = new Set(["home-display-mode-controller"]);
+  const examplesDir = join(dirname(require.resolve(`${packageName}/package.json`)), "examples");
+  const statuses = new Map();
+  RED.events.on("node-status", (event) => statuses.set(event.id, event.status));
+  const problems = [];
+  for (const file of readdirSync(examplesDir).filter((name) => name.endsWith(".json")).sort()) {
+    const flow = JSON.parse(readFileSync(join(examplesDir, file), "utf8"));
+    const tab = {id: "smoke0example0tab", type: "tab", label: file};
+    statuses.clear();
+    await RED.runtime.flows.setFlows({flows: {flows: [tab, ...flow.map((node) => ({...node, z: tab.id}))]}, deploymentType: "full"});
+    await new Promise((done) => setTimeout(done, 200));
+    const notCreated = flow.filter((node) => !RED.nodes.getNode(node.id)).map((node) => node.type);
+    const invalid = flow.filter((node) => statuses.get(node.id)?.text === "invalid configuration").map((node) => node.type);
+    console.log(JSON.stringify({example: file, nodes: flow.length, notCreated, invalidConfiguration: invalid}));
+    if (notCreated.length) problems.push(`${file}: not created: ${notCreated.join(", ")}`);
+    const unexpected = invalid.filter((type) => !expectedInvalid.has(type));
+    if (unexpected.length) problems.push(`${file}: invalid configuration: ${unexpected.join(", ")}`);
+  }
+  return problems.length ? problems.join("; ") : null;
+}
+
 if (failure) {
   console.error(`Node-RED smoke failed: ${failure}`);
   process.exit(1);
 }
-console.log(`Node-RED smoke passed: ${expected.length} node types registered.`);
+console.log(`Node-RED smoke passed: ${expected.length} node types registered, example flows deployed.`);
 process.exit(0);

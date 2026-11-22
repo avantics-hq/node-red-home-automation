@@ -1,0 +1,214 @@
+[
+  {
+    "id": "example-home-theatre-activity-home-theatre-activity-example",
+    "type": "comment",
+    "name": "Home theatre activity example",
+    "info": "The state contract turns a request on home/room/theatre/request into an activity intent. The activity controller plans each target (display, receiver, source, lighting, backlighting) and reports a complete state snapshot, which the contract publishes as retained MQTT state.\n\nIn a real flow, route the activity controller's target commands to the equipment controllers and the activity-lighting node.",
+    "x": 190,
+    "y": 40,
+    "wires": []
+  },
+  {
+    "id": "example-home-theatre-activity-request-tv-activity",
+    "type": "inject",
+    "name": "request tv activity",
+    "props": [
+      {
+        "p": "topic",
+        "v": "home/room/theatre/request",
+        "vt": "str"
+      },
+      {
+        "p": "payload",
+        "v": "{\"requestId\":\"example-request-1\",\"activity\":\"tv\"}",
+        "vt": "json"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 170,
+    "y": 100,
+    "wires": [
+      [
+        "example-home-theatre-activity-theatre-state-contract"
+      ]
+    ]
+  },
+  {
+    "id": "example-home-theatre-activity-contract-startup",
+    "type": "inject",
+    "name": "contract startup",
+    "props": [
+      {
+        "p": "theatreStateContract",
+        "v": "{\"kind\":\"startup\"}",
+        "vt": "json"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 170,
+    "y": 140,
+    "wires": [
+      [
+        "example-home-theatre-activity-theatre-state-contract"
+      ]
+    ]
+  },
+  {
+    "id": "example-home-theatre-activity-theatre-state-contract",
+    "type": "home-theatre-state-contract",
+    "name": "",
+    "area": "room",
+    "displayName": "Room",
+    "baseTopic": "home/room/theatre",
+    "discoveryPrefix": "homeassistant",
+    "activities": "[\"off\",\"tv\"]",
+    "sloWindowSize": 20,
+    "sloMinimumSamples": 5,
+    "sloLatencyBudgetMs": 60000,
+    "sloSuccessObjectivePct": 95,
+    "x": 430,
+    "y": 120,
+    "wires": [
+      [
+        "example-home-theatre-activity-theatre-activity-controller"
+      ],
+      [
+        "example-home-theatre-activity-retained-state"
+      ]
+    ]
+  },
+  {
+    "id": "example-home-theatre-activity-retained-state",
+    "type": "debug",
+    "name": "retained state",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 680,
+    "y": 60,
+    "wires": []
+  },
+  {
+    "id": "example-home-theatre-activity-theatre-activity-controller",
+    "type": "home-theatre-activity-controller",
+    "name": "",
+    "area": "room",
+    "freshnessMs": 30000,
+    "recoveryOffActivity": "off",
+    "activityProfiles": "{\"off\":{\"display\":{\"mode\":\"off\"},\"avr\":{\"power\":\"off\"},\"source\":{\"action\":\"deactivate\",\"readiness\":\"optional\"},\"lighting\":{\"profile\":\"off\"},\"backlighting\":{\"power\":\"off\"}},\"tv\":{\"display\":{\"mode\":\"tv\"},\"avr\":{\"power\":\"on\",\"source\":\"shield\"},\"source\":{\"action\":\"activate\",\"sourceId\":\"streamer\",\"readiness\":\"required\"},\"lighting\":{\"profile\":\"tv\"},\"backlighting\":{\"power\":\"on\"}}}",
+    "x": 680,
+    "y": 140,
+    "wires": [
+      [
+        "example-home-theatre-activity-target-commands"
+      ],
+      [
+        "example-home-theatre-activity-theatre-state-contract"
+      ]
+    ]
+  },
+  {
+    "id": "example-home-theatre-activity-target-commands",
+    "type": "debug",
+    "name": "target commands",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 930,
+    "y": 140,
+    "wires": []
+  },
+  {
+    "id": "example-home-theatre-activity-lighting-tv-profile",
+    "type": "inject",
+    "name": "lighting tv profile",
+    "props": [
+      {
+        "p": "activityLighting",
+        "v": "{\"kind\":\"intent\",\"requestId\":\"example-lighting-1\",\"generation\":1,\"profile\":\"tv\"}",
+        "vt": "json"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 170,
+    "y": 240,
+    "wires": [
+      [
+        "example-home-theatre-activity-activity-lighting-controller"
+      ]
+    ]
+  },
+  {
+    "id": "example-home-theatre-activity-activity-lighting-controller",
+    "type": "home-activity-lighting-controller",
+    "name": "",
+    "area": "room",
+    "profiles": "{\"off\":{\"targets\":[],\"values\":{}},\"tv\":{\"targets\":[\"main\"],\"values\":{\"brightness\":64,\"color_temp\":400}}}",
+    "confirmationTimeoutMs": 15000,
+    "maxAttempts": 2,
+    "x": 450,
+    "y": 240,
+    "wires": [
+      [
+        "example-home-theatre-activity-room-lighting-intents"
+      ],
+      [
+        "example-home-theatre-activity-lighting-state"
+      ]
+    ]
+  },
+  {
+    "id": "example-home-theatre-activity-room-lighting-intents",
+    "type": "debug",
+    "name": "room lighting intents",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 700,
+    "y": 220,
+    "wires": []
+  },
+  {
+    "id": "example-home-theatre-activity-lighting-state",
+    "type": "debug",
+    "name": "lighting state",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 690,
+    "y": 260,
+    "wires": []
+  }
+]
