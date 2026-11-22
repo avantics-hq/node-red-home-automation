@@ -10,6 +10,7 @@ import type {
 } from "node-red";
 import {appendTrace} from "../lib/bounded-trace";
 import {
+  normaliseAvrConfig,
   transitionAvr,
   type AvrConfig,
   type AvrMessage,
@@ -35,17 +36,12 @@ function number(value: unknown, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function parseSources(value: string | undefined): Record<string, string> {
+function parseSources(value: string | undefined): unknown {
   const sources: unknown = JSON.parse(value || "{}");
   if (!sources || Array.isArray(sources) || typeof sources !== "object") {
     throw new Error("sources must be a JSON object");
   }
-  for (const [name, code] of Object.entries(sources)) {
-    if (typeof name !== "string" || typeof code !== "string") {
-      throw new Error("sources must map names to Denon source codes");
-    }
-  }
-  return sources as Record<string, string>;
+  return sources;
 }
 
 const registerAvrController: NodeInitializer = (RED) => {
@@ -57,16 +53,19 @@ const registerAvrController: NodeInitializer = (RED) => {
 
     let controllerConfig: AvrConfig;
     try {
-      controllerConfig = {
+      // The same validation the reducer applies, so a bad configuration
+      // fails here at deploy rather than on every message.
+      controllerConfig = normaliseAvrConfig({
         area: config.area || "room",
         sources: parseSources(config.sources),
         retryMs: Math.max(250, number(config.retryMs, 2000)),
         maxAttempts: Math.max(1, Math.floor(number(config.maxAttempts, 3))),
         minVolume: number(config.minVolume, 0),
         maxVolume: number(config.maxVolume, 60)
-      };
+      });
     } catch (error) {
-      node.status({fill: "red", shape: "ring", text: "invalid configuration"});
+      const reason = error instanceof Error ? error.message : String(error);
+      node.status({fill: "red", shape: "ring", text: "invalid configuration: " + reason});
       node.error(error);
       return;
     }
