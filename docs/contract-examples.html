@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <meta name="description" content="Executable transport-neutral contract examples for deterministic Node-RED home-automation components.">
-  <link rel="canonical" href="https://cptbucky.github.io/node-red-home-automation/contract-examples.html">
+  <link rel="canonical" href="https://avantics-hq.github.io/node-red-home-automation/contract-examples.html">
   <title>Home-Automation Contract Examples</title>
   <style>
     :root {
@@ -90,7 +90,7 @@
     <div class="shell">
       <nav class="site-nav" aria-label="Primary navigation">
         <a class="brand" href="./">Node-RED Home Automation</a>
-        <div><a href="./">Component overview</a><a href="home-theatre.html">Home-theatre capability</a><a href="https://github.com/cptbucky/node-red-home-automation/tree/main/examples">Source examples</a></div>
+        <div><a href="./">Component overview</a><a href="home-theatre.html">Home-theatre capability</a><a href="https://github.com/avantics-hq/node-red-home-automation/tree/main/examples">Source examples</a></div>
       </nav>
       <div class="hero">
         <p class="eyebrow">Executable public contracts</p>
@@ -113,7 +113,7 @@
 motion:on    → occupied:true
 motion:off   → held
 presence:off → occupied:false</code></pre>
-          <a href="https://github.com/cptbucky/node-red-home-automation/blob/main/examples/occupancy-fusion.mjs">Open executable example →</a>
+          <a href="https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/occupancy-fusion.mjs">Open executable example →</a>
         </article>
         <article class="example">
           <p class="eyebrow">Motion policy</p><h3>Occupancy to lighting intent</h3>
@@ -122,7 +122,7 @@ presence:off → occupied:false</code></pre>
 →
 { kind: "intent", state: "ON",
   targets: ["ceiling", "worktop"] }</code></pre>
-          <a href="https://github.com/cptbucky/node-red-home-automation/blob/main/examples/motion-lighting.mjs">Open executable example →</a>
+          <a href="https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/motion-lighting.mjs">Open executable example →</a>
         </article>
         <article class="example">
           <p class="eyebrow">Switch policy</p><h3>Explicit manual brightness</h3>
@@ -131,7 +131,7 @@ presence:off → occupied:false</code></pre>
 →
 { state: "ON", manual: true,
   values: { brightness: 254 } }</code></pre>
-          <a href="https://github.com/cptbucky/node-red-home-automation/blob/main/examples/switch-gestures.mjs">Open executable example →</a>
+          <a href="https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/switch-gestures.mjs">Open executable example →</a>
         </article>
         <article class="example">
           <p class="eyebrow">Command owner</p><h3>Room lighting boundary</h3>
@@ -141,7 +141,7 @@ presence:off → occupied:false</code></pre>
 →
 { topic: "demo/lighting/ceiling/set",
   lighting_command: { source: "motion" } }</code></pre>
-          <a href="https://github.com/cptbucky/node-red-home-automation/blob/main/examples/room-lighting.mjs">Open executable example →</a>
+          <a href="https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/room-lighting.mjs">Open executable example →</a>
         </article>
         <article class="example">
           <p class="eyebrow">Readiness policy</p><h3>Media-source evidence</h3>
@@ -149,7 +149,7 @@ presence:off → occupied:false</code></pre>
           <pre><code>activate → command_result:ok → confirming
 observed:{ active, application, paused }
 → ready</code></pre>
-          <a href="https://github.com/cptbucky/node-red-home-automation/blob/main/examples/source-readiness.mjs">Open executable example →</a>
+          <a href="https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/source-readiness.mjs">Open executable example →</a>
         </article>
         <article class="example">
           <p class="eyebrow">Command ownership</p><h3>Bounded receiver volume</h3>
@@ -158,7 +158,7 @@ observed:{ active, application, paused }
 relative:+1 → MV32
 observed:32 → ready · released
 observed:28 → external baseline</code></pre>
-          <a href="https://github.com/cptbucky/node-red-home-automation/blob/main/examples/volume-ownership.mjs">Open executable example →</a>
+          <a href="https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/volume-ownership.mjs">Open executable example →</a>
         </article>
         <article class="example">
           <p class="eyebrow">Coordination</p><h3>Theatre activity</h3>
@@ -167,7 +167,7 @@ observed:28 → external baseline</code></pre>
 → display · receiver · source · lighting · backlighting
 → fresh target evidence
 → { phase: "ready", availability: "available" }</code></pre>
-          <a href="https://github.com/cptbucky/node-red-home-automation/blob/main/examples/theatre-activity.mjs">Open executable example →</a>
+          <a href="https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/theatre-activity.mjs">Open executable example →</a>
         </article>
       </div>
     </section>
@@ -191,7 +191,7 @@ npm run examples</code></pre></div>
   </main>
 
   <footer>
-    <div class="shell"><span>Package 2.0.1 · executable public contracts</span><nav aria-label="Footer navigation"><a href="./">Component overview</a><a href="home-theatre.html">Home-theatre capability</a><a href="https://github.com/cptbucky/node-red-home-automation/tree/main/examples">Example source</a></nav></div>
+    <div class="shell"><span>Package 2.0.1 · executable public contracts</span><nav aria-label="Footer navigation"><a href="./">Component overview</a><a href="home-theatre.html">Home-theatre capability</a><a href="https://github.com/avantics-hq/node-red-home-automation/tree/main/examples">Example source</a></nav></div>
   </footer>
 </body>
 </html>
