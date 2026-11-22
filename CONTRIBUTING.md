@@ -76,8 +76,10 @@ Merged `main` changes run CI and publish Pages. Package releases are intentional
 
 Documentation-only commits do not receive package tags or releases.
 
-Versions follow semantic versioning: fixes bump the patch number, compatible
-features the minor, and breaking changes the major. Cut a release when a group
+Fixes bump the patch number, and features the minor. For now, breaking changes
+also bump the minor version rather than the major, so improvements keep rolling
+out; every breaking change is called out under "Behaviour change" in the GitHub
+Release notes. Cut a release when a group
 of user-noticeable fixes or a feature has merged, not on every merge. The
 version-bump pull request updates every place that names the current version:
 `package.json`, both root entries in `package-lock.json` (`npm version <x.y.z>
