@@ -1562,6 +1562,7 @@ test("occupancy publishing: off unless switched on; then its state, availability
   const entry = JSON.parse(String(started[0]?.payload)) as Record<string, unknown>;
   assert.deepEqual([entry.device_class, entry.state_topic, entry.availability_topic, entry.default_entity_id],
     ["occupancy", "home/den/occupancy/state", "home/den/occupancy/availability", ["binary_sensor", "den_occupancy"].join(".")]);
+  assert.deepEqual([entry.name, (entry.device as {name: string}).name], ["Occupancy", "Den Occupancy"], "the device carries the area");
   assert.deepEqual(started.slice(1).map(({payload}) => payload), ["online", "OFF"]);
 
   const occupied = await receive<SendEnvelope>(node, {source: "motion", payload: {motion: true}});

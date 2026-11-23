@@ -5,7 +5,6 @@
 // All of it is opt-in; the fusion itself only decides occupancy.
 
 import {
-  DEFAULT_DISCOVERY_PREFIX,
   DISCOVERY_ORIGIN,
   OFFLINE,
   ONLINE,
@@ -20,7 +19,8 @@ export interface OccupancyPublishingConfig {
   // Both off unless switched on: occupancy published nothing before.
   publishState?: boolean;
   discovery?: boolean;
-  discoveryPrefix?: string;
+  // Read with discoveryPrefixSetting, which gives Home Assistant's default.
+  discoveryPrefix: string;
   nodeId?: string;
   idScheme?: IdScheme;
 }
@@ -57,10 +57,10 @@ function retained(topic: string, payload: string): OccupancyPublication {
 
 // The occupancy binary sensor's discovery entry.
 export function occupancyDiscovery(config: OccupancyPublishingConfig): OccupancyPublication {
-  const owner = {...config, discoveryPrefix: config.discoveryPrefix ?? DEFAULT_DISCOVERY_PREFIX};
-  const ids = discoveryEntity(owner, "binary_sensor", "occupancy");
+  const ids = discoveryEntity(config, "binary_sensor", "occupancy");
   return retained(ids.topic, JSON.stringify({
-    name: config.area + " Occupancy",
+    // Home Assistant shows it after the device's name, which has the area.
+    name: "Occupancy",
     unique_id: ids.uniqueId,
     default_entity_id: ids.defaultEntityId,
     device_class: "occupancy",
@@ -69,7 +69,7 @@ export function occupancyDiscovery(config: OccupancyPublishingConfig): Occupancy
     payload_off: "OFF",
     availability_topic: occupancyAvailabilityTopic(config.area),
     device: {
-      ...discoveryDevice(owner, "occupancy"),
+      ...discoveryDevice(config, "occupancy"),
       name: config.area + " Occupancy",
       manufacturer: "Node-RED",
       model: "Occupancy fusion"
