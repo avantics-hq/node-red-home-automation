@@ -159,6 +159,20 @@ function publication(topic: string, payload: unknown): ContractPublication {
   };
 }
 
+// When the latest transition started and finished, and which targets it
+// left degraded: the Phase sensor's attributes in Home Assistant.
+function transitionDetails(event: TheatreStateSnapshot) {
+  const timestamp = (value: unknown) => (typeof value === "string" ? value : null);
+  return {
+    startedAt: timestamp(event.transitionStartedAt),
+    completedAt: timestamp(event.transitionCompletedAt),
+    degraded: (Array.isArray(event.degraded) ? event.degraded : []).map((entry) => ({
+      target: String(entry.target),
+      reason: String(entry.reason)
+    }))
+  };
+}
+
 // What the contract publishes from each controller snapshot, one retained
 // topic per entry, in this order. The publications and the list of topics
 // the contract publishes both come from this table.
@@ -173,6 +187,7 @@ const STATE_TOPICS: Array<[TheatreTopicName, (event: TheatreStateSnapshot, slo: 
     : null)],
   ["current", (event) => event.currentActivity],
   ["phase", (event) => event.phase],
+  ["transition", (event) => transitionDetails(event)],
   ["failure", (event) => event.failure],
   ["readiness", (event) => event.availability],
   ["metrics", (event) => event.metrics || {
