@@ -1078,3 +1078,16 @@ test("every adapter shows the same badge for a configuration it cannot use, and 
     assert.match(String(node.errors[0]), reason, name);
   }
 });
+
+test("a motion node with a blank or unusable delay or cutoff uses the defaults", async (t) => {
+  const {Constructor} = runtime(registerMotion);
+  for (const [delay, cutoff] of [["", ""], ["abc", "dark"]]) {
+    const node = new Constructor({area: "hall", onTargets: "[\"main\"]", defaultDelaySeconds: delay, defaultIlluminanceCutoff: cutoff});
+    t.after(() => close(node));
+    assert.deepEqual(node.errors, []);
+    await receive(node, {source: "motion", payload: true});
+    const state = node.context().get("state") as {delaySeconds: number; illuminanceCutoff: number};
+    assert.equal(state.delaySeconds, 120, `delay ${JSON.stringify(delay)}`);
+    assert.equal(state.illuminanceCutoff, 10, `cutoff ${JSON.stringify(cutoff)}`);
+  }
+});

@@ -25,7 +25,10 @@ function fakeNode() {
 test("number keeps finite values and falls back otherwise", () => {
   assert.equal(number("12", 5), 12);
   assert.equal(number(0, 5), 0);
-  assert.equal(number("", 5), 0);
+  // A cleared editor field means "use the default", not 0.
+  assert.equal(number("", 5), 5);
+  assert.equal(number("  ", 5), 5);
+  assert.equal(number(null, 5), 5);
   assert.equal(number("twelve", 5), 5);
   assert.equal(number(undefined, 5), 5);
 });

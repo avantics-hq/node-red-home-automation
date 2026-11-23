@@ -11,8 +11,11 @@ test("finiteOr reads editor strings and falls back on anything unusable", () => 
   assert.equal(finiteOr("12", 5), 12);
   assert.equal(finiteOr("abc", 5), 5);
   assert.equal(finiteOr(undefined, 5), 5);
-  // A blank field is 0 today (review-fixes 32 changes this).
-  assert.equal(finiteOr("", 5), 0);
+  // A blank (cleared) editor field takes the default, not 0; a typed 0 stays 0.
+  assert.equal(finiteOr("", 5), 5);
+  assert.equal(finiteOr("  ", 5), 5);
+  assert.equal(finiteOr(null, 5), 5);
+  assert.equal(finiteOr("0", 5), 0);
 });
 
 test("the receiver's settings are read from editor strings with its deployed defaults", () => {
@@ -20,9 +23,10 @@ test("the receiver's settings are read from editor strings with its deployed def
   assert.deepEqual(normaliseAvrConfig({sources}), {area: "room", sources, retryMs: 2000, maxAttempts: 3, minVolume: 0, maxVolume: 60});
   assert.deepEqual(normaliseAvrConfig({area: "area-a", sources, retryMs: "100", maxAttempts: "2.7", minVolume: "10", maxVolume: "40.5"}),
     {area: "area-a", sources, retryMs: 250, maxAttempts: 2, minVolume: 10, maxVolume: 40.5});
-  // A blank retry or attempt count is 0, then raised to the minimum.
-  assert.equal(normaliseAvrConfig({sources, retryMs: "", maxAttempts: ""}).retryMs, 250);
-  assert.equal(normaliseAvrConfig({sources, retryMs: "", maxAttempts: ""}).maxAttempts, 1);
+  // A blank retry, attempt count or volume bound takes its default.
+  assert.equal(normaliseAvrConfig({sources, retryMs: "", maxAttempts: ""}).retryMs, 2000);
+  assert.equal(normaliseAvrConfig({sources, retryMs: "", maxAttempts: ""}).maxAttempts, 3);
+  assert.equal(normaliseAvrConfig({sources, minVolume: "", maxVolume: ""}).maxVolume, 60);
   assert.throws(() => normaliseAvrConfig({sources, minVolume: "50", maxVolume: "40"}), /volume bounds/);
 });
 

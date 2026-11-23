@@ -8,7 +8,7 @@ import {
   type MotionInput,
   type MotionState
 } from "../lib/motion-policy";
-import {guarded, invalidConfig, onInput, runReducer, type Send} from "./adapter";
+import {guarded, invalidConfig, number, onInput, runReducer, type Send} from "./adapter";
 
 interface MotionPolicyConfig extends NodeDef {
   area?: string;
@@ -68,8 +68,8 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
         area: config.area || "room",
         onTargets,
         offTargets: parseArray(config.offTargets, onTargets),
-        defaultDelaySeconds: Number(config.defaultDelaySeconds ?? 120),
-        defaultIlluminanceCutoff: Number(config.defaultIlluminanceCutoff ?? 10),
+        defaultDelaySeconds: number(config.defaultDelaySeconds, 120),
+        defaultIlluminanceCutoff: number(config.defaultIlluminanceCutoff, 10),
         switchWindowMs: Number(config.switchWindowMs ?? 500),
         switchFreshnessMs: Number(config.switchFreshnessSeconds ?? 3600) * 1000
       };
