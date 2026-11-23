@@ -1,159 +1,62 @@
 "use strict";
 
 import {boundObservedAt, isFresh as isFreshAt, isOutOfOrder, parseObservedAt} from "./observation-time";
+import {
+  OPTIONAL_TARGETS,
+  REQUIRED_TARGETS,
+  TARGETS,
+  matchesExpected,
+  normaliseActivityProfiles,
+  type ActivityProfile,
+  type ActivityProfiles,
+  type TheatreTarget
+} from "./theatre-profiles";
+import {
+  REFRESH_ATTEMPTS,
+  TARGET_CLASSIFICATIONS,
+  TARGET_STATUSES,
+  count,
+  createTheatreState,
+  emptyRefreshPending,
+  emptyTargets,
+  theatreSnapshot,
+  type RecoveryObservations,
+  type TargetClassification,
+  type TargetFailure,
+  type TargetState,
+  type TargetStatus,
+  type TheatreDesired,
+  type TheatreState
+} from "./theatre-state";
 
-const PROFILE_NAME = /^[a-z][a-z0-9_-]*$/;
-export const TARGETS = ["display", "avr", "source", "lighting", "backlighting"] as const;
-const REQUIRED_TARGETS = ["display", "avr", "backlighting"] as const;
-const OPTIONAL_TARGETS = ["lighting"] as const;
-
-export type TheatreTarget = typeof TARGETS[number];
-export type TargetStatus =
-  | "discovering"
-  | "transitioning"
-  | "confirming"
-  | "ready"
-  | "waiting_for_source"
-  | "failed"
-  | "unavailable";
-export type TargetClassification = "drift" | "manual_override";
-export type TheatreAvailability = "unknown" | "available" | "degraded" | "unavailable";
-
-const TARGET_STATUSES: Record<TargetStatus, true> = {
-  discovering: true,
-  transitioning: true,
-  confirming: true,
-  ready: true,
-  waiting_for_source: true,
-  failed: true,
-  unavailable: true
-};
-const TARGET_CLASSIFICATIONS: Record<TargetClassification, true> = {
-  drift: true,
-  manual_override: true
-};
-const AVAILABILITIES: Record<TheatreAvailability, true> = {
-  unknown: true,
-  available: true,
-  degraded: true,
-  unavailable: true
-};
-const SOURCE_ACTIONS: Record<string, true> = {activate: true, deactivate: true};
-const SOURCE_READINESS: Record<string, true> = {required: true, optional: true};
-const BACKLIGHTING_POWER: Record<ActivityBacklightingProfile["power"], true> = {
-  on: true,
-  off: true
-};
-
-export interface ActivitySourceProfile extends Record<string, unknown> {
-  action: "activate" | "deactivate";
-  readiness: "required" | "optional";
-  sourceId?: string | null;
-}
-
-export interface ActivityLightingProfile extends Record<string, unknown> {
-  profile: string;
-}
-
-export interface ActivityBacklightingProfile extends Record<string, unknown> {
-  power: "on" | "off";
-}
-
-export type ActivityProfile = Record<TheatreTarget, Record<string, unknown>> & {
-  source: ActivitySourceProfile;
-  lighting: ActivityLightingProfile;
-  backlighting: ActivityBacklightingProfile;
-};
-export type ActivityProfiles = Record<string, ActivityProfile>;
-
-export interface TheatreDesired {
-  requestId: string;
-  generation: number;
-  activity: string;
-  requestedAt: string;
-}
-
-export interface TargetFailure {
-  operation?: string | null;
-  reason?: string;
-  occurredAt?: string;
-}
-
-export interface TargetState {
-  status: TargetStatus;
-  observedAt: string;
-  classification: TargetClassification | null;
-  failure: TargetFailure | null;
-  details: Record<string, unknown> | null;
-}
-
-export interface TheatreFailure {
-  target: TheatreTarget;
-  operation: string | null;
-  reason: string;
-  occurredAt: string;
-}
-
-export interface TheatreTargetMetrics {
-  attempts: number;
-  retries: number;
-  failures: number;
-  manualOverrides: number;
-  fallbackUses: number;
-  fallbackUsed: boolean;
-  lastConfirmationMs: number | null;
-  observationAgeMs: number | null;
-  availability: TheatreAvailability;
-}
-
-export interface TheatreMetrics {
-  requests: number;
-  ready: number;
-  failed: number;
-  superseded: number;
-  manualOverrides: number;
-  driftEvents: number;
-  recoveriesAdopted: number;
-  recoveriesSafeOff: number;
-  lastTransitionMs: number | null;
-  maxTransitionMs: number | null;
-  lastOutcome: string | null;
-  targets: Record<TheatreTarget, TheatreTargetMetrics>;
-}
-
-export interface RecoveryObservation {
-  observedAt: string;
-  values: Record<string, unknown>;
-}
-
-export type RecoveryObservations = Partial<Record<TheatreTarget, RecoveryObservation>>;
-
-// A refresh sent to a target owner and not yet answered.
-export interface RefreshPending {
-  sentAt: number;
-  attempts: number;
-  exhausted: boolean;
-}
-
-export interface TheatreState {
-  desired: TheatreDesired | null;
-  currentActivity: string;
-  generation: number;
-  // The highest generation proposed by a request from outside (not
-  // recovery). A new request proposing more than that is never lost to a
-  // generation the controller used meanwhile; it gets the next free one.
-  lastProposedGeneration: number;
-  phase: string;
-  targets: Record<TheatreTarget, TargetState | null>;
-  refreshPending: Record<TheatreTarget, RefreshPending | null>;
-  failure: TheatreFailure | null;
-  blockedGeneration: number | null;
-  degraded: Array<{target: TheatreTarget; reason: string}>;
-  availability: TheatreAvailability;
-  transitionStartedAt: string | null;
-  transitionCompletedAt: string | null;
-  metrics: TheatreMetrics;
-}
+// Names other modules have imported from here.
+export {
+  TARGETS,
+  normaliseActivityProfiles,
+  type ActivityBacklightingProfile,
+  type ActivityLightingProfile,
+  type ActivityProfile,
+  type ActivityProfiles,
+  type ActivitySourceProfile,
+  type TheatreTarget
+} from "./theatre-profiles";
+export {
+  createTheatreState,
+  type RecoveryObservation,
+  type RecoveryObservations,
+  type RefreshPending,
+  type TargetClassification,
+  type TargetFailure,
+  type TargetState,
+  type TargetStatus,
+  type TheatreAvailability,
+  type TheatreDesired,
+  type TheatreFailure,
+  type TheatreMetrics,
+  type TheatreSnapshot,
+  type TheatreState,
+  type TheatreTargetMetrics
+} from "./theatre-state";
 
 export interface TheatreConfig {
   area: string;
@@ -197,168 +100,6 @@ export interface TargetCommand extends Record<string, unknown> {
   kind: string;
   requestId: string | null;
   generation: number;
-}
-
-export function normaliseActivityProfiles(value: unknown): ActivityProfiles {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("activityProfiles must be an object");
-  }
-  const entries = Object.entries(value);
-  if (entries.length === 0) throw new Error("activityProfiles must not be empty");
-
-  const profiles: ActivityProfiles = {};
-  for (const [name, profileValue] of entries) {
-    if (!PROFILE_NAME.test(name)) throw new Error(`invalid activity profile name: ${name}`);
-    if (!profileValue || typeof profileValue !== "object" || Array.isArray(profileValue)) {
-      throw new Error(`activity profile ${name} must be an object`);
-    }
-    const profile = profileValue as Record<string, unknown>;
-    const targets = {} as Record<TheatreTarget, Record<string, unknown>>;
-    for (const target of TARGETS) {
-      const desired = profile[target];
-      if (!desired || typeof desired !== "object" || Array.isArray(desired)) {
-        throw new Error(`activity profile ${name} must define ${target}`);
-      }
-      targets[target] = {...desired as Record<string, unknown>};
-    }
-    const source = targets.source;
-    if (!Object.hasOwn(SOURCE_ACTIONS, source.action as PropertyKey)) {
-      throw new Error(`activity profile ${name} has an invalid source action`);
-    }
-    if (!Object.hasOwn(SOURCE_READINESS, source.readiness as PropertyKey)) {
-      throw new Error(`activity profile ${name} has invalid source readiness`);
-    }
-    if (source.action === "activate" &&
-      (typeof source.sourceId !== "string" || !source.sourceId)) {
-      throw new Error(`activity profile ${name} must define sourceId`);
-    }
-    const lighting = targets.lighting;
-    if (typeof lighting.profile !== "string" || !PROFILE_NAME.test(lighting.profile)) {
-      throw new Error(`activity profile ${name} has invalid lighting profile`);
-    }
-    const backlighting = targets.backlighting;
-    if (!Object.hasOwn(BACKLIGHTING_POWER, backlighting.power as PropertyKey)) {
-      throw new Error(`activity profile ${name} has invalid backlighting power`);
-    }
-    profiles[name] = targets as ActivityProfile;
-  }
-  return profiles;
-}
-
-function emptyTargets(
-  saved: Partial<Record<TheatreTarget, TargetState | null>> = {}
-): Record<TheatreTarget, TargetState | null> {
-  return Object.fromEntries(TARGETS.map((target) => [
-    target,
-    saved[target] && typeof saved[target] === "object" ? {...saved[target]} : null
-  ])) as Record<TheatreTarget, TargetState | null>;
-}
-
-// A refresh is re-sent at this many attempts at most before the target is
-// reported as not responding.
-const REFRESH_ATTEMPTS = 3;
-
-function emptyRefreshPending(
-  saved: Partial<Record<TheatreTarget, RefreshPending | boolean | null>> = {}
-): Record<TheatreTarget, RefreshPending | null> {
-  return Object.fromEntries(TARGETS.map((target) => {
-    const entry = saved[target];
-    // Saved before retries existed: pending with no send time, so it retries.
-    if (entry === true) return [target, {sentAt: 0, attempts: 1, exhausted: false}];
-    if (entry && typeof entry === "object" && Number.isFinite(entry.sentAt) && Number.isInteger(entry.attempts)) {
-      return [target, {sentAt: entry.sentAt, attempts: entry.attempts, exhausted: entry.exhausted === true}];
-    }
-    return [target, null];
-  })) as Record<TheatreTarget, RefreshPending | null>;
-}
-
-function count(value: unknown): number {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
-}
-
-function nullableDuration(value: unknown): number | null {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
-}
-
-function targetMetrics(
-  saved: Partial<Record<TheatreTarget, Partial<TheatreTargetMetrics>>> = {}
-): Record<TheatreTarget, TheatreTargetMetrics> {
-  return Object.fromEntries(TARGETS.map((target) => {
-    const metric = saved[target] || {};
-    const availability = typeof metric.availability === "string" &&
-      Object.hasOwn(AVAILABILITIES, metric.availability)
-      ? metric.availability as TheatreAvailability
-      : "unknown";
-    return [target, {
-      attempts: count(metric.attempts),
-      retries: count(metric.retries),
-      failures: count(metric.failures),
-      manualOverrides: count(metric.manualOverrides),
-      fallbackUses: count(metric.fallbackUses),
-      fallbackUsed: metric.fallbackUsed === true,
-      lastConfirmationMs: nullableDuration(metric.lastConfirmationMs),
-      observationAgeMs: nullableDuration(metric.observationAgeMs),
-      availability
-    }];
-  })) as Record<TheatreTarget, TheatreTargetMetrics>;
-}
-
-function createMetrics(saved: Partial<TheatreMetrics> = {}): TheatreMetrics {
-  return {
-    requests: count(saved.requests),
-    ready: count(saved.ready),
-    failed: count(saved.failed),
-    superseded: count(saved.superseded),
-    manualOverrides: count(saved.manualOverrides),
-    driftEvents: count(saved.driftEvents),
-    recoveriesAdopted: count(saved.recoveriesAdopted),
-    recoveriesSafeOff: count(saved.recoveriesSafeOff),
-    lastTransitionMs: nullableDuration(saved.lastTransitionMs),
-    maxTransitionMs: nullableDuration(saved.maxTransitionMs),
-    lastOutcome: typeof saved.lastOutcome === "string" ? saved.lastOutcome : null,
-    targets: targetMetrics(saved.targets)
-  };
-}
-
-export function createTheatreState(
-  saved: Partial<TheatreState> = {},
-  activityProfiles: ActivityProfiles = {}
-): TheatreState {
-  const savedDesired = saved.desired && typeof saved.desired === "object" ? saved.desired : null;
-  const desired = savedDesired && Object.hasOwn(activityProfiles, savedDesired.activity)
-    ? {...savedDesired}
-    : null;
-  return {
-    desired,
-    currentActivity: typeof saved.currentActivity === "string" &&
-      Object.hasOwn(activityProfiles, saved.currentActivity)
-      ? saved.currentActivity
-      : "unknown",
-    generation: Number.isInteger(saved.generation) && (saved.generation ?? -1) >= 0 ? saved.generation! : 0,
-    lastProposedGeneration: Number.isInteger(saved.lastProposedGeneration)
-      ? saved.lastProposedGeneration!
-      : savedDesired && !savedDesired.requestId.startsWith("recovery-") && Number.isInteger(savedDesired.generation)
-        ? savedDesired.generation
-        : 0,
-    phase: typeof saved.phase === "string" ? saved.phase : "idle",
-    targets: emptyTargets(saved.targets),
-    refreshPending: emptyRefreshPending(saved.refreshPending),
-    failure: saved.failure && typeof saved.failure === "object" ? {...saved.failure} : null,
-    blockedGeneration: Number.isInteger(saved.blockedGeneration) ? saved.blockedGeneration! : null,
-    degraded: Array.isArray(saved.degraded) ? saved.degraded.map((entry) => ({...entry})) : [],
-    availability: saved.availability && Object.hasOwn(AVAILABILITIES, saved.availability)
-      ? saved.availability
-      : "unknown",
-    transitionStartedAt: typeof saved.transitionStartedAt === "string"
-      ? saved.transitionStartedAt
-      : null,
-    transitionCompletedAt: typeof saved.transitionCompletedAt === "string"
-      ? saved.transitionCompletedAt
-      : null,
-    metrics: createMetrics(saved.metrics)
-  };
 }
 
 export function normaliseConfig(
@@ -427,6 +168,10 @@ function isFresh(targetState: {observedAt: string}, nowMs: number, freshnessMs: 
   return isFreshAt(observationTime(targetState), nowMs, freshnessMs);
 }
 
+function stateEvent(state: TheatreState, area: string): TheatreOutput {
+  return {theatre: {...theatreSnapshot(state, area)}};
+}
+
 function statusFor(state: TheatreState) {
   const activity = state.desired?.activity || "none";
   if (state.phase === "failed") {
@@ -435,38 +180,7 @@ function statusFor(state: TheatreState) {
   return {phase: state.phase, text: `${activity}: ${state.phase}`};
 }
 
-function stateEvent(state: TheatreState, area: string): TheatreOutput {
-  return {
-    theatre: {
-      kind: "state",
-      area,
-      requestId: state.desired?.requestId || null,
-      generation: state.generation,
-      desiredActivity: state.desired?.activity || null,
-      requestedAt: state.desired?.requestedAt || null,
-      currentActivity: state.currentActivity,
-      phase: state.phase,
-      availability: state.availability,
-      transitionStartedAt: state.transitionStartedAt,
-      transitionCompletedAt: state.transitionCompletedAt,
-      targets: emptyTargets(state.targets),
-      failure: state.failure ? {...state.failure} : null,
-      degraded: state.degraded.map((entry) => ({...entry})),
-      metrics: createMetrics(state.metrics)
-    }
-  };
-}
-
 const RECOVERY_TARGETS: readonly TheatreTarget[] = ["display", "avr", "source", "backlighting"];
-
-function matchesExpected(expected: unknown, observed: unknown): boolean {
-  if (!expected || typeof expected !== "object" || Array.isArray(expected)) {
-    return Object.is(expected, observed);
-  }
-  if (!observed || typeof observed !== "object" || Array.isArray(observed)) return false;
-  return Object.entries(expected as Record<string, unknown>).every(([key, value]) =>
-    matchesExpected(value, (observed as Record<string, unknown>)[key]));
-}
 
 function recoveryMatches(
   profile: ActivityProfile,
