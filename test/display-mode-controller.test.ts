@@ -374,3 +374,21 @@ test("a display refresh is answered from fresh readings", () => {
   const early = apply(undefined, {kind: "intent", requestId: "tv-2", generation: 2, mode: "tv"}, 50);
   assert.deepEqual(targetStatus(apply(early.state, {kind: "refresh"}, 51)), ["discovering"]);
 });
+
+test("a retry after a transport failure gets its own full deadline", () => {
+  // The TV is off; tv mode sends set_power, which has 4 s to confirm.
+  let result = discover("tv", 1, [
+    [0.1, "tv", {power: "standby"}],
+    [0.2, "screen", {position: 0, state: "closed"}],
+    [0.3, "projector", {watts: 2.1}]
+  ]);
+  assert.equal(result.state.pending?.device, "tv");
+  const operation = result.state.pending!.command.operation;
+  // The command's transport fails just before its deadline.
+  result = apply(result.state, {kind: "transport_failed", device: "tv", operation, generation: 1, reason: "timeout"}, 3.9);
+  assert.equal(result.state.pending?.attempt, 2);
+  assert.equal(result.state.pending?.deadlineAt, at(3.9).getTime() + config.tvTimeoutMs);
+  // So the retry is not given up on a tenth of a second later.
+  result = apply(result.state, {kind: "tick", generation: 1}, 4.5);
+  assert.notEqual(result.state.phase, "failed");
+});
