@@ -137,11 +137,20 @@ Version 3.0 changes some behaviour. Check these after upgrading:
   lowercase, with each run of spaces or other characters (anything but letters, digits, `_` and `-`) as `_`:
   "Living Room" publishes under `home/living_room/…`, and "living-room" is unchanged.
   Names shown in Home Assistant keep the area as you typed it.
+- **Availability:** each publishing node sends a retained `online` once the flows have started (and again at its
+  startup message) and `offline` when it stops, on `home/<area>/lighting/availability` (room) or
+  `<base>/availability` (theatre), and its Home Assistant entities follow it. These get through when the node is
+  deployed on its own ("Modified nodes" or "Modified flows"), while the MQTT connection stays up. On a full deploy, a
+  restart or a shutdown, Node-RED stops the MQTT out node at the same moment and reconnects to the broker afterwards,
+  so set the MQTT broker node's **Birth message** to `online`, and its **Close message** and **Will message** (which
+  covers crashes) to `offline`, all retained, on the same topic; with several publishing nodes, the broker can cover
+  one of them. The theatre's readiness (`unknown`, `available`, `degraded`
+  or `unavailable`), which used `<base>/availability` before, is now on `<base>/readiness`.
 
 The whole-theatre MQTT contract uses non-retained requests at
 `home/<area>/theatre/request`; every request supplies a unique `requestId` and an
 explicit configured activity. Controller output is retained under `desired`,
-`current`, `phase`, `failure`, `availability`, `metrics`, `slo`, and
+`current`, `phase`, `failure`, `readiness`, `metrics`, `slo`, and
 `health/<target>`. Metrics expose transition latency and outcome counts plus
 per-target retry, fallback, confirmation-latency, failure, manual-override, and
 availability evidence. The SLO evaluator keeps a bounded outcome window,

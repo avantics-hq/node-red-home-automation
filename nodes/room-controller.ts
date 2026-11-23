@@ -11,7 +11,8 @@ import {
 import {scheduledLighting} from "../lib/circadian";
 import {resolveSchedule} from "../lib/circadian-schedule";
 import type {LightLevels} from "../lib/light-styling";
-import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
+import {roomStartingOutputs, roomStoppingOutputs} from "../lib/room-lighting-discovery";
+import {guarded, invalidConfig, whenFlowsStarted, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
 import {booleanSetting, jsonSetting, numberSetting, optionalBooleanSetting, textSetting} from "../lib/settings";
 import {discoveryPrefixSetting, publishingArea} from "../lib/ha-discovery";
 
@@ -136,8 +137,20 @@ const registerRoomController: NodeInitializer = (RED) => {
       process({lighting: {kind: "refresh"}}, node.send.bind(node));
     }), refreshSeconds * 1000);
 
+    // Available again as soon as this node runs, as after a redeploy of it
+    // alone, rather than waiting for the flow's startup message.
+    whenFlowsStarted(RED, node, () => {
+      const starting = roomStartingOutputs(controllerConfig);
+      if (starting.length) node.send([starting.map((output) => ({...output}))]);
+    });
+
     node.on("close", (_removed: boolean, done: () => void) => {
       clearInterval(refreshTimer);
+      // Reaches the broker only if the MQTT out node is still running, as in a
+      // deploy of this node alone; the broker's own Close and Will messages
+      // cover a full deploy, a restart and a crash (see the README).
+      const stopping = roomStoppingOutputs(controllerConfig);
+      if (stopping.length) node.send([stopping.map((output) => ({...output}))]);
       done();
     });
   }

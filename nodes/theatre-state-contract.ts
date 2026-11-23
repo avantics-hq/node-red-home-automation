@@ -3,12 +3,14 @@
 import type {Node, NodeDef, NodeInitializer} from "node-red";
 import {
   normaliseStateContractConfig,
+  theatreStartingPublications,
+  theatreStoppingPublications,
   transitionTheatreStateContract,
   type TheatreStateContractConfig,
   type TheatreStateContractMessage,
   type TheatreStateContractState
 } from "../lib/theatre-state-contract";
-import {invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
+import {invalidConfig, whenFlowsStarted, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
 import {jsonSetting, numberSetting, optionalBooleanSetting, textSetting} from "../lib/settings";
 
 interface TheatreStateContractNodeConfig extends NodeDef {
@@ -91,7 +93,17 @@ const registerTheatreStateContract: NodeInitializer = (RED) => {
       }, send);
     });
 
+    // Available again as soon as this node runs, as after a redeploy of it
+    // alone, rather than waiting for the flow's startup message.
+    whenFlowsStarted(RED, node, () => {
+      node.send([null, theatreStartingPublications(controllerConfig).map((entry) => ({...entry}))]);
+    });
+
     node.on("close", (_removed: boolean, done: () => void) => {
+      // Reaches the broker only if the MQTT out node is still running, as in a
+      // deploy of this node alone; the broker's own Close and Will messages
+      // cover a full deploy, a restart and a crash (see the README).
+      node.send([null, theatreStoppingPublications(controllerConfig).map((entry) => ({...entry}))]);
       done();
     });
   }

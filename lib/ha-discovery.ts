@@ -50,3 +50,9 @@ export function publishingArea(area: string, needed: boolean): string {
   if (area && !areaId(area)) throw new Error("area must contain a letter or digit");
   return area;
 }
+
+// A publishing node's availability, retained on its availability topic:
+// online when it starts, offline when it stops. These are Home Assistant's
+// default availability payloads, so entities need only the topic.
+export const ONLINE = "online";
+export const OFFLINE = "offline";

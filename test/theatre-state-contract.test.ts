@@ -89,8 +89,9 @@ test("startup publishes retained Home Assistant discovery for requests and truth
     theatreStateContract: {kind: "startup"}
   }, config, at(0));
 
-  assert.equal(result.publications.length, 13);
+  assert.equal(result.publications.length, 14);
   assert.equal(result.publications.every(({retain}) => retain), true);
+  assert.deepEqual(result.publications.at(-1), {topic: "home/lounge/theatre/availability", payload: "online", retain: true}, "online, after discovery");
   const select = result.publications.find(({topic}) => topic ===
     "homeassistant/select/lounge_theatre_activity/config");
   assert.ok(select);
@@ -122,7 +123,7 @@ test("non-retained requests allocate generations and exact duplicates are idempo
   );
   assert.equal(requestTopics["home/lounge/theatre/phase"], "requested");
   assert.equal(requestTopics["home/lounge/theatre/failure"], "null");
-  assert.equal(requestTopics["home/lounge/theatre/availability"], "unknown");
+  assert.equal(requestTopics["home/lounge/theatre/readiness"], "unknown");
   assert.equal(
     jsonObject(requestTopics["home/lounge/theatre/desired"]!).requestId,
     "ha-request-1"
@@ -181,7 +182,7 @@ test("controller snapshots publish retained desired, current, phase, failure and
   assert.equal(byTopic["home/lounge/theatre/current"], "unknown");
   assert.equal(byTopic["home/lounge/theatre/phase"], "transitioning");
   assert.equal(byTopic["home/lounge/theatre/failure"], "null");
-  assert.equal(byTopic["home/lounge/theatre/availability"], "unknown");
+  assert.equal(byTopic["home/lounge/theatre/readiness"], "unknown");
   assert.equal(jsonObject(byTopic["home/lounge/theatre/health/display"]!).status, "ready");
   assert.equal(jsonObject(byTopic["home/lounge/theatre/health/source"]!).status, "unknown");
   assert.equal(jsonObject(byTopic["home/lounge/theatre/metrics"]!).lastTransitionMs, null);
@@ -230,14 +231,18 @@ test("a contract area that isn't an identifier names topics and IDs by its ID", 
 test("discovery is a setting: on publishes it, off clears it, unset means on", () => {
   const startup = (settings: Partial<TheatreStateContractConfig>) =>
     transitionTheatreStateContract(undefined, {theatreStateContract: {kind: "startup"}}, {...config, ...settings}, at(0)).publications;
-  const on = startup({});
+  const online = {topic: "home/lounge/theatre/availability", payload: "online", retain: true};
+  const discovery = (publications: ReturnType<typeof startup>) => publications.filter(({topic}) => topic !== online.topic);
+  assert.deepEqual(startup({}).at(-1), online, "the contract publishes its state, so its availability, either way");
+  assert.deepEqual(startup({discovery: false}).at(-1), online);
+  const on = discovery(startup({}));
   assert.equal(on.length, 13);
   assert.ok(on.every(({payload}) => payload.startsWith("{")));
-  const off = startup({discovery: false});
+  const off = discovery(startup({discovery: false}));
   assert.deepEqual(off.map(({topic}) => topic), on.map(({topic}) => topic), "the same discovery topics");
   assert.ok(off.every(({payload, retain}) => payload === "" && retain), "each cleared with an empty retained message");
   // With no area there are no entities to clear.
-  assert.deepEqual(startup({discovery: false, area: ""}), []);
+  assert.deepEqual(discovery(startup({discovery: false, area: ""})), []);
 });
 
 test("the area is needed for discovery or the default base topic, and optional otherwise", () => {

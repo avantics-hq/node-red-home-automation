@@ -12,7 +12,10 @@ export type TheatreTopicName =
   | "desired"
   | "current"
   | "phase"
+  // The node's own availability, online or offline, for Home Assistant.
   | "availability"
+  // The theatre's readiness: unknown, available, degraded or unavailable.
+  | "readiness"
   | "failure"
   | "metrics"
   | "slo"
@@ -91,11 +94,13 @@ export function theatreDiscovery(config: TheatreDiscoveryConfig): Array<{topic: 
       component: "sensor",
       objectId: `${area}_theatre_availability`,
       payload: {
-        name: "Availability",
+        // Named "Readiness" so it isn't mistaken for Home Assistant's own
+        // availability; its IDs are kept so the entity carries over.
+        name: "Readiness",
         unique_id: `${area}_theatre_availability`,
         default_entity_id: `sensor.${area}_theatre_availability`,
         icon: "mdi:check-network-outline",
-        state_topic: theatreTopic(baseTopic, "availability"),
+        state_topic: theatreTopic(baseTopic, "readiness"),
         entity_category: "diagnostic",
         device: controllerDevice
       }
@@ -181,6 +186,6 @@ export function theatreDiscovery(config: TheatreDiscoveryConfig): Array<{topic: 
   }
   return entries.map(({component, objectId, payload}) => ({
     topic: `${discoveryPrefix}/${component}/${objectId}/config`,
-    payload: {...payload, origin: DISCOVERY_ORIGIN}
+    payload: {...payload, availability_topic: theatreTopic(baseTopic, "availability"), origin: DISCOVERY_ORIGIN}
   }));
 }

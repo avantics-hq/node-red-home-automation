@@ -68,13 +68,16 @@ type RuntimeConstructor = new (config: Record<string, unknown>) => RuntimeNode;
 function runtime(
   register: NodeInitializer,
   credentials: Record<string, string> = {}
-): {Constructor: RuntimeConstructor} {
+): {Constructor: RuntimeConstructor; events: EventEmitter} {
   let Constructor: RuntimeConstructor | undefined;
   const globalValues = new Map<string, unknown>([["MOTION_ENABLED_STATE", true]]);
   // Shared by every node built from this runtime, as Node-RED keeps a node's
   // memory context across a redeploy.
   const values = new Map<string, unknown>();
+  // Node-RED's runtime events, such as "flows:started" after a deploy.
+  const events = new EventEmitter();
   const RED = {
+    events,
     nodes: {
       createNode(node: RuntimeNode) {
         (node as RuntimeNode & {credentials: Record<string, string>}).credentials = credentials;
@@ -113,7 +116,7 @@ function runtime(
   };
   register(RED as unknown as Parameters<NodeInitializer>[0]);
   assert.ok(Constructor);
-  return {Constructor};
+  return {Constructor, events};
 }
 
 function receive<T>(
@@ -508,7 +511,7 @@ test("theatre state adapter bridges non-retained requests and retained HA truth"
   const startup = await receive<SendEnvelope>(node, {
     theatreStateContract: {kind: "startup"}
   });
-  assert.equal(startup[0]?.[1]?.length, 13);
+  assert.equal(startup[0]?.[1]?.length, 14);
   assert.equal(startup[0]?.[1]?.every((entry) => entry.retain === true), true);
 
   const requested = await receive<SendEnvelope>(node, {
@@ -1205,7 +1208,8 @@ test("publish settings: the area is required only when something named after it 
   assert.deepEqual(topicOnly.errors, []);
   const cleared = await receive<Array<Array<{topic?: string; payload?: unknown}>>>(new contract({...base, area: "hall", discovery: "false"}), {theatreStateContract: {kind: "startup"}});
   const clearedMessages = cleared.flat(2).filter((message) => message !== null);
-  assert.ok(clearedMessages.length > 0 && clearedMessages.every((message) => message.payload === ""), "discovery off clears its entries");
+  const discoveryMessages = clearedMessages.filter((message) => message.topic !== "home/hall/theatre/availability");
+  assert.ok(discoveryMessages.length > 0 && discoveryMessages.every((message) => message.payload === ""), "discovery off clears its entries");
 });
 
 test("publish settings: null and a missing field mean on; only false means off", async (t) => {
@@ -1282,4 +1286,60 @@ test("discovery basics: the room checks a publishing area and uses its discovery
   const startup = await receive<Array<Array<{topic?: string; payload?: Record<string, unknown>} | null>>>(prefixed, {lighting: {kind: "startup"}});
   const entry = startup.flat(2).find((message) => message?.topic === "ha/switch/hall_circadian_lighting/config");
   assert.equal((entry?.payload?.origin as {name?: string} | undefined)?.name, "@avantics/node-red-home-automation");
+});
+
+test("availability: publishing nodes send a retained offline as they stop", async () => {
+  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
+  const sentOnClose = async (node: RuntimeNode) => {
+    const before = node.sent.length;
+    await close(node);
+    return node.sent.slice(before);
+  };
+  const room = runtime(registerRoom).Constructor;
+  assert.deepEqual(await sentOnClose(new room({targets, area: "hall", publishState: true, discovery: true})),
+    [[[{topic: "home/hall/lighting/availability", payload: "offline", retain: true}]]]);
+  assert.deepEqual(await sentOnClose(new room({targets, area: "hall", publishState: false, discovery: false})), [],
+    "a room that publishes nothing sends nothing");
+
+  const contract = runtime(registerTheatreStateContract).Constructor;
+  assert.deepEqual(await sentOnClose(new contract({area: "den", activities: "[\"off\"]", discovery: false})),
+    [[null, [{topic: "home/den/theatre/availability", payload: "offline", retain: true}]]]);
+});
+
+test("availability: a node redeployed on its own is available again without a startup message", async (t) => {
+  const availability = (node: RuntimeNode) => JSON.stringify(node.sent).match(/"topic":"[^"]*\/availability","payload":"(online|offline)"/g) ?? [];
+  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
+  const roomRuntime = runtime(registerRoom);
+  const roomConfig = {targets, area: "hall", publishState: true, discovery: true};
+  const before = new roomRuntime.Constructor(roomConfig);
+  await receive(before, {lighting: {kind: "startup"}});
+  await close(before);
+  assert.match(String(availability(before).at(-1)), /offline/);
+  // Node-RED reconstructs the node, then announces the flows started.
+  const after = new roomRuntime.Constructor(roomConfig);
+  t.after(() => close(after));
+  roomRuntime.events.emit("flows:started");
+  assert.deepEqual(after.sent, [[[{topic: "home/hall/lighting/availability", payload: "online", retain: true}]]]);
+  roomRuntime.events.emit("flows:started");
+  assert.equal(after.sent.length, 1, "once per construction");
+
+  const quiet = new roomRuntime.Constructor({targets, area: "hall", publishState: false, discovery: false});
+  t.after(() => close(quiet));
+  const quietRuntime = roomRuntime;
+  quietRuntime.events.emit("flows:started");
+  assert.deepEqual(quiet.sent, [], "a room that publishes nothing announces nothing");
+
+  const contractRuntime = runtime(registerTheatreStateContract);
+  const contract = new contractRuntime.Constructor({area: "lounge", activities: "[\"off\"]"});
+  await close(contract);
+  const again = new contractRuntime.Constructor({area: "lounge", activities: "[\"off\"]"});
+  t.after(() => close(again));
+  contractRuntime.events.emit("flows:started");
+  assert.deepEqual(again.sent, [[null, [{topic: "home/lounge/theatre/availability", payload: "online", retain: true}]]]);
+  // A node closed before the flows start announces nothing.
+  const closedEarly = new contractRuntime.Constructor({area: "den", activities: "[\"off\"]"});
+  await close(closedEarly);
+  const sentBefore = closedEarly.sent.length;
+  contractRuntime.events.emit("flows:started");
+  assert.equal(closedEarly.sent.length, sentBefore);
 });

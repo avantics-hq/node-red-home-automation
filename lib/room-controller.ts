@@ -4,7 +4,7 @@ import type {TraceEntry} from "./bounded-trace";
 import type {CircadianLighting} from "./circadian";
 import {alreadyStyled, lightCommand, readLightReport, setsLightValues, type LightCommand, type LightReport} from "./z2m-light";
 import {areaId} from "./ha-discovery";
-import {circadianCommandTopic, circadianStateMessage, roomLightingDiscovery} from "./room-lighting-discovery";
+import {circadianCommandTopic, circadianStateMessage, roomAvailabilityMessage, roomLightingDiscovery, roomPublishesState} from "./room-lighting-discovery";
 import {checkCommandEcho, checkStateReport, parsePayload, rememberCommand, type ExpectedCommand} from "./command-echo";
 
 export {fingerprint, parsePayload, type ExpectedCommand} from "./command-echo";
@@ -204,7 +204,7 @@ export function transitionRoom(
   // What the room publishes for MQTT and Home Assistant to see is named after
   // its area, so it needs one, and is switched on by its settings; light
   // control depends on neither.
-  const publishesArea = config.area !== "" && config.publishState !== false;
+  const publishesArea = roomPublishesState(config);
   const publishesDiscovery = publishesArea && config.discovery !== false;
 
   function refreshCommands(source: string): RoomOutput[] {
@@ -310,7 +310,10 @@ export function transitionRoom(
       // from Home Assistant.
       outputs.push(publishesDiscovery ? entry : {topic: entry.topic, payload: "", retain: true});
     }
-    if (publishesArea) outputs.push(circadianStateMessage(config.area, state.circadianEnabled));
+    if (publishesArea) {
+      outputs.push(roomAvailabilityMessage(config.area, true));
+      outputs.push(circadianStateMessage(config.area, state.circadianEnabled));
+    }
     for (const target of config.targets) controlChanged.add(target.id);
   } else if (event.kind === "observed") {
     const target = event.target ? targetById[event.target] : targetForTopic(msg.topic, "stateTopic");
