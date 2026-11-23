@@ -668,3 +668,24 @@ test("a request is never lost to a generation the controller used for recovery",
   result = request(result.state, "tv_shield", 3, 5, "other-request");
   assert.equal(result.events.find(({theatre}) => theatre.kind === "rejected")?.theatre.reason, "generation-conflict");
 });
+
+test("transition time covers only the transition, not later overrides or failures", () => {
+  const settled = confirmActivity("tv_shield", 1);
+  const transitionMs = settled.state.metrics.lastTransitionMs;
+  assert.equal(transitionMs, 1200);
+
+  // A person takes over the receiver an hour later.
+  const manual = target(settled.state, "avr", "transitioning", 1, 3600, {classification: "manual_override"});
+  assert.equal(manual.state.phase, "manual_override");
+  assert.equal(manual.state.metrics.lastTransitionMs, transitionMs);
+  assert.equal(manual.state.metrics.maxTransitionMs, transitionMs);
+
+  // A target fails an hour later: the activity fails, but the transition
+  // it completed is not retimed.
+  const failed = target(settled.state, "display", "failed", 1, 3600, {
+    failure: {operation: "query", reason: "timeout", occurredAt: at(3600).toISOString()}
+  });
+  assert.equal(failed.state.phase, "failed");
+  assert.equal(failed.state.metrics.lastTransitionMs, transitionMs);
+  assert.equal(failed.state.transitionCompletedAt, settled.state.transitionCompletedAt);
+});

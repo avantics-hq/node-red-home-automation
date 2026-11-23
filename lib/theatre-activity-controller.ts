@@ -519,12 +519,17 @@ export function transitionTheatre(
     });
   }
 
+  // Records an outcome. Only the transition's first ready or failed ends it
+  // and is timed: a later override or failure is not part of the transition.
   function completeTransition(outcome: "ready" | "failed" | "manual_override") {
     const startedAt = Date.parse(state.transitionStartedAt || "");
-    if (Number.isFinite(startedAt)) {
-      const duration = Math.max(0, nowMs - startedAt);
-      state.metrics.lastTransitionMs = duration;
-      state.metrics.maxTransitionMs = Math.max(state.metrics.maxTransitionMs || 0, duration);
+    if (outcome !== "manual_override" && state.transitionCompletedAt === null) {
+      state.transitionCompletedAt = now.toISOString();
+      if (Number.isFinite(startedAt)) {
+        const duration = Math.max(0, nowMs - startedAt);
+        state.metrics.lastTransitionMs = duration;
+        state.metrics.maxTransitionMs = Math.max(state.metrics.maxTransitionMs || 0, duration);
+      }
     }
     state.metrics.lastOutcome = outcome;
     if (outcome === "ready") state.metrics.ready += 1;
@@ -593,7 +598,6 @@ export function transitionTheatre(
     state.currentActivity = "unknown";
     state.phase = "failed";
     state.availability = "unavailable";
-    state.transitionCompletedAt = state.transitionCompletedAt || now.toISOString();
     if (firstFailure) completeTransition("failed");
   }
 
@@ -724,7 +728,6 @@ export function transitionTheatre(
     if (previousPhase !== "ready" || previousCurrent !== state.currentActivity) {
       // Only the first ready of a generation completes its transition.
       if (state.transitionCompletedAt === null) {
-        state.transitionCompletedAt = now.toISOString();
         completeTransition("ready");
       }
       emit("ready");
