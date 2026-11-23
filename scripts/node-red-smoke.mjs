@@ -65,9 +65,11 @@ try {
 // create, or an unexpected "invalid configuration" status, fails the smoke.
 // Every adapter uses that one badge text for a configuration it cannot use
 // (test/nodes.test.ts checks it).
-// The display controller needs device hosts, which the examples leave blank.
+// The display controller needs device hosts, and the theatre state contract an
+// area (it names topics and Home Assistant entities after it); the examples
+// leave both for the user to fill in.
 async function checkExamples() {
-  const expectedInvalid = new Set(["home-display-mode-controller"]);
+  const expectedInvalid = new Set(["home-display-mode-controller", "home-theatre-state-contract"]);
   const examplesDir = join(dirname(require.resolve(`${packageName}/package.json`)), "examples");
   const statuses = new Map();
   RED.events.on("node-status", (event) => statuses.set(event.id, event.status));

@@ -925,9 +925,12 @@ test("the example theatre flow reaches ready with no translation and stays ready
   for (const entry of flow) {
     const register = registers[entry.type];
     if (!register) continue;
+    // What the example leaves for the user to fill in.
     const config = entry.type === "home-display-mode-controller"
       ? {...entry, tvHost: "tv.example", screenHost: "screen.example", projectorMeterHost: "meter.example"}
-      : entry;
+      : entry.type === "home-theatre-state-contract"
+        ? {...entry, area: "lounge"}
+        : entry;
     const node = new (runtime(register, {tvPsk: "example"}).Constructor)(config);
     assert.deepEqual(node.errors, [], entry.type);
     nodes.set(entry.id, node);
@@ -1021,7 +1024,8 @@ test("the example theatre flow reaches ready with no translation and stays ready
   for (const entry of flow.filter((candidate) => candidate.type === "inject")) {
     const msg: Record<string, unknown> = {};
     for (const prop of entry.props as Array<{p: string; v: string; vt: string}>) {
-      msg[prop.p] = prop.vt === "json" ? JSON.parse(prop.v) : prop.v;
+      // The inject's topic names the area the user gives the contract.
+      msg[prop.p] = prop.vt === "json" ? JSON.parse(prop.v) : prop.v.replace("<area>", "lounge");
     }
     queue.push([entry.wires![0]![0]!, msg]);
     await settle();
@@ -1046,7 +1050,7 @@ test("the example theatre flow reaches ready with no translation and stays ready
 
   // The example's off activity confirms too: the receiver goes to standby.
   const contractId = idOf("home-theatre-state-contract");
-  queue.push([contractId, {topic: "home/room/theatre/request", payload: {requestId: "example-request-2", activity: "off"}}]);
+  queue.push([contractId, {topic: "home/lounge/theatre/request", payload: {requestId: "example-request-2", activity: "off"}}]);
   await settle();
   for (let second = 0; second < 180 && activity().currentActivity !== "off"; second += 1) {
     t.mock.timers.tick(1000);
