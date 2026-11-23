@@ -2,11 +2,28 @@
 
 import {numberSetting} from "./settings";
 import {asTargetStatus, targetStateEvent, type TargetStateEvent} from "./target-state";
+import {
+  POWER_ON,
+  POWER_STANDBY,
+  QUERY_COMMAND,
+  ZONE_ON,
+  formatVolumeCommand,
+  parseAvrLine,
+  parseSourceCodes,
+  roundVolume,
+  selectSource,
+  type AvrPower,
+  type MainZone
+} from "./denon-protocol";
 
-export const QUERY_COMMAND = "PW?\rZM?\rSI?\rMV?\r";
-
-export type AvrPower = "on" | "standby";
-export type MainZone = "on" | "off";
+export {
+  QUERY_COMMAND,
+  formatVolumeCommand,
+  parseAvrLine,
+  type AvrPower,
+  type MainZone,
+  type ParsedAvrLine
+} from "./denon-protocol";
 export type AvrField = "power" | "mainZone" | "source" | "volume";
 
 export interface AvrConfig {
@@ -132,31 +149,6 @@ export interface AvrOutputEvent {
   };
 }
 
-export type ParsedAvrLine =
-  | {field: "power"; value: AvrPower; line: string}
-  | {field: "mainZone"; value: MainZone; line: string}
-  | {field: "source"; value: string | null; sourceCode: string; line: string}
-  | {field: "volume"; value: number | null; line: string};
-
-function parseSources(value: unknown): Record<string, string> {
-  const sources = value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
-  const entries = Object.entries(sources);
-  if (entries.some(([name, code]) =>
-    !name ||
-    !code || typeof code !== "string" ||
-    !/^[A-Z0-9][A-Z0-9 /._-]*$/.test(code)
-  )) {
-    throw new Error("sources must map names to Denon source codes");
-  }
-  const typedEntries = entries as Array<[string, string]>;
-  if (new Set(typedEntries.map(([, code]) => code)).size !== typedEntries.length) {
-    throw new Error("Denon source codes must be unique");
-  }
-  return Object.fromEntries(typedEntries);
-}
-
 function observedTime(value: unknown): string | null {
   return typeof value === "string" && Number.isFinite(Date.parse(value)) ? value : null;
 }
@@ -227,50 +219,10 @@ export function createAvrState(
   };
 }
 
-function parseVolume(raw: string): number | null {
-  if (!/^\d{2,3}$/.test(raw)) return null;
-  if (raw.length === 2) return Number(raw);
-  return Number(raw.slice(0, 2)) + Number(raw.slice(2)) / 10;
-}
-function roundVolume(value: number): number {
-  return Math.round(value * 2) / 2;
-}
-
 function sameVolume(left: number | null, right: number | null): boolean {
   return left !== null && right !== null && Math.abs(left - right) < 0.001;
 }
 
-export function formatVolumeCommand(value: number): string {
-  const rounded = roundVolume(value);
-  if (!Number.isFinite(value) || rounded < 0 || rounded > 98 || Math.abs(value - rounded) > 0.001) {
-    throw new Error("volume must be a half-step between 0 and 98");
-  }
-  const whole = Math.floor(rounded).toString().padStart(2, "0");
-  return "MV" + whole + (Number.isInteger(rounded) ? "" : "5") + "\r";
-}
-
-
-export function parseAvrLine(
-  value: unknown,
-  sources: Record<string, string>
-): ParsedAvrLine | null {
-  const line = String(value ?? "").trim();
-  if (line === "PWON") return {field: "power", value: "on", line};
-  if (line === "PWOFF" || line === "PWSTANDBY") {
-    return {field: "power", value: "standby", line};
-  }
-  if (line === "ZMON") return {field: "mainZone", value: "on", line};
-  if (line === "ZMOFF") return {field: "mainZone", value: "off", line};
-  if (/^SI.+/.test(line)) {
-    const sourceCode = line.slice(2);
-    const source = Object.entries(sources).find(([, code]) => code === sourceCode)?.[0] || null;
-    return {field: "source", value: source, sourceCode, line};
-  }
-  if (/^MV\d{2,3}$/.test(line)) {
-    return {field: "volume", value: parseVolume(line.slice(2)), line};
-  }
-  return null;
-}
 
 // Validates AVR configuration and fills its defaults. The Node-RED adapter
 // calls this at deploy, so a bad configuration shows on the node instead of
@@ -290,7 +242,7 @@ export function normaliseAvrConfig(rawConfig: {[K in keyof AvrConfig]?: unknown}
   }
   return {
     area: typeof rawConfig.area === "string" && rawConfig.area ? rawConfig.area : "room",
-    sources: parseSources(rawConfig.sources),
+    sources: parseSourceCodes(rawConfig.sources),
     retryMs: Math.max(250, numberSetting(rawConfig.retryMs, "retry interval", 2000)),
     maxAttempts: Math.max(1, Math.floor(numberSetting(rawConfig.maxAttempts, "max attempts", 3))),
     minVolume,
@@ -591,13 +543,13 @@ export function transitionAvr(
         return;
       }
       if (state.desired.power === "standby") {
-        emitCommand("standby", "PWSTANDBY\r", 1);
+        emitCommand("standby", POWER_STANDBY, 1);
       } else if (state.observed.power !== "on") {
-        emitCommand("power-on", "PWON\r", 1);
+        emitCommand("power-on", POWER_ON, 1);
       } else if (state.observed.mainZone !== "on") {
-        emitCommand("main-zone-on", "ZMON\r", 1);
+        emitCommand("main-zone-on", ZONE_ON, 1);
       } else if (state.desired.source && state.observed.sourceCode !== desiredSourceCode()) {
-        emitCommand("source", "SI" + desiredSourceCode() + "\r", 1);
+        emitCommand("source", selectSource(desiredSourceCode()!), 1);
       }
       return;
     }
