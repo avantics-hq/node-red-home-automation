@@ -143,8 +143,9 @@ const registerDisplayModeController: NodeInitializer = (RED) => {
         area: config.area || "lounge",
         component: "display-mode-controller"
       }, result.traces, now);
-      if (result.events.length) {
-        send([null, result.events.map((event) => ({payload: undefined, ...event}))]);
+      const outputs = [...result.events, ...result.targetStates];
+      if (outputs.length) {
+        send([null, outputs.map((event) => ({payload: undefined, ...event}))]);
       }
       updateStatus(result.status);
       schedule(result.state);
