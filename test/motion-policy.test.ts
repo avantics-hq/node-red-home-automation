@@ -183,3 +183,32 @@ test("motion settings are read once, from the node's editor values", () => {
   assert.throws(() => normaliseMotionConfig({defaultDelaySeconds: ""}), /vacancy delay must be a number/);
   assert.throws(() => normaliseMotionConfig({defaultIlluminanceCutoff: "dark"}), /illuminance cutoff must be a number/);
 });
+
+test("a redeploy with a changed delay or cutoff uses the new setting", () => {
+  // The node ran with the old settings; then the user changes both and redeploys.
+  const ran = transitionMotion(undefined, {source: "illuminance", payload: 5}, config, true, 1000).state;
+  assert.equal(ran.delaySeconds, 30);
+  const changed = {...config, defaultDelaySeconds: 90, defaultIlluminanceCutoff: 40};
+  const redeployed = transitionMotion(ran, {source: "illuminance", payload: 5}, changed, true, 2000).state;
+  assert.equal(redeployed.delaySeconds, 90);
+  assert.equal(redeployed.illuminanceCutoff, 40);
+  // State saved before the setting was recorded also takes the setting.
+  const legacy = {...ran, delaySeconds: 600, illuminanceCutoff: 999, delaySecondsSetting: undefined, illuminanceCutoffSetting: undefined};
+  assert.equal(transitionMotion(legacy as never, {source: "illuminance", payload: 5}, config, true, 3000).state.delaySeconds, 30);
+});
+
+test("a delay or cutoff message overrides the setting until it changes", () => {
+  let state = transitionMotion(undefined, {source: "delay", payload: 45}, config, true, 1000).state;
+  state = transitionMotion(state, {source: "illuminance-cut-off", payload: 80}, config, true, 1100).state;
+  assert.equal(state.delaySeconds, 45, "the delay message is in seconds");
+  assert.equal(state.illuminanceCutoff, 80);
+  // A redeploy with the same settings keeps the overrides.
+  state = transitionMotion(state, {source: "illuminance", payload: 5}, config, true, 2000).state;
+  assert.deepEqual([state.delaySeconds, state.illuminanceCutoff], [45, 80]);
+  // A redeploy with a changed delay setting replaces only the delay override.
+  state = transitionMotion(state, {source: "illuminance", payload: 5}, {...config, defaultDelaySeconds: 60}, true, 3000).state;
+  assert.deepEqual([state.delaySeconds, state.illuminanceCutoff], [60, 80]);
+  // The vacancy timer uses the delay in seconds.
+  const vacancy = transitionMotion(state, {source: "occupancy", payload: {occupied: false}}, {...config, defaultDelaySeconds: 60}, true, 4000);
+  assert.deepEqual(vacancy.effects.find((effect) => effect.kind === "schedule-off-timer"), {kind: "schedule-off-timer", delayMs: 60000, generation: vacancy.state.offTimerGeneration});
+});
