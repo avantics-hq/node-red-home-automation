@@ -1,6 +1,7 @@
 "use strict";
 
 import {boundObservedAt, isFresh as isFreshAt, isOutOfOrder, parseObservedAt} from "./observation-time";
+import {isTargetStatus} from "./target-state";
 import {
   OPTIONAL_TARGETS,
   REQUIRED_TARGETS,
@@ -14,7 +15,6 @@ import {
 import {
   REFRESH_ATTEMPTS,
   TARGET_CLASSIFICATIONS,
-  TARGET_STATUSES,
   createTheatreState,
   emptyRefreshPending,
   emptyTargets,
@@ -517,7 +517,7 @@ export function transitionTheatre(
     if (!Number.isInteger(event.generation) || event.generation < 1) {
       throw new Error("target generation must be a positive integer");
     }
-    if (!Object.hasOwn(TARGET_STATUSES, event.status)) throw new Error("unknown theatre target status");
+    if (!isTargetStatus(event.status)) throw new Error("unknown theatre target status");
     if (observationTime(event) === null) throw new Error("target observedAt must be an ISO timestamp");
     if (event.classification && !Object.hasOwn(TARGET_CLASSIFICATIONS, event.classification)) {
       throw new Error("unknown theatre target classification");

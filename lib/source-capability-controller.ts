@@ -1,6 +1,7 @@
 "use strict";
 
 import {boundObservedAt, isOutOfOrder, parseObservedAt} from "./observation-time";
+import {targetStateEvent, type TargetStateEvent, type TargetStatus} from "./target-state";
 
 export type SourceAction = "activate" | "deactivate";
 export type SourceControlMode = "command" | "external" | "unavailable";
@@ -218,31 +219,20 @@ export interface SourceCommand {
   attempt: number;
 }
 export interface SourceOutputEvent {
-  theatre: {
-    kind: "target_state";
-    target: "source";
-    requestId: string;
-    generation: number;
-    status: string;
-    observedAt: string;
-    sourceId: string | null;
-    action: SourceAction;
-    classification?: "manual_override";
-    details: {
-      observedStatus: SourceObservationStatus | null;
-      readiness: {
-        required: SourceConfirmation;
-        available: boolean;
-        active: boolean;
-        application: string | null;
-        playback: SourcePlaybackState;
-        satisfied: boolean;
-      };
-      recovery: Record<string, unknown>;
-      metrics: {attempts: number; retries: number; fallbackUsed: boolean};
+  // The envelope, plus the source and action it answers.
+  theatre: TargetStateEvent<"source", {
+    observedStatus: SourceObservationStatus | null;
+    readiness: {
+      required: SourceConfirmation;
+      available: boolean;
+      active: boolean;
+      application: string | null;
+      playback: SourcePlaybackState;
+      satisfied: boolean;
     };
-    failure?: SourceFailure;
-  };
+    recovery: Record<string, unknown>;
+    metrics: {attempts: number; retries: number; fallbackUsed: boolean};
+  }, SourceFailure> & {sourceId: string | null; action: SourceAction};
 }
 
 
@@ -261,7 +251,7 @@ function commandFor(
   };
 }
 
-function targetStatus(phase: string): string {
+function targetStatus(phase: string): TargetStatus {
   if (phase === "ready") return "ready";
   if (phase === "failed") return "failed";
   if (phase === "unavailable") return "unavailable";
@@ -312,15 +302,12 @@ function targetEvent(
 ): SourceOutputEvent | null {
   if (!state.desired) return null;
   const readiness = readinessEvidence(state.observed, descriptorFor(state, sources)?.confirmation ?? "unavailable");
-  const theatre: SourceOutputEvent["theatre"] = {
-    kind: "target_state",
+  const envelope = targetStateEvent({
     target: "source",
     requestId: state.desired.requestId,
     generation: state.generation,
     status: targetStatus(state.phase),
     observedAt: state.observed?.confirmedAt ?? state.observed?.observedAt ?? iso(now),
-    sourceId: state.desired.sourceId,
-    action: state.desired.action,
     details: {
       observedStatus: state.observed?.status ?? null,
       readiness,
@@ -334,11 +321,11 @@ function targetEvent(
         retries: Math.max(0, state.lastAttempt - 1),
         fallbackUsed: state.fallbackUsed
       }
-    }
-  };
-  if (state.failure) theatre.failure = {...state.failure};
-  if (state.classification) theatre.classification = state.classification;
-  return {theatre};
+    },
+    classification: state.classification,
+    failure: state.failure
+  });
+  return {theatre: {...envelope, sourceId: state.desired.sourceId, action: state.desired.action}};
 }
 
 function statusFor(state: SourceState) {
