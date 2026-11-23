@@ -1057,3 +1057,21 @@ test("the example theatre flow reaches ready with no translation and stays ready
   assert.equal(activity().currentActivity, "off");
   assert.equal(devices.avr.PW, "STANDBY");
 });
+
+test("every adapter shows the same badge for a configuration it cannot use", () => {
+  // One badge text lets people, and the Node-RED smoke, spot any broken node;
+  // the reason goes to node.error.
+  const broken: Array<[string, NodeInitializer, Record<string, unknown>, RegExp]> = [
+    ["activity lighting", registerActivityLighting, {area: "room", profiles: "{not json"}, /JSON/],
+    ["source capability", registerSource, {area: "room", sources: "{not json"}, /JSON/],
+    ["theatre activity", registerTheatreActivity, {area: "room", activityProfiles: "{not json"}, /JSON/],
+    ["theatre state contract", registerTheatreStateContract, {area: "room", activities: "{not json"}, /./]
+  ];
+  for (const [name, register, config, reason] of broken) {
+    const node = new (runtime(register).Constructor)(config);
+    assert.deepEqual(node.statuses.at(-1), {fill: "red", shape: "ring", text: "invalid configuration"}, name);
+    assert.equal(node.errors.length, 1, name);
+    assert.match(String(node.errors[0]), /^invalid configuration: /, name);
+    assert.match(String(node.errors[0]), reason, name);
+  }
+});
