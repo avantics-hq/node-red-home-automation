@@ -47,7 +47,7 @@ Example: [`Room lighting.json`](https://github.com/avantics-hq/node-red-home-aut
 | Node | Purpose |
 |---|---|
 | `home-occupancy-fusion` | Combines PIR motion with optional presence sensing. |
-| `home-motion-lighting-policy` | Converts occupancy and illuminance into lighting intent. |
+| `home-motion-lighting-policy` | Converts occupancy and illuminance into lighting intent. A `delay` message (in seconds) or `illuminance-cut-off` message overrides its settings until they are changed and redeployed. |
 | `home-switch-lighting-policy` | Converts raw edges or pre-classified button actions into lighting intent while exposing input freshness and availability. |
 | `home-room-lighting-controller` | Owns the room's light commands, adaptive styling, manual and held lights, and lighting state. |
 

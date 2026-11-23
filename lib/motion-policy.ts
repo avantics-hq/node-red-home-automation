@@ -18,6 +18,11 @@ export interface MotionState {
   illuminance: number | null;
   illuminanceCutoff: number;
   delaySeconds: number;
+  // The configured cutoff and delay the two values above were based on. A
+  // "delay" or "illuminance-cut-off" message overrides a value until the
+  // node is redeployed with a different setting.
+  illuminanceCutoffSetting: number | null;
+  delaySecondsSetting: number | null;
   offTimerGeneration: number;
   offTimerDueAt: number | null;
   // When the room went vacant and the pending off-timer started.
@@ -92,8 +97,17 @@ export function createMotionState(
   return {
     areaEnabled: saved.areaEnabled !== false,
     illuminance: saved.illuminance ?? null,
-    illuminanceCutoff: saved.illuminanceCutoff ?? config.defaultIlluminanceCutoff,
-    delaySeconds: saved.delaySeconds ?? config.defaultDelaySeconds,
+    // A saved value stands only while the setting it was based on is
+    // unchanged; state saved before this rule recorded none, so the setting
+    // applies.
+    illuminanceCutoff: saved.illuminanceCutoffSetting === config.defaultIlluminanceCutoff && saved.illuminanceCutoff !== undefined
+      ? saved.illuminanceCutoff
+      : config.defaultIlluminanceCutoff,
+    delaySeconds: saved.delaySecondsSetting === config.defaultDelaySeconds && saved.delaySeconds !== undefined
+      ? saved.delaySeconds
+      : config.defaultDelaySeconds,
+    illuminanceCutoffSetting: config.defaultIlluminanceCutoff,
+    delaySecondsSetting: config.defaultDelaySeconds,
     offTimerGeneration: Number(saved.offTimerGeneration) || 0,
     offTimerDueAt: Number(saved.offTimerDueAt) || null,
     offTimerArmedAt: Number(saved.offTimerArmedAt) || null
@@ -191,8 +205,9 @@ export function transitionMotion(
     }
     if (!enabled()) cancelOffTimer("motion-disabled");
   } else if (source === "delay") {
-    const minutes = finiteNumber(payload);
-    if (minutes !== null) state.delaySeconds = minutes * 60;
+    // Seconds, the same unit as the vacancy setting.
+    const seconds = finiteNumber(payload);
+    if (seconds !== null) state.delaySeconds = seconds;
   } else if (source === "illuminance-cut-off") {
     const cutoff = finiteNumber(payload);
     if (cutoff !== null) state.illuminanceCutoff = cutoff;

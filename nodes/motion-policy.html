@@ -33,4 +33,16 @@
     vacant.</p>
   <p>Wall switches go to the <b>switch lighting policy</b> node, not here; switch messages sent to this node are
     ignored.</p>
+  <h3>Inputs</h3>
+  <p>Each message names its kind in <code>msg.source</code>:</p>
+  <dl class="message-properties">
+    <dt>occupancy</dt><dd><code>msg.payload.occupied</code>, from the occupancy fusion node.</dd>
+    <dt>illuminance</dt><dd>the light level in lux.</dd>
+    <dt>area-enabled</dt><dd>ON or OFF for this node; <code>global-enabled</code> for every motion node.</dd>
+    <dt>delay</dt><dd>a new vacancy time, in <b>seconds</b>, the same unit as <b>Vacancy seconds</b>.</dd>
+    <dt>illuminance-cut-off</dt><dd>a new lux cutoff.</dd>
+  </dl>
+  <p>A <code>delay</code> or <code>illuminance-cut-off</code> message overrides the setting, and lasts across
+    restarts until the node is deployed with a different <b>Vacancy seconds</b> or <b>Lux cutoff</b>, which then
+    applies.</p>
 </script>
