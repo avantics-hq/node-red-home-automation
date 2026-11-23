@@ -1264,9 +1264,11 @@ test("discovery basics: the room checks a publishing area and uses its discovery
   const room = runtime(registerRoom).Constructor;
   const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
   for (const settings of [{publishState: true, discovery: false}, {publishState: false, discovery: true}]) {
-    const node = new room({targets, area: "Living Room", ...settings});
-    assert.deepEqual(node.errors.map(String), ["invalid configuration: area must be a lowercase identifier"], JSON.stringify(settings));
+    const node = new room({targets, area: "!!!", ...settings});
+    assert.deepEqual(node.errors.map(String), ["invalid configuration: area must contain a letter or digit"], JSON.stringify(settings));
   }
+  const contract = new (runtime(registerTheatreStateContract).Constructor)({area: "!!!", activities: "[\"off\"]"});
+  assert.deepEqual(contract.errors.map(String), ["invalid configuration: area must contain a letter or digit"]);
   const emptiedPrefix = new room({targets, area: "hall", discoveryPrefix: " "});
   assert.deepEqual(emptiedPrefix.errors.map(String), ["invalid configuration: discovery prefix is required"]);
 

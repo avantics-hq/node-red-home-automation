@@ -4,7 +4,7 @@
 // on, and the discovery entries that describe them. Home Assistant may send
 // a request on the request topic, which the state contract acts on.
 
-import {DISCOVERY_ORIGIN} from "./ha-discovery";
+import {DISCOVERY_ORIGIN, areaId} from "./ha-discovery";
 import {TARGETS, type TheatreTarget} from "./theatre-profiles";
 
 export type TheatreTopicName =
@@ -34,7 +34,7 @@ export interface TheatreDiscoveryConfig {
 
 function device(config: TheatreDiscoveryConfig) {
   return {
-    identifiers: [`nodered_${config.area}_theatre`],
+    identifiers: [`nodered_${areaId(config.area)}_theatre`],
     name: `${config.displayName} Theatre Controller`,
     manufacturer: "Node-RED",
     model: "Deterministic theatre activity controller"
@@ -42,7 +42,8 @@ function device(config: TheatreDiscoveryConfig) {
 }
 
 export function theatreDiscovery(config: TheatreDiscoveryConfig): Array<{topic: string; payload: Record<string, unknown>}> {
-  const {area, baseTopic, discoveryPrefix} = config;
+  const {baseTopic, discoveryPrefix} = config;
+  const area = areaId(config.area);
   const controllerDevice = device(config);
   const entries: Array<{component: string; objectId: string; payload: Record<string, unknown>}> = [
     {

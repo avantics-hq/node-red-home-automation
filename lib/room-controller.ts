@@ -3,7 +3,7 @@
 import type {TraceEntry} from "./bounded-trace";
 import type {CircadianLighting} from "./circadian";
 import {alreadyStyled, lightCommand, readLightReport, setsLightValues, type LightCommand, type LightReport} from "./z2m-light";
-import {IDENTIFIER} from "./ha-discovery";
+import {areaId} from "./ha-discovery";
 import {circadianCommandTopic, circadianStateMessage, roomLightingDiscovery} from "./room-lighting-discovery";
 import {checkCommandEcho, checkStateReport, parsePayload, rememberCommand, type ExpectedCommand} from "./command-echo";
 
@@ -178,7 +178,7 @@ export function transitionRoom(
   function controlMessage(targetId: string): RoomOutput {
     const entry = state.control[targetId];
     return {
-      topic: "home/" + config.area + "/lighting/" + targetId + "/control",
+      topic: "home/" + areaId(config.area) + "/lighting/" + targetId + "/control",
       payload: {state: entry?.state ?? "in-control", owner: entry?.state === "overridden" ? entry.owner : null},
       retain: true
     };
@@ -303,8 +303,7 @@ export function transitionRoom(
     }
   }
   if (event.kind === "startup") {
-    // An area that isn't an identifier never published, and can't name a topic.
-    if (IDENTIFIER.test(config.area)) {
+    if (areaId(config.area) !== "") {
       const discoveryConfig = {...config, discoveryPrefix: config.discoveryPrefix ?? "homeassistant"};
       const entry = roomLightingDiscovery(discoveryConfig, state.circadianEnabled)[0]!;
       // Discovery switched off: an empty retained entry removes the switch

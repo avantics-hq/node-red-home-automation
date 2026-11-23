@@ -33,10 +33,20 @@ export function discoveryPrefixSetting(value: unknown): string {
   return prefix;
 }
 
-// The area of a node that publishes under it. `needed` says whether this
-// node's publishing needs one at all.
+// The form of an area used in topics, unique IDs, object IDs and device
+// identifiers: lowercase, each run of characters other than letters, digits,
+// "_" and "-" as one "_", with no "_" or "-" at either end. "Living Room"
+// becomes "living_room", and an area that is already an identifier, such as
+// "living-room", stays as it is. The area as typed is kept for names shown
+// to people.
+export function areaId(area: string): string {
+  return area.toLowerCase().replace(/[^a-z0-9_-]+/g, "_").replace(/^[_-]+|[_-]+$/g, "");
+}
+
+// The area of a node that publishes under it, as typed. `needed` says
+// whether this node's publishing needs one at all.
 export function publishingArea(area: string, needed: boolean): string {
   if (!area && needed) throw new Error("area is required");
-  if (area && !IDENTIFIER.test(area)) throw new Error("area must be a lowercase identifier");
+  if (area && !areaId(area)) throw new Error("area must contain a letter or digit");
   return area;
 }

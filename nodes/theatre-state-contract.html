@@ -9,13 +9,13 @@
       defaults: {
         name: {value: ""},
         // Required for discovery, and for the default base topic home/<area>/theatre;
-        // when set, a lowercase identifier.
+        // when set, it needs a letter or digit, from which topics and IDs are made.
         area: {value: "", validate: function (v) {
           var dialog = $("#node-input-discovery").length > 0;
           var discovery = dialog ? $("#node-input-discovery").prop("checked") : on(this.discovery);
           var baseTopic = dialog ? $("#node-input-baseTopic").val() : this.baseTopic;
           var area = String(v || "").trim();
-          return area ? /^[a-z][a-z0-9_-]*$/.test(area) : !(discovery || !baseTopic);
+          return area ? /[a-z0-9]/i.test(area) : !(discovery || !baseTopic);
         }},
         // null means "not set": Node-RED fills it into a saved flow from before
         // this setting, which keeps publishing discovery. New nodes start with

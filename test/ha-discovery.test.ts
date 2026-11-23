@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {resolve} from "node:path";
 import test from "node:test";
-import {DISCOVERY_ORIGIN, discoveryPrefixSetting, publishingArea} from "../lib/ha-discovery";
+import {DISCOVERY_ORIGIN, areaId, discoveryPrefixSetting, publishingArea} from "../lib/ha-discovery";
 import {theatreDiscovery} from "../lib/theatre-ha-discovery";
 
 test("the discovery origin names this package, its version and its home", () => {
@@ -31,11 +31,27 @@ test("the discovery prefix: absent is Home Assistant's default, and it must be a
   }
 });
 
-test("a publishing area is a lowercase identifier, and needed only when asked", () => {
-  assert.equal(publishingArea("living_room", true), "living_room");
+test("an area's ID: lowercase, other characters as one _, none at the ends", () => {
+  const cases: Array<[string, string]> = [
+    ["Living Room", "living_room"],
+    ["Hall 2", "hall_2"],
+    ["  Den / Theatre!  ", "den_theatre"],
+    ["hall+#", "hall"],
+    ["1st-floor", "1st-floor"],
+    ["-Den-", "den"],
+    ["!!!", ""],
+    ["--", ""]
+  ];
+  for (const [area, id] of cases) assert.equal(areaId(area), id, area);
+});
+
+test("an area that is already an identifier is its own ID, so its topics and IDs don't change", () => {
+  for (const area of ["living-room", "den_2", "kitchen"]) assert.equal(areaId(area), area);
+});
+
+test("a publishing area is kept as typed, needed only when asked, and needs a letter or digit", () => {
+  assert.equal(publishingArea("Living Room", true), "Living Room");
   assert.equal(publishingArea("", false), "");
   assert.throws(() => publishingArea("", true), /^Error: area is required$/);
-  for (const area of ["Living Room", "hall+", "1st-floor", "den/theatre"]) {
-    assert.throws(() => publishingArea(area, false), /^Error: area must be a lowercase identifier$/, area);
-  }
+  assert.throws(() => publishingArea("!!!", false), /^Error: area must contain a letter or digit$/);
 });

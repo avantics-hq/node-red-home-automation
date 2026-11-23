@@ -9,12 +9,12 @@
       defaults: {
         name: {value: ""},
         // Required only when the room publishes something named after it, and
-        // then a lowercase identifier, as it names topics and IDs.
+        // then with a letter or digit, from which its topics and IDs are made.
         area: {value: "", validate: function (v) {
           var publishing = $("#node-input-publishState").length
             ? $("#node-input-publishState").prop("checked") || $("#node-input-discovery").prop("checked")
             : on(this.publishState) || on(this.discovery);
-          return !publishing || /^[a-z][a-z0-9_-]*$/.test(String(v || "").trim());
+          return !publishing || /[a-z0-9]/i.test(String(v || ""));
         }},
         // null means "not set": Node-RED fills it into a saved flow from before
         // these settings, which keeps publishing. New nodes start with both
@@ -85,8 +85,9 @@
   <p>Owns room MQTT commands, adaptive colour and brightness, manual overrides, discovery and bounded tracing.</p>
   <h3>Publishing</h3>
   <p>The room always commands its lights on each target's own command topic. Two settings add what it publishes
-    for other systems to see; both are named after the <b>Area</b>, which is needed only when one of them is on, and
-    must then be a lowercase identifier (a letter, then letters, digits, <code>_</code> or <code>-</code>).</p>
+    for other systems to see; both are named after the <b>Area</b>, which is needed only when one of them is on. Topics
+    and IDs use it in lowercase, with spaces and other characters (anything but letters, digits, <code>_</code> and
+    <code>-</code>) as <code>_</code>: <i>Living Room</i> publishes under <code>home/living_room/…</code>.</p>
   <dl class="message-properties">
     <dt>Publish state over MQTT</dt><dd>each light's control state on
       <code>home/&lt;area&gt;/lighting/&lt;target&gt;/control</code> and the circadian state on

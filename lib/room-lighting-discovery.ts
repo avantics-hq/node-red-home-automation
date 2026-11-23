@@ -4,7 +4,7 @@
 // circadian switch and the retained state that entry reads. Home Assistant
 // may send ON/OFF on the command topic, which the room controller acts on.
 
-import {DISCOVERY_ORIGIN} from "./ha-discovery";
+import {DISCOVERY_ORIGIN, areaId} from "./ha-discovery";
 
 export interface DiscoveryMessage {
   topic: string;
@@ -13,11 +13,11 @@ export interface DiscoveryMessage {
 }
 
 export function circadianStateTopic(area: string): string {
-  return "home/" + area + "/circadian/state";
+  return "home/" + areaId(area) + "/circadian/state";
 }
 
 export function circadianCommandTopic(area: string): string {
-  return "home/" + area + "/circadian/set";
+  return "home/" + areaId(area) + "/circadian/set";
 }
 
 // The retained circadian state, as Home Assistant reads it.
@@ -34,7 +34,7 @@ export interface RoomDiscoveryConfig {
 // The discovery entry for the room's circadian switch, then its state.
 export function roomLightingDiscovery(config: RoomDiscoveryConfig, circadianEnabled: boolean): DiscoveryMessage[] {
   const {area, displayName} = config;
-  const objectId = area + "_circadian_lighting";
+  const objectId = areaId(area) + "_circadian_lighting";
   return [
     {
       topic: config.discoveryPrefix + "/switch/" + objectId + "/config",
@@ -49,7 +49,7 @@ export function roomLightingDiscovery(config: RoomDiscoveryConfig, circadianEnab
         payload_off: "OFF",
         optimistic: false,
         device: {
-          identifiers: ["nodered_" + area + "_lighting"],
+          identifiers: ["nodered_" + areaId(area) + "_lighting"],
           name: displayName + " Lighting Controller",
           manufacturer: "Node-RED",
           model: "Composable circadian lighting"
