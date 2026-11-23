@@ -7,7 +7,7 @@ import {
   type OccupancyInput,
   type OccupancyState
 } from "../lib/occupancy-fusion";
-import {onInput, runReducer} from "./adapter";
+import {onInput, optionalArea, runReducer} from "./adapter";
 
 interface OccupancyFusionConfig extends NodeDef {
   area?: string;
@@ -23,7 +23,7 @@ const registerOccupancyFusion: NodeInitializer = (RED) => {
     RED.nodes.createNode(this, config);
     const node = this;
     const fusionConfig: OccupancyConfig & {area: string} = {
-      area: config.area || "room",
+      area: optionalArea(config),
       presenceMode: config.presenceMode === "hold" ? "hold" : "ignore"
     };
 

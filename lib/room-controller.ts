@@ -192,6 +192,11 @@ export function transitionRoom(
     };
   }
 
+  // What the room publishes for MQTT and Home Assistant to see is named after
+  // its area, so a room with no area publishes none of it; light control
+  // does not depend on it.
+  const publishesArea = config.area !== "";
+
   function refreshCommands(source: string): RoomOutput[] {
     if (!state.circadianEnabled) return [];
     const commands: Array<RoomOutput | null> = [];
@@ -272,7 +277,7 @@ export function transitionRoom(
 
   const event: LightingEvent = msg.lighting || {};
   if (event.kind === "startup") {
-    outputs.push(...roomLightingDiscovery(config.area, config.displayName, state.circadianEnabled));
+    if (publishesArea) outputs.push(...roomLightingDiscovery(config.area, config.displayName, state.circadianEnabled));
     for (const target of config.targets) controlChanged.add(target.id);
   } else if (event.kind === "observed") {
     const target = event.target ? targetById[event.target] : targetForTopic(msg.topic, "stateTopic");
@@ -346,7 +351,7 @@ export function transitionRoom(
     if (previous !== state.circadianEnabled) {
       trace("circadian", "changed", null, {enabled: state.circadianEnabled});
     }
-    outputs.push(circadianStateMessage(config.area, state.circadianEnabled));
+    if (publishesArea) outputs.push(circadianStateMessage(config.area, state.circadianEnabled));
     if (state.circadianEnabled) {
       // Enabling circadian takes back manual lights; other owners keep theirs.
       for (const target of config.targets) {
@@ -397,7 +402,7 @@ export function transitionRoom(
   }
 
   for (const target of config.targets) {
-    if (controlChanged.has(target.id)) outputs.push(controlMessage(target.id));
+    if (publishesArea && controlChanged.has(target.id)) outputs.push(controlMessage(target.id));
   }
 
   const onCount = Object.values(state.desired).filter(Boolean).length;

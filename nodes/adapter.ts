@@ -54,6 +54,21 @@ export function runReducer<Saved, Result extends {state: unknown; traces: TraceI
   return result;
 }
 
+// A node's area. Most nodes only use it as a label, so it is optional and an
+// empty one means no area; there is never a default.
+export function optionalArea(config: {area?: unknown}): string {
+  return typeof config.area === "string" ? config.area.trim() : "";
+}
+
+// The area of a node that builds MQTT topics or Home Assistant IDs from it,
+// or null after showing "invalid configuration" when it has none, in which
+// case the node should not start.
+export function configuredArea(node: Node, config: {area?: unknown}): string | null {
+  const area = optionalArea(config);
+  if (!area) invalidConfig(node, new Error("area is required"));
+  return area || null;
+}
+
 // The one badge for a configuration the node cannot use, with the reason in
 // the log.
 export function invalidConfig(node: Node, reason: unknown): void {

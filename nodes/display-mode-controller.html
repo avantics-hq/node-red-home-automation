@@ -4,7 +4,7 @@
     color: "#c7d9f1",
     defaults: {
       name: {value: ""},
-      area: {value: "lounge", required: true},
+      area: {value: ""},
       tvHost: {value: "", required: true},
       screenHost: {value: "", required: true},
       projectorMeterHost: {value: "", required: true},
@@ -29,7 +29,7 @@
     outputs: 2,
     outputLabels: ["projector IR fallback", "state and results"],
     icon: "font-awesome/fa-television",
-    label: function () { return this.name || this.area + " display mode"; }
+    label: function () { return this.name || (this.area ? this.area + " " : "") + "display mode"; }
   });
 </script>
 

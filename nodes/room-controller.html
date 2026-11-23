@@ -4,8 +4,8 @@
     color: "#ffd27f",
     defaults: {
       name: {value: ""},
-      area: {value: "room", required: true},
-      displayName: {value: "Room", required: true},
+      area: {value: ""},
+      displayName: {value: ""},
       targets: {value: "[]", required: true},
       maxBrightnessPct: {value: 100, required: true, validate: RED.validators.number()},
       maxColorTempKelvin: {value: 6500, required: true, validate: RED.validators.number()},
@@ -21,7 +21,7 @@
     inputs: 1,
     outputs: 1,
     icon: "font-awesome/fa-lightbulb-o",
-    label: function () { return this.name || this.area + " lighting controller"; }
+    label: function () { return this.name || (this.area ? this.area + " " : "") + "lighting controller"; }
   });
 </script>
 

@@ -14,7 +14,7 @@ import {
   type AvrMessage,
   type AvrState
 } from "../lib/avr-controller";
-import {guarded, invalidConfig, objectField, onInput, runReducer, type Send} from "./adapter";
+import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
 
 interface AvrControllerConfig extends NodeDef {
   area?: string;
@@ -48,7 +48,7 @@ const registerAvrController: NodeInitializer = (RED) => {
     try {
       // The same validation the reducer applies, so a bad configuration
       // fails here at deploy rather than on every message.
-      controllerConfig = normaliseAvrConfig({...config, sources: parseSources(config.sources)});
+      controllerConfig = normaliseAvrConfig({...config, area: optionalArea(config), sources: parseSources(config.sources)});
     } catch (error) {
       invalidConfig(node, error);
       return;

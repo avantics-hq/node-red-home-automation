@@ -4,13 +4,13 @@
     color: "#c7e9c0",
     defaults: {
       name: {value: ""},
-      area: {value: "room", required: true},
+      area: {value: ""},
       presenceMode: {value: "none", required: true}
     },
     inputs: 1,
     outputs: 1,
     icon: "font-awesome/fa-users",
-    label: function () { return this.name || this.area + " occupancy"; }
+    label: function () { return this.name || (this.area ? this.area + " " : "") + "occupancy"; }
   });
 </script>
 

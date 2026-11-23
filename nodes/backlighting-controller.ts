@@ -13,7 +13,7 @@ import {
   type BacklightingMessage,
   type BacklightingState
 } from "../lib/backlighting-controller";
-import {guarded, invalidConfig, objectField, onInput, runReducer, type Send} from "./adapter";
+import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
 import {numberSetting} from "../lib/settings";
 
 interface BacklightingNodeConfig extends NodeDef {
@@ -68,7 +68,7 @@ const registerBacklightingController: NodeInitializer = (RED) => {
     }
 
     function process(msg: BacklightingMessage, send: Send) {
-      const result = runReducer(node, {area: config.area || "lounge", component: "backlighting-controller"},
+      const result = runReducer(node, {area: optionalArea(config), component: "backlighting-controller"},
         (saved: Partial<BacklightingState> | undefined, now) =>
           transitionBacklighting(saved, msg, controllerConfig, now));
       if (result.commands.length) {

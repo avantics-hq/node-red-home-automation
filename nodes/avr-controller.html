@@ -4,7 +4,7 @@
     color: "#c7d9f1",
     defaults: {
       name: {value: ""},
-      area: {value: "lounge", required: true},
+      area: {value: ""},
       sources: {value: "{\"shield\":\"SAT/CBL\",\"playstation\":\"GAME\"}", required: true},
       retryMs: {value: 2000, required: true, validate: RED.validators.number()},
       maxAttempts: {value: 3, required: true, validate: RED.validators.number()},
@@ -15,7 +15,7 @@
     outputs: 2,
     outputLabels: ["Denon commands", "state and results"],
     icon: "font-awesome/fa-volume-up",
-    label: function () { return this.name || this.area + " AVR controller"; }
+    label: function () { return this.name || (this.area ? this.area + " " : "") + "AVR controller"; }
   });
 </script>
 

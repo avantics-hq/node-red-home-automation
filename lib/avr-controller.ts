@@ -242,7 +242,8 @@ export function normaliseAvrConfig(rawConfig: {[K in keyof AvrConfig]?: unknown}
     throw new Error("volume bounds must be half-step values between 0 and 98 with minimum below maximum");
   }
   return {
-    area: typeof rawConfig.area === "string" && rawConfig.area ? rawConfig.area : "room",
+    // Optional: an empty area means none.
+    area: typeof rawConfig.area === "string" ? rawConfig.area.trim() : "",
     sources: parseSourceCodes(rawConfig.sources),
     retryMs: Math.max(250, numberSetting(rawConfig.retryMs, "retry interval", 2000)),
     maxAttempts: Math.max(1, Math.floor(numberSetting(rawConfig.maxAttempts, "max attempts", 3))),
