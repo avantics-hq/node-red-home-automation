@@ -3,7 +3,7 @@
 import type {TraceEntry} from "./bounded-trace";
 import type {CircadianLighting} from "./circadian";
 import {alreadyStyled, lightCommand, readLightReport, setsLightValues, type LightCommand, type LightReport} from "./z2m-light";
-import {circadianStateMessage, roomLightingDiscovery} from "./room-lighting-discovery";
+import {circadianCommandTopic, circadianStateMessage, roomLightingDiscovery} from "./room-lighting-discovery";
 import {checkCommandEcho, checkStateReport, parsePayload, rememberCommand, type ExpectedCommand} from "./command-echo";
 
 export {fingerprint, parsePayload, type ExpectedCommand} from "./command-echo";
@@ -282,7 +282,23 @@ export function transitionRoom(
     return commands.filter((entry): entry is RoomOutput => entry !== null);
   }
 
-  const event: LightingEvent = msg.lighting || {};
+  let event: LightingEvent = msg.lighting || {};
+  // The circadian switch's set topic: Home Assistant sends ON or OFF there.
+  // Read only while the room publishes, as the switch is only discovered then;
+  // a bare MQTT message, or one a flow tagged as observed, is accepted.
+  if (publishesArea && msg.topic === circadianCommandTopic(config.area) &&
+    (!event.kind || event.kind === "observed" || event.kind === "command-observed")) {
+    const requested = typeof msg.payload === "string" ? msg.payload.trim().toUpperCase() : "";
+    if (msg.retain === true || event.retained === true) {
+      trace("circadian-set", "ignored", "retained-message");
+      event = {kind: "ignored"};
+    } else if (requested === "ON" || requested === "OFF") {
+      event = {kind: "circadian", enabled: requested === "ON"};
+    } else {
+      trace("circadian-set", "ignored", "not-on-or-off", {payload: typeof msg.payload === "string" ? msg.payload : null});
+      event = {kind: "ignored"};
+    }
+  }
   if (event.kind === "startup") {
     if (config.area !== "") {
       const entry = roomLightingDiscovery(config.area, config.displayName, state.circadianEnabled)[0]!;
