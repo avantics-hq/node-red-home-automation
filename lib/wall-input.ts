@@ -91,12 +91,16 @@ export function wallGestureIntent(targets: string[], gesture: "single" | "double
 }
 
 // The wall-input settings from a node's configuration. The switch window
-// defaults to 500 ms and the freshness to an hour, which must be positive.
+// defaults to 500 ms and must not be negative; the freshness defaults to an
+// hour and must be positive.
 export function normaliseWallInputConfig(raw: {switchWindowMs?: unknown; switchFreshnessSeconds?: unknown}): WallInputConfig {
   const config = {
     switchWindowMs: numberSetting(raw.switchWindowMs, "switch window", 500),
     switchFreshnessMs: numberSetting(raw.switchFreshnessSeconds, "switch freshness", 3600) * 1000
   };
+  if (!Number.isFinite(config.switchWindowMs) || config.switchWindowMs < 0) {
+    throw new Error("switch window must be a non-negative number");
+  }
   if (!Number.isFinite(config.switchFreshnessMs) || config.switchFreshnessMs <= 0) {
     throw new Error("switch freshness must be a positive number");
   }

@@ -150,3 +150,11 @@ test("wall-input settings default and require a positive freshness", () => {
   assert.deepEqual(normaliseWallInputConfig({switchWindowMs: "300", switchFreshnessSeconds: "60"}), {switchWindowMs: 300, switchFreshnessMs: 60000});
   assert.throws(() => normaliseWallInputConfig({switchFreshnessSeconds: 0}), /positive/);
 });
+
+test("a negative or unusable switch window is rejected for every wall-switch node", () => {
+  assert.throws(() => normaliseWallInputConfig({switchWindowMs: -1}), /switch window must be a non-negative number/);
+  assert.throws(() => normaliseWallInputConfig({switchWindowMs: "soon"}), /switch window/);
+  assert.equal(normaliseWallInputConfig({switchWindowMs: 0}).switchWindowMs, 0);
+  // With both settings bad, the window is reported first, as the switch node always did.
+  assert.throws(() => normaliseWallInputConfig({switchWindowMs: -1, switchFreshnessSeconds: 0}), /switch window/);
+});

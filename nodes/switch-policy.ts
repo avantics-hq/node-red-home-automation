@@ -49,9 +49,6 @@ const registerSwitchPolicy: NodeInitializer = (RED) => {
         targets: parseTargets(config.targets),
         ...normaliseWallInputConfig(config)
       };
-      if (!Number.isFinite(policyConfig.switchWindowMs) || policyConfig.switchWindowMs < 0) {
-        throw new Error("switch window must be a non-negative number");
-      }
     } catch (error) {
       invalidConfig(node, error);
       return;

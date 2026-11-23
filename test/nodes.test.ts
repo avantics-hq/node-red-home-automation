@@ -1111,3 +1111,10 @@ test("a number setting absent from an older saved flow takes its default; a type
   assert.equal(state.delaySeconds, 120, "absent: the default");
   assert.equal(state.illuminanceCutoff, 0, "typed 0 is kept");
 });
+
+test("a motion node rejects a negative switch window, as the switch node does", () => {
+  // A node with a configuration it cannot use starts no timers, so it needs no close.
+  const node = new (runtime(registerMotion).Constructor)({area: "hall", onTargets: "[\"main\"]", switchWindowMs: -100});
+  assert.deepEqual(node.statuses.at(-1), {fill: "red", shape: "ring", text: "invalid configuration"});
+  assert.match(String(node.errors[0]), /switch window must be a non-negative number/);
+});
