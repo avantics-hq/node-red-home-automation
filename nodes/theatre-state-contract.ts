@@ -11,8 +11,8 @@ import {
   type TheatreStateContractMessage,
   type TheatreStateContractState
 } from "../lib/theatre-state-contract";
-import {retainedClears} from "../lib/retained-topics";
-import {allRetainedTopics, clearStaleRetained, wasDeleted, invalidConfig, whenFlowsStarted, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
+import {publishingLifecycle} from "./publishing-lifecycle";
+import {invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
 import {jsonSetting, numberSetting, optionalBooleanSetting, optionalChoiceSetting} from "../lib/settings";
 import {ID_SCHEMES, discoveryPrefixSetting} from "../lib/ha-discovery";
 
@@ -70,6 +70,16 @@ const registerTheatreStateContract: NodeInitializer = (RED) => {
       return;
     }
 
+    // Available, and clear of what it no longer publishes, as soon as it
+    // runs; offline as it stops; nothing left behind when deleted.
+    const lifecycle = publishingLifecycle(RED, node, {
+      retainedTopics: () => theatreRetainedTopics(controllerConfig),
+      starting: () => theatreStartingPublications(controllerConfig),
+      stopping: () => theatreStoppingPublications(controllerConfig),
+      output: 1,
+      outputs: 2
+    });
+
     function process(msg: TheatreStateContractMessage, send: Send) {
       const result = runReducer(node, {area: controllerConfig.area, component: "theatre-state-contract"},
         (saved: Partial<TheatreStateContractState> | undefined, now) =>
@@ -92,9 +102,9 @@ const registerTheatreStateContract: NodeInitializer = (RED) => {
     }
 
     onInput(node, (msg, send) => {
+      // The startup's own announcement comes from the contract's transition.
       if (objectField<TheatreStateContractMessage["theatreStateContract"]>(msg, "theatreStateContract")?.kind === "startup") {
-        const clears = clearStaleRetained(node, theatreRetainedTopics(controllerConfig));
-        if (clears.length) send([null, clears.map((clear) => ({...clear}))]);
+        lifecycle.startup(send);
       }
       process({
         topic: typeof msg.topic === "string" ? msg.topic : undefined,
@@ -107,22 +117,6 @@ const registerTheatreStateContract: NodeInitializer = (RED) => {
 
     // Available again as soon as this node runs, as after a redeploy of it
     // alone, rather than waiting for the flow's startup message.
-    whenFlowsStarted(RED, node, () => {
-      const clears = clearStaleRetained(node, theatreRetainedTopics(controllerConfig), "flows-started");
-      node.send([null, [...clears, ...theatreStartingPublications(controllerConfig)].map((entry) => ({...entry}))]);
-    });
-
-    node.on("close", (removed: boolean, done: () => void) => {
-      // Reaches the broker only if the MQTT out node is still running, as in a
-      // deploy of modified nodes or flows; the broker's own Close and Will
-      // messages cover a full deploy, a restart and a crash (see the README).
-      // A deleted node removes its entities and retained state instead.
-      const stopping = wasDeleted(RED, node, removed)
-        ? retainedClears(allRetainedTopics(node, theatreRetainedTopics(controllerConfig)))
-        : theatreStoppingPublications(controllerConfig);
-      node.send([null, stopping.map((entry) => ({...entry}))]);
-      done();
-    });
   }
 
   RED.nodes.registerType("home-theatre-state-contract", HomeTheatreStateContract);

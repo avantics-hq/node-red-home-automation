@@ -12,23 +12,13 @@ import {
   occupancyStartingOutputs,
   occupancyStateOutputs,
   occupancyStoppingOutputs,
-  type OccupancyPublication,
   type OccupancyPublishingConfig
 } from "../lib/occupancy-publishing";
 import {ID_SCHEMES, discoveryPrefixSetting} from "../lib/ha-discovery";
-import {retainedClears} from "../lib/retained-topics";
 import {optionalBooleanSetting, optionalChoiceSetting, textSetting} from "../lib/settings";
 import {publishingArea} from "../lib/topic-names";
-import {
-  allRetainedTopics,
-  clearStaleRetained,
-  invalidConfig,
-  onInput,
-  optionalArea,
-  runReducer,
-  wasDeleted,
-  whenFlowsStarted
-} from "./adapter";
+import {invalidConfig, onInput, optionalArea, runReducer} from "./adapter";
+import {publishingLifecycle} from "./publishing-lifecycle";
 
 interface OccupancyFusionConfig extends NodeDef {
   area?: string;
@@ -84,31 +74,25 @@ const registerOccupancyFusion: NodeInitializer = (RED) => {
       });
     }
 
-    // MQTT publications go on the second output, away from the occupancy
-    // events the motion policy reads on the first.
-    function publish(send: (msg: unknown) => void, publications: OccupancyPublication[]) {
-      if (publications.length) send([null, publications.map((entry) => ({...entry}))]);
-    }
-
     function occupied(): boolean {
       return (node.context().get("state") as Partial<OccupancyState> | undefined)?.occupied === true;
     }
 
-    // Once the flows have started, and again at a startup message: clear
-    // what the node no longer publishes, then announce it.
-    whenFlowsStarted(RED, node, () => {
-      publish((msg) => node.send(msg as never), [
-        ...clearStaleRetained(node, occupancyRetainedTopics(publishing), "flows-started"),
-        ...occupancyStartingOutputs(publishing, occupied())
-      ]);
+    // MQTT publications go on the second output, away from the occupancy
+    // events the motion policy reads on the first. Available, and clear of
+    // what it no longer publishes, as soon as it runs; offline as it stops;
+    // nothing left behind when deleted.
+    const lifecycle = publishingLifecycle(RED, node, {
+      retainedTopics: () => occupancyRetainedTopics(publishing),
+      starting: () => occupancyStartingOutputs(publishing, occupied()),
+      stopping: () => occupancyStoppingOutputs(publishing),
+      output: 1,
+      outputs: 2
     });
 
     onInput(node, (msg, send) => {
       if (msg.source === "startup") {
-        publish(send as (msg: unknown) => void, [
-          ...clearStaleRetained(node, occupancyRetainedTopics(publishing)),
-          ...occupancyStartingOutputs(publishing, occupied())
-        ]);
+        lifecycle.startup(send, occupancyStartingOutputs(publishing, occupied()));
         return;
       }
       const input: OccupancyInput = {
@@ -119,20 +103,12 @@ const registerOccupancyFusion: NodeInitializer = (RED) => {
         (saved: Partial<OccupancyState> | undefined) => transitionOccupancy(saved, input, fusionConfig));
       for (const output of result.outputs) {
         send([{...output, payload: output.payload}, null]);
-        publish(send as (msg: unknown) => void, occupancyStateOutputs(publishing, output.payload.occupied));
+        const state = occupancyStateOutputs(publishing, output.payload.occupied);
+        if (state.length) send([null, state.map((entry) => ({...entry}))]);
       }
       updateStatus(result.status);
     });
 
-    node.on("close", (removed: boolean, done: () => void) => {
-      // Reaches the broker only if the MQTT out node is still running, as in
-      // a deploy of modified nodes or flows (see the README). A deleted node
-      // removes its entity and retained state instead.
-      publish((msg) => node.send(msg as never), wasDeleted(RED, node, removed)
-        ? retainedClears(allRetainedTopics(node, occupancyRetainedTopics(publishing))) as OccupancyPublication[]
-        : occupancyStoppingOutputs(publishing));
-      done();
-    });
   }
 
   RED.nodes.registerType("home-occupancy-fusion", HomeOccupancyFusion);
