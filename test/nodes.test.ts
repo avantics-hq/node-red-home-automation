@@ -1160,8 +1160,10 @@ test("every other node runs with no area, and reports none instead of a made-up 
   }
 });
 
-test("a room controller with no area still commands its lights, and publishes no area topics or discovery", async (t) => {
+test("a room controller with publishing off and no area still commands its lights, and publishes nothing else", async (t) => {
   const node = new (runtime(registerRoom).Constructor)({
+    publishState: false,
+    discovery: false,
     targets: "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]"
   });
   t.after(() => close(node));
@@ -1174,4 +1176,34 @@ test("a room controller with no area still commands its lights, and publishes no
   const topics = [...startup, ...on, ...circadian].flat(2).map((message) => message.topic);
   assert.deepEqual(topics, ["room/light/main/set"], "only the light's own command topic");
   assert.equal((on.flat(2).find((message) => message.topic === "room/light/main/set") as {payload?: Record<string, unknown>}).payload?.state, "ON");
+});
+
+test("publish settings: the area is required only when something named after it is published", async (t) => {
+  const room = runtime(registerRoom).Constructor;
+  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
+  // A saved flow from before the settings: both count as on, so it needs an area.
+  for (const settings of [{}, {publishState: true, discovery: false}, {publishState: false, discovery: true}]) {
+    const node = new room({targets, ...settings});
+    assert.deepEqual(node.errors.map(String), ["invalid configuration: area is required"], JSON.stringify(settings));
+  }
+  const quiet = new room({targets, publishState: false, discovery: false});
+  t.after(() => close(quiet));
+  assert.deepEqual(quiet.errors, []);
+  const legacy = new room({targets, area: "hall"});
+  t.after(() => close(legacy));
+  const startup = await receive<Array<Array<{topic?: string}>>>(legacy, {lighting: {kind: "startup"}});
+  assert.ok(startup.flat(2).some((message) => message.topic === "homeassistant/switch/hall_circadian_lighting/config"),
+    "an older saved flow keeps publishing discovery");
+
+  const contract = runtime(registerTheatreStateContract).Constructor;
+  const base = {activities: "[\"off\"]"};
+  for (const settings of [{}, {discovery: true, baseTopic: "media/theatre"}, {discovery: false}]) {
+    const node = new contract({...base, ...settings});
+    assert.deepEqual(node.errors.map(String), ["invalid configuration: area is required"], JSON.stringify(settings));
+  }
+  const topicOnly = new contract({...base, discovery: false, baseTopic: "media/theatre"});
+  assert.deepEqual(topicOnly.errors, []);
+  const cleared = await receive<Array<Array<{topic?: string; payload?: unknown}>>>(new contract({...base, area: "hall", discovery: "false"}), {theatreStateContract: {kind: "startup"}});
+  const clearedMessages = cleared.flat(2).filter((message) => message !== null);
+  assert.ok(clearedMessages.length > 0 && clearedMessages.every((message) => message.payload === ""), "discovery off clears its entries");
 });

@@ -8,11 +8,12 @@ import {
   type TheatreStateContractMessage,
   type TheatreStateContractState
 } from "../lib/theatre-state-contract";
-import {configuredArea, invalidConfig, objectField, onInput, runReducer, type Send} from "./adapter";
+import {invalidConfig, objectField, onInput, onUnlessOff, optionalArea, runReducer, type Send} from "./adapter";
 import {numberSetting} from "../lib/settings";
 
 interface TheatreStateContractNodeConfig extends NodeDef {
   area?: string;
+  discovery?: boolean | string;
   displayName?: string;
   baseTopic?: string;
   discoveryPrefix?: string;
@@ -29,9 +30,9 @@ const registerTheatreStateContract: NodeInitializer = (RED) => {
   function HomeTheatreStateContract(this: TheatreStateContractNode, config: TheatreStateContractNodeConfig) {
     RED.nodes.createNode(this, config);
     const node = this;
-    const configuredAreaName = configuredArea(node, config);
-    if (configuredAreaName === null) return;
-    const area: string = configuredAreaName;
+    // Needed for discovery and for the default base topic; the normaliser
+    // says "area is required" when it is.
+    const area = optionalArea(config);
 
     let controllerConfig: TheatreStateContractConfig;
     try {
@@ -39,7 +40,9 @@ const registerTheatreStateContract: NodeInitializer = (RED) => {
       controllerConfig = normaliseStateContractConfig({
         area,
         displayName: config.displayName || area,
-        baseTopic: config.baseTopic || `home/${area}/theatre`,
+        baseTopic: config.baseTopic || "",
+        // A saved flow without the setting keeps publishing discovery.
+        discovery: onUnlessOff(config.discovery),
         discoveryPrefix: config.discoveryPrefix || "homeassistant",
         activities: Array.isArray(activities) ? activities.map(String) : [],
         slo: {

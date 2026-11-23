@@ -83,7 +83,7 @@ Example: [`Home theatre activity.json`](https://github.com/avantics-hq/node-red-
 
 | Node | Purpose |
 |---|---|
-| `home-theatre-state-contract` | Bridges non-retained activity requests to retained MQTT truth and HA discovery. |
+| `home-theatre-state-contract` | Bridges non-retained activity requests to retained MQTT truth and, optionally, HA discovery. |
 | `home-theatre-activity-controller` | Owns latest-request-wins activity state and aggregates target evidence. |
 | `home-activity-lighting-controller` | Applies activity styles to room lights and holds them while the activity is active. |
 
@@ -200,9 +200,10 @@ and are traced as `ignored held-by`; their other targets are still handled.
 The switch policy marks presses with `person: true`. Owner-less
 intents, with or without values, reach a held light only with `manual: true` or
 `person: true`; a flow acting for a person, such as a dashboard, sets one.
-Switching a light off by its owner or a person returns it to `in-control`. On startup
-and whenever a target's state changes, the controller sends a retained message
-on its command output:
+Switching a light off by its owner or a person returns it to `in-control`. With
+**Publish state over MQTT** on (new nodes start with it off; nodes saved before
+the setting existed keep it on), on startup and whenever a target's state
+changes, the controller sends a retained message on its command output:
 
 ```js
 {topic: "home/<area>/lighting/<target>/control", payload: {state: "overridden", owner: "theatre"}, retain: true}

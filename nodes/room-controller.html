@@ -1,33 +1,67 @@
 <script type="text/javascript">
-  RED.nodes.registerType("home-room-lighting-controller", {
-    category: "home automation",
-    color: "#ffd27f",
-    defaults: {
-      name: {value: ""},
-      area: {value: ""},
-      displayName: {value: ""},
-      targets: {value: "[]", required: true},
-      maxBrightnessPct: {value: 100, required: true, validate: RED.validators.number()},
-      maxColorTempKelvin: {value: 6500, required: true, validate: RED.validators.number()},
-      sleepBrightnessPct: {value: 1, required: true, validate: RED.validators.number()},
-      sleepColorTempKelvin: {value: 2200, required: true, validate: RED.validators.number()},
-      initialTransitionSeconds: {value: 1, required: true, validate: RED.validators.number()},
-      refreshTransitionSeconds: {value: 60, required: true, validate: RED.validators.number()},
-      refreshSeconds: {value: 60, required: true, validate: RED.validators.number()},
-      initialSleep: {value: false},
-      wakeTime: {value: "07:00", required: true, validate: function (v) { return /^([01]\d|2[0-3]):[0-5]\d$/.test(v); }},
-      bedTime: {value: "23:00", required: true, validate: function (v) { return /^([01]\d|2[0-3]):[0-5]\d$/.test(v); }}
-    },
-    inputs: 1,
-    outputs: 1,
-    icon: "font-awesome/fa-lightbulb-o",
-    label: function () { return this.name || (this.area ? this.area + " " : "") + "lighting controller"; }
-  });
+  (function () {
+    // A setting is on unless it was explicitly switched off.
+    function on(value) { return value !== false && value !== "false"; }
+    RED.nodes.registerType("home-room-lighting-controller", {
+      category: "home automation",
+      color: "#ffd27f",
+      defaults: {
+        name: {value: ""},
+        // Required only when the room publishes something named after it.
+        area: {value: "", validate: function (v) {
+          var publishing = $("#node-input-publishState").length
+            ? $("#node-input-publishState").prop("checked") || $("#node-input-discovery").prop("checked")
+            : on(this.publishState) || on(this.discovery);
+          return !publishing || Boolean(v && v.trim());
+        }},
+        // Empty means "not set": a saved flow from before these settings keeps
+        // publishing. New nodes start with both off (onadd).
+        publishState: {value: ""},
+        discovery: {value: ""},
+        displayName: {value: ""},
+        targets: {value: "[]", required: true},
+        maxBrightnessPct: {value: 100, required: true, validate: RED.validators.number()},
+        maxColorTempKelvin: {value: 6500, required: true, validate: RED.validators.number()},
+        sleepBrightnessPct: {value: 1, required: true, validate: RED.validators.number()},
+        sleepColorTempKelvin: {value: 2200, required: true, validate: RED.validators.number()},
+        initialTransitionSeconds: {value: 1, required: true, validate: RED.validators.number()},
+        refreshTransitionSeconds: {value: 60, required: true, validate: RED.validators.number()},
+        refreshSeconds: {value: 60, required: true, validate: RED.validators.number()},
+        initialSleep: {value: false},
+        wakeTime: {value: "07:00", required: true, validate: function (v) { return /^([01]\d|2[0-3]):[0-5]\d$/.test(v); }},
+        bedTime: {value: "23:00", required: true, validate: function (v) { return /^([01]\d|2[0-3]):[0-5]\d$/.test(v); }}
+      },
+      onadd: function () {
+        this.publishState = false;
+        this.discovery = false;
+      },
+      oneditprepare: function () {
+        var node = this;
+        $("#node-input-publishState").prop("checked", on(node.publishState));
+        $("#node-input-discovery").prop("checked", on(node.discovery));
+        // Discovery describes the published state, so it needs it.
+        function follow() {
+          var publishing = $("#node-input-publishState").prop("checked");
+          if (!publishing) $("#node-input-discovery").prop("checked", false);
+          $("#node-input-discovery").prop("disabled", !publishing);
+          $("#node-input-area").trigger("change");
+        }
+        $("#node-input-publishState, #node-input-discovery").on("change", follow);
+        follow();
+      },
+      inputs: 1,
+      outputs: 1,
+      icon: "font-awesome/fa-lightbulb-o",
+      label: function () { return this.name || (this.area ? this.area + " " : "") + "lighting controller"; }
+    });
+  })();
 </script>
 
 <script type="text/html" data-template-name="home-room-lighting-controller">
   <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
-  <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area"></div>
+  <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area" placeholder="needed when publishing"></div>
+  <div class="form-row"><label for="node-input-publishState">Publish state over MQTT</label><input type="checkbox" id="node-input-publishState" style="display:inline-block; width:auto;"></div>
+  <div class="form-row"><label for="node-input-discovery">Home Assistant discovery</label><input type="checkbox" id="node-input-discovery" style="display:inline-block; width:auto;"> <span>(needs Publish state)</span></div>
   <div class="form-row"><label for="node-input-displayName">Display name</label><input type="text" id="node-input-displayName"></div>
   <div class="form-row"><label for="node-input-targets">Targets JSON</label><input type="text" id="node-input-targets"></div>
   <div class="form-row"><label for="node-input-maxBrightnessPct">Daytime brightness %</label><input type="number" id="node-input-maxBrightnessPct"></div>
@@ -44,6 +78,18 @@
 
 <script type="text/html" data-help-name="home-room-lighting-controller">
   <p>Owns room MQTT commands, adaptive colour and brightness, manual overrides, discovery and bounded tracing.</p>
+  <h3>Publishing</h3>
+  <p>The room always commands its lights on each target's own command topic. Two settings add what it publishes
+    for other systems to see; both are named after the <b>Area</b>, which is needed only when one of them is on.</p>
+  <dl class="message-properties">
+    <dt>Publish state over MQTT</dt><dd>each light's control state on
+      <code>home/&lt;area&gt;/lighting/&lt;target&gt;/control</code> and the circadian state on
+      <code>home/&lt;area&gt;/circadian/state</code>.</dd>
+    <dt>Home Assistant discovery</dt><dd>a circadian switch in Home Assistant, which reads that state and sends
+      ON/OFF to <code>home/&lt;area&gt;/circadian/set</code>. It needs <b>Publish state</b>. Switching it off
+      removes the switch from Home Assistant at the next start.</dd>
+  </dl>
+  <p>New nodes start with both off. A node saved before these settings existed keeps publishing both.</p>
   <h3>Circadian schedule</h3>
   <p>Circadian levels follow <b>Wake time</b> and <b>Bed time</b> (24-hour <code>HH:MM</code>, default 07:00 and
     23:00): they rise to the daytime level over the hour after waking, stay at the daytime brightness and colour
@@ -76,7 +122,8 @@
       held by that owner are released. Released lights that are on are restyled as a refresh would.</dd>
   </dl>
   <h3>Outputs</h3>
-  <p>On startup and whenever a target's control state changes, a retained message is sent with topic
+  <p>With <b>Publish state</b> on, on startup and whenever a target's control state changes, a retained message is
+    sent with topic
     <code>home/&lt;area&gt;/lighting/&lt;target&gt;/control</code> and payload
     <code>{"state": "in-control" | "overridden" | "manual", "owner": string | null}</code>.</p>
 </script>
