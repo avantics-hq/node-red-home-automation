@@ -262,7 +262,8 @@ from fresh observed volume, accumulates rapid requests against the pending
 target, applies configured half-step bounds, retries through the existing
 bounded transport path, and confirms completion from fresh receiver evidence.
 Once confirmed, it releases the volume target; a later physical or external
-adjustment becomes the new baseline instead of being corrected.
+adjustment becomes the new baseline instead of being corrected. A request still pending when Node-RED restarts is reported as
+`volume_failed` with reason `restart`, not replayed.
 
 ## Contract examples
 

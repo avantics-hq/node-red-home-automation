@@ -34,5 +34,13 @@
   <p>Send protocol observations as <code>msg.avr = {kind: "observed", line: msg.payload}</code>.</p>
   <p>Send activity requests as <code>msg.avr = {kind: "intent", requestId, generation, power: "on", source: "shield"}</code>. Omit <code>source</code> to preserve the current input, or use <code>power: "standby"</code> to stop the AVR.</p>
   <p>Send volume requests as <code>msg.avr = {kind: "volume", requestId, mode: "absolute", value: 30}</code> or use <code>mode: "relative"</code> with a positive or negative delta. The controller applies configured bounds, accumulates rapid relative requests, confirms fresh <code>MV</code> evidence and releases ownership so external adjustments are preserved.</p>
-  <p>Send <code>kind: "startup"</code> after deployment to discard stale observations and query the receiver. Output 1 connects to a TCP output node; output 2 emits state plus ready, failed, rejected, superseded and volume results.</p>
+  <p>Send <code>kind: "startup"</code> after deployment to discard stale observations and query the receiver; a volume request still pending then is reported as failed with reason <code>restart</code>. Send <code>kind: "refresh"</code> to re-read the receiver without disturbing work in flight. Output 1 connects to a TCP output node; output 2 emits state plus ready, failed, rejected, superseded and volume results.</p>
+  <h3>Volume results</h3>
+  <dl class="message-properties">
+    <dt>volume_ready</dt><dd><code>{kind, area, requestId, volume, bounded}</code>: confirmed by a fresh reading.</dd>
+    <dt>volume_rejected</dt><dd><code>{kind, area, requestId, reason}</code>: not sent, for example <code>receiver-not-ready</code> or an invalid request.</dd>
+    <dt>volume_failed</dt><dd><code>{kind, area, requestId, reason, operation, attempts}</code>: <code>reason</code> is <code>attempts-exhausted</code> (with the operation and attempts) or <code>restart</code> (operation and attempts are <code>null</code>).</dd>
+    <dt>volume_manual_override</dt><dd><code>{kind, area, requestId, reason, observed, target}</code>: the receiver moved elsewhere while the request was in flight.</dd>
+    <dt>volume_external</dt><dd><code>{kind, area, previous, observed}</code>: a change made outside any request.</dd>
+  </dl>
 </script>
