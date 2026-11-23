@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  normaliseMotionConfig,
   transitionMotion,
   type LightingIntent,
   type MotionConfig,
@@ -171,4 +172,13 @@ test("re-enabling motion switches nothing off; a later vacancy schedules OFF as 
   assert.equal(timer?.delayMs, 30_000);
   result = transitionMotion(result.state, {source: "off-timer", generation: timer?.generation}, config, true, 34_000);
   assert.deepEqual(sendEffects(result).map((message) => message.lighting.state), ["OFF"]);
+});
+
+test("motion settings are read once, from the node's editor values", () => {
+  assert.deepEqual(normaliseMotionConfig({}), {onTargets: ["main"], offTargets: ["main"], defaultDelaySeconds: 120, defaultIlluminanceCutoff: 10});
+  const read = normaliseMotionConfig({onTargets: "[\"ceiling\",\"lamp\"]", offTargets: "", defaultDelaySeconds: "300", defaultIlluminanceCutoff: "0"});
+  assert.deepEqual(read, {onTargets: ["ceiling", "lamp"], offTargets: ["ceiling", "lamp"], defaultDelaySeconds: 300, defaultIlluminanceCutoff: 0});
+  assert.throws(() => normaliseMotionConfig({onTargets: "[1]"}), /JSON array of strings/);
+  assert.throws(() => normaliseMotionConfig({defaultDelaySeconds: ""}), /vacancy delay must be a number/);
+  assert.throws(() => normaliseMotionConfig({defaultIlluminanceCutoff: "dark"}), /illuminance cutoff must be a number/);
 });

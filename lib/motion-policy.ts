@@ -1,6 +1,7 @@
 "use strict";
 
 import type {TraceEntry} from "./bounded-trace";
+import {numberSetting} from "./settings";
 
 // Motion handles occupancy, illuminance and whether it is enabled. Wall
 // switches belong to the switch policy; the room controller keeps motion from
@@ -55,6 +56,34 @@ function finiteNumber(value: unknown): number | null {
 
 // Saved wall-switch state from earlier versions (wallInput and the older
 // switch* fields) is not read.
+// A JSON array of target names from the editor, or the fallback when blank.
+function targetList(value: unknown, fallback: string[]): string[] {
+  const parsed: unknown = JSON.parse(typeof value === "string" && value ? value : JSON.stringify(fallback));
+  if (!Array.isArray(parsed) || parsed.some((item) => typeof item !== "string")) {
+    throw new Error("targets must be a JSON array of strings");
+  }
+  return parsed as string[];
+}
+
+// The motion policy's settings from a node's editor values: on targets
+// default to ["main"] and off targets to the on targets; the vacancy delay
+// (120 s) and illuminance cutoff (10) take their defaults only when absent
+// from an older saved flow. Throws on settings it cannot use.
+export function normaliseMotionConfig(raw: {
+  onTargets?: unknown;
+  offTargets?: unknown;
+  defaultDelaySeconds?: unknown;
+  defaultIlluminanceCutoff?: unknown;
+}): MotionConfig {
+  const onTargets = targetList(raw.onTargets, ["main"]);
+  return {
+    onTargets,
+    offTargets: targetList(raw.offTargets, onTargets),
+    defaultDelaySeconds: numberSetting(raw.defaultDelaySeconds, "vacancy delay", 120),
+    defaultIlluminanceCutoff: numberSetting(raw.defaultIlluminanceCutoff, "illuminance cutoff", 10)
+  };
+}
+
 export function createMotionState(
   config: MotionConfig,
   saved: Partial<MotionState> = {}

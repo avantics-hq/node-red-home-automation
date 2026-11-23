@@ -2,13 +2,13 @@
 
 import type {Node, NodeDef, NodeInitializer} from "node-red";
 import {
+  normaliseMotionConfig,
   transitionMotion,
   type MotionConfig,
   type MotionInput,
   type MotionState
 } from "../lib/motion-policy";
 import {guarded, invalidConfig, onInput, runReducer, type Send} from "./adapter";
-import {numberSetting} from "../lib/settings";
 
 interface MotionPolicyConfig extends NodeDef {
   area?: string;
@@ -23,14 +23,6 @@ interface MotionPolicyNode extends Node {}
 type MotionStatus = ReturnType<typeof transitionMotion>["status"];
 
 
-function parseArray(value: string | undefined, fallback: string[]): string[] {
-  const parsed: unknown = JSON.parse(value || JSON.stringify(fallback));
-  if (!Array.isArray(parsed) || parsed.some((item) => typeof item !== "string")) {
-    throw new Error("targets must be a JSON array of strings");
-  }
-  return parsed as string[];
-}
-
 const registerMotionPolicy: NodeInitializer = (RED) => {
   function HomeMotionLightingPolicy(this: MotionPolicyNode, config: MotionPolicyConfig) {
     RED.nodes.createNode(this, config);
@@ -41,14 +33,7 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
 
     let policyConfig: MotionConfig & {area: string};
     try {
-      const onTargets = parseArray(config.onTargets, ["main"]);
-      policyConfig = {
-        area: config.area || "room",
-        onTargets,
-        offTargets: parseArray(config.offTargets, onTargets),
-        defaultDelaySeconds: numberSetting(config.defaultDelaySeconds, "vacancy delay", 120),
-        defaultIlluminanceCutoff: numberSetting(config.defaultIlluminanceCutoff, "illuminance cutoff", 10)
-      };
+      policyConfig = {area: config.area || "room", ...normaliseMotionConfig(config)};
     } catch (error) {
       invalidConfig(node, error);
       return;
