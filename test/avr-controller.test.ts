@@ -425,3 +425,69 @@ test("every failed volume request is reported in one shape", () => {
   });
   assert.equal(result.traces.some((entry) => entry.event === "volume" && entry.outcome === "failed" && entry.reason === "attempts-exhausted"), true);
 });
+
+const intent = (state: Partial<AvrState> | undefined, seconds: number) => transitionAvr(state, {
+  avr: {kind: "intent", requestId: "tv-1", generation: 1, power: "on", source: "shield"}
+}, config, at(seconds));
+
+test("a confirmed request reports ready target state for the theatre activity controller", () => {
+  const result = intent(readyState(), 5);
+  assert.deepEqual(result.targetStates.map((entry) => entry.theatre.status), ["ready"]);
+  const theatre = result.targetStates[0]!.theatre;
+  assert.equal(theatre.target, "avr");
+  assert.equal(theatre.requestId, "tv-1");
+  assert.equal(theatre.generation, 1);
+  // Confirmed by the readings taken at 0 s, not by the intent at 5 s.
+  assert.equal(theatre.observedAt, at(0).toISOString());
+  assert.deepEqual(theatre.details.recovery, {power: "on", source: "shield"});
+});
+
+test("a refresh is answered with target state stamped by the receiver's new readings", () => {
+  const settled = intent(readyState(), 5).state;
+  const refresh = transitionAvr(settled, {avr: {kind: "refresh"}}, config, at(60));
+  assert.equal(refresh.commands[0]!.payload, QUERY_COMMAND);
+  // Nothing new is confirmed until the receiver answers.
+  assert.deepEqual(refresh.targetStates, []);
+
+  let state = refresh.state;
+  const answers = ["PWON", "ZMON", "SISAT/CBL"].map((line, index) => {
+    const result = observed(state, line, 61 + index);
+    state = result.state;
+    return result.targetStates.map((entry) => entry.theatre);
+  });
+  // Each answer re-sends ready, stamped with the oldest field it relies on:
+  // only the last answer makes the whole request fresh.
+  assert.deepEqual(answers.map((entries) => entries.map((entry) => entry.status)), [["ready"], ["ready"], ["ready"]]);
+  assert.equal(answers[0]![0]!.observedAt, at(0).toISOString());
+  assert.equal(answers[2]![0]!.observedAt, at(61).toISOString());
+  // A volume reading confirms nothing the request needs.
+  assert.deepEqual(observed(state, "MV31", 70).targetStates, []);
+});
+
+test("target state reports a manual override and a failed request honestly", () => {
+  const settled = intent(readyState(), 5).state;
+  const override = observed(settled, "SIGAME", 10).targetStates.map((entry) => entry.theatre);
+  assert.equal(override.at(-1)!.status, "transitioning");
+  assert.equal(override.at(-1)!.classification, "manual_override");
+
+  let result = transitionAvr(observed(undefined, "PWSTANDBY\rZMOFF\rSIGAME\r").state, {
+    avr: {kind: "intent", requestId: "tv-2", generation: 2, power: "on", source: "shield"}
+  }, config, at(1));
+  for (let tick = 2; result.state.phase !== "failed" && tick < 20; tick += 2) {
+    result = transitionAvr(result.state, {avr: {kind: "tick"}}, config, at(tick));
+  }
+  const failed = result.targetStates.at(-1)!.theatre;
+  assert.equal(failed.status, "failed");
+  assert.equal(failed.failure?.reason, "attempts-exhausted");
+  assert.equal(failed.failure?.operation, "power-on");
+});
+
+test("a new request for a ready receiver is carried out, not mistaken for a manual change", () => {
+  const settled = intent(readyState(), 5).state;
+  const off = transitionAvr(settled, {
+    avr: {kind: "intent", requestId: "off-2", generation: 2, power: "standby"}
+  }, config, at(10));
+  assert.equal(off.state.classification, null);
+  assert.deepEqual(off.commands.map((command) => command.payload), ["PWSTANDBY\r"]);
+  assert.equal(off.targetStates.at(-1)!.theatre.status, "transitioning");
+});

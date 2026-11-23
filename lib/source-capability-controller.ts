@@ -65,6 +65,9 @@ export interface SourceObservation {
   sourceId: string;
   status: SourceObservationStatus;
   observedAt: string;
+  // When this reading was confirmed: its arrival when it answers a refresh,
+  // which a quiet source reports with an unchanged observedAt.
+  confirmedAt?: string;
   application: string | null;
   playback: SourcePlaybackState;
 }
@@ -93,6 +96,8 @@ export interface SourceState {
   classification: "manual_override" | null;
   lastAttempt: number;
   fallbackUsed: boolean;
+  // Set while a refresh of a settled source waits for its reading.
+  refreshAsked: boolean;
 }
 
 export type SourceEvent =
@@ -203,7 +208,8 @@ function initialState(
     lastAttempt: Number.isInteger(saved.lastAttempt) && (saved.lastAttempt ?? -1) >= 0
       ? saved.lastAttempt!
       : 0,
-    fallbackUsed: saved.fallbackUsed === true
+    fallbackUsed: saved.fallbackUsed === true,
+    refreshAsked: saved.refreshAsked === true
   };
 }
 
@@ -305,7 +311,7 @@ function targetEvent(
     requestId: state.desired.requestId,
     generation: state.generation,
     status: targetStatus(state.phase),
-    observedAt: state.observed?.observedAt ?? iso(now),
+    observedAt: state.observed?.confirmedAt ?? state.observed?.observedAt ?? iso(now),
     sourceId: state.desired.sourceId,
     action: state.desired.action,
     details: {
@@ -468,6 +474,7 @@ export function transitionSource(
     };
     state.generation = event.generation;
     state.observed = null;
+    state.refreshAsked = false;
     state.pending = null;
     state.failure = null;
     state.blockedGeneration = null;
@@ -527,6 +534,10 @@ export function transitionSource(
       application,
       playback
     };
+    if (state.refreshAsked) {
+      state.observed.confirmedAt = new Date(Math.max(bounded.ms, nowMs)).toISOString();
+      state.refreshAsked = false;
+    }
     reconcileObservation();
   }
 
@@ -583,7 +594,16 @@ export function transitionSource(
     acceptCommandResult(event);
   } else if (event.kind === "tick") {
     tick(event);
+  } else if (event.kind === "refresh" && state.desired && state.phase === "ready" && !state.pending &&
+    descriptor()?.confirmation !== "unavailable") {
+    // Re-read a settled source without putting it back into confirmation: it
+    // stays ready, and its target state follows the reading. A refresh that
+    // is never answered leaves it to the activity controller to report.
+    commands.push(commandFor(state, "observe"));
+    state.refreshAsked = true;
+    trace("refresh", "querying", null, {sourceId: state.desired.sourceId});
   } else if (event.kind === "startup" || event.kind === "refresh") {
+    state.refreshAsked = false;
     if (state.desired) {
       if (state.desired.sourceId === null || descriptor()?.confirmation === "unavailable") {
         markUnavailable(state.desired.sourceId === null ? "unknown-active-source" : "unobservable-source");
@@ -607,7 +627,8 @@ export function transitionSource(
     throw new Error("unknown source capability event kind");
   }
 
-  const outputEvent = targetEvent(state, now, config.sources);
+  // A refresh of a settled source reports nothing until its reading arrives.
+  const outputEvent = event.kind === "refresh" && state.refreshAsked ? null : targetEvent(state, now, config.sources);
   if (outputEvent) events.push(outputEvent);
   return {state, commands, events, traces, status: statusFor(state)};
 }
