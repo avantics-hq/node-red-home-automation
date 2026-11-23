@@ -6,7 +6,8 @@ import {scheduledLighting, type CircadianLighting} from "../lib/circadian";
 import {alreadyStyled} from "../lib/z2m-light";
 import {DEFAULT_BED_TIME, DEFAULT_WAKE_TIME, clockMinutes, resolveSchedule, scheduleLevel} from "../lib/circadian-schedule";
 import {styleAtLevel, type LightLevels} from "../lib/light-styling";
-import {transitionRoom, type RoomConfig} from "../lib/room-controller";
+import {type RoomConfig} from "../lib/room-controller";
+import {publishRoom} from "../lib/room-publishing";
 
 const levels: LightLevels = {sleepBrightnessPct: 1, maxBrightnessPct: 100, sleepColorTempKelvin: 2200, maxColorTempKelvin: 6500};
 const clock = (hours: number, minutes = 0) => new Date(2026, 10, 23, hours, minutes);
@@ -58,7 +59,7 @@ test("the room controller uses whatever circadian lighting it is given", () => {
     targets: [{id: "main", stateTopic: "room/light/main", commandTopic: "room/light/main/set"}],
     refreshTransitionSeconds: 60, initialTransitionSeconds: 1, lighting: fixed
   };
-  const result = transitionRoom(undefined, {lighting: {kind: "intent", targets: ["main"], state: "ON", source: "motion"}}, config, clock(3));
+  const result = publishRoom(undefined, {lighting: {kind: "intent", targets: ["main"], state: "ON", source: "motion"}}, config, clock(3));
   const command = result.outputs.find((entry) => entry.lighting_command)?.payload as Record<string, unknown>;
   assert.equal(command.brightness, 77);
   assert.equal(command.color_temp, 333);

@@ -12,7 +12,8 @@ import {
 } from "../lib/activity-lighting-controller";
 import {scheduledLighting} from "../lib/circadian";
 import {resolveSchedule} from "../lib/circadian-schedule";
-import {transitionRoom, type RoomConfig, type RoomState} from "../lib/room-controller";
+import {type RoomConfig, type RoomState} from "../lib/room-controller";
+import {publishRoom} from "../lib/room-publishing";
 
 const config: ActivityLightingConfig = {
   profiles: {
@@ -206,10 +207,10 @@ test("activity lighting holds its room lights through refresh and hands them bac
     })
   };
   const noon = (seconds: number) => new Date(new Date(2026, 5, 21, 12, 0).getTime() + seconds * 1000);
-  let room = transitionRoom(undefined, {lighting: {kind: "intent", targets: ["wall", "lamp"], state: "ON", source: "motion"}}, roomConfig, noon(0));
+  let room = publishRoom(undefined, {lighting: {kind: "intent", targets: ["wall", "lamp"], state: "ON", source: "motion"}}, roomConfig, noon(0));
   const feed = (lighting: ReturnType<typeof transitionActivityLighting>, seconds: number) => {
     for (const command of lighting.commands) {
-      if (command.lighting) room = transitionRoom(room.state as Partial<RoomState>, {lighting: command.lighting}, roomConfig, noon(seconds));
+      if (command.lighting) room = publishRoom(room.state as Partial<RoomState>, {lighting: command.lighting}, roomConfig, noon(seconds));
     }
     return room;
   };
@@ -220,7 +221,7 @@ test("activity lighting holds its room lights through refresh and hands them bac
   room = feed(activity, 1);
   assert.deepEqual(commanded(room), [["wall", 64], ["lamp", 64]]);
   assert.deepEqual(room.status.control, {wall: "overridden", lamp: "overridden"});
-  room = transitionRoom(room.state, {lighting: {kind: "refresh"}}, roomConfig, noon(90));
+  room = publishRoom(room.state, {lighting: {kind: "refresh"}}, roomConfig, noon(90));
   assert.deepEqual(commanded(room), []);
 
   // Ending the activity releases both lights and the room controller restyles them.
@@ -228,7 +229,7 @@ test("activity lighting holds its room lights through refresh and hands them bac
   room = feed(activity, 100);
   assert.deepEqual(commanded(room), [["wall", 254], ["lamp", 254]]);
   assert.deepEqual(room.status.control, {wall: "in-control", lamp: "in-control"});
-  room = transitionRoom(room.state, {lighting: {kind: "refresh"}}, roomConfig, noon(190));
+  room = publishRoom(room.state, {lighting: {kind: "refresh"}}, roomConfig, noon(190));
   assert.equal(commanded(room).length, 2);
 });
 

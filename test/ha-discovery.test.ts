@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {resolve} from "node:path";
 import test from "node:test";
-import {DISCOVERY_ORIGIN, areaId, discoveryPrefixSetting, publishingArea} from "../lib/ha-discovery";
+import {DISCOVERY_ORIGIN, discoveryPrefixSetting} from "../lib/ha-discovery";
+import {areaId, publishingArea} from "../lib/topic-names";
 import {theatreDiscovery} from "../lib/theatre-ha-discovery";
 
 test("the discovery origin names this package, its version and its home", () => {

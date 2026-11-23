@@ -3,8 +3,6 @@
 import type {TraceEntry} from "./bounded-trace";
 import type {CircadianLighting} from "./circadian";
 import {alreadyStyled, lightCommand, readLightReport, setsLightValues, type LightCommand, type LightReport} from "./z2m-light";
-import {areaId} from "./ha-discovery";
-import {circadianCommandTopic, circadianStateMessage, roomAvailabilityMessage, roomLightingDiscovery, roomPublishesState} from "./room-lighting-discovery";
 import {checkCommandEcho, checkStateReport, parsePayload, rememberCommand, type ExpectedCommand} from "./command-echo";
 
 export {fingerprint, parsePayload, type ExpectedCommand} from "./command-echo";
@@ -175,15 +173,6 @@ export function transitionRoom(
     });
   }
 
-  function controlMessage(targetId: string): RoomOutput {
-    const entry = state.control[targetId];
-    return {
-      topic: "home/" + areaId(config.area) + "/lighting/" + targetId + "/control",
-      payload: {state: entry?.state ?? "in-control", owner: entry?.state === "overridden" ? entry.owner : null},
-      retain: true
-    };
-  }
-
   function intendedOn(targetId: string): boolean {
     if (Object.hasOwn(state.desired, targetId)) return state.desired[targetId] === true;
     return state.observed[targetId]?.on === true;
@@ -200,12 +189,6 @@ export function transitionRoom(
       lighting_command: {area: config.area, target: targetId, source}
     };
   }
-
-  // What the room publishes for MQTT and Home Assistant to see is named after
-  // its area, so it needs one, and is switched on by its settings; light
-  // control depends on neither.
-  const publishesArea = roomPublishesState(config);
-  const publishesDiscovery = publishesArea && config.discovery !== false;
 
   function refreshCommands(source: string): RoomOutput[] {
     if (!state.circadianEnabled) return [];
@@ -285,37 +268,10 @@ export function transitionRoom(
     return commands.filter((entry): entry is RoomOutput => entry !== null);
   }
 
-  let event: LightingEvent = msg.lighting || {};
-  // The circadian switch's set topic: Home Assistant sends ON or OFF there.
-  // Read only while the room publishes, as the switch is only discovered then;
-  // a bare MQTT message, or one a flow tagged as observed, is accepted.
-  if (publishesArea && msg.topic === circadianCommandTopic(config.area) &&
-    (!event.kind || event.kind === "observed" || event.kind === "command-observed")) {
-    const requested = typeof msg.payload === "string" ? msg.payload.trim().toUpperCase() : "";
-    if (msg.retain === true || event.retained === true) {
-      trace("circadian-set", "ignored", "retained-message");
-      event = {kind: "ignored"};
-    } else if (requested === "ON" || requested === "OFF") {
-      event = {kind: "circadian", enabled: requested === "ON"};
-    } else {
-      trace("circadian-set", "ignored", "not-on-or-off", {payload: typeof msg.payload === "string" ? msg.payload : null});
-      event = {kind: "ignored"};
-    }
-  }
-  if (event.kind === "startup") {
-    if (areaId(config.area) !== "") {
-      const discoveryConfig = {...config, discoveryPrefix: config.discoveryPrefix ?? "homeassistant"};
-      const entry = roomLightingDiscovery(discoveryConfig, state.circadianEnabled)[0]!;
-      // Discovery switched off: an empty retained entry removes the switch
-      // from Home Assistant.
-      outputs.push(publishesDiscovery ? entry : {topic: entry.topic, payload: "", retain: true});
-    }
-    if (publishesArea) {
-      outputs.push(roomAvailabilityMessage(config.area, true));
-      outputs.push(circadianStateMessage(config.area, state.circadianEnabled));
-    }
-    for (const target of config.targets) controlChanged.add(target.id);
-  } else if (event.kind === "observed") {
+  // What the room publishes, and the MQTT it reads for itself, are
+  // room-publishing.ts's; this decides about lights only.
+  const event: LightingEvent = msg.lighting || {};
+  if (event.kind === "observed") {
     const target = event.target ? targetById[event.target] : targetForTopic(msg.topic, "stateTopic");
     const parsed = parsePayload(msg.payload);
     const payload = parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : null;
@@ -387,7 +343,6 @@ export function transitionRoom(
     if (previous !== state.circadianEnabled) {
       trace("circadian", "changed", null, {enabled: state.circadianEnabled});
     }
-    if (publishesArea) outputs.push(circadianStateMessage(config.area, state.circadianEnabled));
     if (state.circadianEnabled) {
       // Enabling circadian takes back manual lights; other owners keep theirs.
       for (const target of config.targets) {
@@ -437,10 +392,6 @@ export function transitionRoom(
     });
   }
 
-  for (const target of config.targets) {
-    if (publishesArea && controlChanged.has(target.id)) outputs.push(controlMessage(target.id));
-  }
-
   const onCount = Object.values(state.desired).filter(Boolean).length;
   const control = Object.fromEntries(config.targets.map((target) => [target.id, controlOf(target.id)]));
   const manualCount = Object.values(control).filter((entry) => entry === "manual").length;
@@ -449,6 +400,8 @@ export function transitionRoom(
     state,
     outputs,
     traces,
+    // The lights whose control state changed, in configured order.
+    controlChanged: config.targets.map((target) => target.id).filter((id) => controlChanged.has(id)),
     status: {
       circadianEnabled: state.circadianEnabled,
       sleeping: state.sleeping,

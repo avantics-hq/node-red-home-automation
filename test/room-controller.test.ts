@@ -9,11 +9,11 @@ import {DEFAULT_BED_TIME, DEFAULT_WAKE_TIME, resolveSchedule, scheduleLevel} fro
 import type {LightLevels} from "../lib/light-styling";
 import {
   adaptivePayload,
-  transitionRoom,
   type RoomConfig,
   type RoomOutput,
   type RoomState
 } from "../lib/room-controller";
+import {publishRoom} from "../lib/room-publishing";
 
 const levels: LightLevels = {
   maxBrightnessPct: 100,
@@ -39,20 +39,20 @@ const onSchedule = (wakeTime: string, bedTime: string): RoomConfig =>
 // Local noon, so the default schedule is in its daytime in any timezone.
 const now = new Date(2026, 5, 21, 12, 0);
 
-function output(result: ReturnType<typeof transitionRoom>, index: number): RoomOutput {
+function output(result: ReturnType<typeof publishRoom>, index: number): RoomOutput {
   const entry = result.outputs[index];
   assert.ok(entry);
   return entry;
 }
 
-function payload(result: ReturnType<typeof transitionRoom>, index: number): Record<string, unknown> {
+function payload(result: ReturnType<typeof publishRoom>, index: number): Record<string, unknown> {
   const value = output(result, index).payload;
   assert.ok(value && typeof value === "object" && !Array.isArray(value));
   return value as Record<string, unknown>;
 }
 
 test("intent emits adaptive commands and records command ownership", () => {
-  const result = transitionRoom(undefined, {
+  const result = publishRoom(undefined, {
     lighting: {kind: "intent", targets: ["cooking", "dining"], state: "ON", source: "motion"}
   }, config, now);
 
@@ -66,30 +66,30 @@ test("intent emits adaptive commands and records command ownership", () => {
 });
 
 test("own command echo is ignored while external values create a manual override", () => {
-  const commanded = transitionRoom(undefined, {
+  const commanded = publishRoom(undefined, {
     lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}
   }, config, now);
   const ownPayload = output(commanded, 0).payload;
-  const ownEcho = transitionRoom(commanded.state, {
+  const ownEcho = publishRoom(commanded.state, {
     topic: "home/kitchen/light/group/cooking/set",
     payload: ownPayload,
     lighting: {kind: "command-observed", target: "cooking"}
   }, config, new Date(now.getTime() + 100));
   assert.equal(ownEcho.state.control.cooking, undefined);
 
-  const external = transitionRoom(ownEcho.state, {
+  const external = publishRoom(ownEcho.state, {
     topic: "home/kitchen/light/group/cooking/set",
     payload: {state: "ON", brightness: 100},
     lighting: {kind: "command-observed", target: "cooking"}
   }, config, new Date(now.getTime() + 200));
   assert.equal(external.state.control.cooking?.state, "manual");
 
-  const refresh = transitionRoom(external.state, {lighting: {kind: "refresh"}}, config, new Date(now.getTime() + 300));
+  const refresh = publishRoom(external.state, {lighting: {kind: "refresh"}}, config, new Date(now.getTime() + 300));
   assert.equal(refresh.outputs.length, 0);
 });
 
 test("OFF clears manual state and TOGGLE resolves from desired state", () => {
-  const initial = transitionRoom(undefined, {
+  const initial = publishRoom(undefined, {
     lighting: {
       kind: "intent",
       targets: ["cooking"],
@@ -101,7 +101,7 @@ test("OFF clears manual state and TOGGLE resolves from desired state", () => {
   }, config, now);
   assert.equal(initial.state.control.cooking?.state, "manual");
 
-  const toggle = transitionRoom(initial.state, {
+  const toggle = publishRoom(initial.state, {
     lighting: {kind: "intent", targets: ["cooking"], state: "TOGGLE", source: "wall"}
   }, config, new Date(now.getTime() + 100));
   assert.equal(payload(toggle, 0).state, "OFF");
@@ -109,7 +109,7 @@ test("OFF clears manual state and TOGGLE resolves from desired state", () => {
 });
 
 test("activity styling preserves manual and occupancy power ownership", () => {
-  let result = transitionRoom(undefined, {
+  let result = publishRoom(undefined, {
     lighting: {
       kind: "intent",
       targets: ["cooking"],
@@ -121,7 +121,7 @@ test("activity styling preserves manual and occupancy power ownership", () => {
   }, config, now);
   result.state.desired.dining = false;
 
-  result = transitionRoom(result.state, {
+  result = publishRoom(result.state, {
     lighting: {
       kind: "intent",
       targets: ["cooking", "dining"],
@@ -137,7 +137,7 @@ test("activity styling preserves manual and occupancy power ownership", () => {
   assert.equal(result.state.desired.dining, false);
 
   delete result.state.control.cooking;
-  result = transitionRoom(result.state, {
+  result = publishRoom(result.state, {
     lighting: {
       kind: "intent",
       targets: ["cooking"],
@@ -153,11 +153,11 @@ test("activity styling preserves manual and occupancy power ownership", () => {
 });
 
 test("off-only intents preserve active lights while applying a bedtime level to inactive targets", () => {
-  const state = transitionRoom(undefined, {
+  const state = publishRoom(undefined, {
     lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "wall"}
   }, config, now).state;
 
-  const result = transitionRoom(state, {
+  const result = publishRoom(state, {
     lighting: {
       kind: "intent",
       targets: ["cooking", "dining"],
@@ -178,7 +178,7 @@ test("off-only intents preserve active lights while applying a bedtime level to 
 });
 
 test("startup publishes stable discovery and state messages", () => {
-  const result = transitionRoom(undefined, {lighting: {kind: "startup"}}, config, now);
+  const result = publishRoom(undefined, {lighting: {kind: "startup"}}, config, now);
   assert.equal(result.outputs.length, 5);
   assert.equal(output(result, 0).topic, "homeassistant/switch/kitchen_circadian_lighting/config");
   assert.equal(output(result, 0).retain, true);
@@ -192,8 +192,8 @@ test("startup publishes stable discovery and state messages", () => {
 
 const later = (ms: number): Date => new Date(now.getTime() + ms);
 
-function observeState(state: Parameters<typeof transitionRoom>[0], on: boolean, ms: number) {
-  return transitionRoom(state, {
+function observeState(state: Parameters<typeof publishRoom>[0], on: boolean, ms: number) {
+  return publishRoom(state, {
     topic: "home/kitchen/light/group/cooking",
     payload: {state: on ? "ON" : "OFF", brightness: on ? 254 : null},
     lighting: {kind: "observed"}
@@ -201,25 +201,25 @@ function observeState(state: Parameters<typeof transitionRoom>[0], on: boolean, 
 }
 
 test("a light switched off at the bulb is not switched back on by the periodic refresh", () => {
-  let result = transitionRoom(undefined, {
+  let result = publishRoom(undefined, {
     lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}
   }, config, now);
   result = observeState(result.state, true, 200);
   result = observeState(result.state, false, 60000);
   assert.equal(result.state.desired.cooking, false);
-  result = transitionRoom(result.state, {lighting: {kind: "refresh"}}, config, later(90000));
+  result = publishRoom(result.state, {lighting: {kind: "refresh"}}, config, later(90000));
   assert.equal(result.outputs.length, 0);
 });
 
 test("a light switched on at the bulb is switched off by the next toggle", () => {
   let result = observeState(undefined, false, 0);
-  result = transitionRoom(result.state, {
+  result = publishRoom(result.state, {
     lighting: {kind: "intent", targets: ["cooking"], state: "OFF", source: "wall"}
   }, config, later(100));
   result = observeState(result.state, false, 300);
   result = observeState(result.state, true, 60000);
   assert.equal(result.state.desired.cooking, true);
-  result = transitionRoom(result.state, {
+  result = publishRoom(result.state, {
     lighting: {kind: "intent", targets: ["cooking"], state: "TOGGLE", source: "wall"}
   }, config, later(61000));
   assert.equal(payload(result, 0).state, "OFF");
@@ -227,12 +227,12 @@ test("a light switched on at the bulb is switched off by the next toggle", () =>
 
 test("a stale state report does not undo the controller's own command in flight", () => {
   let result = observeState(undefined, false, 0);
-  result = transitionRoom(result.state, {
+  result = publishRoom(result.state, {
     lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}
   }, config, later(1000));
   const ownPayload = output(result, 0).payload;
   // The command topic echo arrives before the bulb's stale report.
-  result = transitionRoom(result.state, {
+  result = publishRoom(result.state, {
     topic: "home/kitchen/light/group/cooking/set",
     payload: ownPayload,
     lighting: {kind: "command-observed", target: "cooking"}
@@ -249,13 +249,13 @@ test("a stale state report does not undo the controller's own command in flight"
 });
 
 test("an own command echo still marks only one matching external command as own", () => {
-  let result = transitionRoom(undefined, {
+  let result = publishRoom(undefined, {
     lighting: {kind: "intent", targets: ["cooking"], state: "OFF", source: "wall"}
   }, config, now);
   const echo = {topic: "home/kitchen/light/group/cooking/set", payload: {state: "OFF"}, lighting: {kind: "command-observed", target: "cooking"}};
-  result = transitionRoom(result.state, echo, config, later(100));
+  result = publishRoom(result.state, echo, config, later(100));
   assert.equal(result.traces.length, 0);
-  result = transitionRoom(result.state, echo, config, later(200));
+  result = publishRoom(result.state, echo, config, later(200));
   assert.equal(result.traces.at(-1)?.event, "external-command");
 });
 
@@ -266,18 +266,18 @@ test("restored state with expected entries from before in-flight tracking adopts
   };
   let result = observeState(saved, false, 1000);
   assert.equal(result.state.desired.cooking, false);
-  result = transitionRoom(result.state, {lighting: {kind: "refresh"}}, config, later(90000));
+  result = publishRoom(result.state, {lighting: {kind: "refresh"}}, config, later(90000));
   assert.equal(result.outputs.length, 0);
 });
 
 test("the reducer does not mutate the saved state it is given", () => {
   let result = observeState(undefined, false, 0);
-  result = transitionRoom(result.state, {
+  result = publishRoom(result.state, {
     lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}
   }, config, later(1000));
   const ownPayload = output(result, 0).payload;
   const beforeEcho = structuredClone(result.state);
-  const echoed = transitionRoom(result.state, {
+  const echoed = publishRoom(result.state, {
     topic: "home/kitchen/light/group/cooking/set",
     payload: ownPayload,
     lighting: {kind: "command-observed", target: "cooking"}
@@ -291,12 +291,12 @@ test("the reducer does not mutate the saved state it is given", () => {
 
 const later2 = (ms: number): Date => new Date(now.getTime() + ms);
 
-function controlOutputs(result: ReturnType<typeof transitionRoom>) {
+function controlOutputs(result: ReturnType<typeof publishRoom>) {
   return result.outputs.filter((entry) => entry.topic.endsWith("/control")).map((entry) => [entry.topic, entry.payload]);
 }
 
-function ownedActivity(state: Parameters<typeof transitionRoom>[0], ms: number) {
-  return transitionRoom(state, {
+function ownedActivity(state: Parameters<typeof publishRoom>[0], ms: number) {
+  return publishRoom(state, {
     lighting: {
       kind: "intent",
       targets: ["cooking"],
@@ -311,7 +311,7 @@ function ownedActivity(state: Parameters<typeof transitionRoom>[0], ms: number) 
 
 test("an overridden light keeps its owner's style through the periodic refresh", () => {
   // dev-review repro: activity {brightness 64, color_temp 400} became circadian {254, 439}.
-  let result = transitionRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, now);
+  let result = publishRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, now);
   result = ownedActivity(result.state, 1000);
   assert.equal(payload(result, 0).brightness, 64);
   assert.deepEqual(result.state.control.cooking, {state: "overridden", owner: "theatre"});
@@ -320,49 +320,49 @@ test("an overridden light keeps its owner's style through the periodic refresh",
   assert.deepEqual(controlOutputs(result), [["home/kitchen/lighting/cooking/control", {state: "overridden", owner: "theatre"}]]);
   assert.equal(result.traces.some((entry) => entry.event === "control" && entry.reason === "owner-intent"), true);
 
-  result = transitionRoom(result.state, {lighting: {kind: "refresh"}}, config, later2(90000));
+  result = publishRoom(result.state, {lighting: {kind: "refresh"}}, config, later2(90000));
   assert.equal(result.outputs.length, 0);
   // A later owner-less ON (motion) is ignored for the held light.
-  result = transitionRoom(result.state, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, later2(91000));
+  result = publishRoom(result.state, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, later2(91000));
   assert.equal(result.outputs.length, 0);
   assert.equal(result.status.control.cooking, "overridden");
 });
 
 test("releasing an overridden light restyles it and refresh resumes", () => {
-  let result = transitionRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, now);
+  let result = publishRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, now);
   result = ownedActivity(result.state, 1000);
   // Another owner's release does not touch it.
-  result = transitionRoom(result.state, {lighting: {kind: "release", owner: "scene"}}, config, later2(2000));
+  result = publishRoom(result.state, {lighting: {kind: "release", owner: "scene"}}, config, later2(2000));
   assert.equal(result.outputs.length, 0);
   assert.equal(result.status.control.cooking, "overridden");
 
-  result = transitionRoom(result.state, {lighting: {kind: "release", targets: ["cooking"], owner: "theatre"}}, config, later2(3000));
+  result = publishRoom(result.state, {lighting: {kind: "release", targets: ["cooking"], owner: "theatre"}}, config, later2(3000));
   assert.equal(result.status.control.cooking, "in-control");
   assert.equal(result.outputs[0]?.lighting_command?.source, "release");
   assert.equal(payload(result, 0).brightness, 254);
   assert.equal(payload(result, 0).transition, 45);
   assert.deepEqual(controlOutputs(result), [["home/kitchen/lighting/cooking/control", {state: "in-control", owner: null}]]);
 
-  result = transitionRoom(result.state, {lighting: {kind: "refresh"}}, config, later2(90000));
+  result = publishRoom(result.state, {lighting: {kind: "refresh"}}, config, later2(90000));
   assert.equal(result.outputs.length, 1);
   assert.equal(payload(result, 0).brightness, 254);
 });
 
 test("only the owner switching a held light off returns it to the room controller", () => {
-  let result = transitionRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, now);
+  let result = publishRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, now);
   result = ownedActivity(result.state, 1000);
-  result = transitionRoom(result.state, {lighting: {kind: "intent", targets: ["cooking"], state: "OFF", source: "activity", owner: "theatre"}}, config, later2(2000));
+  result = publishRoom(result.state, {lighting: {kind: "intent", targets: ["cooking"], state: "OFF", source: "activity", owner: "theatre"}}, config, later2(2000));
   assert.equal(payload(result, 0).state, "OFF");
   assert.equal(result.status.control.cooking, "in-control");
   assert.equal(result.traces.some((entry) => entry.event === "control" && entry.reason === "off"), true);
 
-  result = transitionRoom(result.state, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, later2(60000));
+  result = publishRoom(result.state, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, later2(60000));
   assert.equal(payload(result, 0).brightness, 254);
 });
 
 test("a person's change on an overridden light makes it manual; enabling circadian keeps other owners", () => {
   let result = ownedActivity(undefined, 0);
-  result = transitionRoom(result.state, {
+  result = publishRoom(result.state, {
     lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "wall", manual: true, values: {brightness: 254}}
   }, config, later2(1000));
   assert.equal(result.status.control.cooking, "manual");
@@ -372,17 +372,17 @@ test("a person's change on an overridden light makes it manual; enabling circadi
   assert.equal(result.status.control.cooking, "manual");
 
   result = ownedActivity(undefined, 2000);
-  result = transitionRoom(result.state, {
+  result = publishRoom(result.state, {
     lighting: {kind: "intent", targets: ["dining"], state: "ON", source: "wall", manual: true, values: {brightness: 100}}
   }, config, later2(3000));
-  result = transitionRoom(result.state, {lighting: {kind: "circadian", enabled: true}}, config, later2(4000));
+  result = publishRoom(result.state, {lighting: {kind: "circadian", enabled: true}}, config, later2(4000));
   assert.equal(result.status.control.cooking, "overridden");
   assert.equal(result.status.control.dining, "in-control");
 });
 
 test("state saved before control states existed loads as manual or in-control", () => {
   const saved = {desired: {cooking: true, dining: true}, manual: {cooking: true, dining: false}};
-  const result = transitionRoom(saved as Parameters<typeof transitionRoom>[0], {lighting: {kind: "refresh"}}, config, now);
+  const result = publishRoom(saved as Parameters<typeof publishRoom>[0], {lighting: {kind: "refresh"}}, config, now);
   assert.deepEqual(result.status.control, {cooking: "manual", dining: "in-control"});
   assert.deepEqual(result.outputs.map((entry) => entry.lighting_command?.target), ["dining"]);
   assert.equal(Object.hasOwn(result.state, "manual"), false);
@@ -395,19 +395,19 @@ const heldConfig: RoomConfig = {...config, targets: [
 ]};
 
 function heldLamp() {
-  let result = transitionRoom(undefined, {lighting: {kind: "intent", targets: ["lamp", "wall"], state: "ON", source: "motion"}}, heldConfig, now);
-  result = transitionRoom(result.state, {
+  let result = publishRoom(undefined, {lighting: {kind: "intent", targets: ["lamp", "wall"], state: "ON", source: "motion"}}, heldConfig, now);
+  result = publishRoom(result.state, {
     lighting: {kind: "intent", targets: ["lamp"], state: "ON", source: "activity", owner: "film", values: {brightness: 30}}
   }, heldConfig, later2(1000));
   assert.equal(result.status.control.lamp, "overridden");
   return result;
 }
 
-function heldIntent(state: Parameters<typeof transitionRoom>[0], lighting: Record<string, unknown>, ms = 2000) {
-  return transitionRoom(state, {lighting: {kind: "intent", targets: ["lamp"], ...lighting}}, heldConfig, later2(ms));
+function heldIntent(state: Parameters<typeof publishRoom>[0], lighting: Record<string, unknown>, ms = 2000) {
+  return publishRoom(state, {lighting: {kind: "intent", targets: ["lamp"], ...lighting}}, heldConfig, later2(ms));
 }
 
-function ignoredHeld(result: ReturnType<typeof transitionRoom>) {
+function ignoredHeld(result: ReturnType<typeof publishRoom>) {
   return result.traces.filter((entry) => entry.reason === "held-by").map((entry) => [entry.details.target, entry.details.owner]);
 }
 
@@ -441,7 +441,7 @@ test("a held light follows its owner, a newer owner, a person and a release", ()
   assert.equal(payload(result, 0).brightness, 254);
   assert.equal(result.status.control.lamp, "manual");
 
-  result = transitionRoom(held.state, {lighting: {kind: "release", owner: "film"}}, heldConfig, later2(2000));
+  result = publishRoom(held.state, {lighting: {kind: "release", owner: "film"}}, heldConfig, later2(2000));
   assert.equal(result.status.control.lamp, "in-control");
   assert.equal(output(result, 0).lighting_command?.target, "lamp");
   assert.equal(payload(result, 0).brightness, 254);
@@ -455,7 +455,7 @@ test("a wall-switch press reaches a held light like any person", () => {
   const sent = single.effects.find((effect) => effect.kind === "send");
   assert.ok(sent && sent.kind === "send");
   assert.equal(sent.message.lighting.person, true);
-  const result = transitionRoom(held.state, sent.message, heldConfig, later2(2000));
+  const result = publishRoom(held.state, sent.message, heldConfig, later2(2000));
   assert.deepEqual(result.outputs.filter((entry) => entry.lighting_command).map((entry) => [entry.lighting_command?.target, (entry.payload as Record<string, unknown>).state]), [["lamp", "OFF"], ["wall", "OFF"]]);
   assert.equal(result.status.control.lamp, "in-control");
   assert.deepEqual(ignoredHeld(result), []);
@@ -468,8 +468,8 @@ test("a wall-switch press reaches a held light like any person", () => {
 test("switching a held light off at the bulb still frees it", () => {
   const held = heldLamp();
   // Confirm the owner's ON first, so the OFF report is a real external change.
-  let result = transitionRoom(held.state, {topic: "home/kitchen/light/lamp", payload: {state: "ON", brightness: 30}, lighting: {kind: "observed"}}, heldConfig, later2(1200));
-  result = transitionRoom(result.state, {topic: "home/kitchen/light/lamp", payload: {state: "OFF"}, lighting: {kind: "observed"}}, heldConfig, later2(60000));
+  let result = publishRoom(held.state, {topic: "home/kitchen/light/lamp", payload: {state: "ON", brightness: 30}, lighting: {kind: "observed"}}, heldConfig, later2(1200));
+  result = publishRoom(result.state, {topic: "home/kitchen/light/lamp", payload: {state: "OFF"}, lighting: {kind: "observed"}}, heldConfig, later2(60000));
   assert.equal(result.outputs.filter((entry) => entry.lighting_command).length, 0);
   assert.equal(result.status.control.lamp, "in-control");
   assert.equal(result.state.desired.lamp, false);
@@ -477,7 +477,7 @@ test("switching a held light off at the bulb still frees it", () => {
 
 test("a mixed intent changes only the lights that are not held", () => {
   const held = heldLamp();
-  const result = transitionRoom(held.state, {lighting: {kind: "intent", targets: ["lamp", "wall"], state: "OFF", source: "motion"}}, heldConfig, later2(2000));
+  const result = publishRoom(held.state, {lighting: {kind: "intent", targets: ["lamp", "wall"], state: "OFF", source: "motion"}}, heldConfig, later2(2000));
   assert.deepEqual(result.outputs.filter((entry) => entry.lighting_command).map((entry) => entry.lighting_command?.target), ["wall"]);
   assert.deepEqual(ignoredHeld(result), [["lamp", "film"]]);
   assert.equal(result.status.control.lamp, "overridden");
@@ -534,9 +534,9 @@ test("schedules may cross midnight or run through the night", () => {
 
 test("the room controller styles lights from the schedule", () => {
   const scheduled = onSchedule("07:00", "23:00");
-  let result = transitionRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, scheduled, clock(21, 30));
+  let result = publishRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, scheduled, clock(21, 30));
   assert.equal(payload(result, 0).brightness, 128);
-  result = transitionRoom(result.state, {lighting: {kind: "refresh"}}, scheduled, clock(23, 30));
+  result = publishRoom(result.state, {lighting: {kind: "refresh"}}, scheduled, clock(23, 30));
   assert.equal(payload(result, 0).brightness, Math.round(levels.sleepBrightnessPct * 254 / 100) || 1);
 });
 
@@ -573,24 +573,24 @@ test("colour moves evenly in mireds with no kelvin rounding", () => {
 
 test("a refresh skips lights already at their level and re-sends to one that is not", () => {
   const scheduled = onSchedule("07:00", "23:00");
-  const report = (state: Parameters<typeof transitionRoom>[0], level: Record<string, unknown>, at: Date) =>
-    transitionRoom(state, {topic: "home/kitchen/light/group/cooking", payload: {state: "ON", ...level}, lighting: {kind: "observed"}}, scheduled, at);
-  let result = transitionRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, scheduled, clock(13));
+  const report = (state: Parameters<typeof publishRoom>[0], level: Record<string, unknown>, at: Date) =>
+    publishRoom(state, {topic: "home/kitchen/light/group/cooking", payload: {state: "ON", ...level}, lighting: {kind: "observed"}}, scheduled, at);
+  let result = publishRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, scheduled, clock(13));
   const sent = payload(result, 0);
   result = report(result.state, {brightness: sent.brightness, color_temp: sent.color_temp}, clock(13, 0));
 
   // Flat daytime: the bulb already reports the level, so nothing is sent.
-  const flat = transitionRoom(result.state, {lighting: {kind: "refresh"}}, scheduled, clock(14));
+  const flat = publishRoom(result.state, {lighting: {kind: "refresh"}}, scheduled, clock(14));
   assert.equal(flat.outputs.filter((entry) => entry.lighting_command).length, 0);
   assert.equal(flat.traces.some((entry) => entry.reason === "already-at-level"), true);
 
   // A bulb that missed a command reports something else and gets it again.
   const missed = report(result.state, {brightness: 120, color_temp: sent.color_temp}, clock(14));
-  const resent = transitionRoom(missed.state, {lighting: {kind: "refresh"}}, scheduled, clock(14, 1));
+  const resent = publishRoom(missed.state, {lighting: {kind: "refresh"}}, scheduled, clock(14, 1));
   assert.equal(resent.outputs.filter((entry) => entry.lighting_command).length, 1);
 
   // During the wind-down the level moves, so the refresh sends.
-  const ramp = transitionRoom(result.state, {lighting: {kind: "refresh"}}, scheduled, clock(21, 30));
+  const ramp = publishRoom(result.state, {lighting: {kind: "refresh"}}, scheduled, clock(21, 30));
   assert.equal(ramp.outputs.filter((entry) => entry.lighting_command).length, 1);
   assert.notEqual(payload(ramp, 0).brightness, sent.brightness);
 });
@@ -605,8 +605,8 @@ test("motion does not switch off a light a person set after the room went vacant
   const intents = (effects: Array<{kind: string; message?: {lighting: Record<string, unknown>}}>) =>
     effects.filter((effect) => effect.kind === "send").map((effect) => effect.message!.lighting);
   const room = (state: RoomState | undefined, lighting: Record<string, unknown>, seconds: number) =>
-    transitionRoom(state, {lighting}, config, at(seconds));
-  const sentOff = (result: ReturnType<typeof transitionRoom>) =>
+    publishRoom(state, {lighting}, config, at(seconds));
+  const sentOff = (result: ReturnType<typeof publishRoom>) =>
     result.outputs.some((entry) => entry.lighting_command && (entry.payload as {state?: string}).state === "OFF");
 
   let roomResult = room(undefined, {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}, 0);
@@ -633,18 +633,18 @@ test("motion does not switch off a light a person set after the room went vacant
 
 test("someone else's command counts as a person's change for the vacancy rule", () => {
   const at = (seconds: number) => new Date(now.getTime() + seconds * 1000);
-  let result = transitionRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, at(0));
-  result = transitionRoom(result.state, {topic: "home/kitchen/light/group/cooking/set", payload: {state: "ON", brightness: 40}, lighting: {kind: "command-observed"}}, config, at(20));
-  const off = transitionRoom(result.state, {lighting: {kind: "intent", targets: ["cooking"], state: "OFF", source: "motion", vacantSince: at(10).toISOString()}}, config, at(40));
+  let result = publishRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, at(0));
+  result = publishRoom(result.state, {topic: "home/kitchen/light/group/cooking/set", payload: {state: "ON", brightness: 40}, lighting: {kind: "command-observed"}}, config, at(20));
+  const off = publishRoom(result.state, {lighting: {kind: "intent", targets: ["cooking"], state: "OFF", source: "motion", vacantSince: at(10).toISOString()}}, config, at(40));
   assert.equal(off.outputs.some((entry) => entry.lighting_command), false);
 });
 
 test("state reports are traced as confirming our command, stale, or someone else's change", () => {
   const report = (state: RoomState, on: boolean, ms: number) =>
-    transitionRoom(state, {topic: "home/kitchen/light/group/cooking", payload: {state: on ? "ON" : "OFF"}, lighting: {kind: "observed"}}, config, new Date(now.getTime() + ms));
-  const traced = (result: ReturnType<typeof transitionRoom>) =>
+    publishRoom(state, {topic: "home/kitchen/light/group/cooking", payload: {state: on ? "ON" : "OFF"}, lighting: {kind: "observed"}}, config, new Date(now.getTime() + ms));
+  const traced = (result: ReturnType<typeof publishRoom>) =>
     result.traces.filter((entry) => entry.event === "state-observed" && entry.outcome !== "changed").map((entry) => [entry.outcome, entry.reason]);
-  const sent = transitionRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, now);
+  const sent = publishRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, now);
 
   const stale = report(sent.state as RoomState, false, 100);
   assert.deepEqual(traced(stale), [["ignored", "stale-report"]]);
@@ -662,12 +662,12 @@ test("state reports are traced as confirming our command, stale, or someone else
 test("a confirmed OFF leaves control as the OFF intent set it", () => {
   // A person set values, so the light is manual; our OFF intent returns it to
   // in-control. The confirming report changes nothing more.
-  let result = transitionRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "wall", manual: true, values: {brightness: 80}}}, config, now);
+  let result = publishRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "wall", manual: true, values: {brightness: 80}}}, config, now);
   assert.equal(result.state.control.cooking?.state, "manual");
-  result = transitionRoom(result.state, {lighting: {kind: "intent", targets: ["cooking"], state: "OFF", source: "wall"}}, config, new Date(now.getTime() + 100));
+  result = publishRoom(result.state, {lighting: {kind: "intent", targets: ["cooking"], state: "OFF", source: "wall"}}, config, new Date(now.getTime() + 100));
   assert.equal(result.state.control.cooking, undefined);
   const controlBefore = JSON.stringify(result.state.control);
-  const confirmed = transitionRoom(result.state, {topic: "home/kitchen/light/group/cooking", payload: {state: "OFF"}, lighting: {kind: "observed"}}, config, new Date(now.getTime() + 200));
+  const confirmed = publishRoom(result.state, {topic: "home/kitchen/light/group/cooking", payload: {state: "OFF"}, lighting: {kind: "observed"}}, config, new Date(now.getTime() + 200));
   assert.equal(confirmed.traces.some((entry) => entry.outcome === "confirmed" && entry.reason === "own-command"), true);
   assert.equal(JSON.stringify(confirmed.state.control), controlBefore);
   assert.equal(confirmed.outputs.some((entry) => entry.topic.endsWith("/control")), false, "no control change is published");
@@ -675,7 +675,7 @@ test("a confirmed OFF leaves control as the OFF intent set it", () => {
 
 test("publish settings: state and discovery each switch on and off, and unset means on", () => {
   const startupTopics = (settings: Partial<RoomConfig>) =>
-    transitionRoom(undefined, {lighting: {kind: "startup"}}, {...config, ...settings}, now).outputs.map(({topic, payload}) => [topic, payload]);
+    publishRoom(undefined, {lighting: {kind: "startup"}}, {...config, ...settings}, now).outputs.map(({topic, payload}) => [topic, payload]);
   const discoveryTopic = "homeassistant/switch/kitchen_circadian_lighting/config";
   const controlTopic = "home/kitchen/lighting/cooking/control";
 
@@ -699,15 +699,15 @@ test("publish settings: state and discovery each switch on and off, and unset me
 
   // Circadian changes publish their state only with state on.
   const circadian = (settings: Partial<RoomConfig>) =>
-    transitionRoom(undefined, {lighting: {kind: "circadian", enabled: false}}, {...config, ...settings}, now).outputs.map(({topic}) => topic);
+    publishRoom(undefined, {lighting: {kind: "circadian", enabled: false}}, {...config, ...settings}, now).outputs.map(({topic}) => topic);
   assert.deepEqual(circadian({publishState: true}), ["home/kitchen/circadian/state"]);
   assert.deepEqual(circadian({publishState: false}), []);
 });
 
 test("the circadian set topic switches circadian lighting on and off", () => {
   const set = (state: RoomState | undefined, payload: unknown, extra: Record<string, unknown> = {}, settings: Partial<RoomConfig> = {}) =>
-    transitionRoom(state, {topic: "home/kitchen/circadian/set", payload, ...extra}, {...config, ...settings}, now);
-  const lit = transitionRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, now).state as RoomState;
+    publishRoom(state, {topic: "home/kitchen/circadian/set", payload, ...extra}, {...config, ...settings}, now);
+  const lit = publishRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, now).state as RoomState;
 
   const off = set(lit, "OFF");
   assert.equal(off.state.circadianEnabled, false);
@@ -732,7 +732,7 @@ test("the circadian set topic switches circadian lighting on and off", () => {
 
 test("an area that isn't an identifier publishes under its ID, and keeps its name for people", () => {
   const living = {...config, area: "Living Room", displayName: "Living Room"};
-  const startup = transitionRoom(undefined, {lighting: {kind: "startup"}}, living, now);
+  const startup = publishRoom(undefined, {lighting: {kind: "startup"}}, living, now);
   assert.deepEqual(startup.outputs.map(({topic}) => topic), [
     "homeassistant/switch/living_room_circadian_lighting/config",
     "home/living_room/lighting/availability",
@@ -746,6 +746,6 @@ test("an area that isn't an identifier publishes under its ID, and keeps its nam
   assert.equal(entry.name, "Living Room Circadian Lighting");
   assert.deepEqual((entry.device as {identifiers: string[]}).identifiers, ["nodered_living_room_lighting"]);
   // The set topic is matched under the ID too.
-  const off = transitionRoom(startup.state, {topic: "home/living_room/circadian/set", payload: "OFF"}, living, now);
+  const off = publishRoom(startup.state, {topic: "home/living_room/circadian/set", payload: "OFF"}, living, now);
   assert.equal(off.state.circadianEnabled, false);
 });

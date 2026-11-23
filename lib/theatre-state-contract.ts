@@ -11,7 +11,8 @@ import {
   type TheatreSloState
 } from "./theatre-slo";
 import type {TraceEntry} from "./bounded-trace";
-import {IDENTIFIER, OFFLINE, ONLINE, areaId, discoveryPrefixSetting, publishingArea} from "./ha-discovery";
+import {OFFLINE, ONLINE, discoveryPrefixSetting} from "./ha-discovery";
+import {IDENTIFIER, areaId, publishingArea} from "./topic-names";
 
 const REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 
