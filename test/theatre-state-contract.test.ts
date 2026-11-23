@@ -297,3 +297,27 @@ test("the transition's timing and degraded targets reach Home Assistant as the P
   const phase = startup.find(({topic}) => topic.includes("_theatre_phase/config"));
   assert.equal(phase && JSON.parse(phase.payload).json_attributes_topic, "home/lounge/theatre/transition");
 });
+
+test("a node-named contract needs no area: entity IDs and the suggested area come from the display name", () => {
+  const base = {...config, nodeId: "c7", idScheme: "node" as const, area: "", displayName: "Media Room", baseTopic: "media/theatre"};
+  const normalised = normaliseStateContractConfig(base);
+  assert.equal(normalised.area, "");
+  const startup = transitionTheatreStateContract(undefined, {theatreStateContract: {kind: "startup"}}, normalised, at(0)).publications;
+  const select = startup.find(({topic}) => topic === "homeassistant/select/nrha_c7_theatre_activity/config");
+  const payload = JSON.parse(select!.payload) as {default_entity_id: string; device: {suggested_area?: string}};
+  assert.equal(payload.default_entity_id, ["select", "media_room_theatre_activity"].join("."));
+  assert.equal(payload.device.suggested_area, "Media Room");
+  // With an area, the area names them.
+  const withArea = transitionTheatreStateContract(undefined, {theatreStateContract: {kind: "startup"}},
+    normaliseStateContractConfig({...base, area: "Lounge"}), at(0)).publications;
+  const areaPayload = JSON.parse(withArea.find(({topic}) => topic.includes("_theatre_activity/config"))!.payload) as {default_entity_id: string; device: {suggested_area?: string}};
+  assert.deepEqual([areaPayload.default_entity_id, areaPayload.device.suggested_area], [["select", "lounge_theatre_activity"].join("."), "Lounge"]);
+
+  // Still needed for the default base topic, and for an area-named contract's entities.
+  assert.throws(() => normaliseStateContractConfig({...base, baseTopic: ""}), /area is required/);
+  assert.throws(() => normaliseStateContractConfig({...base, idScheme: undefined}), /area is required/);
+  assert.throws(() => normaliseStateContractConfig({...base, displayName: ""}), /displayName is required/);
+  // An area-named contract's entries are as before: no suggested area.
+  const legacy = transitionTheatreStateContract(undefined, {theatreStateContract: {kind: "startup"}}, config, at(0)).publications;
+  assert.ok(legacy.filter(({topic}) => topic.endsWith("/config")).every(({payload}) => !("suggested_area" in (JSON.parse(payload) as {device: object}).device)));
+});

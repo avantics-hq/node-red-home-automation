@@ -105,3 +105,13 @@ test("occupancy and motion publishing start off, and a new node is named after i
     assert.equal(node.idScheme, "node", file);
   }
 });
+
+test("the contract editor asks for an area only where the runtime needs one", () => {
+  const area = editorDefinition("theatre-state-contract.html").defaults.area!;
+  const valid = (value: string, node: Record<string, unknown>) => area.validate!.call(node, value);
+  assert.equal(valid("", {discovery: true, baseTopic: "media/theatre", idScheme: "node"}), true, "new contract with a base topic");
+  assert.equal(valid("", {discovery: true, baseTopic: "media/theatre", idScheme: null}), false, "saved contract with discovery");
+  assert.equal(valid("", {discovery: false, baseTopic: "media/theatre", idScheme: null}), true);
+  assert.equal(valid("", {discovery: false, baseTopic: "", idScheme: "node"}), false, "the default base topic needs it");
+  assert.equal(valid("!!!", {discovery: false, baseTopic: "x", idScheme: "node"}), false);
+});
