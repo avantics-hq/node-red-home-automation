@@ -3,7 +3,7 @@
     "id": "example-home-theatre-activity-home-theatre-activity-example",
     "type": "comment",
     "name": "Home theatre activity example",
-    "info": "The state contract turns a request on home/room/theatre/request into an activity intent. The activity controller plans each target (display, receiver, source, lighting, backlighting) and reports a complete state snapshot, which the contract publishes as retained MQTT state.\n\nIn a real flow, route the activity controller's target commands to the equipment controllers and the activity-lighting node.",
+    "info": "The state contract turns a request on home/room/theatre/request into an activity intent. The activity controller plans each target and sends msg.theatreCommand; the switch routes each command by its target, and a change node moves it onto that controller's input. Every controller reports msg.theatre target state on output 2, wired straight back to the activity controller, which publishes a complete snapshot through the contract.\n\nSet the display controller's device hosts and TV pre-shared key before deploying; until then it shows \"invalid configuration\" and the activity waits for it. Wire the controllers' output 1 to your device transports and activity lighting to your room lighting controller.",
     "x": 190,
     "y": 40,
     "wires": []
@@ -113,50 +113,10 @@
     "y": 140,
     "wires": [
       [
-        "example-home-theatre-activity-target-commands"
+        "example-home-theatre-activity-route-by-target"
       ],
       [
         "example-home-theatre-activity-theatre-state-contract"
-      ]
-    ]
-  },
-  {
-    "id": "example-home-theatre-activity-target-commands",
-    "type": "debug",
-    "name": "target commands",
-    "active": true,
-    "tosidebar": true,
-    "console": false,
-    "tostatus": false,
-    "complete": "true",
-    "targetType": "full",
-    "statusVal": "",
-    "statusType": "auto",
-    "x": 930,
-    "y": 140,
-    "wires": []
-  },
-  {
-    "id": "example-home-theatre-activity-lighting-tv-profile",
-    "type": "inject",
-    "name": "lighting tv profile",
-    "props": [
-      {
-        "p": "activityLighting",
-        "v": "{\"kind\":\"intent\",\"requestId\":\"example-lighting-1\",\"generation\":1,\"profile\":\"tv\"}",
-        "vt": "json"
-      }
-    ],
-    "repeat": "",
-    "crontab": "",
-    "once": false,
-    "onceDelay": 0.1,
-    "topic": "",
-    "x": 170,
-    "y": 240,
-    "wires": [
-      [
-        "example-home-theatre-activity-activity-lighting-controller"
       ]
     ]
   },
@@ -168,14 +128,14 @@
     "profiles": "{\"off\":{\"targets\":[],\"values\":{}},\"tv\":{\"targets\":[\"main\"],\"values\":{\"brightness\":64,\"color_temp\":400}}}",
     "confirmationTimeoutMs": 15000,
     "maxAttempts": 2,
-    "x": 450,
-    "y": 240,
+    "x": 1380,
+    "y": 440,
     "wires": [
       [
         "example-home-theatre-activity-room-lighting-intents"
       ],
       [
-        "example-home-theatre-activity-lighting-state"
+        "example-home-theatre-activity-theatre-activity-controller"
       ]
     ]
   },
@@ -191,14 +151,125 @@
     "targetType": "full",
     "statusVal": "",
     "statusType": "auto",
-    "x": 700,
-    "y": 220,
+    "x": 1630,
+    "y": 440,
     "wires": []
   },
   {
-    "id": "example-home-theatre-activity-lighting-state",
+    "id": "example-home-theatre-activity-route-by-target",
+    "type": "switch",
+    "name": "route by target",
+    "property": "theatreCommand.target",
+    "propertyType": "msg",
+    "rules": [
+      {
+        "t": "eq",
+        "v": "display",
+        "vt": "str"
+      },
+      {
+        "t": "eq",
+        "v": "avr",
+        "vt": "str"
+      },
+      {
+        "t": "eq",
+        "v": "source",
+        "vt": "str"
+      },
+      {
+        "t": "eq",
+        "v": "lighting",
+        "vt": "str"
+      },
+      {
+        "t": "eq",
+        "v": "backlighting",
+        "vt": "str"
+      }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 5,
+    "x": 930,
+    "y": 300,
+    "wires": [
+      [
+        "example-home-theatre-activity-to-display"
+      ],
+      [
+        "example-home-theatre-activity-to-avr"
+      ],
+      [
+        "example-home-theatre-activity-to-source"
+      ],
+      [
+        "example-home-theatre-activity-to-lighting"
+      ],
+      [
+        "example-home-theatre-activity-to-backlighting"
+      ]
+    ]
+  },
+  {
+    "id": "example-home-theatre-activity-to-display",
+    "type": "change",
+    "name": "to display",
+    "rules": [
+      {
+        "t": "move",
+        "p": "theatreCommand",
+        "pt": "msg",
+        "to": "display",
+        "tot": "msg"
+      }
+    ],
+    "x": 1140,
+    "y": 200,
+    "wires": [
+      [
+        "example-home-theatre-activity-display-controller"
+      ]
+    ]
+  },
+  {
+    "id": "example-home-theatre-activity-display-controller",
+    "type": "home-display-mode-controller",
+    "name": "",
+    "area": "room",
+    "tvHost": "",
+    "screenHost": "",
+    "projectorMeterHost": "",
+    "screenOpenPosition": 82,
+    "screenTolerance": 2,
+    "pollMs": 2000,
+    "queryTimeoutMs": 5000,
+    "tvTimeoutMs": 30000,
+    "screenTimeoutMs": 65000,
+    "projectorWarmupMs": 60000,
+    "projectorMinimumWarmupMs": 15000,
+    "projectorShutdownConfirmMs": 5000,
+    "projectorCooldownMs": 120000,
+    "maxAttempts": 2,
+    "projectorOnWatts": 20,
+    "projectorOffWatts": 10,
+    "projectorPowerFallback": false,
+    "transportTimeoutMs": 5000,
+    "x": 1380,
+    "y": 200,
+    "wires": [
+      [
+        "example-home-theatre-activity-display-commands"
+      ],
+      [
+        "example-home-theatre-activity-theatre-activity-controller"
+      ]
+    ]
+  },
+  {
+    "id": "example-home-theatre-activity-display-commands",
     "type": "debug",
-    "name": "lighting state",
+    "name": "display commands",
     "active": true,
     "tosidebar": true,
     "console": false,
@@ -207,8 +278,200 @@
     "targetType": "full",
     "statusVal": "",
     "statusType": "auto",
-    "x": 690,
-    "y": 260,
+    "x": 1630,
+    "y": 200,
+    "wires": []
+  },
+  {
+    "id": "example-home-theatre-activity-to-avr",
+    "type": "change",
+    "name": "to avr",
+    "rules": [
+      {
+        "t": "move",
+        "p": "theatreCommand",
+        "pt": "msg",
+        "to": "avr",
+        "tot": "msg"
+      }
+    ],
+    "x": 1140,
+    "y": 280,
+    "wires": [
+      [
+        "example-home-theatre-activity-avr-controller"
+      ]
+    ]
+  },
+  {
+    "id": "example-home-theatre-activity-avr-controller",
+    "type": "home-avr-controller",
+    "name": "",
+    "area": "room",
+    "sources": "{\"shield\":\"SAT/CBL\",\"playstation\":\"GAME\"}",
+    "retryMs": 2000,
+    "maxAttempts": 3,
+    "minVolume": 0,
+    "maxVolume": 60,
+    "x": 1380,
+    "y": 280,
+    "wires": [
+      [
+        "example-home-theatre-activity-avr-commands"
+      ],
+      [
+        "example-home-theatre-activity-theatre-activity-controller"
+      ]
+    ]
+  },
+  {
+    "id": "example-home-theatre-activity-avr-commands",
+    "type": "debug",
+    "name": "avr commands",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 1630,
+    "y": 280,
+    "wires": []
+  },
+  {
+    "id": "example-home-theatre-activity-to-source",
+    "type": "change",
+    "name": "to sourceCapability",
+    "rules": [
+      {
+        "t": "move",
+        "p": "theatreCommand",
+        "pt": "msg",
+        "to": "sourceCapability",
+        "tot": "msg"
+      }
+    ],
+    "x": 1140,
+    "y": 360,
+    "wires": [
+      [
+        "example-home-theatre-activity-source-controller"
+      ]
+    ]
+  },
+  {
+    "id": "example-home-theatre-activity-source-controller",
+    "type": "home-source-capability-controller",
+    "name": "",
+    "area": "room",
+    "sources": "{\"streamer\":{\"activation\":\"command\",\"deactivation\":\"command\",\"confirmation\":\"active\"}}",
+    "pollMs": 2000,
+    "confirmationTimeoutMs": 15000,
+    "maxAttempts": 2,
+    "x": 1380,
+    "y": 360,
+    "wires": [
+      [
+        "example-home-theatre-activity-source-commands"
+      ],
+      [
+        "example-home-theatre-activity-theatre-activity-controller"
+      ]
+    ]
+  },
+  {
+    "id": "example-home-theatre-activity-source-commands",
+    "type": "debug",
+    "name": "source commands",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 1630,
+    "y": 360,
+    "wires": []
+  },
+  {
+    "id": "example-home-theatre-activity-to-lighting",
+    "type": "change",
+    "name": "to activityLighting",
+    "rules": [
+      {
+        "t": "move",
+        "p": "theatreCommand",
+        "pt": "msg",
+        "to": "activityLighting",
+        "tot": "msg"
+      }
+    ],
+    "x": 1140,
+    "y": 440,
+    "wires": [
+      [
+        "example-home-theatre-activity-activity-lighting-controller"
+      ]
+    ]
+  },
+  {
+    "id": "example-home-theatre-activity-to-backlighting",
+    "type": "change",
+    "name": "to backlighting",
+    "rules": [
+      {
+        "t": "move",
+        "p": "theatreCommand",
+        "pt": "msg",
+        "to": "backlighting",
+        "tot": "msg"
+      }
+    ],
+    "x": 1140,
+    "y": 520,
+    "wires": [
+      [
+        "example-home-theatre-activity-backlighting-controller"
+      ]
+    ]
+  },
+  {
+    "id": "example-home-theatre-activity-backlighting-controller",
+    "type": "home-backlighting-controller",
+    "name": "",
+    "area": "room",
+    "pollMs": 2000,
+    "confirmationTimeoutMs": 15000,
+    "maxAttempts": 2,
+    "x": 1380,
+    "y": 520,
+    "wires": [
+      [
+        "example-home-theatre-activity-backlighting-commands"
+      ],
+      [
+        "example-home-theatre-activity-theatre-activity-controller"
+      ]
+    ]
+  },
+  {
+    "id": "example-home-theatre-activity-backlighting-commands",
+    "type": "debug",
+    "name": "backlighting commands",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 1630,
+    "y": 520,
     "wires": []
   }
 ]
