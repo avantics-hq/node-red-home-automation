@@ -18,6 +18,7 @@ import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, 
 import {jsonSetting, optionalBooleanSetting, optionalChoiceSetting} from "../lib/settings";
 import {
   avrRetainedTopics,
+  avrVolumeRequest,
   avrStartingOutputs,
   avrStateOutputs,
   avrStoppingOutputs,
@@ -77,7 +78,9 @@ const registerAvrController: NodeInitializer = (RED) => {
         discovery,
         discoveryPrefix: discoveryPrefixSetting(config.discoveryPrefix),
         nodeId: node.id,
-        idScheme: optionalChoiceSetting(config.idScheme, "ID scheme", ID_SCHEMES) ?? "node"
+        idScheme: optionalChoiceSetting(config.idScheme, "ID scheme", ID_SCHEMES) ?? "node",
+        minVolume: controllerConfig.minVolume,
+        maxVolume: controllerConfig.maxVolume
       };
     } catch (error) {
       invalidConfig(node, error);
@@ -157,7 +160,22 @@ const registerAvrController: NodeInitializer = (RED) => {
       }), 0);
     }
 
+    // Each request from the volume number gets its own ID, as the receiver
+    // answers a repeated ID only once.
+    let volumeRequests = 0;
+
     onInput(node, (msg, send) => {
+      const volume = avrVolumeRequest(msg, publishing);
+      if (volume && "ignored" in volume) {
+        runReducer(node, {area: controllerConfig.area, component: "avr-controller"}, (saved: Partial<AvrState> | undefined) =>
+          ({state: saved, traces: [{event: "volume-set", outcome: "ignored", reason: volume.ignored, details: {payload: volume.payload}}]}));
+        return;
+      }
+      if (volume) {
+        volumeRequests += 1;
+        process({avr: {kind: "volume", requestId: `mqtt-volume-${Date.now()}-${volumeRequests}`, mode: "absolute", value: volume.value}}, send);
+        return;
+      }
       if (objectField<AvrMessage["avr"]>(msg, "avr")?.kind === "startup") {
         lifecycle.startup(send, avrStartingOutputs(publishing, observed()));
       }

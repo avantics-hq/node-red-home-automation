@@ -18,6 +18,9 @@ export interface AvrPublishingConfig {
   discoveryPrefix: string;
   nodeId?: string;
   idScheme?: IdScheme;
+  // The configured volume bounds, which the volume number offers.
+  minVolume: number;
+  maxVolume: number;
 }
 
 export interface AvrPublication {
@@ -53,14 +56,37 @@ function fieldValue(observed: Partial<AvrObserved> | undefined, field: Field): s
   return String(value);
 }
 
-// The power, source and volume sensors, on one device per node. Extra
-// entities (such as the volume number) join the same device.
+// Power and source sensors, and a volume number that shows the volume and
+// sets it, within the configured bounds, on one device per node.
 export function avrDiscovery(config: AvrPublishingConfig): AvrPublication[] {
   return [
     avrEntity(config, "binary_sensor", "receiver_power", "Power", {device_class: "power", state_topic: receiverTopic(config.area, "power/state"), payload_on: "ON", payload_off: "OFF"}),
     avrEntity(config, "sensor", "receiver_source", "Source", {icon: "mdi:import", state_topic: receiverTopic(config.area, "source/state")}),
-    avrEntity(config, "sensor", "receiver_volume", "Volume", {icon: "mdi:volume-high", state_topic: receiverTopic(config.area, "volume/state")})
+    avrEntity(config, "number", "receiver_volume", "Volume", {
+      icon: "mdi:volume-high",
+      state_topic: receiverTopic(config.area, "volume/state"),
+      command_topic: receiverTopic(config.area, "volume/set"),
+      min: config.minVolume,
+      max: config.maxVolume,
+      step: 0.5,
+      mode: "slider"
+    })
   ];
+}
+
+// A volume from the volume number's set topic, as the receiver's own
+// absolute volume request, so it takes the same bounded, confirmed path as
+// any other request. Read only while the node publishes; retained messages
+// and anything but a number are ignored with a trace.
+export function avrVolumeRequest(
+  msg: {topic?: unknown; payload?: unknown; retain?: unknown},
+  config: AvrPublishingConfig
+): {value: number} | {ignored: string; payload: string} | null {
+  if (!avrPublishesState(config) || msg.topic !== receiverTopic(config.area, "volume/set")) return null;
+  const text = typeof msg.payload === "string" ? msg.payload.trim() : typeof msg.payload === "number" ? String(msg.payload) : "";
+  if (msg.retain === true) return {ignored: "retained-message", payload: text};
+  const value = text === "" ? NaN : Number(text);
+  return Number.isFinite(value) ? {value} : {ignored: "not-a-number", payload: text};
 }
 
 export function avrEntity(config: AvrPublishingConfig, component: string, entity: string, name: string, fields: Record<string, unknown>): AvrPublication {

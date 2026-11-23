@@ -163,7 +163,8 @@ Version 3.0 changes some behaviour. Check these after upgrading:
   takes from their `/set` topics, and a switch and a vacancy delay number in Home Assistant. These go on its new
   second output; the shared global enable is not published.
 - **The AVR controller can publish what the receiver reports**, off unless you switch it on: power, source and
-  volume, retained under `home/<area>/receiver/`, with availability and Home Assistant sensors. These go on its new
+  volume, retained under `home/<area>/receiver/`, with availability, and Home Assistant power and source sensors
+  and a volume number (see "Receiver volume ownership"). These go on its new
   third output, apart from the receiver commands and the theatre's state.
 - **Topics no longer published are cleared.** Once the flows have started, and again at its startup message, a node
   clears any retained topic it published before and no longer does, for example after an area, base topic,
@@ -313,6 +314,16 @@ bounded transport path, and confirms completion from fresh receiver evidence.
 Once confirmed, it releases the volume target; a later physical or external
 adjustment becomes the new baseline instead of being corrected. A request still pending when Node-RED restarts is reported as
 `volume_failed` with reason `restart`, not replayed.
+
+With publishing and discovery on, Home Assistant gets a volume number. A
+value set there arrives on `home/<area>/receiver/volume/set` and becomes an
+ordinary absolute request (`msg.avr = {kind: "volume", mode: "absolute", ...}`),
+so it is bounded, sent and confirmed in the same way, and never sent to the
+receiver directly. The number shows the confirmed volume. A theatre activity
+owns the receiver's power and source, not its volume: a volume request made
+while an activity is switching power or source waits until that is done, and
+one made while the receiver is off (an activity's `off`, say) is rejected
+with `receiver-not-ready`, as any request would be.
 
 ## Contract examples
 
