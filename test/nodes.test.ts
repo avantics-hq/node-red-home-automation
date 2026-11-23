@@ -828,3 +828,19 @@ test("wired contract and activity controller never lose a request to a recovery 
   const contractState = contract.context().get("state") as {generation: number};
   assert.equal(contractState.generation, state.desired.generation);
 });
+
+test("room adapter rejects an unusable wake and bed schedule at deploy", () => {
+  for (const [label, times, reason] of [
+    ["not a time", {wakeTime: "7am", bedTime: "23:00"}, /HH:MM/],
+    ["only one set", {wakeTime: "07:00", bedTime: ""}, /HH:MM/],
+    ["the same time", {wakeTime: "07:00", bedTime: "07:00"}, /differ/]
+  ] as const) {
+    const {Constructor} = runtime(registerRoom);
+    const node = new Constructor({area: "room", displayName: "Room", targets: "[]", latitude: 0, longitude: 0, ...times});
+    const status = node.statuses.at(-1) as {fill?: string; text?: string} | undefined;
+    assert.equal(status?.fill, "red", label);
+    assert.equal(status?.text, "invalid configuration", label);
+    assert.match(String(node.errors[0]), /^invalid configuration: /, label);
+    assert.match(String(node.errors[0]), reason, label);
+  }
+});

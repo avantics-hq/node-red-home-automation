@@ -3,6 +3,7 @@
 import type {Node, NodeDef, NodeInitializer, NodeMessage} from "node-red";
 import {appendTrace} from "../lib/bounded-trace";
 import {
+  clockMinutes,
   transitionRoom,
   type RoomConfig,
   type RoomMessage,
@@ -26,6 +27,8 @@ interface RoomControllerConfig extends NodeDef {
   refreshTransitionSeconds?: number | string;
   refreshSeconds?: number | string;
   initialSleep?: boolean | string;
+  wakeTime?: string;
+  bedTime?: string;
 }
 
 interface RoomControllerNode extends Node {}
@@ -36,6 +39,18 @@ type RoomStatus = ReturnType<typeof transitionRoom>["status"];
 function number(value: unknown, fallback: number): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+// Both times or neither; each "HH:MM", and not the same time.
+function schedule(wakeTime: unknown, bedTime: unknown): {wakeTime?: string; bedTime?: string} {
+  const wake = typeof wakeTime === "string" ? wakeTime.trim() : "";
+  const bed = typeof bedTime === "string" ? bedTime.trim() : "";
+  if (!wake && !bed) return {};
+  const wakeMinutes = clockMinutes(wake);
+  const bedMinutes = clockMinutes(bed);
+  if (wakeMinutes === null || bedMinutes === null) throw new Error("wake and bed times must both be HH:MM (24-hour)");
+  if (wakeMinutes === bedMinutes) throw new Error("wake and bed times must differ");
+  return {wakeTime: wake, bedTime: bed};
 }
 
 function requiredNumber(value: unknown, name: string): number {
@@ -88,11 +103,12 @@ const registerRoomController: NodeInitializer = (RED) => {
         sleepColorTempKelvin: number(config.sleepColorTempKelvin, 1000),
         initialTransitionSeconds: number(config.initialTransitionSeconds, 1),
         refreshTransitionSeconds: number(config.refreshTransitionSeconds, 45),
-        initialSleep: config.initialSleep === true || config.initialSleep === "true"
+        initialSleep: config.initialSleep === true || config.initialSleep === "true",
+        ...schedule(config.wakeTime, config.bedTime)
       };
     } catch (error) {
       node.status({fill: "red", shape: "ring", text: "invalid configuration"});
-      node.error(error);
+      node.error("invalid configuration: " + (error instanceof Error ? error.message : String(error)));
       return;
     }
 

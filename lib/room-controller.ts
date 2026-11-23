@@ -32,6 +32,10 @@ export interface RoomConfig {
   maxColorTempKelvin: number;
   refreshTransitionSeconds: number;
   initialTransitionSeconds: number;
+  // Optional daily schedule, as "HH:MM" in the Node-RED host's local time.
+  // When both are set, circadian levels follow it instead of the sun.
+  wakeTime?: string;
+  bedTime?: string;
 }
 
 export interface RoomObservation {
@@ -176,6 +180,45 @@ export function sunPosition(now: Date, config: Pick<RoomConfig, "latitude" | "lo
   return clamp(sign * (1 - Math.pow((target - h) / (h - x), 2)), -1, 1);
 }
 
+// After waking, light rises to the daytime level over this long; before bed it
+// winds down to the sleep settings over the three hours that evidence on
+// evening light exposure points to (Brown et al. 2022, PLOS Biology).
+export const WAKE_RISE_MINUTES = 60;
+export const WIND_DOWN_MINUTES = 180;
+
+const CLOCK_TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+// Minutes after midnight for an "HH:MM" clock time, or null if it is not one.
+export function clockMinutes(value: unknown): number | null {
+  const match = typeof value === "string" ? CLOCK_TIME.exec(value.trim()) : null;
+  return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+}
+
+// How far into the day the lights are, from 0 (sleep settings) to 1 (daytime
+// settings), for the given local time. Times wrap at midnight, so a bed time
+// after midnight or a wake time later than the bed time both work. When the
+// waking day is shorter than the rise and the wind-down together, both are
+// shortened in proportion.
+export function scheduleLevel(now: Date, wakeTime: string, bedTime: string): number {
+  const wake = clockMinutes(wakeTime);
+  const bed = clockMinutes(bedTime);
+  if (wake === null || bed === null || wake === bed) throw new Error("wake and bed times must be different HH:MM times");
+  const day = 24 * 60;
+  const awake = (bed - wake + day) % day;
+  const minute = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+  const sinceWake = (minute - wake + day) % day;
+  if (sinceWake >= awake) return 0;
+  const scale = Math.min(1, awake / (WAKE_RISE_MINUTES + WIND_DOWN_MINUTES));
+  const rise = WAKE_RISE_MINUTES * scale;
+  const windDown = WIND_DOWN_MINUTES * scale;
+  // Ease in and out so neither end of a ramp is a visible step.
+  const ease = (fraction: number) => fraction * fraction * (3 - 2 * fraction);
+  if (sinceWake < rise) return ease(sinceWake / rise);
+  const untilBed = awake - sinceWake;
+  if (untilBed < windDown) return ease(untilBed / windDown);
+  return 1;
+}
+
 export function adaptivePayload(
   lightState: string,
   isRefresh: boolean,
@@ -184,6 +227,19 @@ export function adaptivePayload(
   config: RoomConfig
 ) {
   if (lightState === "OFF") return {state: lightState};
+  if (config.wakeTime && config.bedTime) {
+    // Between the sleep settings (level 0) and the brightest, coolest daytime
+    // settings (level 1).
+    const level = sleeping ? 0 : scheduleLevel(now, config.wakeTime, config.bedTime);
+    const brightnessPct = config.sleepBrightnessPct + (config.maxBrightnessPct - config.sleepBrightnessPct) * level;
+    const kelvin = config.sleepColorTempKelvin + (config.maxColorTempKelvin - config.sleepColorTempKelvin) * level;
+    return {
+      state: lightState,
+      brightness: clamp(Math.round(brightnessPct * 254 / 100), 1, 254),
+      color_temp: Math.floor(1000000 / (5 * Math.round(kelvin / 5))),
+      transition: isRefresh ? config.refreshTransitionSeconds : config.initialTransitionSeconds
+    };
+  }
   const position = sunPosition(now, config);
   const brightnessPct = sleeping
     ? config.sleepBrightnessPct

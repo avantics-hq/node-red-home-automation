@@ -18,7 +18,9 @@
       initialTransitionSeconds: {value: 1, required: true, validate: RED.validators.number()},
       refreshTransitionSeconds: {value: 45, required: true, validate: RED.validators.number()},
       refreshSeconds: {value: 90, required: true, validate: RED.validators.number()},
-      initialSleep: {value: false}
+      initialSleep: {value: false},
+      wakeTime: {value: "", validate: function (v) { return v === "" || /^([01]\d|2[0-3]):[0-5]\d$/.test(v); }},
+      bedTime: {value: "", validate: function (v) { return v === "" || /^([01]\d|2[0-3]):[0-5]\d$/.test(v); }}
     },
     inputs: 1,
     outputs: 1,
@@ -43,11 +45,21 @@
   <div class="form-row"><label for="node-input-initialTransitionSeconds">Initial transition seconds</label><input type="number" id="node-input-initialTransitionSeconds"></div>
   <div class="form-row"><label for="node-input-refreshTransitionSeconds">Refresh transition seconds</label><input type="number" id="node-input-refreshTransitionSeconds"></div>
   <div class="form-row"><label for="node-input-refreshSeconds">Refresh interval seconds</label><input type="number" id="node-input-refreshSeconds"></div>
+  <div class="form-row"><label for="node-input-wakeTime">Wake time</label><input type="text" id="node-input-wakeTime" placeholder="07:00"></div>
+  <div class="form-row"><label for="node-input-bedTime">Bed time</label><input type="text" id="node-input-bedTime" placeholder="23:00"></div>
   <div class="form-row"><label for="node-input-initialSleep">Initial sleep mode</label><input type="checkbox" id="node-input-initialSleep" style="display:inline-block; width:auto;"></div>
 </script>
 
 <script type="text/html" data-help-name="home-room-lighting-controller">
   <p>Owns room MQTT commands, adaptive colour and brightness, manual overrides, discovery and bounded tracing.</p>
+  <h3>Circadian schedule</h3>
+  <p>Set <b>Wake time</b> and <b>Bed time</b> (24-hour <code>HH:MM</code>) and circadian levels follow your day
+    instead of the sun: they rise to the daytime level over the hour after waking, stay at the maximum
+    brightness and coolest colour through the day, wind down to the sleep settings over the three hours before
+    bed, and stay at the sleep settings until you wake. A bed time after midnight, or a wake time later than the
+    bed time, works. Sleep mode still overrides the schedule. Leave both empty to follow the sun.</p>
+  <p>Times are the Node-RED host's local time. Docker containers default to UTC: set the container's
+    <code>TZ</code> if your host should follow a local timezone.</p>
   <h3>Control state</h3>
   <p>Each target has one control state:</p>
   <dl class="message-properties">

@@ -79,7 +79,11 @@ The nodes come in three groups. Each group has an importable example flow
 
 Motion, presence, illuminance and wall switches drive one room's lights, with
 circadian styling and manual ownership. Wire occupancy fusion into the motion
-policy, and the motion and switch policies into the room controller.
+policy, and the motion and switch policies into the room controller. Give the
+room controller a wake time and a bed time and circadian levels follow your
+day: they rise over the hour after waking, stay bright and cool through the
+day, and wind down to the sleep settings over the three hours before bed. Times
+are the Node-RED host's local time; without them, levels follow the sun.
 Example: [`Room lighting.json`](examples/Room%20lighting.json).
 
 | Node | Purpose |
