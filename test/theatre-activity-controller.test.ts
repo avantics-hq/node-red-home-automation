@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import {evaluateTheatreSlo, type TheatreSloState} from "../lib/theatre-slo";
 import {
   normaliseActivityProfiles,
   transitionTheatre,
@@ -421,16 +422,20 @@ test("adapter failure after ready is failure evidence, not physical drift", () =
   assert.equal(result.state.targets.display?.classification, null);
 });
 
-test("stale observations trigger one refresh and cannot preserve ready", () => {
+test("a stale target while ready is refreshed without leaving ready", () => {
   let result = confirmActivity("projector_shield", 10);
   result = apply(result.state, {kind: "tick", generation: 10}, 12);
 
-  assert.equal(result.state.phase, "confirming");
-  assert.equal(result.state.currentActivity, "unknown");
+  assert.equal(result.state.phase, "ready");
+  assert.equal(result.state.currentActivity, "projector_shield");
   assert.deepEqual(result.commands.map((command) => command.target).sort(), [
     "avr", "backlighting", "display", "source"
   ]);
+  assert.deepEqual(result.state.degraded.filter(({reason}) => reason === "stale").map(({target}) => target).sort(), [
+    "avr", "backlighting", "display", "source"
+  ]);
 
+  // Within the retry interval nothing is re-sent.
   result = apply(result.state, {kind: "tick", generation: 10}, 13);
   assert.equal(result.commands.length, 0);
 });
@@ -546,4 +551,87 @@ test("metrics retain transition latency, retries, fallback use and target availa
   assert.equal(result.state.metrics.targets.display.fallbackUses, 1);
   assert.equal(result.state.metrics.targets.display.lastConfirmationMs, 2000);
   assert.equal(result.state.metrics.targets.display.availability, "available");
+});
+
+function sloSnapshot(state: TheatreState) {
+  return {
+    generation: state.generation,
+    desiredActivity: state.desired?.activity ?? null,
+    phase: state.phase,
+    transitionStartedAt: state.transitionStartedAt,
+    transitionCompletedAt: state.transitionCompletedAt,
+    metrics: state.metrics
+  };
+}
+
+test("a settled activity stays ready through refresh cycles without false transitions", () => {
+  // dev-review repro: everything ready at about 1 s, then ticks past several
+  // freshness windows (10 s here) with owners answering each refresh.
+  let result = confirmActivity("tv_shield", 1);
+  const firstTransitionMs = result.state.metrics.lastTransitionMs;
+  assert.equal(result.state.metrics.ready, 1);
+  let slo: TheatreSloState | undefined;
+  for (let seconds = 5; seconds <= 200; seconds += 5) {
+    result = apply(result.state, {kind: "tick", generation: 1}, seconds);
+    for (const command of result.commands) {
+      result = target(result.state, command.target as TheatreTarget, "ready", 1, seconds + 0.1);
+    }
+    assert.equal(result.state.phase, "ready", `phase at ${seconds} s`);
+    const assessment = evaluateTheatreSlo(slo, sloSnapshot(result.state), {}, at(seconds + 0.1));
+    slo = assessment.state;
+    assert.notEqual(assessment.assessment.status, "breached", `SLO at ${seconds} s: ${assessment.assessment.reason}`);
+  }
+  assert.equal(result.state.metrics.ready, 1);
+  assert.equal(result.state.metrics.lastTransitionMs, firstTransitionMs);
+  assert.equal(result.state.metrics.requests, 1);
+});
+
+test("an unanswered refresh is retried a bounded number of times, then reported", () => {
+  let result = confirmActivity("tv_shield", 1);
+  const sent: number[] = [];
+  const reported: number[] = [];
+  for (const seconds of [7, 12, 17, 22, 27, 32]) {
+    result = apply(result.state, {kind: "tick", generation: 1}, seconds);
+    sent.push(result.commands.length);
+    reported.push(result.traces.filter((entry) => entry.event === "refresh" && entry.outcome === "no-response").length);
+  }
+  // First refresh, two retries, then each target is reported once and left alone.
+  assert.deepEqual(sent, [4, 4, 4, 0, 0, 0]);
+  assert.deepEqual(reported, [0, 0, 0, 4, 0, 0]);
+  assert.equal(result.state.phase, "ready");
+  assert.deepEqual(Object.fromEntries(result.state.degraded.map(({target: name, reason}) => [name, reason])), {
+    lighting: "unconfirmed", display: "no-response", avr: "no-response", backlighting: "no-response", source: "no-response"
+  });
+  assert.equal(result.state.metrics.targets.avr.availability, "unavailable");
+  const assessment = evaluateTheatreSlo(undefined, sloSnapshot(result.state), {}, at(32));
+  assert.notEqual(assessment.assessment.reason, "transition_timeout");
+
+  // A late answer restores it.
+  result = target(result.state, "avr", "ready", 1, 33);
+  assert.equal(result.state.degraded.some(({target: name}) => name === "avr"), false);
+});
+
+test("a refresh lost after a restart ends as unavailable, not stuck confirming", () => {
+  let result = confirmActivity("tv_shield", 1);
+  result = apply(result.state, {kind: "startup"}, 50);
+  assert.equal(result.state.phase, "confirming");
+  for (const seconds of [55, 60, 65]) result = apply(result.state, {kind: "tick", generation: 1}, seconds);
+  assert.equal(result.state.phase, "failed");
+  assert.equal(result.state.failure?.reason, "no-response");
+  result = apply(result.state, {kind: "tick", generation: 1}, 3650);
+  assert.equal(result.state.phase, "failed");
+});
+
+test("recovery with no observations times out to the configured off activity", () => {
+  let result = apply(undefined, {kind: "startup"}, 0);
+  assert.equal(result.state.phase, "recovering");
+  const kinds: string[] = [];
+  for (const seconds of [5, 10, 15]) {
+    result = apply(result.state, {kind: "tick", generation: 0}, seconds);
+    kinds.push(...result.commands.map((command) => command.kind));
+  }
+  assert.equal(result.state.desired?.activity, "off");
+  assert.equal(result.traces.some((entry) => entry.event === "recovery" && entry.outcome === "timed-out"), true);
+  assert.equal(result.events.some(({theatre}) => theatre.kind === "recovery_safe_off"), true);
+  assert.equal(kinds.filter((kind) => kind === "intent").length, 5);
 });
