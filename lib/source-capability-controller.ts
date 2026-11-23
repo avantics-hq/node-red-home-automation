@@ -551,8 +551,12 @@ export function transitionSource(
   }
 
   function tick(event: Extract<SourceEvent, {kind: "tick"}>) {
-    if (!state.desired || event.generation !== state.generation || !state.pending) {
+    if (!state.desired || event.generation !== state.generation) {
       trace("tick", "ignored", "stale-generation");
+      return;
+    }
+    if (!state.pending) {
+      trace("tick", "ignored", "nothing-pending");
       return;
     }
     if (nowMs >= state.pending.deadlineAt) {
@@ -583,10 +587,17 @@ export function transitionSource(
     if (state.desired) {
       if (state.desired.sourceId === null || descriptor()?.confirmation === "unavailable") {
         markUnavailable(state.desired.sourceId === null ? "unknown-active-source" : "unobservable-source");
-      } else {
+      } else if (state.classification === "manual_override") {
         commands.push(commandFor(state, "observe"));
         state.pending = null;
-        state.phase = state.classification === "manual_override" ? "manual_override" : "confirming";
+        state.phase = "manual_override";
+        trace(event.kind, "querying", null, {sourceId: state.desired.sourceId});
+      } else {
+        // Re-observe with a deadline, so an activation interrupted by the
+        // restart ends ready or failed instead of waiting for good. The
+        // activation itself is not replayed.
+        issue("observe");
+        state.phase = "confirming";
         trace(event.kind, "querying", null, {sourceId: state.desired.sourceId});
       }
     } else {

@@ -245,5 +245,26 @@ test("startup re-queries restored intent without replaying a command", () => {
   const result = apply(active.state, {kind: "startup"}, 1);
   assert.deepEqual(result.commands.map(({operation}) => operation), ["observe"]);
   assert.equal(result.state.phase, "confirming");
-  assert.equal(result.state.pending, null);
+  // The re-observation has a deadline, so it cannot wait for good.
+  assert.equal(result.state.pending?.operation, "observe");
+  assert.equal(result.state.pending?.deadlineAt, at(1).getTime() + config.confirmationTimeoutMs);
+});
+
+test("a restart mid-activation ends ready or failed, not waiting for good", () => {
+  const active = intent(undefined, "streamer");
+  let result = apply(active.state, {kind: "startup"}, 1);
+  // The device has not switched yet: waiting, but with a deadline.
+  result = apply(result.state, {kind: "observed", sourceId: "streamer", generation: 1, status: "inactive", observedAt: at(1.1).toISOString()}, 1.1);
+  assert.equal(result.state.phase, "waiting_for_source");
+  assert.ok(result.state.pending);
+  for (let seconds = 2; seconds <= 40 && result.state.phase !== "failed"; seconds += 1) {
+    result = apply(result.state, {kind: "tick", generation: 1}, seconds);
+  }
+  assert.equal(result.state.phase, "failed");
+  assert.equal(result.state.failure?.reason, "confirmation-timeout");
+  assert.equal(result.commands.some((command) => command.operation === "activate"), false);
+
+  // With nothing pending, a tick says so rather than "stale-generation".
+  const idle = apply(result.state, {kind: "tick", generation: 1}, 60);
+  assert.equal(idle.traces.at(-1)?.reason, "nothing-pending");
 });

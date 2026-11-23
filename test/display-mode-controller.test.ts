@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   classifyProjectorPower,
+  normaliseConfig,
   transitionDisplay,
   type DisplayCommand,
   type DisplayConfig,
@@ -290,4 +291,28 @@ test("a projector stuck between the power thresholds fails at the deadline", () 
   assert.equal(result.state.failure?.operation, "projector_settle");
   assert.ok(queries <= 6, `${queries} queries before the deadline`);
   assert.equal(toggles, 0);
+});
+
+test("an older display reading cannot override a newer one", () => {
+  // Overlapping polls: a TV standby report taken before the latest "on" arrives late.
+  let result = discover("tv", 1, [
+    [0.1, "tv", {power: "on", observedAt: at(0.1).toISOString()}],
+    [0.2, "screen", {position: 0, state: "closed", observedAt: at(0.2).toISOString()}],
+    [0.3, "projector", {watts: 2.1, observedAt: at(0.3).toISOString()}]
+  ]);
+  assert.equal(result.state.phase, "ready");
+  result = observe(result.state, "tv", {power: "standby", observedAt: at(0.05).toISOString()}, 2);
+  assert.equal(result.state.phase, "ready");
+  assert.equal(result.state.observed.tv?.power, "on");
+  assert.equal(result.traces.at(-1)?.reason, "out-of-order");
+});
+
+test("unusable timing settings fall back to their defaults, keeping valid zeros", () => {
+  const normalised = transitionDisplay(undefined, {display: {kind: "startup"}}, {pollMs: "soon" as never, screenTolerance: 0, projectorMinimumWarmupMs: 0}, at(0));
+  assert.equal(normalised.state.pending, null);
+  const config = normaliseConfig({pollMs: "soon" as never, queryTimeoutMs: Number.NaN, screenTolerance: 0, projectorMinimumWarmupMs: 0});
+  assert.equal(config.pollMs, 2000);
+  assert.equal(config.queryTimeoutMs, 5000);
+  assert.equal(config.screenTolerance, 0);
+  assert.equal(config.projectorMinimumWarmupMs, 0);
 });
