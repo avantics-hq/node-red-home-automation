@@ -1,6 +1,7 @@
 "use strict";
 
-import {TARGETS, type TheatreMetrics, type TheatreTarget} from "./theatre-activity-controller";
+import {TARGETS, type TheatreTarget} from "./theatre-profiles";
+import type {TheatreMetrics, TheatreSnapshot} from "./theatre-state";
 import {
   evaluateTheatreSlo,
   normaliseTheatreSloConfig,
@@ -34,23 +35,17 @@ export interface TheatreStateContractState {
   slo: TheatreSloState;
 }
 
-export interface TheatreStateSnapshot {
-  kind: "state";
-  area: string;
-  requestId: string | null;
-  generation: number;
-  desiredActivity: string | null;
-  requestedAt: string | null;
-  currentActivity: string;
-  phase: string;
-  availability: string;
-  transitionStartedAt: string | null;
-  transitionCompletedAt: string | null;
-  targets: Partial<Record<TheatreTarget, Record<string, unknown> | null>>;
-  failure: Record<string, unknown> | null;
-  degraded: Array<Record<string, unknown>>;
-  metrics?: TheatreMetrics;
-}
+// The activity controller's published state, as the contract reads it: the
+// same snapshot, but with targets, failure, degraded entries and metrics
+// taken as they arrive rather than in the controller's exact shapes.
+export type TheatreStateSnapshot =
+  Omit<TheatreSnapshot, "availability" | "targets" | "failure" | "degraded" | "metrics"> & {
+    availability: string;
+    targets: Partial<Record<TheatreTarget, Record<string, unknown> | null>>;
+    failure: Record<string, unknown> | null;
+    degraded: Array<Record<string, unknown>>;
+    metrics?: TheatreMetrics;
+  };
 
 export interface TheatreStateContractMessage {
   topic?: string;
