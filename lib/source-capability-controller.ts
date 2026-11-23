@@ -65,8 +65,7 @@ export interface SourceObservation {
   sourceId: string;
   status: SourceObservationStatus;
   observedAt: string;
-  // When this reading was confirmed: its arrival when it answers a refresh,
-  // which a quiet source reports with an unchanged observedAt.
+  // When the reading arrived; theatre's target state is stamped with this.
   confirmedAt?: string;
   application: string | null;
   playback: SourcePlaybackState;
@@ -534,10 +533,11 @@ export function transitionSource(
       application,
       playback
     };
-    if (state.refreshAsked) {
-      state.observed.confirmedAt = new Date(Math.max(bounded.ms, nowMs)).toISOString();
-      state.refreshAsked = false;
-    }
+    // Theatre gets the time the report arrived, as from every other target:
+    // a quiet source repeats an unchanged time, and a device clock running
+    // behind would otherwise date it before the request it answers.
+    state.observed.confirmedAt = new Date(Math.max(bounded.ms, nowMs)).toISOString();
+    state.refreshAsked = false;
     reconcileObservation();
   }
 

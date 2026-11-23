@@ -3,6 +3,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  normaliseActivityProfiles,
+  transitionTheatre,
+  type TheatreConfig,
+  type TheatreInputEvent
+} from "../lib/theatre-activity-controller";
+import {
   normaliseCapabilities,
   transitionSource,
   type SourceAction,
@@ -23,6 +29,14 @@ const config: SourceConfig = {
   pollMs: 1000,
   confirmationTimeoutMs: 5000,
   maxAttempts: 2
+};
+const theatreConfig: TheatreConfig = {
+  area: "lounge",
+  freshnessMs: 10000,
+  activityProfiles: normaliseActivityProfiles({
+    tv: {display: {mode: "tv"}, avr: {power: "on"}, source: {action: "activate", sourceId: "streamer", readiness: "required"},
+      lighting: {profile: "tv"}, backlighting: {power: "on"}}
+  })
 };
 const at = (seconds: number): Date =>
   new Date(Date.parse("2026-11-21T15:00:00Z") + seconds * 1000);
@@ -288,11 +302,11 @@ test("a refresh keeps a settled source ready and stamps it with when the answer 
   assert.equal(theatreState(answer).status, "ready");
   assert.equal(theatreState(answer).observedAt, at(61).toISOString());
 
-  // An unasked-for report keeps its own date.
+  // An unasked-for report is stamped with its arrival too.
   const later = apply(answer.state, {
     kind: "observed", sourceId: "streamer", status: "active", generation: 1, observedAt: at(62).toISOString()
   }, 90);
-  assert.equal(theatreState(later).observedAt, at(62).toISOString());
+  assert.equal(theatreState(later).observedAt, at(90).toISOString());
 
   // A refresh that is never answered neither fails nor leaves ready.
   let quiet = apply(later.state, {kind: "refresh"}, 120);
@@ -300,4 +314,23 @@ test("a refresh keeps a settled source ready and stamps it with when the answer 
     quiet = apply(quiet.state, {kind: "tick", generation: 1}, seconds);
   }
   assert.equal(quiet.state.phase, "ready");
+});
+
+test("a source whose clock runs behind is stamped with when its report arrived", () => {
+  // The adapter's clock is 5 s behind: every report is dated 5 s early.
+  let result = intent(undefined, "streamer", "activate", 1, 0);
+  result = apply(result.state, {
+    kind: "observed", sourceId: "streamer", status: "active", generation: 1, observedAt: at(3 - 5).toISOString()
+  }, 3);
+  assert.equal(theatreState(result).status, "ready");
+  assert.equal(theatreState(result).observedAt, at(3).toISOString());
+
+  // The theatre activity controller sees an up-to-date report, not one older
+  // than the intent it answers.
+  const theatre = transitionTheatre(undefined, {
+    theatre: {kind: "intent", requestId: "tv-1", generation: 1, activity: "tv"}
+  }, theatreConfig, at(0));
+  const answered = transitionTheatre(theatre.state, {theatre: {...theatreState(result), kind: "target_state"} as TheatreInputEvent},
+    theatreConfig, at(3));
+  assert.equal(answered.state.targets.source?.status, "ready");
 });
