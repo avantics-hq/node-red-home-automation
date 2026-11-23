@@ -3,11 +3,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {transitionSwitchPolicy} from "../lib/switch-policy";
+import {DEFAULT_BED_TIME, DEFAULT_WAKE_TIME, scheduleLevel} from "../lib/circadian-schedule";
 import {
-  DEFAULT_BED_TIME,
-  DEFAULT_WAKE_TIME,
   adaptivePayload,
-  scheduleLevel,
   transitionRoom,
   type RoomConfig,
   type RoomOutput

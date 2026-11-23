@@ -3,15 +3,15 @@
 import type {Node, NodeDef, NodeInitializer, NodeMessage} from "node-red";
 import {appendTrace} from "../lib/bounded-trace";
 import {
-  DEFAULT_BED_TIME,
-  DEFAULT_WAKE_TIME,
-  clockMinutes,
   transitionRoom,
   type RoomConfig,
   type RoomMessage,
   type RoomState,
   type RoomTarget
 } from "../lib/room-controller";
+import {scheduledLighting} from "../lib/circadian";
+import {resolveSchedule} from "../lib/circadian-schedule";
+import type {LightLevels} from "../lib/light-styling";
 
 interface RoomControllerConfig extends NodeDef {
   area?: string;
@@ -38,18 +38,6 @@ function number(value: unknown, fallback: number): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 }
-
-// Each time "HH:MM" (a blank one takes its default), and not the same time.
-function schedule(wakeTime: unknown, bedTime: unknown): {wakeTime: string; bedTime: string} {
-  const wake = (typeof wakeTime === "string" ? wakeTime.trim() : "") || DEFAULT_WAKE_TIME;
-  const bed = (typeof bedTime === "string" ? bedTime.trim() : "") || DEFAULT_BED_TIME;
-  const wakeMinutes = clockMinutes(wake);
-  const bedMinutes = clockMinutes(bed);
-  if (wakeMinutes === null || bedMinutes === null) throw new Error("wake and bed times must both be HH:MM (24-hour)");
-  if (wakeMinutes === bedMinutes) throw new Error("wake and bed times must differ");
-  return {wakeTime: wake, bedTime: bed};
-}
-
 
 function parseTargets(value: string | undefined): RoomTarget[] {
   const targets: unknown = JSON.parse(value || "[]");
@@ -78,20 +66,27 @@ const registerRoomController: NodeInitializer = (RED) => {
 
     let controllerConfig: RoomConfig;
     try {
+      // Saved latitude, longitude and minimum settings from earlier versions
+      // are ignored.
+      const levels: LightLevels = {
+        maxBrightnessPct: number(config.maxBrightnessPct, 100),
+        maxColorTempKelvin: number(config.maxColorTempKelvin, 6500),
+        sleepBrightnessPct: number(config.sleepBrightnessPct, 1),
+        sleepColorTempKelvin: number(config.sleepColorTempKelvin, 2200)
+      };
+      const schedule = resolveSchedule(config.wakeTime, config.bedTime);
       controllerConfig = {
         area: config.area || "room",
         displayName: config.displayName || config.area || "Room",
         targets: parseTargets(config.targets),
-        // Saved latitude, longitude and minimum settings from earlier versions
-        // are ignored.
-        maxBrightnessPct: number(config.maxBrightnessPct, 100),
-        maxColorTempKelvin: number(config.maxColorTempKelvin, 6500),
-        sleepBrightnessPct: number(config.sleepBrightnessPct, 1),
-        sleepColorTempKelvin: number(config.sleepColorTempKelvin, 2200),
+        ...levels,
+        ...schedule,
         initialTransitionSeconds: number(config.initialTransitionSeconds, 1),
         refreshTransitionSeconds: number(config.refreshTransitionSeconds, 60),
         initialSleep: config.initialSleep === true || config.initialSleep === "true",
-        ...schedule(config.wakeTime, config.bedTime)
+        // The adapter picks the circadian lighting; the controller only asks
+        // it how a light should look.
+        lighting: scheduledLighting(schedule, levels)
       };
     } catch (error) {
       node.status({fill: "red", shape: "ring", text: "invalid configuration"});

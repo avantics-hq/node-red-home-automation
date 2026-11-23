@@ -1,12 +1,17 @@
 "use strict";
 
+import {scheduledLighting, type CircadianLighting} from "./circadian";
+import {alreadyStyled} from "./circadian-refresh";
+import {resolveSchedule} from "./circadian-schedule";
+import type {LightLevels} from "./light-styling";
+
 export interface RoomTarget {
   id: string;
   stateTopic: string;
   commandTopic: string;
 }
 
-export interface RoomConfig {
+export interface RoomConfig extends LightLevels {
   area: string;
   displayName: string;
   targets: RoomTarget[];
@@ -18,9 +23,11 @@ export interface RoomConfig {
   refreshTransitionSeconds: number;
   initialTransitionSeconds: number;
   // The daily schedule, as "HH:MM" in the Node-RED host's local time;
-  // DEFAULT_WAKE_TIME and DEFAULT_BED_TIME when unset.
+  // defaults from circadian-schedule when unset.
   wakeTime?: string;
   bedTime?: string;
+  // Circadian lighting to use instead of the schedule above.
+  lighting?: CircadianLighting;
 }
 
 export interface RoomObservation {
@@ -87,10 +94,6 @@ export interface RoomOutput {
   lighting_command?: {area: string; target: string; source: string};
 }
 
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.max(minimum, Math.min(maximum, value));
-}
-
 export function parsePayload(payload: unknown): unknown {
   if (typeof payload !== "string") return payload;
   try { return JSON.parse(payload) as unknown; } catch { return payload; }
@@ -135,70 +138,24 @@ export function createRoomState(
   };
 }
 
-// After waking, light rises to the daytime level over this long; before bed it
-// winds down to the sleep settings over the three hours that evidence on
-// evening light exposure points to (Brown et al. 2022, PLOS Biology).
-export const WAKE_RISE_MINUTES = 60;
-export const WIND_DOWN_MINUTES = 180;
-// A conventional day, used until a room is given its own times.
-export const DEFAULT_WAKE_TIME = "07:00";
-export const DEFAULT_BED_TIME = "23:00";
-
-const CLOCK_TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
-
-// Minutes after midnight for an "HH:MM" clock time, or null if it is not one.
-export function clockMinutes(value: unknown): number | null {
-  const match = typeof value === "string" ? CLOCK_TIME.exec(value.trim()) : null;
-  return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+// The circadian lighting a room uses: the one passed in, or the wake and bed
+// schedule from its configuration.
+function lightingFor(config: RoomConfig): CircadianLighting {
+  return config.lighting ?? scheduledLighting(resolveSchedule(config.wakeTime, config.bedTime), config);
 }
 
-// How far into the day the lights are, from 0 (sleep settings) to 1 (daytime
-// settings), for the given local time. Times wrap at midnight, so a bed time
-// after midnight or a wake time later than the bed time both work. When the
-// waking day is shorter than the rise and the wind-down together, both are
-// shortened in proportion.
-export function scheduleLevel(now: Date, wakeTime: string, bedTime: string): number {
-  const wake = clockMinutes(wakeTime);
-  const bed = clockMinutes(bedTime);
-  if (wake === null || bed === null || wake === bed) throw new Error("wake and bed times must be different HH:MM times");
-  const day = 24 * 60;
-  const awake = (bed - wake + day) % day;
-  const minute = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
-  const sinceWake = (minute - wake + day) % day;
-  if (sinceWake >= awake) return 0;
-  const scale = Math.min(1, awake / (WAKE_RISE_MINUTES + WIND_DOWN_MINUTES));
-  const rise = WAKE_RISE_MINUTES * scale;
-  const windDown = WIND_DOWN_MINUTES * scale;
-  // Ease in and out so neither end of a ramp is a visible step.
-  const ease = (fraction: number) => fraction * fraction * (3 - 2 * fraction);
-  if (sinceWake < rise) return ease(sinceWake / rise);
-  const untilBed = awake - sinceWake;
-  if (untilBed < windDown) return ease(untilBed / windDown);
-  return 1;
-}
-
+// A circadian light command for this moment.
 export function adaptivePayload(
   lightState: string,
   isRefresh: boolean,
   sleeping: boolean,
   now: Date,
   config: RoomConfig
-) {
+): {state: string; brightness?: number; color_temp?: number; transition?: number} {
   if (lightState === "OFF") return {state: lightState};
-  // Between the sleep settings (level 0) and the brightest, coolest daytime
-  // settings (level 1).
-  const level = sleeping
-    ? 0
-    : scheduleLevel(now, config.wakeTime || DEFAULT_WAKE_TIME, config.bedTime || DEFAULT_BED_TIME);
-  const brightnessPct = config.sleepBrightnessPct + (config.maxBrightnessPct - config.sleepBrightnessPct) * level;
-  // Colour moves evenly in mireds, the unit bulbs take: equal mired steps look
-  // evenly spaced, where equal kelvin steps would bunch up at the cool end.
-  const sleepMired = 1_000_000 / config.sleepColorTempKelvin;
-  const dayMired = 1_000_000 / config.maxColorTempKelvin;
   return {
     state: lightState,
-    brightness: clamp(Math.round(brightnessPct * 254 / 100), 1, 254),
-    color_temp: Math.round(sleepMired + (dayMired - sleepMired) * level),
+    ...lightingFor(config).styleAt(now, sleeping),
     transition: isRefresh ? config.refreshTransitionSeconds : config.initialTransitionSeconds
   };
 }
@@ -330,16 +287,12 @@ export function transitionRoom(
     const commands: Array<RoomOutput | null> = [];
     for (const target of config.targets) {
       if (!intendedOn(target.id) || controlOf(target.id) !== "in-control") continue;
-      const payload = adaptivePayload("ON", true, state.sleeping, now, config);
-      // Nothing to change: the light last reported exactly these levels. A
-      // bulb that missed a command reports something else and is re-sent.
-      const observed = state.observed[target.id];
-      if (observed?.on === true && Number(observed.brightness) === payload.brightness &&
-        Number(observed.color_temp) === payload.color_temp) {
+      // Nothing to change when the light last reported exactly this style.
+      if (alreadyStyled(lightingFor(config).styleAt(now, state.sleeping), state.observed[target.id])) {
         trace("refresh", "skipped", "already-at-level", {target: target.id});
         continue;
       }
-      commands.push(command(target.id, payload, source));
+      commands.push(command(target.id, adaptivePayload("ON", true, state.sleeping, now, config), source));
     }
     return commands.filter((entry): entry is RoomOutput => entry !== null);
   }
