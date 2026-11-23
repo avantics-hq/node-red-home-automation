@@ -29,6 +29,20 @@ privately, as described in [SECURITY.md](SECURITY.md), not in a public issue.
 
 4. Open a pull request against `main` and fill in the template.
 
+### Code origin
+
+Write your own code. Don't copy or port code from other projects, whatever
+their license, and that includes translating it into another language. Say in
+the pull request's Origin section what you consulted. Vendor protocol strings
+and commands taken from published device documentation are fine.
+
+### Reviewing
+
+When a change contains algorithm-shaped code (curves, maths, tuned constants or
+default values), compare it with the well-known projects in that domain: look
+for distinctive names, constants and default values that match. A translated
+port is easy to miss, and no free scanner catches one.
+
 The required `test` and `private-boundary` checks must pass before a pull
 request can merge. Pull requests are squash-merged. Follow the
 [repository boundaries](#repository-boundaries): no device addresses, precise
