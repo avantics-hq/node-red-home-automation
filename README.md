@@ -148,7 +148,7 @@ also attaches the package tarball and its SHA-256 checksum. Install a downloaded
 tarball through **Manage palette → Install → Upload module**, or with:
 
 ```sh
-npm install /path/to/avantics-node-red-home-automation-2.2.0.tgz
+npm install /path/to/avantics-node-red-home-automation-2.2.1.tgz
 ```
 
 Add the installed nodes from the **home automation** section of the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.
@@ -319,6 +319,15 @@ The strict TypeScript build, compiled test suite, executable contract examples, 
 
 Contributions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md) and the
 [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Acknowledgements
+
+The circadian sun-position curve and the brightness and colour-temperature rules
+in the room lighting controller are adapted from
+[Adaptive Lighting](https://github.com/basnijholt/adaptive-lighting) by
+basnijholt, licensed under Apache-2.0. See
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). They are due to be replaced by
+an original implementation.
 
 ## License
 

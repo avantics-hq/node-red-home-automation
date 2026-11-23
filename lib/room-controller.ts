@@ -150,6 +150,12 @@ export function createRoomState(
   };
 }
 
+// The sun-position curve below and the brightness and colour-temperature rules
+// in adaptivePayload are adapted (ported to TypeScript and modified) from
+// Adaptive Lighting by basnijholt, https://github.com/basnijholt/adaptive-lighting
+// (custom_components/adaptive_lighting/color_and_brightness.py), licensed under
+// Apache-2.0; see THIRD-PARTY-NOTICES.md. They are due to be replaced by an
+// original implementation.
 export function sunPosition(now: Date, config: Pick<RoomConfig, "latitude" | "longitude">): number {
   const events: Array<{name: string; at: number}> = [];
   for (const dayOffset of [-1, 0, 1]) {
@@ -219,6 +225,8 @@ export function scheduleLevel(now: Date, wakeTime: string, bedTime: string): num
   return 1;
 }
 
+// Brightness and colour-temperature rules adapted from Adaptive Lighting
+// (Apache-2.0); see the note above sunPosition.
 export function adaptivePayload(
   lightState: string,
   isRefresh: boolean,
