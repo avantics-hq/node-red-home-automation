@@ -5,6 +5,7 @@
 
 import type {Node, NodeAPI, NodeMessage} from "node-red";
 import {appendTrace, type TraceInput, type TraceMetadata} from "../lib/bounded-trace";
+import {staleRetainedTopics, type RetainedClear} from "../lib/retained-topics";
 
 export type Send = (msg: NodeMessage | Array<NodeMessage | NodeMessage[] | null>) => void;
 export type InputMessage = NodeMessage & Record<string, unknown>;
@@ -77,4 +78,16 @@ export function whenFlowsStarted(RED: NodeAPI, node: Node, action: () => void): 
   node.on("close", () => {
     RED.events.removeListener("flows:started", run);
   });
+}
+
+// At a node's start: the empty retained messages that clear what it
+// published before and no longer does, recording what it publishes now. The
+// record is kept in the node's context, so it survives redeploys, which is
+// when what a node publishes changes; it survives a restart only if the
+// default context store persists.
+export function clearStaleRetained(node: Node, current: string[]): RetainedClear[] {
+  const context = node.context();
+  const {clears, record} = staleRetainedTopics(context.get("retainedTopics") as string[] | undefined, current);
+  context.set("retainedTopics", record);
+  return clears;
 }

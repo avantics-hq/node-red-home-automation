@@ -4,7 +4,7 @@
 // circadian switch and the retained state that entry reads. Home Assistant
 // may send ON/OFF on the command topic, which the room controller acts on.
 
-import {DISCOVERY_ORIGIN, OFFLINE, ONLINE} from "./ha-discovery";
+import {DISCOVERY_ORIGIN, OFFLINE, ONLINE, discoveryDevice, discoveryEntity, type DiscoveryOwner} from "./ha-discovery";
 import {areaId} from "./topic-names";
 
 export interface DiscoveryMessage {
@@ -45,23 +45,23 @@ export function circadianStateMessage(area: string, enabled: boolean): Discovery
   return {topic: circadianStateTopic(area), payload: enabled ? "ON" : "OFF", retain: true};
 }
 
-export interface RoomDiscoveryConfig {
-  area: string;
+export interface RoomDiscoveryConfig extends DiscoveryOwner {
   displayName: string;
-  discoveryPrefix: string;
 }
+
+const CIRCADIAN_ENTITY = "circadian_lighting";
 
 // The discovery entry for the room's circadian switch, then its state.
 export function roomLightingDiscovery(config: RoomDiscoveryConfig, circadianEnabled: boolean): DiscoveryMessage[] {
   const {area, displayName} = config;
-  const objectId = areaId(area) + "_circadian_lighting";
+  const ids = discoveryEntity(config, "switch", CIRCADIAN_ENTITY);
   return [
     {
-      topic: config.discoveryPrefix + "/switch/" + objectId + "/config",
+      topic: ids.topic,
       payload: {
         name: displayName + " Circadian Lighting",
-        unique_id: objectId,
-        default_entity_id: "switch." + objectId,
+        unique_id: ids.uniqueId,
+        default_entity_id: ids.defaultEntityId,
         icon: "mdi:clock-time-seven-outline",
         command_topic: circadianCommandTopic(area),
         state_topic: circadianStateTopic(area),
@@ -70,7 +70,7 @@ export function roomLightingDiscovery(config: RoomDiscoveryConfig, circadianEnab
         payload_off: "OFF",
         optimistic: false,
         device: {
-          identifiers: ["nodered_" + areaId(area) + "_lighting"],
+          ...discoveryDevice(config, "lighting"),
           name: displayName + " Lighting Controller",
           manufacturer: "Node-RED",
           model: "Composable circadian lighting"

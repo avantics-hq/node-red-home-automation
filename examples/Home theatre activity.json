@@ -84,7 +84,8 @@
         "example-home-theatre-activity-retained-state"
       ]
     ],
-    "discovery": false
+    "discovery": false,
+    "idScheme": "node"
   },
   {
     "id": "example-home-theatre-activity-retained-state",

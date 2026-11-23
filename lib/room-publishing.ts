@@ -6,7 +6,7 @@
 // The room controller itself only decides about lights.
 
 import type {TraceEntry} from "./bounded-trace";
-import {DEFAULT_DISCOVERY_PREFIX} from "./ha-discovery";
+import {DEFAULT_DISCOVERY_PREFIX, type IdScheme} from "./ha-discovery";
 import {
   transitionRoom,
   type RoomConfig,
@@ -17,13 +17,42 @@ import {
 import {
   circadianCommandTopic,
   circadianStateMessage,
+  circadianStateTopic,
   roomAvailabilityMessage,
+  roomAvailabilityTopic,
   roomControlTopic,
-  roomLightingDiscovery
+  roomLightingDiscovery,
+  type RoomDiscoveryConfig
 } from "./room-lighting-discovery";
 import {areaId} from "./topic-names";
 
 type PublishSettings = {area: string; publishState?: boolean; discovery?: boolean};
+
+// What the room's publishing needs beyond the controller's own settings: the
+// Node-RED node it runs in and how it names its Home Assistant device and
+// entity. Absent means the area scheme every room used before node IDs.
+export interface RoomPublishingConfig {
+  nodeId?: string;
+  idScheme?: IdScheme;
+}
+
+type PublishingRoomConfig = RoomConfig & RoomPublishingConfig;
+
+function discoveryConfig(config: PublishingRoomConfig): RoomDiscoveryConfig {
+  return {...config, discoveryPrefix: config.discoveryPrefix ?? DEFAULT_DISCOVERY_PREFIX};
+}
+
+// Every retained topic the room publishes, for clearing those it no longer
+// does after a change. The discovery entry counts whenever the room has an
+// area, as it is published or cleared at each start.
+export function roomRetainedTopics(config: PublishingRoomConfig): string[] {
+  const topics = areaId(config.area) ? [roomLightingDiscovery(discoveryConfig(config), false)[0]!.topic] : [];
+  if (roomPublishesState(config)) {
+    topics.push(roomAvailabilityTopic(config.area), circadianStateTopic(config.area));
+    topics.push(...config.targets.map((target) => roomControlTopic(config.area, target.id)));
+  }
+  return topics;
+}
 
 // Whether the room publishes state under its area, and its circadian
 // switch's discovery, which reads that state.
@@ -95,7 +124,7 @@ function controlMessage(config: RoomConfig, state: RoomState, targetId: string):
 export function publishRoom(
   saved: Partial<RoomState> | undefined,
   msg: RoomMessage,
-  config: RoomConfig,
+  config: PublishingRoomConfig,
   now?: Date | string | number
 ) {
   const inbound = roomInbound(msg, config);
@@ -105,8 +134,7 @@ export function publishRoom(
   const before: RoomOutput[] = [];
   if (kind === "startup") {
     if (areaId(config.area) !== "") {
-      const discoveryConfig = {...config, discoveryPrefix: config.discoveryPrefix ?? DEFAULT_DISCOVERY_PREFIX};
-      const entry = roomLightingDiscovery(discoveryConfig, result.state.circadianEnabled)[0]!;
+      const entry = roomLightingDiscovery(discoveryConfig(config), result.state.circadianEnabled)[0]!;
       // Discovery switched off: an empty retained entry removes the switch
       // from Home Assistant.
       before.push(roomPublishesDiscovery(config) ? entry : {topic: entry.topic, payload: "", retain: true});

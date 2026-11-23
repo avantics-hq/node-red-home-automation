@@ -2,7 +2,7 @@
 
 import {TARGETS, type TheatreTarget} from "./theatre-profiles";
 import type {TheatreMetrics, TheatreSnapshot} from "./theatre-state";
-import {theatreDiscovery, theatreTopic} from "./theatre-ha-discovery";
+import {theatreDiscovery, theatreTopic, type TheatreTopicName} from "./theatre-ha-discovery";
 import {
   evaluateTheatreSlo,
   normaliseTheatreSloConfig,
@@ -11,12 +11,16 @@ import {
   type TheatreSloState
 } from "./theatre-slo";
 import type {TraceEntry} from "./bounded-trace";
-import {OFFLINE, ONLINE, discoveryPrefixSetting} from "./ha-discovery";
+import {OFFLINE, ONLINE, discoveryPrefixSetting, type IdScheme} from "./ha-discovery";
 import {IDENTIFIER, areaId, publishingArea} from "./topic-names";
 
 const REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 
 export interface TheatreStateContractConfig {
+  // The Node-RED node's ID, and how the contract names its Home Assistant
+  // device and entities: absent means the area scheme.
+  nodeId?: string;
+  idScheme?: IdScheme;
   area: string;
   displayName: string;
   baseTopic: string;
@@ -98,13 +102,15 @@ export function normaliseStateContractConfig(
   }
   if (new Set(activities).size !== activities.length) throw new Error("activities must be unique");
   return {
+    ...(config.nodeId ? {nodeId: config.nodeId} : {}),
     area,
     displayName,
     baseTopic,
     discoveryPrefix,
     activities,
     slo: normaliseTheatreSloConfig(config.slo),
-    discovery
+    discovery,
+    ...(config.idScheme ? {idScheme: config.idScheme} : {})
   };
 }
 
@@ -153,55 +159,58 @@ function publication(topic: string, payload: unknown): ContractPublication {
   };
 }
 
-function statePublications(
-  event: TheatreStateSnapshot,
-  config: TheatreStateContractConfig,
-  slo: TheatreSloAssessment
-): ContractPublication[] {
-  const base = config.baseTopic;
-  const desired = event.requestId && event.desiredActivity
+// What the contract publishes from each controller snapshot, one retained
+// topic per entry, in this order. The publications and the list of topics
+// the contract publishes both come from this table.
+const STATE_TOPICS: Array<[TheatreTopicName, (event: TheatreStateSnapshot, slo: TheatreSloAssessment) => unknown]> = [
+  ["desired", (event) => (event.requestId && event.desiredActivity
     ? {
       requestId: event.requestId,
       generation: event.generation,
       activity: event.desiredActivity,
       requestedAt: event.requestedAt
     }
-    : null;
-  const outputs = [
-    publication(theatreTopic(base, "desired"), desired),
-    publication(theatreTopic(base, "current"), event.currentActivity),
-    publication(theatreTopic(base, "phase"), event.phase),
-    publication(theatreTopic(base, "failure"), event.failure),
-    publication(theatreTopic(base, "readiness"), event.availability),
-    publication(theatreTopic(base, "metrics"), event.metrics || {
-      requests: 0,
-      ready: 0,
-      failed: 0,
-      superseded: 0,
-      manualOverrides: 0,
-      driftEvents: 0,
-      recoveriesAdopted: 0,
-      recoveriesSafeOff: 0,
-      lastTransitionMs: null,
-      maxTransitionMs: null,
-      lastOutcome: null,
-      targets: {}
-    }),
-    publication(theatreTopic(base, "slo"), slo),
-    publication(theatreTopic(base, "slo/breach"), slo.status === "breached" ? "ON" : "OFF")
-  ];
-  for (const target of TARGETS) {
-    const health = event.targets[target];
-    outputs.push(publication(theatreTopic(base, `health/${target}`), health || {
+    : null)],
+  ["current", (event) => event.currentActivity],
+  ["phase", (event) => event.phase],
+  ["failure", (event) => event.failure],
+  ["readiness", (event) => event.availability],
+  ["metrics", (event) => event.metrics || {
+    requests: 0,
+    ready: 0,
+    failed: 0,
+    superseded: 0,
+    manualOverrides: 0,
+    driftEvents: 0,
+    recoveriesAdopted: 0,
+    recoveriesSafeOff: 0,
+    lastTransitionMs: null,
+    maxTransitionMs: null,
+    lastOutcome: null,
+    targets: {}
+  }],
+  ["slo", (_event, slo) => slo],
+  ["slo/breach", (_event, slo) => (slo.status === "breached" ? "ON" : "OFF")],
+  ...TARGETS.map((target): [TheatreTopicName, (event: TheatreStateSnapshot) => unknown] => [
+    `health/${target}`,
+    (event) => event.targets[target] || {
       status: "unknown",
       observedAt: null,
       classification: null,
       failure: null,
       details: null
-    }));
-  }
-  return outputs;
+    }
+  ])
+];
+
+function statePublications(
+  event: TheatreStateSnapshot,
+  config: TheatreStateContractConfig,
+  slo: TheatreSloAssessment
+): ContractPublication[] {
+  return STATE_TOPICS.map(([name, value]) => publication(theatreTopic(config.baseTopic, name), value(event, slo)));
 }
+
 
 function requestPublications(
   request: ContractRequest,
@@ -233,6 +242,20 @@ function asStateSnapshot(value: unknown): TheatreStateSnapshot {
     throw new Error("theatre state targets must be an object");
   }
   return event as TheatreStateSnapshot;
+}
+
+// Every retained topic the contract publishes, for clearing those it no
+// longer does after a change: discovery entries, whenever they are published
+// or cleared at each start, its availability, and its state topics.
+export function theatreRetainedTopics(config: TheatreStateContractConfig): string[] {
+  const discovery = config.discovery !== false || config.area
+    ? theatreDiscovery(config).map(({topic}) => topic)
+    : [];
+  return [
+    ...discovery,
+    ...theatreStartingPublications(config).map(({topic}) => topic),
+    ...STATE_TOPICS.map(([name]) => theatreTopic(config.baseTopic, name))
+  ];
 }
 
 // What the contract publishes as it starts and as it stops, so Home Assistant

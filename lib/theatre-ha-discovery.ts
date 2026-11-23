@@ -4,8 +4,7 @@
 // on, and the discovery entries that describe them. Home Assistant may send
 // a request on the request topic, which the state contract acts on.
 
-import {DISCOVERY_ORIGIN} from "./ha-discovery";
-import {areaId} from "./topic-names";
+import {DISCOVERY_ORIGIN, discoveryDevice, discoveryEntity, type DiscoveryOwner} from "./ha-discovery";
 import {TARGETS, type TheatreTarget} from "./theatre-profiles";
 
 export type TheatreTopicName =
@@ -28,35 +27,30 @@ export function theatreTopic(baseTopic: string, name: TheatreTopicName): string 
   return `${baseTopic}/${name}`;
 }
 
-export interface TheatreDiscoveryConfig {
-  area: string;
+export interface TheatreDiscoveryConfig extends DiscoveryOwner {
   displayName: string;
   baseTopic: string;
-  discoveryPrefix: string;
   activities: string[];
 }
 
 function device(config: TheatreDiscoveryConfig) {
   return {
-    identifiers: [`nodered_${areaId(config.area)}_theatre`],
+    ...discoveryDevice(config, "theatre"),
     name: `${config.displayName} Theatre Controller`,
     manufacturer: "Node-RED",
     model: "Deterministic theatre activity controller"
   };
 }
 
-export function theatreDiscovery(config: TheatreDiscoveryConfig): Array<{topic: string; payload: Record<string, unknown>}> {
-  const {baseTopic, discoveryPrefix} = config;
-  const area = areaId(config.area);
+function theatreEntries(config: TheatreDiscoveryConfig) {
+  const {baseTopic} = config;
   const controllerDevice = device(config);
-  const entries: Array<{component: string; objectId: string; payload: Record<string, unknown>}> = [
+  const entries: Array<{component: string; entity: string; payload: Record<string, unknown>}> = [
     {
       component: "select",
-      objectId: `${area}_theatre_activity`,
+      entity: `theatre_activity`,
       payload: {
         name: "Requested activity",
-        unique_id: `${area}_theatre_activity`,
-        default_entity_id: `select.${area}_theatre_activity`,
         icon: "mdi:theater",
         command_topic: theatreTopic(baseTopic, "request"),
         state_topic: theatreTopic(baseTopic, "desired"),
@@ -69,11 +63,9 @@ export function theatreDiscovery(config: TheatreDiscoveryConfig): Array<{topic: 
     },
     {
       component: "sensor",
-      objectId: `${area}_theatre_current`,
+      entity: `theatre_current`,
       payload: {
         name: "Current activity",
-        unique_id: `${area}_theatre_current`,
-        default_entity_id: `sensor.${area}_theatre_current`,
         icon: "mdi:play-circle-outline",
         state_topic: theatreTopic(baseTopic, "current"),
         device: controllerDevice
@@ -81,11 +73,9 @@ export function theatreDiscovery(config: TheatreDiscoveryConfig): Array<{topic: 
     },
     {
       component: "sensor",
-      objectId: `${area}_theatre_phase`,
+      entity: `theatre_phase`,
       payload: {
         name: "Phase",
-        unique_id: `${area}_theatre_phase`,
-        default_entity_id: `sensor.${area}_theatre_phase`,
         icon: "mdi:state-machine",
         state_topic: theatreTopic(baseTopic, "phase"),
         device: controllerDevice
@@ -93,13 +83,11 @@ export function theatreDiscovery(config: TheatreDiscoveryConfig): Array<{topic: 
     },
     {
       component: "sensor",
-      objectId: `${area}_theatre_availability`,
+      entity: `theatre_availability`,
       payload: {
         // Named "Readiness" so it isn't mistaken for Home Assistant's own
-        // availability; its IDs are kept so the entity carries over.
+        // availability; it keeps its entity name, so its entity ID carries over.
         name: "Readiness",
-        unique_id: `${area}_theatre_availability`,
-        default_entity_id: `sensor.${area}_theatre_availability`,
         icon: "mdi:check-network-outline",
         state_topic: theatreTopic(baseTopic, "readiness"),
         entity_category: "diagnostic",
@@ -108,11 +96,9 @@ export function theatreDiscovery(config: TheatreDiscoveryConfig): Array<{topic: 
     },
     {
       component: "sensor",
-      objectId: `${area}_theatre_failure`,
+      entity: `theatre_failure`,
       payload: {
         name: "Failure",
-        unique_id: `${area}_theatre_failure`,
-        default_entity_id: `sensor.${area}_theatre_failure`,
         icon: "mdi:alert-circle-outline",
         state_topic: theatreTopic(baseTopic, "failure"),
         value_template: "{{ value_json.reason if value_json else '' }}",
@@ -122,11 +108,9 @@ export function theatreDiscovery(config: TheatreDiscoveryConfig): Array<{topic: 
     },
     {
       component: "sensor",
-      objectId: `${area}_theatre_transition_metrics`,
+      entity: `theatre_transition_metrics`,
       payload: {
         name: "Transition latency",
-        unique_id: `${area}_theatre_transition_metrics`,
-        default_entity_id: `sensor.${area}_theatre_transition_metrics`,
         icon: "mdi:timer-check-outline",
         state_topic: theatreTopic(baseTopic, "metrics"),
         value_template: "{{ value_json.lastTransitionMs if value_json.lastTransitionMs is not none else 'unknown' }}",
@@ -138,11 +122,9 @@ export function theatreDiscovery(config: TheatreDiscoveryConfig): Array<{topic: 
     },
     {
       component: "sensor",
-      objectId: `${area}_theatre_slo_status`,
+      entity: `theatre_slo_status`,
       payload: {
         name: "Operational SLO",
-        unique_id: `${area}_theatre_slo_status`,
-        default_entity_id: `sensor.${area}_theatre_slo_status`,
         icon: "mdi:target-account",
         state_topic: theatreTopic(baseTopic, "slo"),
         value_template: "{{ value_json.status }}",
@@ -153,11 +135,9 @@ export function theatreDiscovery(config: TheatreDiscoveryConfig): Array<{topic: 
     },
     {
       component: "binary_sensor",
-      objectId: `${area}_theatre_slo_breach`,
+      entity: `theatre_slo_breach`,
       payload: {
         name: "Operational SLO breach",
-        unique_id: `${area}_theatre_slo_breach`,
-        default_entity_id: `binary_sensor.${area}_theatre_slo_breach`,
         icon: "mdi:alert-decagram-outline",
         state_topic: theatreTopic(baseTopic, "slo/breach"),
         payload_on: "ON",
@@ -171,11 +151,9 @@ export function theatreDiscovery(config: TheatreDiscoveryConfig): Array<{topic: 
   for (const target of TARGETS) {
     entries.push({
       component: "sensor",
-      objectId: `${area}_theatre_${target}_health`,
+      entity: `theatre_${target}_health`,
       payload: {
         name: `${target[0]?.toUpperCase()}${target.slice(1)} health`,
-        unique_id: `${area}_theatre_${target}_health`,
-        default_entity_id: `sensor.${area}_theatre_${target}_health`,
         icon: "mdi:heart-pulse",
         state_topic: theatreTopic(baseTopic, `health/${target}`),
         value_template: "{{ value_json.status }}",
@@ -185,8 +163,25 @@ export function theatreDiscovery(config: TheatreDiscoveryConfig): Array<{topic: 
       }
     });
   }
-  return entries.map(({component, objectId, payload}) => ({
-    topic: `${discoveryPrefix}/${component}/${objectId}/config`,
-    payload: {...payload, availability_topic: theatreTopic(baseTopic, "availability"), origin: DISCOVERY_ORIGIN}
-  }));
+  return entries;
+}
+
+export function theatreDiscovery(config: TheatreDiscoveryConfig): Array<{topic: string; payload: Record<string, unknown>}> {
+  return theatreEntries(config).map(({component, entity, payload}) => {
+    const ids = discoveryEntity(config, component, entity);
+    // The IDs follow the name, as they always have, so an area-scheme entry
+    // is the same, byte for byte, as before the schemes existed.
+    const {name, ...rest} = payload;
+    return {
+      topic: ids.topic,
+      payload: {
+        name,
+        unique_id: ids.uniqueId,
+        default_entity_id: ids.defaultEntityId,
+        ...rest,
+        availability_topic: theatreTopic(config.baseTopic, "availability"),
+        origin: DISCOVERY_ORIGIN
+      }
+    };
+  });
 }

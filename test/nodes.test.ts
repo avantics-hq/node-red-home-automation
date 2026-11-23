@@ -79,8 +79,10 @@ function runtime(
   const RED = {
     events,
     nodes: {
-      createNode(node: RuntimeNode) {
+      createNode(node: RuntimeNode, config?: {id?: string}) {
         (node as RuntimeNode & {credentials: Record<string, string>}).credentials = credentials;
+        // As Node-RED does, the node takes its ID from its saved config.
+        (node as RuntimeNode & {id?: string}).id = config?.id;
         const emitter = new EventEmitter();
         node.on = emitter.on.bind(emitter);
         node.emit = emitter.emit.bind(emitter);
@@ -96,10 +98,13 @@ function runtime(
         node.status = (status: unknown) => {
           node.statuses.push(status);
         };
+        // Each node ID has its own context, as in Node-RED; nodes built
+        // without one share it.
+        const own = (key: string) => `${config?.id ?? ""}:${key}`;
         node.context = () => ({
-          get: (key: string) => values.get(key),
+          get: (key: string) => values.get(own(key)),
           set: (key: string, value: unknown) => {
-            values.set(key, value);
+            values.set(own(key), value);
           },
           global: {
             get: (key: string) => globalValues.get(key),
@@ -1342,4 +1347,68 @@ test("availability: a node redeployed on its own is available again without a st
   const sentBefore = closedEarly.sent.length;
   contractRuntime.events.emit("flows:started");
   assert.equal(closedEarly.sent.length, sentBefore);
+});
+
+test("ID schemes: a saved node keeps its area-named entities; a new node names them after itself", async (t) => {
+  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
+  const room = runtime(registerRoom).Constructor;
+  const discoveryOf = async (settings: Record<string, unknown>) => {
+    const node = new room({targets, area: "hall", publishState: true, discovery: true, ...settings});
+    t.after(() => close(node));
+    assert.deepEqual(node.errors, []);
+    const startup = await receive<SendEnvelope>(node, {lighting: {kind: "startup"}});
+    const entry = startup.flat(2).find((message) => String(message?.topic).endsWith("/config"));
+    const payload = entry?.payload as {unique_id: string; default_entity_id: string; device: {identifiers: string[]}};
+    return [entry?.topic, payload.unique_id, payload.default_entity_id, payload.device.identifiers[0]];
+  };
+  const entityId = ["switch", "hall_circadian_lighting"].join(".");
+  assert.deepEqual(await discoveryOf({id: "saved1"}),
+    ["homeassistant/switch/hall_circadian_lighting/config", "hall_circadian_lighting", entityId, "nodered_hall_lighting"],
+    "no idScheme: as every room published before");
+  assert.deepEqual(await discoveryOf({id: "saved2", idScheme: null}),
+    ["homeassistant/switch/hall_circadian_lighting/config", "hall_circadian_lighting", entityId, "nodered_hall_lighting"]);
+  assert.deepEqual(await discoveryOf({id: "new1", idScheme: "node"}),
+    ["homeassistant/switch/nrha_new1_circadian_lighting/config", "nrha_new1_circadian_lighting", entityId, "nrha_new1"],
+    "a new node: named after the node, with the same entity ID");
+  const junk = new room({targets, area: "hall", idScheme: "random"});
+  assert.deepEqual(junk.errors.map(String), ["invalid configuration: ID scheme must be area or node"]);
+
+  const contract = runtime(registerTheatreStateContract).Constructor;
+  const theatre = new contract({id: "c9", idScheme: "node", area: "lounge", activities: "[\"off\"]"});
+  t.after(() => close(theatre));
+  const startup = await receive<SendEnvelope>(theatre, {theatreStateContract: {kind: "startup"}});
+  const topics = startup.flat(2).map((message) => String(message?.topic));
+  assert.ok(topics.includes("homeassistant/select/nrha_c9_theatre_activity/config"), topics.join());
+});
+
+test("ID schemes: after an area change, a node clears the retained topics it no longer publishes", async (t) => {
+  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
+  const topicsCleared = async (idScheme: string | null) => {
+    const room = runtime(registerRoom).Constructor;
+    const settings = {id: "r1", targets, publishState: true, discovery: true, idScheme};
+    const first = new room({...settings, area: "hall"});
+    await receive(first, {lighting: {kind: "startup"}});
+    await close(first);
+    const unchanged = new room({...settings, area: "hall"});
+    assert.equal((await receive<SendEnvelope>(unchanged, {lighting: {kind: "startup"}})).length, 1, "nothing changed: no clears");
+    await close(unchanged);
+    const renamed = new room({...settings, area: "den"});
+    t.after(() => close(renamed));
+    const startup = await receive<SendEnvelope>(renamed, {lighting: {kind: "startup"}});
+    return (startup[0]?.[0] ?? []).map((message) => [message.topic, message.payload]);
+  };
+  // A new node keeps its discovery topic, which now points at home/den.
+  assert.deepEqual(await topicsCleared("node"), [
+    ["home/hall/lighting/availability", ""],
+    ["home/hall/circadian/state", ""],
+    ["home/hall/lighting/main/control", ""]
+  ]);
+  // A saved node's discovery topic is named after the area, so it moves too
+  // and the old entry is cleared, rather than left behind as before.
+  assert.deepEqual(await topicsCleared(null), [
+    ["homeassistant/switch/hall_circadian_lighting/config", ""],
+    ["home/hall/lighting/availability", ""],
+    ["home/hall/circadian/state", ""],
+    ["home/hall/lighting/main/control", ""]
+  ]);
 });

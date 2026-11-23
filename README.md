@@ -137,6 +137,15 @@ Version 3.0 changes some behaviour. Check these after upgrading:
   lowercase, with each run of spaces or other characters (anything but letters, digits, `_` and `-`) as `_`:
   "Living Room" publishes under `home/living_room/…`, and "living-room" is unchanged.
   Names shown in Home Assistant keep the area as you typed it.
+- **Entity names.** A room lighting controller or theatre state contract you add from now on names its Home
+  Assistant device, unique IDs and discovery topics after its Node-RED node ID (`nrha_<node id>…`), so renaming its
+  area or display name updates the same entities. Nodes in flows saved before this keep naming them after the area,
+  exactly as before, so nothing changes for them in Home Assistant. Either way, the entity ID Home Assistant first
+  gives an entity comes from the area, with `-` as `_`.
+- **Topics no longer published are cleared.** At its startup message a node clears any retained topic it published
+  before and no longer does, for example after an area, base topic, discovery prefix or target change. It remembers
+  what it published in its node context, which lasts across deploys; it lasts across a Node-RED restart only if your
+  default context store is persistent, so a change deployed just before a restart may leave its old topics behind.
 - **Availability:** each publishing node sends a retained `online` once the flows have started (and again at its
   startup message) and `offline` when it stops, on `home/<area>/lighting/availability` (room) or
   `<base>/availability` (theatre), and its Home Assistant entities follow it. These get through when the node is

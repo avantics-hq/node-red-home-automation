@@ -4,16 +4,19 @@ import type {Node, NodeDef, NodeInitializer} from "node-red";
 import {
   normaliseStateContractConfig,
   theatreStartingPublications,
+  theatreRetainedTopics,
   theatreStoppingPublications,
   transitionTheatreStateContract,
   type TheatreStateContractConfig,
   type TheatreStateContractMessage,
   type TheatreStateContractState
 } from "../lib/theatre-state-contract";
-import {invalidConfig, whenFlowsStarted, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
-import {jsonSetting, numberSetting, optionalBooleanSetting, textSetting} from "../lib/settings";
+import {clearStaleRetained, invalidConfig, whenFlowsStarted, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
+import {jsonSetting, numberSetting, optionalBooleanSetting, optionalChoiceSetting} from "../lib/settings";
+import {ID_SCHEMES, discoveryPrefixSetting} from "../lib/ha-discovery";
 
 interface TheatreStateContractNodeConfig extends NodeDef {
+  idScheme?: string | null;
   area?: string;
   discovery?: boolean | string;
   displayName?: string;
@@ -40,6 +43,10 @@ const registerTheatreStateContract: NodeInitializer = (RED) => {
     try {
       const activities = jsonSetting(config.activities, "activities", []);
       controllerConfig = normaliseStateContractConfig({
+        nodeId: node.id,
+        // Not set: a node saved before node IDs, which keeps its area-named
+        // entities. The editor gives new nodes "node".
+        idScheme: optionalChoiceSetting(config.idScheme, "ID scheme", ID_SCHEMES) ?? "area",
         area,
         // Optional, with documented meanings: an empty display name is the
         // area, and an empty base topic is home/<area>/theatre.
@@ -48,7 +55,7 @@ const registerTheatreStateContract: NodeInitializer = (RED) => {
         // Not set (null, or absent from a flow saved before the setting)
         // means on, so an older flow keeps publishing discovery.
         discovery: optionalBooleanSetting(config.discovery, "Home Assistant discovery") ?? true,
-        discoveryPrefix: textSetting(config.discoveryPrefix, "discovery prefix", "homeassistant"),
+        discoveryPrefix: discoveryPrefixSetting(config.discoveryPrefix),
         activities: (Array.isArray(activities) ? activities.map(String) : activities) as string[],
         slo: {
           windowSize: numberSetting(config.sloWindowSize, "SLO window", 20),
@@ -84,6 +91,10 @@ const registerTheatreStateContract: NodeInitializer = (RED) => {
     }
 
     onInput(node, (msg, send) => {
+      if (objectField<TheatreStateContractMessage["theatreStateContract"]>(msg, "theatreStateContract")?.kind === "startup") {
+        const clears = clearStaleRetained(node, theatreRetainedTopics(controllerConfig));
+        if (clears.length) send([null, clears.map((clear) => ({...clear}))]);
+      }
       process({
         topic: typeof msg.topic === "string" ? msg.topic : undefined,
         payload: msg.payload,

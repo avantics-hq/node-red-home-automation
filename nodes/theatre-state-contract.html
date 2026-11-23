@@ -21,6 +21,10 @@
         // this setting, which keeps publishing discovery. New nodes start with
         // it off (onadd).
         discovery: {value: null},
+        // How Home Assistant IDs are named. null means "not set": a node saved
+        // before this setting, which keeps its area-named entities. New nodes
+        // name them after the node (onadd), so renaming the area keeps them.
+        idScheme: {value: null},
         displayName: {value: ""},
         baseTopic: {value: ""},
         discoveryPrefix: {value: "homeassistant", required: true, validate: function (v) { var prefix = String(v || "").trim().replace(/^\/+|\/+$/g, ""); return Boolean(prefix) && !/[+#]/.test(prefix); }},
@@ -33,6 +37,7 @@
         sloSuccessObjectivePct: {value: 95, required: true, validate: RED.validators.number()}
       },
       onadd: function () {
+        this.idScheme = "node";
         this.discovery = false;
       },
       oneditprepare: function () {
