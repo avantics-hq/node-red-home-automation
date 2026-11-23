@@ -129,8 +129,9 @@ export function transitionOccupancy(
         trace("motion", "unchanged");
       }
     } else if (usesPresence && state.presenceKnown && state.presenceActive) {
-      state.occupied = true;
-      trace("motion", "held", "presence-active");
+      // Presence only holds occupancy that motion established; it never
+      // establishes it, so the state (and what was last emitted) is unchanged.
+      trace("motion", state.occupied ? "held" : "unchanged", state.occupied ? "presence-active" : "motion-required");
     } else if (!wasKnown || wasActive || state.occupied) {
       emit(false, "all-sources-inactive");
       trace("motion", "vacant");
