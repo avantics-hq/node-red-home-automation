@@ -2,6 +2,7 @@
 
 import {TARGETS, type TheatreTarget} from "./theatre-profiles";
 import type {TheatreMetrics, TheatreSnapshot} from "./theatre-state";
+import {theatreDiscovery, theatreTopic} from "./theatre-ha-discovery";
 import {
   evaluateTheatreSlo,
   normaliseTheatreSloConfig,
@@ -147,158 +148,6 @@ function publication(topic: string, payload: unknown): ContractPublication {
   };
 }
 
-function device(config: TheatreStateContractConfig) {
-  return {
-    identifiers: [`nodered_${config.area}_theatre`],
-    name: `${config.displayName} Theatre Controller`,
-    manufacturer: "Node-RED",
-    model: "Deterministic theatre activity controller"
-  };
-}
-
-function discoveryPublications(config: TheatreStateContractConfig): ContractPublication[] {
-  const {area, baseTopic, discoveryPrefix} = config;
-  const controllerDevice = device(config);
-  const entries: Array<{component: string; objectId: string; payload: Record<string, unknown>}> = [
-    {
-      component: "select",
-      objectId: `${area}_theatre_activity`,
-      payload: {
-        name: "Requested activity",
-        unique_id: `${area}_theatre_activity`,
-        default_entity_id: `select.${area}_theatre_activity`,
-        icon: "mdi:theater",
-        command_topic: `${baseTopic}/request`,
-        state_topic: `${baseTopic}/desired`,
-        value_template: "{{ value_json.activity if value_json else none }}",
-        command_template: "{\"requestId\":\"ha-{{ now().strftime('%Y%m%d%H%M%S%f') }}\",\"activity\":\"{{ value }}\"}",
-        options: config.activities,
-        optimistic: false,
-        device: controllerDevice
-      }
-    },
-    {
-      component: "sensor",
-      objectId: `${area}_theatre_current`,
-      payload: {
-        name: "Current activity",
-        unique_id: `${area}_theatre_current`,
-        default_entity_id: `sensor.${area}_theatre_current`,
-        icon: "mdi:play-circle-outline",
-        state_topic: `${baseTopic}/current`,
-        device: controllerDevice
-      }
-    },
-    {
-      component: "sensor",
-      objectId: `${area}_theatre_phase`,
-      payload: {
-        name: "Phase",
-        unique_id: `${area}_theatre_phase`,
-        default_entity_id: `sensor.${area}_theatre_phase`,
-        icon: "mdi:state-machine",
-        state_topic: `${baseTopic}/phase`,
-        device: controllerDevice
-      }
-    },
-    {
-      component: "sensor",
-      objectId: `${area}_theatre_availability`,
-      payload: {
-        name: "Availability",
-        unique_id: `${area}_theatre_availability`,
-        default_entity_id: `sensor.${area}_theatre_availability`,
-        icon: "mdi:check-network-outline",
-        state_topic: `${baseTopic}/availability`,
-        entity_category: "diagnostic",
-        device: controllerDevice
-      }
-    },
-    {
-      component: "sensor",
-      objectId: `${area}_theatre_failure`,
-      payload: {
-        name: "Failure",
-        unique_id: `${area}_theatre_failure`,
-        default_entity_id: `sensor.${area}_theatre_failure`,
-        icon: "mdi:alert-circle-outline",
-        state_topic: `${baseTopic}/failure`,
-        value_template: "{{ value_json.reason if value_json else '' }}",
-        entity_category: "diagnostic",
-        device: controllerDevice
-      }
-    },
-    {
-      component: "sensor",
-      objectId: `${area}_theatre_transition_metrics`,
-      payload: {
-        name: "Transition latency",
-        unique_id: `${area}_theatre_transition_metrics`,
-        default_entity_id: `sensor.${area}_theatre_transition_metrics`,
-        icon: "mdi:timer-check-outline",
-        state_topic: `${baseTopic}/metrics`,
-        value_template: "{{ value_json.lastTransitionMs if value_json.lastTransitionMs is not none else 'unknown' }}",
-        json_attributes_topic: `${baseTopic}/metrics`,
-        unit_of_measurement: "ms",
-        entity_category: "diagnostic",
-        device: controllerDevice
-      }
-    },
-    {
-      component: "sensor",
-      objectId: `${area}_theatre_slo_status`,
-      payload: {
-        name: "Operational SLO",
-        unique_id: `${area}_theatre_slo_status`,
-        default_entity_id: `sensor.${area}_theatre_slo_status`,
-        icon: "mdi:target-account",
-        state_topic: `${baseTopic}/slo`,
-        value_template: "{{ value_json.status }}",
-        json_attributes_topic: `${baseTopic}/slo`,
-        entity_category: "diagnostic",
-        device: controllerDevice
-      }
-    },
-    {
-      component: "binary_sensor",
-      objectId: `${area}_theatre_slo_breach`,
-      payload: {
-        name: "Operational SLO breach",
-        unique_id: `${area}_theatre_slo_breach`,
-        default_entity_id: `binary_sensor.${area}_theatre_slo_breach`,
-        icon: "mdi:alert-decagram-outline",
-        state_topic: `${baseTopic}/slo/breach`,
-        payload_on: "ON",
-        payload_off: "OFF",
-        device_class: "problem",
-        entity_category: "diagnostic",
-        device: controllerDevice
-      }
-    }
-  ];
-  for (const target of TARGETS) {
-    entries.push({
-      component: "sensor",
-      objectId: `${area}_theatre_${target}_health`,
-      payload: {
-        name: `${target[0]?.toUpperCase()}${target.slice(1)} health`,
-        unique_id: `${area}_theatre_${target}_health`,
-        default_entity_id: `sensor.${area}_theatre_${target}_health`,
-        icon: "mdi:heart-pulse",
-        state_topic: `${baseTopic}/health/${target}`,
-        value_template: "{{ value_json.status }}",
-        json_attributes_topic: `${baseTopic}/health/${target}`,
-        entity_category: "diagnostic",
-        device: controllerDevice
-      }
-    });
-  }
-  return entries.map(({component, objectId, payload}) => publication(
-    `${discoveryPrefix}/${component}/${objectId}/config`,
-    payload
-  ));
-}
-
 function statePublications(
   event: TheatreStateSnapshot,
   config: TheatreStateContractConfig,
@@ -314,12 +163,12 @@ function statePublications(
     }
     : null;
   const outputs = [
-    publication(`${base}/desired`, desired),
-    publication(`${base}/current`, event.currentActivity),
-    publication(`${base}/phase`, event.phase),
-    publication(`${base}/failure`, event.failure),
-    publication(`${base}/availability`, event.availability),
-    publication(`${base}/metrics`, event.metrics || {
+    publication(theatreTopic(base, "desired"), desired),
+    publication(theatreTopic(base, "current"), event.currentActivity),
+    publication(theatreTopic(base, "phase"), event.phase),
+    publication(theatreTopic(base, "failure"), event.failure),
+    publication(theatreTopic(base, "availability"), event.availability),
+    publication(theatreTopic(base, "metrics"), event.metrics || {
       requests: 0,
       ready: 0,
       failed: 0,
@@ -333,12 +182,12 @@ function statePublications(
       lastOutcome: null,
       targets: {}
     }),
-    publication(`${base}/slo`, slo),
-    publication(`${base}/slo/breach`, slo.status === "breached" ? "ON" : "OFF")
+    publication(theatreTopic(base, "slo"), slo),
+    publication(theatreTopic(base, "slo/breach"), slo.status === "breached" ? "ON" : "OFF")
   ];
   for (const target of TARGETS) {
     const health = event.targets[target];
-    outputs.push(publication(`${base}/health/${target}`, health || {
+    outputs.push(publication(theatreTopic(base, `health/${target}`), health || {
       status: "unknown",
       observedAt: null,
       classification: null,
@@ -355,10 +204,10 @@ function requestPublications(
 ): ContractPublication[] {
   const base = config.baseTopic;
   return [
-    publication(`${base}/desired`, request),
-    publication(`${base}/phase`, "requested"),
-    publication(`${base}/failure`, null),
-    publication(`${base}/availability`, "unknown")
+    publication(theatreTopic(base, "desired"), request),
+    publication(theatreTopic(base, "phase"), "requested"),
+    publication(theatreTopic(base, "failure"), null),
+    publication(theatreTopic(base, "availability"), "unknown")
   ];
 }
 
@@ -400,9 +249,9 @@ export function transitionTheatreStateContract(
   }
 
   if (msg.theatreStateContract?.kind === "startup") {
-    publications.push(...discoveryPublications(config));
+    publications.push(...theatreDiscovery(config).map(({topic, payload}) => publication(topic, payload)));
     trace("startup", "discovery", null, {publications: publications.length});
-  } else if (msg.topic === `${config.baseTopic}/request`) {
+  } else if (msg.topic === theatreTopic(config.baseTopic, "request")) {
     if (msg.retain === true) {
       trace("request", "ignored", "retained-request");
     } else {
