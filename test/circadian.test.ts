@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {scheduledLighting, type CircadianLighting} from "../lib/circadian";
-import {alreadyStyled} from "../lib/circadian-refresh";
+import {alreadyStyled} from "../lib/z2m-light";
 import {DEFAULT_BED_TIME, DEFAULT_WAKE_TIME, clockMinutes, resolveSchedule, scheduleLevel} from "../lib/circadian-schedule";
 import {styleAtLevel, type LightLevels} from "../lib/light-styling";
 import {transitionRoom, type RoomConfig} from "../lib/room-controller";

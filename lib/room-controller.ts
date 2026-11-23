@@ -2,7 +2,7 @@
 
 import type {TraceEntry} from "./bounded-trace";
 import type {CircadianLighting} from "./circadian";
-import {alreadyStyled} from "./circadian-refresh";
+import {alreadyStyled, lightCommand, readLightReport, setsLightValues, type LightCommand, type LightReport} from "./z2m-light";
 import {circadianStateMessage, roomLightingDiscovery} from "./room-lighting-discovery";
 import {checkCommandEcho, checkStateReport, parsePayload, rememberCommand, type ExpectedCommand} from "./command-echo";
 
@@ -26,10 +26,7 @@ export interface RoomConfig {
   lighting: CircadianLighting;
 }
 
-export interface RoomObservation {
-  on: boolean;
-  brightness: unknown;
-  color_temp: unknown;
+export interface RoomObservation extends LightReport {
   observedAt: string;
 }
 
@@ -122,13 +119,10 @@ export function adaptivePayload(
   sleeping: boolean,
   now: Date,
   config: RoomConfig
-): {state: string; brightness?: number; color_temp?: number; transition?: number} {
+): LightCommand {
   if (lightState === "OFF") return {state: lightState};
-  return {
-    state: lightState,
-    ...config.lighting.styleAt(now, sleeping),
-    transition: isRefresh ? config.refreshTransitionSeconds : config.initialTransitionSeconds
-  };
+  return lightCommand(lightState, config.lighting.styleAt(now, sleeping),
+    isRefresh ? config.refreshTransitionSeconds : config.initialTransitionSeconds);
 }
 
 export function transitionRoom(
@@ -284,15 +278,11 @@ export function transitionRoom(
     const target = event.target ? targetById[event.target] : targetForTopic(msg.topic, "stateTopic");
     const parsed = parsePayload(msg.payload);
     const payload = parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : null;
-    if (target && payload && ["ON", "OFF"].includes(String(payload.state).toUpperCase())) {
+    const light = payload ? readLightReport(payload) : null;
+    if (target && light) {
       const previousOn = state.observed[target.id]?.on;
-      const nextOn = String(payload.state).toUpperCase() === "ON";
-      state.observed[target.id] = {
-        on: nextOn,
-        brightness: payload.brightness ?? null,
-        color_temp: payload.color_temp ?? null,
-        observedAt: now.toISOString()
-      };
+      const nextOn = light.on;
+      state.observed[target.id] = {...light, observedAt: now.toISOString()};
       if (previousOn !== nextOn) {
         trace("state-observed", "changed", null, {
           target: target.id,
@@ -324,16 +314,12 @@ export function transitionRoom(
       state.expected[target.id] = echo.queue;
       if (!echo.own) {
         const requestedState = String(payload.state || "").toUpperCase();
-        const fields = [
-          "brightness", "brightness_percent", "color", "color_temp", "color_temp_kelvin",
-          "effect", "hue", "saturation", "x", "y"
-        ];
         if (requestedState === "OFF") {
           state.desired[target.id] = false;
           setControl(target.id, null, "external-off");
         } else if (requestedState === "ON") {
           state.desired[target.id] = true;
-          if (fields.some((field) => Object.hasOwn(payload, field))) {
+          if (setsLightValues(payload)) {
             setControl(target.id, {state: "manual"}, "external-values");
           } else if (state.circadianEnabled && controlOf(target.id) === "in-control") {
             const corrective = command(
