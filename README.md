@@ -169,7 +169,12 @@ Version 3.0 changes some behaviour. Check these after upgrading:
 - **Topics no longer published are cleared.** Once the flows have started, and again at its startup message, a node
   clears any retained topic it published before and no longer does, for example after an area, base topic,
   discovery prefix or target change. It remembers what it published in its node context, which lasts across deploys;
-  it lasts across a Node-RED restart only if your default context store is persistent.
+  it lasts across a Node-RED restart only if your default context store is persistent. A node that never gets a startup message
+  keeps clearing its old topics at every start, so to move an area from one older room node to another, send the old
+  node a startup message, or delete it.
+- **Send each publishing node a startup message once, a few seconds after deploy.** The example flows do this with an
+  inject node set to fire once after 3 seconds: by then the MQTT broker node has usually connected, and a message
+  sent before it connects is dropped, along with the discovery and state it carried.
 - **Removing entities:** deleting a node clears its Home Assistant entities and retained state, but only when you
   deploy with "Modified nodes" or "Modified flows". On a full deploy (the deploy button's default), Node-RED stops the
   MQTT out node at the same moment, so the clearing never reaches the broker. Disabling a node or its flow keeps its

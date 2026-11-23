@@ -53,7 +53,10 @@ test("scheduled lighting holds the sleep settings in sleep mode", () => {
 
 test("the room controller uses whatever circadian lighting it is given", () => {
   // A different curve is a different implementation, not an edit to the controller.
-  const fixed: CircadianLighting = {styleAt: () => ({brightness: 77, color_temp: 333})};
+  const fixed: CircadianLighting = {
+    styleAt: () => ({brightness: 77, color_temp: 333}),
+    withSchedule() { return fixed; }
+  };
   const config: RoomConfig = {
     area: "room", displayName: "Room", initialSleep: false,
     targets: [{id: "main", stateTopic: "room/light/main", commandTopic: "room/light/main/set"}],

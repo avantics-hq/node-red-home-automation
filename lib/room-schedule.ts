@@ -7,6 +7,7 @@
 
 import {DEFAULT_BED_TIME, DEFAULT_WAKE_TIME, clockMinutes, type DaySchedule} from "./circadian-schedule";
 import type {RoomConfig, RoomState} from "./room-controller";
+import {keptOverride} from "./settings";
 
 function configuredSchedule(config: RoomConfig): DaySchedule {
   return config.schedule ?? {wakeTime: DEFAULT_WAKE_TIME, bedTime: DEFAULT_BED_TIME};
@@ -16,10 +17,7 @@ function configuredSchedule(config: RoomConfig): DaySchedule {
 // unchanged; state saved before times could change takes the settings.
 export function savedSchedule(config: RoomConfig, saved: Partial<RoomState>): Pick<RoomState, "schedule" | "scheduleSetting"> {
   const setting = configuredSchedule(config);
-  const kept = (key: keyof DaySchedule) =>
-    saved.scheduleSetting?.[key] === setting[key] && typeof saved.schedule?.[key] === "string"
-      ? saved.schedule[key]
-      : setting[key];
+  const kept = (key: keyof DaySchedule) => keptOverride(saved.schedule?.[key], saved.scheduleSetting?.[key], setting[key]);
   return {schedule: {wakeTime: kept("wakeTime"), bedTime: kept("bedTime")}, scheduleSetting: {...setting}};
 }
 
@@ -27,7 +25,7 @@ export function savedSchedule(config: RoomConfig, saved: Partial<RoomState>): Pi
 export function withActiveSchedule(config: RoomConfig, state: RoomState): RoomConfig {
   const setting = configuredSchedule(config);
   const same = state.schedule.wakeTime === setting.wakeTime && state.schedule.bedTime === setting.bedTime;
-  if (same || !config.lighting.withSchedule) return config;
+  if (same) return config;
   return {...config, lighting: config.lighting.withSchedule(state.schedule)};
 }
 

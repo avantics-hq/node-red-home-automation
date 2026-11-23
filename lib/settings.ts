@@ -63,3 +63,12 @@ export function optionalChoiceSetting<Choice extends string>(value: unknown, lab
   if (typeof value === "string" && (choices as readonly string[]).includes(value)) return value as Choice;
   throw new Error(`${label} must be ${choices.slice(0, -1).join(", ")}${choices.length > 1 ? " or " : ""}${choices.at(-1)}`);
 }
+
+// The rule for a value set at runtime (from Home Assistant, say) over a
+// setting: it lasts until the node is deployed with a different setting,
+// which then applies. `savedSetting` is the setting the saved value was
+// based on; state saved before such values were recorded has none, so the
+// setting applies.
+export function keptOverride<Value extends string | number>(savedValue: unknown, savedSetting: unknown, setting: Value): Value {
+  return savedSetting === setting && typeof savedValue === typeof setting ? savedValue as Value : setting;
+}

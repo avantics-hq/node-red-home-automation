@@ -7,9 +7,9 @@ import {styleAtLevel, type LightLevels, type LightStyle} from "./light-styling";
 // look at this moment? A different curve is a different implementation.
 export interface CircadianLighting {
   styleAt(now: Date, sleeping: boolean): LightStyle;
-  // The same lighting on another wake and bed schedule, when the lighting
-  // follows one.
-  withSchedule?(schedule: DaySchedule): CircadianLighting;
+  // The same lighting on another wake and bed schedule. Required, so a
+  // lighting can't silently ignore times set at runtime.
+  withSchedule(schedule: DaySchedule): CircadianLighting;
 }
 
 // Circadian lighting that follows a wake and bed schedule; sleep mode holds
