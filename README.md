@@ -144,7 +144,7 @@ also attaches the package tarball and its SHA-256 checksum. Install a downloaded
 tarball through **Manage palette → Install → Upload module**, or with:
 
 ```sh
-npm install /path/to/avantics-node-red-home-automation-2.2.0.tgz
+npm install /path/to/avantics-node-red-home-automation-2.2.1.tgz
 ```
 
 Add the installed nodes from the **home automation** section of the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.
