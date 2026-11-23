@@ -3,30 +3,14 @@
 // The theatre activity controller's state: what was asked for, what each
 // target last reported, its metrics, and the snapshot it publishes.
 
+import type {TargetStatus} from "./target-state";
 import {TARGETS, type ActivityProfiles, type TheatreTarget} from "./theatre-profiles";
 
-export type TargetStatus =
-  | "discovering"
-  | "transitioning"
-  | "confirming"
-  | "ready"
-  | "waiting_for_source"
-  | "failed"
-  | "unavailable";
+export type {TargetStatus};
 
 export type TargetClassification = "drift" | "manual_override";
 
 export type TheatreAvailability = "unknown" | "available" | "degraded" | "unavailable";
-
-export const TARGET_STATUSES: Record<TargetStatus, true> = {
-  discovering: true,
-  transitioning: true,
-  confirming: true,
-  ready: true,
-  waiting_for_source: true,
-  failed: true,
-  unavailable: true
-};
 
 export const TARGET_CLASSIFICATIONS: Record<TargetClassification, true> = {
   drift: true,

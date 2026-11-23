@@ -2,6 +2,7 @@
 
 import {boundObservedAt, isOutOfOrder, parseObservedAt} from "./observation-time";
 import type {LightingEvent} from "./room-controller";
+import {asTargetStatus, targetStateEvent, type TargetStateEvent} from "./target-state";
 
 const PROFILE_NAME = /^[a-z][a-z0-9_-]*$/;
 const TARGET_NAME = /^[a-z][a-z0-9_-]*$/;
@@ -104,22 +105,13 @@ export interface ActivityLightingCommand {
 }
 
 export interface ActivityLightingOutputEvent {
-  theatre: {
-    kind: "target_state";
-    target: "lighting";
-    requestId: string;
-    generation: number;
-    status: string;
-    observedAt: string;
-    details: {
-      profile: string;
-      matched: number;
-      preserved: number;
-      expected: number;
-      metrics: {attempts: number; retries: number; fallbackUsed: boolean};
-    };
-    failure?: ActivityLightingFailure;
-  };
+  theatre: TargetStateEvent<"lighting", {
+    profile: string;
+    matched: number;
+    preserved: number;
+    expected: number;
+    metrics: {attempts: number; retries: number; fallbackUsed: boolean};
+  }, ActivityLightingFailure>;
 }
 
 function stable(value: unknown): unknown {
@@ -471,12 +463,11 @@ export function transitionActivityLighting(
   }
 
   if (state.desired) {
-    const theatre: ActivityLightingOutputEvent["theatre"] = {
-      kind: "target_state",
+    const theatre = targetStateEvent({
       target: "lighting",
       requestId: state.desired.requestId,
       generation: state.generation,
-      status: state.phase === "failed" ? "failed" : state.phase === "ready" ? "ready" : state.phase,
+      status: asTargetStatus(state.phase, "confirming"),
       observedAt: now.toISOString(),
       details: {
         profile: state.desired.profile,
@@ -488,9 +479,9 @@ export function transitionActivityLighting(
           retries: Math.max(0, (state.pending?.attempt ?? 1) - 1),
           fallbackUsed: false
         }
-      }
-    };
-    if (state.failure) theatre.failure = {...state.failure};
+      },
+      failure: state.failure
+    });
     events.push({theatre});
   }
 

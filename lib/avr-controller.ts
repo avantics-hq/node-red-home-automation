@@ -1,5 +1,7 @@
 "use strict";
 
+import {asTargetStatus, targetStateEvent, type TargetStateEvent} from "./target-state";
+
 export const QUERY_COMMAND = "PW?\rZM?\rSI?\rMV?\r";
 
 export type AvrPower = "on" | "standby";
@@ -117,17 +119,8 @@ export interface AvrCommand {
 }
 
 // The theatre activity controller's view of the receiver.
-export interface AvrTargetState {
-  kind: "target_state";
-  target: "avr";
-  requestId: string;
-  generation: number;
-  status: string;
-  observedAt: string;
-  details: Record<string, unknown>;
-  classification?: "manual_override";
-  failure?: {operation: string; reason: string; attempts: number; occurredAt: string};
-}
+export type AvrTargetState = TargetStateEvent<"avr", Record<string, unknown>,
+  {operation: string; reason: string; attempts: number; occurredAt: string}>;
 
 export interface AvrOutputEvent {
   payload?: unknown;
@@ -1013,7 +1006,7 @@ export function transitionAvr(
     const fields = requiredFields();
     const status = state.phase === "manual_override"
       ? "transitioning"
-      : state.phase === "idle" || state.phase === "unknown" ? "confirming" : state.phase;
+      : asTargetStatus(state.phase, "confirming");
     const confirmedAt = fields
       .map((field) => state.fieldObservedAt[field])
       .reduce<string | null>((oldest, at) =>
@@ -1021,8 +1014,7 @@ export function transitionAvr(
       now.toISOString());
     const reported = fields.some((field) => reportedFields.has(field));
     if (status !== "ready" || ((previousPhase !== "ready" || reported) && confirmedAt !== null)) {
-      const theatre: AvrTargetState = {
-        kind: "target_state",
+      const theatre: AvrTargetState = targetStateEvent({
         target: "avr",
         requestId: state.desired.requestId,
         generation: state.desired.generation,
@@ -1042,17 +1034,15 @@ export function transitionAvr(
             retries: Math.max(0, state.lastAttempt - 1),
             fallbackUsed: false
           }
-        }
-      };
-      if (state.classification) theatre.classification = state.classification;
-      if (state.failure) {
-        theatre.failure = {
+        },
+        classification: state.classification,
+        failure: state.failure && {
           operation: state.failure.operation,
           reason: "attempts-exhausted",
           attempts: state.failure.attempts,
           occurredAt: state.failure.at
-        };
-      }
+        }
+      });
       targetStates.push({theatre});
     }
   }
