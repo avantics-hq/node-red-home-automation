@@ -111,10 +111,25 @@ also attaches the package tarball and its SHA-256 checksum. Install a downloaded
 tarball through **Manage palette → Install → Upload module**, or with:
 
 ```sh
-npm install /path/to/avantics-node-red-home-automation-2.3.0.tgz
+npm install /path/to/avantics-node-red-home-automation-3.0.0.tgz
 ```
 
 Add the installed nodes from the **home automation** section of the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.
+
+### Upgrading from 2.x
+
+Version 3.0 changes some behaviour. Check these after upgrading:
+
+- **Wall switches go through the switch lighting policy node.** The motion lighting policy no longer handles them,
+  and ignores switch messages, so rewire any wall switch that feeds a motion node. The room lighting controller now
+  keeps a light that a person set after the room went vacant, instead of the motion node.
+- **Settings are checked when you deploy.** An emptied or unusable setting shows "invalid configuration", and the
+  node's log says which setting is wrong. A setting your flow saved before it existed still takes its default.
+- **No node assumes a room.** An empty area is allowed, except on the theatre state contract, which needs one to name
+  its topics. A room lighting controller with no area still controls its lights, but publishes no state or discovery.
+- **MQTT state publishing and Home Assistant discovery are opt-in** on the room lighting controller and the theatre
+  state contract. New nodes start with them off. Nodes in a flow saved before 3.0 keep publishing until you untick
+  the setting. Switching discovery off removes the entities from Home Assistant.
 
 The whole-theatre MQTT contract uses non-retained requests at
 `home/<area>/theatre/request`; every request supplies a unique `requestId` and an
