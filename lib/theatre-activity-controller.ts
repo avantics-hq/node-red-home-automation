@@ -15,7 +15,6 @@ import {
   REFRESH_ATTEMPTS,
   TARGET_CLASSIFICATIONS,
   TARGET_STATUSES,
-  count,
   createTheatreState,
   emptyRefreshPending,
   emptyTargets,
@@ -28,6 +27,8 @@ import {
   type TheatreDesired,
   type TheatreState
 } from "./theatre-state";
+import {recordOutcome, recordTargetReport, resetTransitionMetrics} from "./theatre-metrics";
+import {planRefreshes} from "./theatre-refresh";
 
 // Names other modules have imported from here.
 export {
@@ -237,64 +238,17 @@ export function transitionTheatre(
   // and is timed: a later override or failure is not part of the transition.
   function completeTransition(outcome: "ready" | "failed" | "manual_override") {
     const startedAt = Date.parse(state.transitionStartedAt || "");
+    let transitionMs: number | null = null;
     if (outcome !== "manual_override" && state.transitionCompletedAt === null) {
       state.transitionCompletedAt = now.toISOString();
-      if (Number.isFinite(startedAt)) {
-        const duration = Math.max(0, nowMs - startedAt);
-        state.metrics.lastTransitionMs = duration;
-        state.metrics.maxTransitionMs = Math.max(state.metrics.maxTransitionMs || 0, duration);
-      }
+      if (Number.isFinite(startedAt)) transitionMs = Math.max(0, nowMs - startedAt);
     }
-    state.metrics.lastOutcome = outcome;
-    if (outcome === "ready") state.metrics.ready += 1;
-    if (outcome === "failed") state.metrics.failed += 1;
+    recordOutcome(state.metrics, outcome, transitionMs);
   }
 
-  function resetTransitionMetrics() {
-    for (const target of TARGETS) {
-      const metric = state.metrics.targets[target];
-      metric.attempts = 0;
-      metric.retries = 0;
-      metric.fallbackUsed = false;
-      metric.lastConfirmationMs = null;
-      metric.observationAgeMs = null;
-      metric.availability = "unknown";
-    }
-  }
-
-  function updateTargetMetrics(
-    target: TheatreTarget,
-    targetState: TargetState,
-    previous: TargetState | null
-  ) {
-    const metric = state.metrics.targets[target];
-    const details = targetState.details && typeof targetState.details === "object"
-      ? targetState.details
-      : {};
-    const detailMetrics = details.metrics && typeof details.metrics === "object" &&
-      !Array.isArray(details.metrics)
-      ? details.metrics as Record<string, unknown>
-      : {};
-    const attempts = count(detailMetrics.attempts ?? details.attempt);
-    metric.attempts = Math.max(metric.attempts, attempts);
-    metric.retries = Math.max(metric.retries, Math.max(0, attempts - 1));
-    const fallbackUsed = detailMetrics.fallbackUsed === true;
-    if (fallbackUsed && !metric.fallbackUsed) metric.fallbackUses += 1;
-    metric.fallbackUsed ||= fallbackUsed;
-    const observedAt = observationTime(targetState);
-    metric.observationAgeMs = observedAt === null ? null : Math.max(0, nowMs - observedAt);
-    if (targetState.status === "ready") {
-      const startedAt = Date.parse(state.transitionStartedAt || "");
-      metric.lastConfirmationMs = Number.isFinite(startedAt) && observedAt !== null
-        ? Math.max(0, observedAt - startedAt)
-        : null;
-      metric.availability = "available";
-    } else if (targetState.status === "failed" || targetState.status === "unavailable") {
-      metric.availability = "unavailable";
-      if (previous?.status !== targetState.status) metric.failures += 1;
-    } else {
-      metric.availability = "degraded";
-    }
+  function updateTargetMetrics(target: TheatreTarget, targetState: TargetState, previous: TargetState | null) {
+    recordTargetReport(state.metrics.targets[target], targetState, previous, observationTime(targetState),
+      state.transitionStartedAt, nowMs);
   }
 
   function fail(target: TheatreTarget, targetState: TargetState) {
@@ -449,42 +403,19 @@ export function transitionTheatre(
     }
   }
 
-  // Refresh each confirmed target at half its freshness window, so a settled
-  // activity stays fresh, and re-send an unanswered refresh a bounded number
-  // of times before reporting the target as not responding. A target that
-  // has stopped responding is still asked once per freshness window, so it
-  // recovers when it answers again.
+  // Send the refreshes planned for this moment (see theatre-refresh).
   function tickRefreshes() {
-    const intervalMs = config.freshnessMs / 2;
-    for (const target of TARGETS) {
-      const pending = state.refreshPending[target];
-      if (pending) {
-        if (pending.exhausted) {
-          if (nowMs - pending.sentAt >= config.freshnessMs) {
-            commands.push(targetCommand(target, "refresh", state.desired));
-            pending.sentAt = nowMs;
-            trace("refresh", "retried", "no-response", {target});
-          }
-          continue;
-        }
-        if (nowMs - pending.sentAt < intervalMs) continue;
-        if (pending.attempts < REFRESH_ATTEMPTS) {
-          commands.push(targetCommand(target, "refresh", state.desired));
-          state.refreshPending[target] = {sentAt: nowMs, attempts: pending.attempts + 1, exhausted: false};
-          trace("refresh", "retried", null, {target, attempt: pending.attempts + 1});
-        } else {
-          pending.exhausted = true;
-          pending.sentAt = nowMs;
-          noResponse(target);
-        }
+    const plan = planRefreshes(state.refreshPending, (target) => observationTime(state.targets[target]),
+      state.desired !== null, config.freshnessMs, nowMs);
+    state.refreshPending = plan.pending;
+    for (const action of plan.actions) {
+      if (action.kind === "give-up") {
+        noResponse(action.target);
         continue;
       }
-      const targetState = state.targets[target];
-      const observedAt = observationTime(targetState);
-      if (state.desired && targetState && observedAt !== null && nowMs - observedAt >= intervalMs) {
-        commands.push(targetCommand(target, "refresh", state.desired));
-        state.refreshPending[target] = {sentAt: nowMs, attempts: 1, exhausted: false};
-      }
+      commands.push(targetCommand(action.target, "refresh", state.desired));
+      if (action.kind === "retry") trace("refresh", "retried", null, {target: action.target, attempt: action.attempt});
+      if (action.kind === "re-ask") trace("refresh", "retried", "no-response", {target: action.target});
     }
   }
 
@@ -576,7 +507,7 @@ export function transitionTheatre(
     state.transitionStartedAt = requestedAt;
     state.transitionCompletedAt = null;
     state.metrics.requests += 1;
-    resetTransitionMetrics();
+    resetTransitionMetrics(state.metrics);
     commands.push(...targetIntentCommands(state.desired, config, previousDesired));
     trace("intent", "accepted", null, {activity: event.activity, generation});
   }
@@ -670,7 +601,7 @@ export function transitionTheatre(
       state.degraded = [];
       state.transitionStartedAt = requestedAt;
       state.transitionCompletedAt = requestedAt;
-      resetTransitionMetrics();
+      resetTransitionMetrics(state.metrics);
       for (const target of TARGETS) {
         const observation = event.observations[target];
         state.targets[target] = {
