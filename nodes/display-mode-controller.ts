@@ -8,6 +8,7 @@ import type {
   NodeStatusShape
 } from "node-red";
 import {
+  normaliseConfig,
   transitionDisplay,
   type DisplayCommand,
   type DisplayConfig,
@@ -54,22 +55,8 @@ const registerDisplayModeController: NodeInitializer = (RED) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let closed = false;
 
-    const controllerConfig: DisplayConfig = {
-      screenOpenPosition: number(config.screenOpenPosition, 82),
-      screenTolerance: number(config.screenTolerance, 2),
-      pollMs: number(config.pollMs, 2000),
-      queryTimeoutMs: number(config.queryTimeoutMs, 5000),
-      tvTimeoutMs: number(config.tvTimeoutMs, 30000),
-      screenTimeoutMs: number(config.screenTimeoutMs, 65000),
-      projectorWarmupMs: number(config.projectorWarmupMs, 60000),
-      projectorMinimumWarmupMs: number(config.projectorMinimumWarmupMs, 15000),
-      projectorShutdownConfirmMs: number(config.projectorShutdownConfirmMs, 5000),
-      projectorCooldownMs: number(config.projectorCooldownMs, 120000),
-      maxAttempts: number(config.maxAttempts, 2),
-      projectorOnWatts: number(config.projectorOnWatts, 20),
-      projectorOffWatts: number(config.projectorOffWatts, 10),
-      projectorPowerFallback: config.projectorPowerFallback === true
-    };
+    // Defaults and limits come from the reducer's own normalisation.
+    const controllerConfig: DisplayConfig = normaliseConfig(config);
 
     let transport: DisplayTransport;
     try {

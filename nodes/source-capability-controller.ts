@@ -8,13 +8,13 @@ import type {
   NodeStatusShape
 } from "node-red";
 import {
-  normaliseCapabilities,
+  normaliseConfig,
   transitionSource,
   type SourceConfig,
   type SourceMessage,
   type SourceState
 } from "../lib/source-capability-controller";
-import {guarded, invalidConfig, number, objectField, onInput, runReducer, type Send} from "./adapter";
+import {guarded, invalidConfig, objectField, onInput, runReducer, type Send} from "./adapter";
 
 interface SourceControllerConfig extends NodeDef {
   area?: string;
@@ -35,19 +35,14 @@ const registerSourceCapabilityController: NodeInitializer = (RED) => {
     const context = node.context();
     let timer: ReturnType<typeof setTimeout> | undefined;
 
-    let sources: SourceConfig["sources"];
+    let controllerConfig: SourceConfig;
     try {
-      sources = normaliseCapabilities(JSON.parse(config.sources || "{}") as unknown);
+      // Defaults and limits come from the reducer's own normalisation.
+      controllerConfig = normaliseConfig({...config, sources: JSON.parse(config.sources || "{}") as unknown});
     } catch (error) {
       invalidConfig(node, error);
       return;
     }
-    const controllerConfig: SourceConfig = {
-      sources,
-      pollMs: number(config.pollMs, 2000),
-      confirmationTimeoutMs: number(config.confirmationTimeoutMs, 15000),
-      maxAttempts: number(config.maxAttempts, 2)
-    };
 
     function updateStatus(status: SourceStatus) {
       const appearances: Record<string, {fill: NodeStatusFill; shape: NodeStatusShape}> = {

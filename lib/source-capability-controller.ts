@@ -168,7 +168,9 @@ export function normaliseCapabilities(value: unknown): SourceCapabilities {
   return sources;
 }
 
-export function normaliseConfig(config: Partial<SourceConfig> & {sources?: unknown} = {}): SourceConfig {
+// Settings may be editor strings; missing, zero or unusable numbers take
+// defaults.
+export function normaliseConfig(config: {[K in keyof SourceConfig]?: unknown} = {}): SourceConfig {
   return {
     sources: normaliseCapabilities(config.sources),
     pollMs: Math.max(250, Number(config.pollMs) || 2000),
