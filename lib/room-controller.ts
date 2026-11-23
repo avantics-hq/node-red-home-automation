@@ -2,6 +2,7 @@
 
 import {scheduledLighting, type CircadianLighting} from "./circadian";
 import {alreadyStyled} from "./circadian-refresh";
+import {circadianStateMessage, roomLightingDiscovery} from "./room-lighting-discovery";
 import {resolveSchedule} from "./circadian-schedule";
 import type {LightLevels} from "./light-styling";
 
@@ -250,38 +251,6 @@ export function transitionRoom(
     };
   }
 
-  function discoveryMessages(): RoomOutput[] {
-    const objectId = config.area + "_circadian_lighting";
-    return [
-      {
-        topic: "homeassistant/switch/" + objectId + "/config",
-        payload: {
-          name: config.displayName + " Circadian Lighting",
-          unique_id: objectId,
-          default_entity_id: "switch." + objectId,
-          icon: "mdi:clock-time-seven-outline",
-          command_topic: "home/" + config.area + "/circadian/set",
-          state_topic: "home/" + config.area + "/circadian/state",
-          payload_on: "ON",
-          payload_off: "OFF",
-          optimistic: false,
-          device: {
-            identifiers: ["nodered_" + config.area + "_lighting"],
-            name: config.displayName + " Lighting Controller",
-            manufacturer: "Node-RED",
-            model: "Composable circadian lighting"
-          }
-        },
-        retain: true
-      },
-      {
-        topic: "home/" + config.area + "/circadian/state",
-        payload: state.circadianEnabled ? "ON" : "OFF",
-        retain: true
-      }
-    ];
-  }
-
   function refreshCommands(source: string): RoomOutput[] {
     if (!state.circadianEnabled) return [];
     const commands: Array<RoomOutput | null> = [];
@@ -353,7 +322,7 @@ export function transitionRoom(
 
   const event: LightingEvent = msg.lighting || {};
   if (event.kind === "startup") {
-    outputs.push(...discoveryMessages());
+    outputs.push(...roomLightingDiscovery(config.area, config.displayName, state.circadianEnabled));
     for (const target of config.targets) controlChanged.add(target.id);
   } else if (event.kind === "observed") {
     const target = event.target ? targetById[event.target] : targetForTopic(msg.topic, "stateTopic");
@@ -433,11 +402,7 @@ export function transitionRoom(
     if (previous !== state.circadianEnabled) {
       trace("circadian", "changed", null, {enabled: state.circadianEnabled});
     }
-    outputs.push({
-      topic: "home/" + config.area + "/circadian/state",
-      payload: state.circadianEnabled ? "ON" : "OFF",
-      retain: true
-    });
+    outputs.push(circadianStateMessage(config.area, state.circadianEnabled));
     if (state.circadianEnabled) {
       // Enabling circadian takes back manual lights; other owners keep theirs.
       for (const target of config.targets) {
