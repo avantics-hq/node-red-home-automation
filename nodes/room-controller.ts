@@ -11,10 +11,11 @@ import {
 import {scheduledLighting} from "../lib/circadian";
 import {resolveSchedule} from "../lib/circadian-schedule";
 import type {LightLevels} from "../lib/light-styling";
-import {roomStartingOutputs, roomStoppingOutputs} from "../lib/room-lighting-discovery";
+import {publishRoom, roomStartingOutputs, roomStoppingOutputs} from "../lib/room-publishing";
 import {guarded, invalidConfig, whenFlowsStarted, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
 import {booleanSetting, jsonSetting, numberSetting, optionalBooleanSetting, textSetting} from "../lib/settings";
-import {discoveryPrefixSetting, publishingArea} from "../lib/ha-discovery";
+import {discoveryPrefixSetting} from "../lib/ha-discovery";
+import {publishingArea} from "../lib/topic-names";
 
 interface RoomControllerConfig extends NodeDef {
   area?: string;
@@ -116,7 +117,7 @@ const registerRoomController: NodeInitializer = (RED) => {
 
     function process(msg: RoomMessage, send: Send) {
       const result = runReducer(node, {area: controllerConfig.area, component: "room-controller"},
-        (saved: Partial<RoomState> | undefined, now) => transitionRoom(saved, msg, controllerConfig, now));
+        (saved: Partial<RoomState> | undefined, now) => publishRoom(saved, msg, controllerConfig, now));
       if (result.outputs.length) {
         send([result.outputs.map((output) => ({...output, payload: output.payload}))]);
       }

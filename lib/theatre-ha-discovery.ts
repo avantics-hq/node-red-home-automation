@@ -4,7 +4,8 @@
 // on, and the discovery entries that describe them. Home Assistant may send
 // a request on the request topic, which the state contract acts on.
 
-import {DISCOVERY_ORIGIN, areaId} from "./ha-discovery";
+import {DISCOVERY_ORIGIN} from "./ha-discovery";
+import {areaId} from "./topic-names";
 import {TARGETS, type TheatreTarget} from "./theatre-profiles";
 
 export type TheatreTopicName =

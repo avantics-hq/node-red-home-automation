@@ -4,7 +4,8 @@
 // circadian switch and the retained state that entry reads. Home Assistant
 // may send ON/OFF on the command topic, which the room controller acts on.
 
-import {DISCOVERY_ORIGIN, OFFLINE, ONLINE, areaId} from "./ha-discovery";
+import {DISCOVERY_ORIGIN, OFFLINE, ONLINE} from "./ha-discovery";
+import {areaId} from "./topic-names";
 
 export interface DiscoveryMessage {
   topic: string;
@@ -12,36 +13,31 @@ export interface DiscoveryMessage {
   retain: boolean;
 }
 
+// The one place a room topic is named: home/<area ID>/<name>.
+export function roomTopic(area: string, name: string): string {
+  return "home/" + areaId(area) + "/" + name;
+}
+
 export function circadianStateTopic(area: string): string {
-  return "home/" + areaId(area) + "/circadian/state";
+  return roomTopic(area, "circadian/state");
 }
 
 export function circadianCommandTopic(area: string): string {
-  return "home/" + areaId(area) + "/circadian/set";
+  return roomTopic(area, "circadian/set");
 }
 
 // The room's own availability, online or offline, for Home Assistant.
 export function roomAvailabilityTopic(area: string): string {
-  return "home/" + areaId(area) + "/lighting/availability";
+  return roomTopic(area, "lighting/availability");
 }
 
 export function roomAvailabilityMessage(area: string, online: boolean): DiscoveryMessage {
   return {topic: roomAvailabilityTopic(area), payload: online ? ONLINE : OFFLINE, retain: true};
 }
 
-// Whether the room publishes state under its area.
-export function roomPublishesState(config: {area: string; publishState?: boolean}): boolean {
-  return config.area !== "" && config.publishState !== false;
-}
-
-// What the room publishes as it starts and as it stops, when it publishes at
-// all, so Home Assistant shows its entities as available only while it runs.
-export function roomStartingOutputs(config: {area: string; publishState?: boolean}): DiscoveryMessage[] {
-  return roomPublishesState(config) ? [roomAvailabilityMessage(config.area, true)] : [];
-}
-
-export function roomStoppingOutputs(config: {area: string; publishState?: boolean}): DiscoveryMessage[] {
-  return roomPublishesState(config) ? [roomAvailabilityMessage(config.area, false)] : [];
+// A light's control state: in-control, overridden or manual.
+export function roomControlTopic(area: string, targetId: string): string {
+  return roomTopic(area, "lighting/" + targetId + "/control");
 }
 
 // The retained circadian state, as Home Assistant reads it.
