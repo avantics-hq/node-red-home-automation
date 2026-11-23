@@ -4,11 +4,9 @@ import type {
   Node,
   NodeDef,
   NodeInitializer,
-  NodeMessage,
   NodeStatusFill,
   NodeStatusShape
 } from "node-red";
-import {appendTrace} from "../lib/bounded-trace";
 import {
   normaliseActivityProfiles,
   transitionTheatre,
@@ -16,6 +14,7 @@ import {
   type TheatreMessage,
   type TheatreState
 } from "../lib/theatre-activity-controller";
+import {guarded, invalidConfig, number, objectField, onInput, runReducer, type Send} from "./adapter";
 
 interface TheatreActivityNodeConfig extends NodeDef {
   area?: string;
@@ -25,13 +24,7 @@ interface TheatreActivityNodeConfig extends NodeDef {
 }
 
 interface TheatreActivityNode extends Node {}
-type Send = (msg: NodeMessage | Array<NodeMessage | NodeMessage[] | null>) => void;
 type TheatreStatus = ReturnType<typeof transitionTheatre>["status"];
-
-function number(value: unknown, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
 
 const registerTheatreActivityController: NodeInitializer = (RED) => {
   function HomeTheatreActivityController(this: TheatreActivityNode, config: TheatreActivityNodeConfig) {
@@ -44,8 +37,7 @@ const registerTheatreActivityController: NodeInitializer = (RED) => {
     try {
       activityProfiles = normaliseActivityProfiles(JSON.parse(config.activityProfiles || "{}") as unknown);
     } catch (error) {
-      node.status({fill: "red", shape: "ring", text: "invalid configuration"});
-      node.error("invalid configuration: " + (error instanceof Error ? error.message : String(error)));
+      invalidConfig(node, error);
       return;
     }
     const controllerConfig: TheatreConfig = {
@@ -71,14 +63,8 @@ const registerTheatreActivityController: NodeInitializer = (RED) => {
     }
 
     function process(msg: TheatreMessage, send: Send) {
-      const now = new Date();
-      const saved = context.get("state") as Partial<TheatreState> | undefined;
-      const result = transitionTheatre(saved, msg, controllerConfig, now);
-      context.set("state", result.state);
-      appendTrace(context, {
-        area: controllerConfig.area,
-        component: "theatre-activity-controller"
-      }, result.traces, now);
+      const result = runReducer(node, {area: controllerConfig.area, component: "theatre-activity-controller"},
+        (saved: Partial<TheatreState> | undefined, now) => transitionTheatre(saved, msg, controllerConfig, now));
       if (result.commands.length) {
         send([
           result.commands.map((theatreCommand) => ({payload: undefined, theatreCommand})),
@@ -92,37 +78,24 @@ const registerTheatreActivityController: NodeInitializer = (RED) => {
       return result;
     }
 
-    node.on("input", (msg, send, done) => {
+    onInput(node, (msg, send) => {
       // Target controllers' output 2 also carries their own events (such as
       // msg.avr and msg.display) beside target state; only msg.theatre is
       // for this controller.
       if (!msg.theatre || typeof msg.theatre !== "object") {
-        done();
         return;
       }
-      try {
-        process({
-          theatre: msg.theatre && typeof msg.theatre === "object"
-            ? msg.theatre as TheatreMessage["theatre"]
-            : undefined
-        }, send);
-        done();
-      } catch (error) {
-        node.error(error, msg);
-        done(error instanceof Error ? error : new Error(String(error)));
-      }
+      process({
+        theatre: objectField<TheatreMessage["theatre"]>(msg, "theatre")
+      }, send);
     });
 
-    timer = setInterval(() => {
+    timer = setInterval(guarded(node, () => {
       const saved = context.get("state") as Partial<TheatreState> | undefined;
       // Recovering has no desired activity yet but still needs ticks to time out.
       if (!saved?.desired && saved?.phase !== "recovering") return;
-      try {
-        process({theatre: {kind: "tick", generation: saved.generation}}, node.send.bind(node));
-      } catch (error) {
-        node.error(error);
-      }
-    }, Math.max(1000, Math.floor(controllerConfig.freshnessMs / 2)));
+      process({theatre: {kind: "tick", generation: saved.generation}}, node.send.bind(node));
+    }), Math.max(1000, Math.floor(controllerConfig.freshnessMs / 2)));
 
     node.on("close", (_removed: boolean, done: () => void) => {
       clearInterval(timer);

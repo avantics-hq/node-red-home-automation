@@ -4,11 +4,9 @@ import type {
   Node,
   NodeDef,
   NodeInitializer,
-  NodeMessage,
   NodeStatusFill,
   NodeStatusShape
 } from "node-red";
-import {appendTrace} from "../lib/bounded-trace";
 import {
   transitionDisplay,
   type DisplayCommand,
@@ -17,6 +15,7 @@ import {
   type DisplayState
 } from "../lib/display-mode-controller";
 import {DisplayTransport} from "../lib/display-transport";
+import {guarded, number, objectField, onInput, runReducer, type Send} from "./adapter";
 
 interface DisplayControllerConfig extends NodeDef {
   area?: string;
@@ -46,19 +45,12 @@ interface DisplayCredentials {
 
 interface DisplayControllerNode extends Node<DisplayCredentials> {}
 
-type Send = (msg: NodeMessage | Array<NodeMessage | NodeMessage[] | null>) => void;
 type DisplayStatus = ReturnType<typeof transitionDisplay>["status"];
-
-function number(value: unknown, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
 
 const registerDisplayModeController: NodeInitializer = (RED) => {
   function HomeDisplayModeController(this: DisplayControllerNode, config: DisplayControllerConfig) {
     RED.nodes.createNode(this, config);
     const node = this;
-    const context = node.context();
     let timer: ReturnType<typeof setTimeout> | undefined;
     let closed = false;
 
@@ -113,13 +105,9 @@ const registerDisplayModeController: NodeInitializer = (RED) => {
       if (!state.pending?.nextAt) return;
       const delay = Math.max(0, state.pending.nextAt - Date.now());
       const generation = state.desired?.generation || state.generation;
-      timer = setTimeout(() => {
-        try {
-          process({display: {kind: "tick", generation}}, node.send.bind(node));
-        } catch (error) {
-          node.error(error);
-        }
-      }, delay);
+      timer = setTimeout(guarded(node, () => {
+        process({display: {kind: "tick", generation}}, node.send.bind(node));
+      }), delay);
     }
 
     async function dispatch(command: DisplayCommand): Promise<void> {
@@ -135,14 +123,8 @@ const registerDisplayModeController: NodeInitializer = (RED) => {
     }
 
     function process(msg: DisplayMessage, send: Send) {
-      const now = new Date();
-      const saved = context.get("state") as Partial<DisplayState> | undefined;
-      const result = transitionDisplay(saved, msg, controllerConfig, now);
-      context.set("state", result.state);
-      appendTrace(context, {
-        area: config.area || "lounge",
-        component: "display-mode-controller"
-      }, result.traces, now);
+      const result = runReducer(node, {area: config.area || "lounge", component: "display-mode-controller"},
+        (saved: Partial<DisplayState> | undefined, now) => transitionDisplay(saved, msg, controllerConfig, now));
       const outputs = [...result.events, ...result.targetStates];
       if (outputs.length) {
         send([null, outputs.map((event) => ({payload: undefined, ...event}))]);
@@ -155,18 +137,10 @@ const registerDisplayModeController: NodeInitializer = (RED) => {
       return result;
     }
 
-    node.on("input", (msg, send, done) => {
-      try {
-        process({
-          display: msg.display && typeof msg.display === "object"
-            ? msg.display as DisplayMessage["display"]
-            : undefined
-        }, send);
-        done();
-      } catch (error) {
-        node.error(error, msg);
-        done(error instanceof Error ? error : new Error(String(error)));
-      }
+    onInput(node, (msg, send) => {
+      process({
+        display: objectField<DisplayMessage["display"]>(msg, "display")
+      }, send);
     });
 
     node.on("close", (_removed: boolean, done: () => void) => {

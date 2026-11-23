@@ -1,13 +1,13 @@
 "use strict";
 
-import type {Node, NodeDef, NodeInitializer, NodeMessage} from "node-red";
-import {appendTrace} from "../lib/bounded-trace";
+import type {Node, NodeDef, NodeInitializer} from "node-red";
 import {
   transitionOccupancy,
   type OccupancyConfig,
   type OccupancyInput,
   type OccupancyState
 } from "../lib/occupancy-fusion";
+import {onInput, runReducer} from "./adapter";
 
 interface OccupancyFusionConfig extends NodeDef {
   area?: string;
@@ -22,7 +22,6 @@ const registerOccupancyFusion: NodeInitializer = (RED) => {
   function HomeOccupancyFusion(this: OccupancyFusionNode, config: OccupancyFusionConfig) {
     RED.nodes.createNode(this, config);
     const node = this;
-    const context = node.context();
     const fusionConfig: OccupancyConfig & {area: string} = {
       area: config.area || "room",
       presenceMode: config.presenceMode === "hold" ? "hold" : "ignore"
@@ -39,27 +38,15 @@ const registerOccupancyFusion: NodeInitializer = (RED) => {
       });
     }
 
-    node.on("input", (msg, send, done) => {
-      try {
-        const now = new Date();
-        const saved = context.get("state") as Partial<OccupancyState> | undefined;
-        const input: OccupancyInput = {
-          source: String(msg.source ?? ""),
-          payload: msg.payload
-        };
-        const result = transitionOccupancy(saved, input, fusionConfig);
-        context.set("state", result.state);
-        appendTrace(context, {
-          area: fusionConfig.area,
-          component: "occupancy-fusion"
-        }, result.traces, now);
-        for (const output of result.outputs) send({...output, payload: output.payload});
-        updateStatus(result.status);
-        done();
-      } catch (error) {
-        node.error(error, msg);
-        done(error instanceof Error ? error : new Error(String(error)));
-      }
+    onInput(node, (msg, send) => {
+      const input: OccupancyInput = {
+        source: String(msg.source ?? ""),
+        payload: msg.payload
+      };
+      const result = runReducer(node, {area: fusionConfig.area, component: "occupancy-fusion"},
+        (saved: Partial<OccupancyState> | undefined) => transitionOccupancy(saved, input, fusionConfig));
+      for (const output of result.outputs) send({...output, payload: output.payload});
+      updateStatus(result.status);
     });
   }
 

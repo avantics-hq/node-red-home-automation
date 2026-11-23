@@ -1,0 +1,68 @@
+"use strict";
+
+// Plain helpers shared by the Node-RED adapters, so each adapter keeps only
+// what is particular to its node: config, message mapping and outputs.
+
+import type {Node, NodeMessage} from "node-red";
+import {appendTrace, type TraceInput, type TraceMetadata} from "../lib/bounded-trace";
+
+export type Send = (msg: NodeMessage | Array<NodeMessage | NodeMessage[] | null>) => void;
+export type InputMessage = NodeMessage & Record<string, unknown>;
+
+// A configured number, or the fallback when it is missing or not a number.
+export function number(value: unknown, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+// The object a message carries under a key, or undefined.
+export function objectField<T>(msg: InputMessage, key: string): T | undefined {
+  const value = msg[key];
+  return value && typeof value === "object" ? value as T : undefined;
+}
+
+// Handle each input; an error is reported against the message and ends it.
+export function onInput(node: Node, handle: (msg: InputMessage, send: Send) => void): void {
+  node.on("input", (msg, send, done) => {
+    try {
+      handle(msg as InputMessage, send);
+      done();
+    } catch (error) {
+      node.error(error, msg);
+      done(error instanceof Error ? error : new Error(String(error)));
+    }
+  });
+}
+
+// Work run from a timer, with any error reported on the node.
+export function guarded(node: Node, work: () => void): () => void {
+  return () => {
+    try {
+      work();
+    } catch (error) {
+      node.error(error);
+    }
+  };
+}
+
+// Run a reducer on the node's saved state, save the new state and append its
+// traces.
+export function runReducer<Saved, Result extends {state: unknown; traces: TraceInput[]}>(
+  node: Node,
+  trace: TraceMetadata,
+  reduce: (saved: Saved | undefined, now: Date) => Result
+): Result {
+  const context = node.context();
+  const now = new Date();
+  const result = reduce(context.get("state") as Saved | undefined, now);
+  context.set("state", result.state);
+  appendTrace(context, trace, result.traces, now);
+  return result;
+}
+
+// The one badge for a configuration the node cannot use, with the reason in
+// the log.
+export function invalidConfig(node: Node, reason: unknown): void {
+  node.status({fill: "red", shape: "ring", text: "invalid configuration"});
+  node.error("invalid configuration: " + (reason instanceof Error ? reason.message : String(reason)));
+}
