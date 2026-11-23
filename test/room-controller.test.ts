@@ -500,10 +500,10 @@ test("a wake and bed schedule shapes the circadian day", () => {
   const scheduled = {...config, wakeTime: "07:00", bedTime: "23:00"};
   const day = adaptivePayload("ON", false, false, clock(13), scheduled);
   assert.equal(day.brightness, 254);
-  assert.equal(day.color_temp, Math.floor(1_000_000 / scheduled.maxColorTempKelvin));
+  assert.equal(day.color_temp, Math.round(1_000_000 / scheduled.maxColorTempKelvin));
   const night = adaptivePayload("ON", false, false, clock(3), scheduled);
   assert.equal(night.brightness, Math.round(scheduled.sleepBrightnessPct * 254 / 100) || 1);
-  assert.equal(night.color_temp, Math.floor(1_000_000 / scheduled.sleepColorTempKelvin));
+  assert.equal(night.color_temp, Math.round(1_000_000 / scheduled.sleepColorTempKelvin));
   // Sleep mode still overrides the schedule.
   assert.deepEqual(adaptivePayload("ON", false, true, clock(13), scheduled), night);
 });
@@ -552,4 +552,36 @@ test("the room controller has no sun dependency left", () => {
   assert.equal(/suncalc|SunCalc|sunPosition|latitude|longitude/.test(source), false);
   const manifest = JSON.parse(readFileSync(resolve(__dirname, "../../package.json"), "utf8"));
   assert.equal(JSON.stringify(manifest).includes("suncalc"), false);
+});
+
+test("colour moves evenly in mireds with no kelvin rounding", () => {
+  const scheduled = {...config, wakeTime: "07:00", bedTime: "23:00"};
+  const sleepMired = 1_000_000 / scheduled.sleepColorTempKelvin;
+  const dayMired = 1_000_000 / scheduled.maxColorTempKelvin;
+  // Half-way through the rise, the colour is half-way in mireds.
+  assert.equal(adaptivePayload("ON", false, false, clock(7, 30), scheduled).color_temp, Math.round((sleepMired + dayMired) / 2));
+});
+
+test("a refresh skips lights already at their level and re-sends to one that is not", () => {
+  const scheduled = {...config, wakeTime: "07:00", bedTime: "23:00"};
+  const report = (state: Parameters<typeof transitionRoom>[0], level: Record<string, unknown>, at: Date) =>
+    transitionRoom(state, {topic: "home/kitchen/light/group/cooking", payload: {state: "ON", ...level}, lighting: {kind: "observed"}}, scheduled, at);
+  let result = transitionRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, scheduled, clock(13));
+  const sent = payload(result, 0);
+  result = report(result.state, {brightness: sent.brightness, color_temp: sent.color_temp}, clock(13, 0));
+
+  // Flat daytime: the bulb already reports the level, so nothing is sent.
+  const flat = transitionRoom(result.state, {lighting: {kind: "refresh"}}, scheduled, clock(14));
+  assert.equal(flat.outputs.filter((entry) => entry.lighting_command).length, 0);
+  assert.equal(flat.traces.some((entry) => entry.reason === "already-at-level"), true);
+
+  // A bulb that missed a command reports something else and gets it again.
+  const missed = report(result.state, {brightness: 120, color_temp: sent.color_temp}, clock(14));
+  const resent = transitionRoom(missed.state, {lighting: {kind: "refresh"}}, scheduled, clock(14, 1));
+  assert.equal(resent.outputs.filter((entry) => entry.lighting_command).length, 1);
+
+  // During the wind-down the level moves, so the refresh sends.
+  const ramp = transitionRoom(result.state, {lighting: {kind: "refresh"}}, scheduled, clock(21, 30));
+  assert.equal(ramp.outputs.filter((entry) => entry.lighting_command).length, 1);
+  assert.notEqual(payload(ramp, 0).brightness, sent.brightness);
 });

@@ -191,11 +191,14 @@ export function adaptivePayload(
     ? 0
     : scheduleLevel(now, config.wakeTime || DEFAULT_WAKE_TIME, config.bedTime || DEFAULT_BED_TIME);
   const brightnessPct = config.sleepBrightnessPct + (config.maxBrightnessPct - config.sleepBrightnessPct) * level;
-  const kelvin = config.sleepColorTempKelvin + (config.maxColorTempKelvin - config.sleepColorTempKelvin) * level;
+  // Colour moves evenly in mireds, the unit bulbs take: equal mired steps look
+  // evenly spaced, where equal kelvin steps would bunch up at the cool end.
+  const sleepMired = 1_000_000 / config.sleepColorTempKelvin;
+  const dayMired = 1_000_000 / config.maxColorTempKelvin;
   return {
     state: lightState,
     brightness: clamp(Math.round(brightnessPct * 254 / 100), 1, 254),
-    color_temp: Math.floor(1000000 / (5 * Math.round(kelvin / 5))),
+    color_temp: Math.round(sleepMired + (dayMired - sleepMired) * level),
     transition: isRefresh ? config.refreshTransitionSeconds : config.initialTransitionSeconds
   };
 }
@@ -327,11 +330,16 @@ export function transitionRoom(
     const commands: Array<RoomOutput | null> = [];
     for (const target of config.targets) {
       if (!intendedOn(target.id) || controlOf(target.id) !== "in-control") continue;
-      commands.push(command(
-        target.id,
-        adaptivePayload("ON", true, state.sleeping, now, config),
-        source
-      ));
+      const payload = adaptivePayload("ON", true, state.sleeping, now, config);
+      // Nothing to change: the light last reported exactly these levels. A
+      // bulb that missed a command reports something else and is re-sent.
+      const observed = state.observed[target.id];
+      if (observed?.on === true && Number(observed.brightness) === payload.brightness &&
+        Number(observed.color_temp) === payload.color_temp) {
+        trace("refresh", "skipped", "already-at-level", {target: target.id});
+        continue;
+      }
+      commands.push(command(target.id, payload, source));
     }
     return commands.filter((entry): entry is RoomOutput => entry !== null);
   }
