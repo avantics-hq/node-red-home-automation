@@ -234,8 +234,12 @@ function asStateSnapshot(value: unknown): TheatreStateSnapshot {
   return event as TheatreStateSnapshot;
 }
 
-// What the contract publishes as it stops, so Home Assistant shows its
-// entities as unavailable rather than stale.
+// What the contract publishes as it starts and as it stops, so Home Assistant
+// shows its entities as available only while it runs.
+export function theatreStartingPublications(config: TheatreStateContractConfig): ContractPublication[] {
+  return [publication(theatreTopic(config.baseTopic, "availability"), ONLINE)];
+}
+
 export function theatreStoppingPublications(config: TheatreStateContractConfig): ContractPublication[] {
   return [publication(theatreTopic(config.baseTopic, "availability"), OFFLINE)];
 }

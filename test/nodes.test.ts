@@ -68,13 +68,16 @@ type RuntimeConstructor = new (config: Record<string, unknown>) => RuntimeNode;
 function runtime(
   register: NodeInitializer,
   credentials: Record<string, string> = {}
-): {Constructor: RuntimeConstructor} {
+): {Constructor: RuntimeConstructor; events: EventEmitter} {
   let Constructor: RuntimeConstructor | undefined;
   const globalValues = new Map<string, unknown>([["MOTION_ENABLED_STATE", true]]);
   // Shared by every node built from this runtime, as Node-RED keeps a node's
   // memory context across a redeploy.
   const values = new Map<string, unknown>();
+  // Node-RED's runtime events, such as "flows:started" after a deploy.
+  const events = new EventEmitter();
   const RED = {
+    events,
     nodes: {
       createNode(node: RuntimeNode) {
         (node as RuntimeNode & {credentials: Record<string, string>}).credentials = credentials;
@@ -113,7 +116,7 @@ function runtime(
   };
   register(RED as unknown as Parameters<NodeInitializer>[0]);
   assert.ok(Constructor);
-  return {Constructor};
+  return {Constructor, events};
 }
 
 function receive<T>(
@@ -1301,4 +1304,42 @@ test("availability: publishing nodes send a retained offline as they stop", asyn
   const contract = runtime(registerTheatreStateContract).Constructor;
   assert.deepEqual(await sentOnClose(new contract({area: "den", activities: "[\"off\"]", discovery: false})),
     [[null, [{topic: "home/den/theatre/availability", payload: "offline", retain: true}]]]);
+});
+
+test("availability: a node redeployed on its own is available again without a startup message", async (t) => {
+  const availability = (node: RuntimeNode) => JSON.stringify(node.sent).match(/"topic":"[^"]*\/availability","payload":"(online|offline)"/g) ?? [];
+  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
+  const roomRuntime = runtime(registerRoom);
+  const roomConfig = {targets, area: "hall", publishState: true, discovery: true};
+  const before = new roomRuntime.Constructor(roomConfig);
+  await receive(before, {lighting: {kind: "startup"}});
+  await close(before);
+  assert.match(String(availability(before).at(-1)), /offline/);
+  // Node-RED reconstructs the node, then announces the flows started.
+  const after = new roomRuntime.Constructor(roomConfig);
+  t.after(() => close(after));
+  roomRuntime.events.emit("flows:started");
+  assert.deepEqual(after.sent, [[[{topic: "home/hall/lighting/availability", payload: "online", retain: true}]]]);
+  roomRuntime.events.emit("flows:started");
+  assert.equal(after.sent.length, 1, "once per construction");
+
+  const quiet = new roomRuntime.Constructor({targets, area: "hall", publishState: false, discovery: false});
+  t.after(() => close(quiet));
+  const quietRuntime = roomRuntime;
+  quietRuntime.events.emit("flows:started");
+  assert.deepEqual(quiet.sent, [], "a room that publishes nothing announces nothing");
+
+  const contractRuntime = runtime(registerTheatreStateContract);
+  const contract = new contractRuntime.Constructor({area: "lounge", activities: "[\"off\"]"});
+  await close(contract);
+  const again = new contractRuntime.Constructor({area: "lounge", activities: "[\"off\"]"});
+  t.after(() => close(again));
+  contractRuntime.events.emit("flows:started");
+  assert.deepEqual(again.sent, [[null, [{topic: "home/lounge/theatre/availability", payload: "online", retain: true}]]]);
+  // A node closed before the flows start announces nothing.
+  const closedEarly = new contractRuntime.Constructor({area: "den", activities: "[\"off\"]"});
+  await close(closedEarly);
+  const sentBefore = closedEarly.sent.length;
+  contractRuntime.events.emit("flows:started");
+  assert.equal(closedEarly.sent.length, sentBefore);
 });

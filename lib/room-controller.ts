@@ -4,7 +4,7 @@ import type {TraceEntry} from "./bounded-trace";
 import type {CircadianLighting} from "./circadian";
 import {alreadyStyled, lightCommand, readLightReport, setsLightValues, type LightCommand, type LightReport} from "./z2m-light";
 import {areaId} from "./ha-discovery";
-import {circadianCommandTopic, circadianStateMessage, roomAvailabilityMessage, roomLightingDiscovery} from "./room-lighting-discovery";
+import {circadianCommandTopic, circadianStateMessage, roomAvailabilityMessage, roomLightingDiscovery, roomPublishesState} from "./room-lighting-discovery";
 import {checkCommandEcho, checkStateReport, parsePayload, rememberCommand, type ExpectedCommand} from "./command-echo";
 
 export {fingerprint, parsePayload, type ExpectedCommand} from "./command-echo";
@@ -134,17 +134,6 @@ export function adaptivePayload(
     isRefresh ? config.refreshTransitionSeconds : config.initialTransitionSeconds);
 }
 
-// Whether the room publishes state under its area.
-function publishesState(config: RoomConfig): boolean {
-  return config.area !== "" && config.publishState !== false;
-}
-
-// What the room publishes as it stops, when it publishes at all, so Home
-// Assistant shows its entities as unavailable rather than stale.
-export function roomStoppingOutputs(config: RoomConfig): RoomOutput[] {
-  return publishesState(config) ? [roomAvailabilityMessage(config.area, false)] : [];
-}
-
 export function transitionRoom(
   saved: Partial<RoomState> | undefined,
   msg: RoomMessage,
@@ -215,7 +204,7 @@ export function transitionRoom(
   // What the room publishes for MQTT and Home Assistant to see is named after
   // its area, so it needs one, and is switched on by its settings; light
   // control depends on neither.
-  const publishesArea = publishesState(config);
+  const publishesArea = roomPublishesState(config);
   const publishesDiscovery = publishesArea && config.discovery !== false;
 
   function refreshCommands(source: string): RoomOutput[] {

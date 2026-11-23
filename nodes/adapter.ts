@@ -3,7 +3,7 @@
 // Plain helpers shared by the Node-RED adapters, so each adapter keeps only
 // what is particular to its node: config, message mapping and outputs.
 
-import type {Node, NodeMessage} from "node-red";
+import type {Node, NodeAPI, NodeMessage} from "node-red";
 import {appendTrace, type TraceInput, type TraceMetadata} from "../lib/bounded-trace";
 
 export type Send = (msg: NodeMessage | Array<NodeMessage | NodeMessage[] | null>) => void;
@@ -65,4 +65,16 @@ export function optionalArea(config: {area?: unknown}): string {
 export function invalidConfig(node: Node, reason: unknown): void {
   node.status({fill: "red", shape: "ring", text: "invalid configuration"});
   node.error("invalid configuration: " + (reason instanceof Error ? reason.message : String(reason)));
+}
+
+// Runs once every flow has started, when the node's outputs reach the nodes
+// wired to them: Node-RED creates a flow's nodes one at a time, so a send
+// from a constructor may find the next node not there yet. Stops waiting if
+// the node closes first.
+export function whenFlowsStarted(RED: NodeAPI, node: Node, action: () => void): void {
+  const run = guarded(node, action);
+  RED.events.once("flows:started", run);
+  node.on("close", () => {
+    RED.events.removeListener("flows:started", run);
+  });
 }

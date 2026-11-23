@@ -29,6 +29,21 @@ export function roomAvailabilityMessage(area: string, online: boolean): Discover
   return {topic: roomAvailabilityTopic(area), payload: online ? ONLINE : OFFLINE, retain: true};
 }
 
+// Whether the room publishes state under its area.
+export function roomPublishesState(config: {area: string; publishState?: boolean}): boolean {
+  return config.area !== "" && config.publishState !== false;
+}
+
+// What the room publishes as it starts and as it stops, when it publishes at
+// all, so Home Assistant shows its entities as available only while it runs.
+export function roomStartingOutputs(config: {area: string; publishState?: boolean}): DiscoveryMessage[] {
+  return roomPublishesState(config) ? [roomAvailabilityMessage(config.area, true)] : [];
+}
+
+export function roomStoppingOutputs(config: {area: string; publishState?: boolean}): DiscoveryMessage[] {
+  return roomPublishesState(config) ? [roomAvailabilityMessage(config.area, false)] : [];
+}
+
 // The retained circadian state, as Home Assistant reads it.
 export function circadianStateMessage(area: string, enabled: boolean): DiscoveryMessage {
   return {topic: circadianStateTopic(area), payload: enabled ? "ON" : "OFF", retain: true};
