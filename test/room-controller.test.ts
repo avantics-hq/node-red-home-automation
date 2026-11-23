@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {transitionSwitchPolicy} from "../lib/switch-policy";
 import {
+  DEFAULT_BED_TIME,
+  DEFAULT_WAKE_TIME,
   adaptivePayload,
   scheduleLevel,
   transitionRoom,
@@ -18,11 +20,7 @@ const config: RoomConfig = {
     {id: "cooking", stateTopic: "home/kitchen/light/group/cooking", commandTopic: "home/kitchen/light/group/cooking/set"},
     {id: "dining", stateTopic: "home/kitchen/light/group/dining", commandTopic: "home/kitchen/light/group/dining/set"}
   ],
-  latitude: 51.5074,
-  longitude: -0.1278,
-  minBrightnessPct: 1,
   maxBrightnessPct: 100,
-  minColorTempKelvin: 2000,
   maxColorTempKelvin: 5500,
   sleepBrightnessPct: 1,
   sleepColorTempKelvin: 1000,
@@ -30,7 +28,8 @@ const config: RoomConfig = {
   refreshTransitionSeconds: 45,
   initialSleep: false
 };
-const now = new Date("2026-06-21T12:00:00Z");
+// Local noon, so the default schedule is in its daytime in any timezone.
+const now = new Date(2026, 5, 21, 12, 0);
 
 function output(result: ReturnType<typeof transitionRoom>, index: number): RoomOutput {
   const entry = result.outputs[index];
@@ -530,4 +529,27 @@ test("the room controller styles lights from the schedule", () => {
   assert.equal(payload(result, 0).brightness, 128);
   result = transitionRoom(result.state, {lighting: {kind: "refresh"}}, scheduled, clock(23, 30));
   assert.equal(payload(result, 0).brightness, Math.round(scheduled.sleepBrightnessPct * 254 / 100) || 1);
+});
+
+test("without wake and bed times the default schedule applies", () => {
+  for (const [hours, minutes] of [[3, 0], [7, 30], [13, 0], [21, 30], [23, 30]] as const) {
+    const at = clock(hours, minutes);
+    assert.deepEqual(
+      adaptivePayload("ON", false, false, at, config),
+      adaptivePayload("ON", false, false, at, {...config, wakeTime: DEFAULT_WAKE_TIME, bedTime: DEFAULT_BED_TIME}),
+      `${hours}:${minutes}`
+    );
+  }
+  assert.equal(DEFAULT_WAKE_TIME, "07:00");
+  assert.equal(DEFAULT_BED_TIME, "23:00");
+  assert.equal(adaptivePayload("ON", false, false, clock(13), config).brightness, 254);
+});
+
+test("the room controller has no sun dependency left", () => {
+  const {readFileSync} = require("node:fs") as typeof import("node:fs");
+  const {resolve} = require("node:path") as typeof import("node:path");
+  const source = readFileSync(resolve(__dirname, "../../lib/room-controller.ts"), "utf8");
+  assert.equal(/suncalc|SunCalc|sunPosition|latitude|longitude/.test(source), false);
+  const manifest = JSON.parse(readFileSync(resolve(__dirname, "../../package.json"), "utf8"));
+  assert.equal(JSON.stringify(manifest).includes("suncalc"), false);
 });

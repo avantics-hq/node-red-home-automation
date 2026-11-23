@@ -1,16 +1,5 @@
 "use strict";
 
-interface SunCalcApi {
-  getTimes(date: Date, latitude: number, longitude: number): {
-    sunrise: Date;
-    solarNoon: Date;
-    sunset: Date;
-    nadir: Date;
-  };
-}
-
-const SunCalc: SunCalcApi = require("suncalc");
-
 export interface RoomTarget {
   id: string;
   stateTopic: string;
@@ -22,18 +11,14 @@ export interface RoomConfig {
   displayName: string;
   targets: RoomTarget[];
   initialSleep: boolean;
-  latitude: number;
-  longitude: number;
   sleepBrightnessPct: number;
   maxBrightnessPct: number;
-  minBrightnessPct: number;
   sleepColorTempKelvin: number;
-  minColorTempKelvin: number;
   maxColorTempKelvin: number;
   refreshTransitionSeconds: number;
   initialTransitionSeconds: number;
-  // Optional daily schedule, as "HH:MM" in the Node-RED host's local time.
-  // When both are set, circadian levels follow it instead of the sun.
+  // The daily schedule, as "HH:MM" in the Node-RED host's local time;
+  // DEFAULT_WAKE_TIME and DEFAULT_BED_TIME when unset.
   wakeTime?: string;
   bedTime?: string;
 }
@@ -150,47 +135,14 @@ export function createRoomState(
   };
 }
 
-// The sun-position curve below and the brightness and colour-temperature rules
-// in adaptivePayload are adapted (ported to TypeScript and modified) from
-// Adaptive Lighting by basnijholt, https://github.com/basnijholt/adaptive-lighting
-// (custom_components/adaptive_lighting/color_and_brightness.py), licensed under
-// Apache-2.0; see THIRD-PARTY-NOTICES.md. They are due to be replaced by an
-// original implementation.
-export function sunPosition(now: Date, config: Pick<RoomConfig, "latitude" | "longitude">): number {
-  const events: Array<{name: string; at: number}> = [];
-  for (const dayOffset of [-1, 0, 1]) {
-    const date = new Date(now);
-    date.setHours(12, 0, 0, 0);
-    date.setDate(date.getDate() + dayOffset);
-    const times = SunCalc.getTimes(date, config.latitude, config.longitude);
-    for (const [name, at] of [
-      ["sunrise", times.sunrise],
-      ["noon", times.solarNoon],
-      ["sunset", times.sunset],
-      ["midnight", times.nadir]
-    ] as const) {
-      if (at instanceof Date && Number.isFinite(at.getTime())) events.push({name, at: at.getTime()});
-    }
-  }
-  events.sort((left, right) => left.at - right.at);
-  const target = now.getTime();
-  const nextIndex = events.findIndex((event) => event.at > target);
-  if (nextIndex < 1) throw new Error("cannot bracket the current solar event");
-  const previous = events[nextIndex - 1];
-  const next = events[nextIndex];
-  if (!previous || !next) throw new Error("cannot bracket the current solar event");
-  const nextIsHorizon = next.name === "sunrise" || next.name === "sunset";
-  const h = nextIsHorizon ? previous.at : next.at;
-  const x = nextIsHorizon ? next.at : previous.at;
-  const sign = next.name === "sunset" || next.name === "noon" ? 1 : -1;
-  return clamp(sign * (1 - Math.pow((target - h) / (h - x), 2)), -1, 1);
-}
-
 // After waking, light rises to the daytime level over this long; before bed it
 // winds down to the sleep settings over the three hours that evidence on
 // evening light exposure points to (Brown et al. 2022, PLOS Biology).
 export const WAKE_RISE_MINUTES = 60;
 export const WIND_DOWN_MINUTES = 180;
+// A conventional day, used until a room is given its own times.
+export const DEFAULT_WAKE_TIME = "07:00";
+export const DEFAULT_BED_TIME = "23:00";
 
 const CLOCK_TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -225,8 +177,6 @@ export function scheduleLevel(now: Date, wakeTime: string, bedTime: string): num
   return 1;
 }
 
-// Brightness and colour-temperature rules adapted from Adaptive Lighting
-// (Apache-2.0); see the note above sunPosition.
 export function adaptivePayload(
   lightState: string,
   isRefresh: boolean,
@@ -235,34 +185,17 @@ export function adaptivePayload(
   config: RoomConfig
 ) {
   if (lightState === "OFF") return {state: lightState};
-  if (config.wakeTime && config.bedTime) {
-    // Between the sleep settings (level 0) and the brightest, coolest daytime
-    // settings (level 1).
-    const level = sleeping ? 0 : scheduleLevel(now, config.wakeTime, config.bedTime);
-    const brightnessPct = config.sleepBrightnessPct + (config.maxBrightnessPct - config.sleepBrightnessPct) * level;
-    const kelvin = config.sleepColorTempKelvin + (config.maxColorTempKelvin - config.sleepColorTempKelvin) * level;
-    return {
-      state: lightState,
-      brightness: clamp(Math.round(brightnessPct * 254 / 100), 1, 254),
-      color_temp: Math.floor(1000000 / (5 * Math.round(kelvin / 5))),
-      transition: isRefresh ? config.refreshTransitionSeconds : config.initialTransitionSeconds
-    };
-  }
-  const position = sunPosition(now, config);
-  const brightnessPct = sleeping
-    ? config.sleepBrightnessPct
-    : position > 0
-      ? config.maxBrightnessPct
-      : (config.maxBrightnessPct - config.minBrightnessPct) * (1 + position) + config.minBrightnessPct;
-  const kelvin = sleeping
-    ? config.sleepColorTempKelvin
-    : position > 0
-      ? 5 * Math.round((config.minColorTempKelvin + (config.maxColorTempKelvin - config.minColorTempKelvin) * position) / 5)
-      : config.minColorTempKelvin;
+  // Between the sleep settings (level 0) and the brightest, coolest daytime
+  // settings (level 1).
+  const level = sleeping
+    ? 0
+    : scheduleLevel(now, config.wakeTime || DEFAULT_WAKE_TIME, config.bedTime || DEFAULT_BED_TIME);
+  const brightnessPct = config.sleepBrightnessPct + (config.maxBrightnessPct - config.sleepBrightnessPct) * level;
+  const kelvin = config.sleepColorTempKelvin + (config.maxColorTempKelvin - config.sleepColorTempKelvin) * level;
   return {
     state: lightState,
     brightness: clamp(Math.round(brightnessPct * 254 / 100), 1, 254),
-    color_temp: Math.floor(1000000 / kelvin),
+    color_temp: Math.floor(1000000 / (5 * Math.round(kelvin / 5))),
     transition: isRefresh ? config.refreshTransitionSeconds : config.initialTransitionSeconds
   };
 }
@@ -366,7 +299,7 @@ export function transitionRoom(
           name: config.displayName + " Circadian Lighting",
           unique_id: objectId,
           default_entity_id: "switch." + objectId,
-          icon: "mdi:theme-light-dark",
+          icon: "mdi:clock-time-seven-outline",
           command_topic: "home/" + config.area + "/circadian/set",
           state_topic: "home/" + config.area + "/circadian/state",
           payload_on: "ON",

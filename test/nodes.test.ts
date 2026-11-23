@@ -263,15 +263,28 @@ test("room adapter publishes startup messages and standard traces", async (t) =>
   assert.equal(node.errors.length, 0);
 });
 
-test("room adapter requires deployment coordinates", () => {
+test("room adapter deploys a saved configuration from before schedules, ignoring coordinates", async (t) => {
+  // Saved by 2.2.x: latitude, longitude and the minimum settings, no times.
   const {Constructor} = runtime(registerRoom);
   const node = new Constructor({
     area: "room",
     displayName: "Room",
-    targets: "[]"
+    targets: "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]",
+    latitude: 51.5074,
+    longitude: -0.1278,
+    minBrightnessPct: 1,
+    minColorTempKelvin: 2000
   });
-
-  assert.match(String(node.errors[0]), /latitude is required/);
+  t.after(() => close(node));
+  assert.deepEqual(node.errors, []);
+  assert.notEqual((node.statuses.at(-1) as {text?: string} | undefined)?.text, "invalid configuration");
+  // It commands the light; the default schedule's values are tested in the reducer.
+  const sent = await receive<Array<Array<{payload?: Record<string, unknown>; topic?: string}>>>(node, {
+    lighting: {kind: "intent", targets: ["main"], state: "ON", source: "motion"}
+  });
+  const command = sent.flat(2).find((message) => message.topic === "room/light/main/set");
+  assert.equal(command?.payload?.state, "ON");
+  assert.equal(typeof command?.payload?.brightness, "number");
 });
 
 test("AVR adapter emits protocol commands and bounded traces", async (t) => {
@@ -832,7 +845,7 @@ test("wired contract and activity controller never lose a request to a recovery 
 test("room adapter rejects an unusable wake and bed schedule at deploy", () => {
   for (const [label, times, reason] of [
     ["not a time", {wakeTime: "7am", bedTime: "23:00"}, /HH:MM/],
-    ["only one set", {wakeTime: "07:00", bedTime: ""}, /HH:MM/],
+    ["a blank wake time defaults to 07:00, the same as bed", {wakeTime: "", bedTime: "07:00"}, /differ/],
     ["the same time", {wakeTime: "07:00", bedTime: "07:00"}, /differ/]
   ] as const) {
     const {Constructor} = runtime(registerRoom);
