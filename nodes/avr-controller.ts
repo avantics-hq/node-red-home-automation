@@ -64,9 +64,10 @@ const registerAvrController: NodeInitializer = (RED) => {
         maxVolume: number(config.maxVolume, 60)
       });
     } catch (error) {
+      // A short badge; the full reason goes to the log and debug sidebar.
       const reason = error instanceof Error ? error.message : String(error);
-      node.status({fill: "red", shape: "ring", text: "invalid configuration: " + reason});
-      node.error(error);
+      node.status({fill: "red", shape: "ring", text: "invalid configuration"});
+      node.error("invalid configuration: " + reason);
       return;
     }
 

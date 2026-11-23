@@ -844,8 +844,8 @@ test("AVR adapter rejects a configuration the reducer would reject, at deploy", 
     });
     const status = node.statuses.at(-1) as {fill?: string; text?: string} | undefined;
     assert.equal(status?.fill, "red", label);
-    assert.match(String(status?.text), /^invalid configuration: /, label);
-    assert.match(String(status?.text), reason, label);
+    assert.equal(status?.text, "invalid configuration", label);
+    assert.match(String(node.errors[0]), /^invalid configuration: /, label);
     assert.match(String(node.errors[0]), reason, label);
     // Inert: no input handler was registered.
     assert.equal(node.emit("input", {avr: {kind: "startup"}}, () => {}, () => {}), false, label);
