@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import {transitionMotion} from "../lib/motion-policy";
 import {transitionSwitchPolicy} from "../lib/switch-policy";
 import {scheduledLighting} from "../lib/circadian";
 import {DEFAULT_BED_TIME, DEFAULT_WAKE_TIME, resolveSchedule, scheduleLevel} from "../lib/circadian-schedule";
@@ -10,7 +11,8 @@ import {
   adaptivePayload,
   transitionRoom,
   type RoomConfig,
-  type RoomOutput
+  type RoomOutput,
+  type RoomState
 } from "../lib/room-controller";
 
 const levels: LightLevels = {
@@ -590,4 +592,48 @@ test("a refresh skips lights already at their level and re-sends to one that is 
   const ramp = transitionRoom(result.state, {lighting: {kind: "refresh"}}, scheduled, clock(21, 30));
   assert.equal(ramp.outputs.filter((entry) => entry.lighting_command).length, 1);
   assert.notEqual(payload(ramp, 0).brightness, sent.brightness);
+});
+
+test("motion does not switch off a light a person set after the room went vacant", () => {
+  // The old scenario, end to end: the light is on, the room goes vacant, a
+  // person double-presses the wall switch, then the vacancy timer fires.
+  const motionConfig = {onTargets: ["cooking"], offTargets: ["cooking"], defaultDelaySeconds: 30, defaultIlluminanceCutoff: 150};
+  const switchConfig = {targets: ["cooking"], switchWindowMs: 500, switchFreshnessMs: 60000};
+  const at = (seconds: number) => new Date(now.getTime() + seconds * 1000);
+  const motionAt = (seconds: number) => at(seconds).getTime();
+  const intents = (effects: Array<{kind: string; message?: {lighting: Record<string, unknown>}}>) =>
+    effects.filter((effect) => effect.kind === "send").map((effect) => effect.message!.lighting);
+  const room = (state: RoomState | undefined, lighting: Record<string, unknown>, seconds: number) =>
+    transitionRoom(state, {lighting}, config, at(seconds));
+  const sentOff = (result: ReturnType<typeof transitionRoom>) =>
+    result.outputs.some((entry) => entry.lighting_command && (entry.payload as {state?: string}).state === "OFF");
+
+  let roomResult = room(undefined, {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}, 0);
+  let motion = transitionMotion(undefined, {source: "occupancy", payload: {occupied: false}}, motionConfig, true, motionAt(10));
+  const edge = transitionSwitchPolicy(undefined, {source: "switch", payload: {state: true}}, switchConfig, motionAt(20));
+  const double = transitionSwitchPolicy(edge.state, {source: "switch", payload: {state: false}}, switchConfig, motionAt(20.2));
+  for (const lighting of intents(double.effects as never)) roomResult = room(roomResult.state as RoomState, lighting, 20.2);
+  motion = transitionMotion(motion.state, {source: "off-timer", generation: motion.state.offTimerGeneration}, motionConfig, true, motionAt(40));
+  const off = intents(motion.effects as never)[0]!;
+  assert.equal(off.vacantSince, at(10).toISOString());
+  const afterVacancy = room(roomResult.state as RoomState, off, 40);
+  assert.equal(sentOff(afterVacancy), false, "the person's light stays on");
+  assert.equal(afterVacancy.traces.some((entry) => entry.reason === "person-set-after-vacancy"), true);
+  assert.equal(afterVacancy.state.desired.cooking, true);
+
+  // A person's change before the room went vacant is not protected: the
+  // vacancy that follows switches the light off, as before.
+  const earlier = room(roomResult.state as RoomState, {...off, vacantSince: at(30).toISOString()}, 60);
+  assert.equal(sentOff(earlier), true);
+  // Nor is a light nobody touched.
+  const untouched = room(undefined, {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}, 0);
+  assert.equal(sentOff(room(untouched.state, off, 40)), true);
+});
+
+test("someone else's command counts as a person's change for the vacancy rule", () => {
+  const at = (seconds: number) => new Date(now.getTime() + seconds * 1000);
+  let result = transitionRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, at(0));
+  result = transitionRoom(result.state, {topic: "home/kitchen/light/group/cooking/set", payload: {state: "ON", brightness: 40}, lighting: {kind: "command-observed"}}, config, at(20));
+  const off = transitionRoom(result.state, {lighting: {kind: "intent", targets: ["cooking"], state: "OFF", source: "motion", vacantSince: at(10).toISOString()}}, config, at(40));
+  assert.equal(off.outputs.some((entry) => entry.lighting_command), false);
 });

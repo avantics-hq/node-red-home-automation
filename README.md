@@ -35,7 +35,9 @@ The nodes come in three groups. Each group has an importable example flow
 
 Motion, presence, illuminance and wall switches drive one room's lights, with
 circadian styling and manual ownership. Wire occupancy fusion into the motion
-policy, and the motion and switch policies into the room controller. Circadian
+policy, wall switches into the switch policy, and both policies into the room
+controller. The room controller keeps a light a person set after the room went
+vacant, so motion doesn't switch it straight off. Circadian
 levels follow the room controller's wake and bed times (default 07:00 and
 23:00): they rise over the hour after waking, stay bright and cool through the
 day, and wind down to the sleep settings over the three hours before bed. Times
@@ -45,7 +47,7 @@ Example: [`Room lighting.json`](https://github.com/avantics-hq/node-red-home-aut
 | Node | Purpose |
 |---|---|
 | `home-occupancy-fusion` | Combines PIR motion with optional presence sensing. |
-| `home-motion-lighting-policy` | Converts occupancy and illuminance into lighting intent with observable wall-input baselines. |
+| `home-motion-lighting-policy` | Converts occupancy and illuminance into lighting intent. |
 | `home-switch-lighting-policy` | Converts raw edges or pre-classified button actions into lighting intent while exposing input freshness and availability. |
 | `home-room-lighting-controller` | Owns the room's light commands, adaptive styling, manual and held lights, and lighting state. |
 
@@ -195,7 +197,7 @@ or a newer owner who takes it over), a person (`manual: true`, an external
 command on the command topic, or a change seen at the light), or a release.
 Other intents, such as motion ON or OFF and owner-less values, leave it alone
 and are traced as `ignored held-by`; their other targets are still handled.
-The package's wall-switch policies mark presses with `person: true`. Owner-less
+The switch policy marks presses with `person: true`. Owner-less
 intents, with or without values, reach a held light only with `manual: true` or
 `person: true`; a flow acting for a person, such as a dashboard, sets one.
 Switching a light off by its owner or a person returns it to `in-control`. On startup

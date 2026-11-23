@@ -142,8 +142,6 @@
     "offTargets": "[\"main\"]",
     "defaultDelaySeconds": 120,
     "defaultIlluminanceCutoff": 10,
-    "switchWindowMs": 500,
-    "switchFreshnessSeconds": 3600,
     "x": 620,
     "y": 140,
     "wires": [

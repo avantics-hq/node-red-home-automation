@@ -14,9 +14,7 @@ const config: MotionConfig & {area: string} = {
   onTargets: ["cooking", "dining"],
   offTargets: ["cooking", "dining", "cabinets"],
   defaultDelaySeconds: 30,
-  defaultIlluminanceCutoff: 150,
-  switchWindowMs: 500,
-  switchFreshnessMs: 60_000
+  defaultIlluminanceCutoff: 150
 };
 
 function sendEffects(result: ReturnType<typeof transitionMotion>): LightingIntent[] {
@@ -86,74 +84,32 @@ test("only the newest vacancy timer may emit OFF", () => {
   assert.equal(sendEffects(current)[0]?.lighting.state, "OFF");
 });
 
-test("retained switch startup is inert, single edge toggles and double edge is full brightness", () => {
-  const retained = transitionMotion(undefined, {
-    source: "switch",
-    payload: {state: false},
-    retain: true
-  }, config, true, 1000);
-  assert.equal(retained.effects.some((effect) => effect.kind === "schedule-switch-timer"), false);
-
-  const edge = transitionMotion(retained.state, {
-    source: "switch",
-    payload: {state: true}
-  }, config, true, 2000);
-  const timer = edge.effects.find(
-    (effect): effect is Extract<MotionEffect, {kind: "schedule-switch-timer"}> =>
-      effect.kind === "schedule-switch-timer"
-  );
-  assert.ok(timer);
-  const single = transitionMotion(edge.state, {
-    source: "switch-timer",
-    generation: timer.generation,
-    switchAt: timer.switchAt
-  }, config, true, 2500);
-  assert.equal(sendEffects(single)[0]?.lighting.state, "TOGGLE");
-  assert.equal(sendEffects(single)[0]?.lighting.person, true);
-
-  const first = transitionMotion(single.state, {
-    source: "switch",
-    payload: {state: false}
-  }, config, true, 3000);
-  const second = transitionMotion(first.state, {
-    source: "switch",
-    payload: {state: true}
-  }, config, true, 3200);
-  assert.deepEqual(sendEffects(second)[0]?.lighting.values, {brightness: 254});
-  assert.equal(sendEffects(second)[0]?.lighting.manual, true);
-  assert.equal(sendEffects(second)[0]?.lighting.person, true);
+test("wall switches belong to the switch policy: motion ignores them and says so", () => {
+  for (const source of ["switch", "switch-startup", "switch-availability", "switch-timer"]) {
+    const result = transitionMotion(undefined, {source, payload: {state: true}}, config, true, 1000);
+    assert.deepEqual(result.effects, [], source);
+    assert.deepEqual(result.traces.map(({outcome, reason}) => [outcome, reason]), [["ignored", "wall switches belong to the switch policy"]], source);
+  }
 });
 
-test("retained switch state re-baselines persisted motion policy state", () => {
-  const baseline = transitionMotion(undefined, {
-    source: "switch",
-    payload: {state: false},
-    retain: true
-  }, config, true, 1000);
-  const edge = transitionMotion(baseline.state, {
-    source: "switch",
-    payload: {state: true}
-  }, config, true, 2000);
-  const timer = edge.effects.find(
-    (effect): effect is Extract<MotionEffect, {kind: "schedule-switch-timer"}> =>
-      effect.kind === "schedule-switch-timer"
-  );
-  assert.ok(timer);
+test("saved wall-switch state from earlier versions loads and is ignored", () => {
+  const saved = {
+    areaEnabled: true, illuminance: 12, illuminanceCutoff: 150, delaySeconds: 30, offTimerGeneration: 2, offTimerDueAt: null,
+    wallInput: {baselineKnown: true, value: true, generation: 4, edgeAt: 900, timerDueAt: 1400},
+    switchStateKnown: true, switchState: true
+  };
+  const result = transitionMotion(saved as never, {source: "occupancy", payload: {occupied: true, trigger: "motion"}}, config, true, 2000);
+  assert.equal(Object.hasOwn(result.state, "wallInput"), false);
+  assert.equal(sendEffects(result)[0]?.lighting.state, "ON");
+});
 
-  const replay = transitionMotion(edge.state, {
-    source: "switch",
-    payload: {state: false},
-    retain: true
-  }, config, true, 2100);
-  assert.equal(sendEffects(replay).length, 0);
-  assert.equal(replay.effects.some((effect) => effect.kind === "cancel-switch-timer"), true);
-
-  const stale = transitionMotion(replay.state, {
-    source: "switch-timer",
-    generation: timer.generation,
-    switchAt: timer.switchAt
-  }, config, true, 2500);
-  assert.equal(sendEffects(stale).length, 0);
+test("the vacancy OFF says when the room went vacant", () => {
+  let result = transitionMotion(undefined, {source: "occupancy", payload: {occupied: false}}, config, true, 5000);
+  const generation = result.state.offTimerGeneration;
+  result = transitionMotion(result.state, {source: "off-timer", generation}, config, true, 35000);
+  const off = sendEffects(result)[0]!;
+  assert.equal(off.lighting.state, "OFF");
+  assert.equal(off.lighting.vacantSince, new Date(5000).toISOString());
 });
 
 function scheduled(result: ReturnType<typeof transitionMotion>) {
