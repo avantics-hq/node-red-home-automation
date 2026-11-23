@@ -13,14 +13,12 @@ export function run() {
       commandTopic: "demo/lighting/ceiling/set"
     }],
     initialSleep: false,
-    latitude: 0,
-    longitude: 0,
     sleepBrightnessPct: 5,
     maxBrightnessPct: 100,
-    minBrightnessPct: 10,
     sleepColorTempKelvin: 1800,
-    minColorTempKelvin: 2200,
     maxColorTempKelvin: 5000,
+    wakeTime: "07:00",
+    bedTime: "23:00",
     refreshTransitionSeconds: 30,
     initialTransitionSeconds: 1
   };
@@ -49,7 +47,7 @@ export function run() {
     configuration: {
       area: configuration.area,
       targets: configuration.targets.map(({id}) => id),
-      solarCoordinates: "deployment-supplied"
+      schedule: {wakeTime: configuration.wakeTime, bedTime: configuration.bedTime}
     },
     inputs: [input],
     outputs,

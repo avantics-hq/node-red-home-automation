@@ -7,18 +7,16 @@
       area: {value: "room", required: true},
       displayName: {value: "Room", required: true},
       targets: {value: "[]", required: true},
-      latitude: {value: "", required: true, validate: RED.validators.number()},
-      longitude: {value: "", required: true, validate: RED.validators.number()},
-      minBrightnessPct: {value: 1, required: true, validate: RED.validators.number()},
       maxBrightnessPct: {value: 100, required: true, validate: RED.validators.number()},
-      minColorTempKelvin: {value: 2000, required: true, validate: RED.validators.number()},
-      maxColorTempKelvin: {value: 5500, required: true, validate: RED.validators.number()},
+      maxColorTempKelvin: {value: 6500, required: true, validate: RED.validators.number()},
       sleepBrightnessPct: {value: 1, required: true, validate: RED.validators.number()},
-      sleepColorTempKelvin: {value: 1000, required: true, validate: RED.validators.number()},
+      sleepColorTempKelvin: {value: 2200, required: true, validate: RED.validators.number()},
       initialTransitionSeconds: {value: 1, required: true, validate: RED.validators.number()},
-      refreshTransitionSeconds: {value: 45, required: true, validate: RED.validators.number()},
-      refreshSeconds: {value: 90, required: true, validate: RED.validators.number()},
-      initialSleep: {value: false}
+      refreshTransitionSeconds: {value: 60, required: true, validate: RED.validators.number()},
+      refreshSeconds: {value: 60, required: true, validate: RED.validators.number()},
+      initialSleep: {value: false},
+      wakeTime: {value: "07:00", required: true, validate: function (v) { return /^([01]\d|2[0-3]):[0-5]\d$/.test(v); }},
+      bedTime: {value: "23:00", required: true, validate: function (v) { return /^([01]\d|2[0-3]):[0-5]\d$/.test(v); }}
     },
     inputs: 1,
     outputs: 1,
@@ -32,22 +30,28 @@
   <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area"></div>
   <div class="form-row"><label for="node-input-displayName">Display name</label><input type="text" id="node-input-displayName"></div>
   <div class="form-row"><label for="node-input-targets">Targets JSON</label><input type="text" id="node-input-targets"></div>
-  <div class="form-row"><label for="node-input-latitude">Latitude</label><input type="number" step="any" id="node-input-latitude"></div>
-  <div class="form-row"><label for="node-input-longitude">Longitude</label><input type="number" step="any" id="node-input-longitude"></div>
-  <div class="form-row"><label for="node-input-minBrightnessPct">Minimum brightness %</label><input type="number" id="node-input-minBrightnessPct"></div>
-  <div class="form-row"><label for="node-input-maxBrightnessPct">Maximum brightness %</label><input type="number" id="node-input-maxBrightnessPct"></div>
-  <div class="form-row"><label for="node-input-minColorTempKelvin">Minimum kelvin</label><input type="number" id="node-input-minColorTempKelvin"></div>
-  <div class="form-row"><label for="node-input-maxColorTempKelvin">Maximum kelvin</label><input type="number" id="node-input-maxColorTempKelvin"></div>
+  <div class="form-row"><label for="node-input-maxBrightnessPct">Daytime brightness %</label><input type="number" id="node-input-maxBrightnessPct"></div>
+  <div class="form-row"><label for="node-input-maxColorTempKelvin">Daytime kelvin</label><input type="number" id="node-input-maxColorTempKelvin"></div>
   <div class="form-row"><label for="node-input-sleepBrightnessPct">Sleep brightness %</label><input type="number" id="node-input-sleepBrightnessPct"></div>
   <div class="form-row"><label for="node-input-sleepColorTempKelvin">Sleep kelvin</label><input type="number" id="node-input-sleepColorTempKelvin"></div>
   <div class="form-row"><label for="node-input-initialTransitionSeconds">Initial transition seconds</label><input type="number" id="node-input-initialTransitionSeconds"></div>
   <div class="form-row"><label for="node-input-refreshTransitionSeconds">Refresh transition seconds</label><input type="number" id="node-input-refreshTransitionSeconds"></div>
   <div class="form-row"><label for="node-input-refreshSeconds">Refresh interval seconds</label><input type="number" id="node-input-refreshSeconds"></div>
+  <div class="form-row"><label for="node-input-wakeTime">Wake time</label><input type="text" id="node-input-wakeTime" placeholder="07:00"></div>
+  <div class="form-row"><label for="node-input-bedTime">Bed time</label><input type="text" id="node-input-bedTime" placeholder="23:00"></div>
   <div class="form-row"><label for="node-input-initialSleep">Initial sleep mode</label><input type="checkbox" id="node-input-initialSleep" style="display:inline-block; width:auto;"></div>
 </script>
 
 <script type="text/html" data-help-name="home-room-lighting-controller">
   <p>Owns room MQTT commands, adaptive colour and brightness, manual overrides, discovery and bounded tracing.</p>
+  <h3>Circadian schedule</h3>
+  <p>Circadian levels follow <b>Wake time</b> and <b>Bed time</b> (24-hour <code>HH:MM</code>, default 07:00 and
+    23:00): they rise to the daytime level over the hour after waking, stay at the daytime brightness and colour
+    through the day, wind down to the sleep settings over the three hours before bed, and stay at the sleep
+    settings until you wake. A bed time after midnight, or a wake time later than the bed time, works. Sleep mode
+    still overrides the schedule.</p>
+  <p>Times are the Node-RED host's local time. Docker containers default to UTC: set the container's
+    <code>TZ</code> if your host should follow a local timezone.</p>
   <h3>Control state</h3>
   <p>Each target has one control state:</p>
   <dl class="message-properties">

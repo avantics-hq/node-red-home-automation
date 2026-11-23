@@ -4,6 +4,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {transitionSwitchPolicy} from "../lib/switch-policy";
 import {
+  DEFAULT_BED_TIME,
+  DEFAULT_WAKE_TIME,
+  adaptivePayload,
+  scheduleLevel,
   transitionRoom,
   type RoomConfig,
   type RoomOutput
@@ -16,11 +20,7 @@ const config: RoomConfig = {
     {id: "cooking", stateTopic: "home/kitchen/light/group/cooking", commandTopic: "home/kitchen/light/group/cooking/set"},
     {id: "dining", stateTopic: "home/kitchen/light/group/dining", commandTopic: "home/kitchen/light/group/dining/set"}
   ],
-  latitude: 51.5074,
-  longitude: -0.1278,
-  minBrightnessPct: 1,
   maxBrightnessPct: 100,
-  minColorTempKelvin: 2000,
   maxColorTempKelvin: 5500,
   sleepBrightnessPct: 1,
   sleepColorTempKelvin: 1000,
@@ -28,7 +28,8 @@ const config: RoomConfig = {
   refreshTransitionSeconds: 45,
   initialSleep: false
 };
-const now = new Date("2026-06-21T12:00:00Z");
+// Local noon, so the default schedule is in its daytime in any timezone.
+const now = new Date(2026, 5, 21, 12, 0);
 
 function output(result: ReturnType<typeof transitionRoom>, index: number): RoomOutput {
   const entry = result.outputs[index];
@@ -472,4 +473,115 @@ test("a mixed intent changes only the lights that are not held", () => {
   assert.deepEqual(ignoredHeld(result), [["lamp", "film"]]);
   assert.equal(result.status.control.lamp, "overridden");
   assert.equal(result.state.desired.wall, false);
+});
+
+// Local wall-clock times, so the tests hold in any timezone.
+const clock = (hours: number, minutes = 0) => new Date(2026, 10, 23, hours, minutes);
+
+test("a wake and bed schedule shapes the circadian day", () => {
+  const level = (hours: number, minutes = 0) => scheduleLevel(clock(hours, minutes), "07:00", "23:00");
+  assert.equal(level(6, 59), 0);
+  assert.equal(level(7), 0);
+  assert.equal(level(7, 30), 0.5);
+  assert.equal(level(8), 1);
+  assert.equal(level(13), 1);
+  assert.equal(level(20), 1);
+  assert.equal(level(21, 30), 0.5);
+  assert.equal(level(23), 0);
+  assert.equal(level(3), 0);
+  // Never a step: neighbouring minutes stay close all day.
+  let previous = level(0);
+  for (let minute = 1; minute < 24 * 60; minute += 1) {
+    const current = level(Math.floor(minute / 60), minute % 60);
+    assert.ok(Math.abs(current - previous) <= 0.03, `${minute} min`);
+    previous = current;
+  }
+
+  const scheduled = {...config, wakeTime: "07:00", bedTime: "23:00"};
+  const day = adaptivePayload("ON", false, false, clock(13), scheduled);
+  assert.equal(day.brightness, 254);
+  assert.equal(day.color_temp, Math.round(1_000_000 / scheduled.maxColorTempKelvin));
+  const night = adaptivePayload("ON", false, false, clock(3), scheduled);
+  assert.equal(night.brightness, Math.round(scheduled.sleepBrightnessPct * 254 / 100) || 1);
+  assert.equal(night.color_temp, Math.round(1_000_000 / scheduled.sleepColorTempKelvin));
+  // Sleep mode still overrides the schedule.
+  assert.deepEqual(adaptivePayload("ON", false, true, clock(13), scheduled), night);
+});
+
+test("schedules may cross midnight or run through the night", () => {
+  // Bed after midnight.
+  assert.equal(scheduleLevel(clock(12), "09:00", "01:00"), 1);
+  assert.ok(scheduleLevel(clock(0), "09:00", "01:00") > 0);
+  assert.ok(scheduleLevel(clock(0), "09:00", "01:00") < 1);
+  assert.equal(scheduleLevel(clock(2), "09:00", "01:00"), 0);
+  // Awake through the night, asleep in the morning.
+  assert.equal(scheduleLevel(clock(23), "15:00", "07:00"), 1);
+  assert.equal(scheduleLevel(clock(10), "15:00", "07:00"), 0);
+  // A short day shortens the rise and wind-down in proportion.
+  assert.equal(scheduleLevel(clock(7, 30), "07:00", "09:00"), 1);
+  assert.ok(scheduleLevel(clock(7, 15), "07:00", "09:00") > 0.4);
+  assert.throws(() => scheduleLevel(clock(7), "07:00", "07:00"), /different/);
+});
+
+test("the room controller styles lights from the schedule", () => {
+  const scheduled = {...config, wakeTime: "07:00", bedTime: "23:00"};
+  let result = transitionRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, scheduled, clock(21, 30));
+  assert.equal(payload(result, 0).brightness, 128);
+  result = transitionRoom(result.state, {lighting: {kind: "refresh"}}, scheduled, clock(23, 30));
+  assert.equal(payload(result, 0).brightness, Math.round(scheduled.sleepBrightnessPct * 254 / 100) || 1);
+});
+
+test("without wake and bed times the default schedule applies", () => {
+  for (const [hours, minutes] of [[3, 0], [7, 30], [13, 0], [21, 30], [23, 30]] as const) {
+    const at = clock(hours, minutes);
+    assert.deepEqual(
+      adaptivePayload("ON", false, false, at, config),
+      adaptivePayload("ON", false, false, at, {...config, wakeTime: DEFAULT_WAKE_TIME, bedTime: DEFAULT_BED_TIME}),
+      `${hours}:${minutes}`
+    );
+  }
+  assert.equal(DEFAULT_WAKE_TIME, "07:00");
+  assert.equal(DEFAULT_BED_TIME, "23:00");
+  assert.equal(adaptivePayload("ON", false, false, clock(13), config).brightness, 254);
+});
+
+test("the room controller has no sun dependency left", () => {
+  const {readFileSync} = require("node:fs") as typeof import("node:fs");
+  const {resolve} = require("node:path") as typeof import("node:path");
+  const source = readFileSync(resolve(__dirname, "../../lib/room-controller.ts"), "utf8");
+  assert.equal(/suncalc|SunCalc|sunPosition|latitude|longitude/.test(source), false);
+  const manifest = JSON.parse(readFileSync(resolve(__dirname, "../../package.json"), "utf8"));
+  assert.equal(JSON.stringify(manifest).includes("suncalc"), false);
+});
+
+test("colour moves evenly in mireds with no kelvin rounding", () => {
+  const scheduled = {...config, wakeTime: "07:00", bedTime: "23:00"};
+  const sleepMired = 1_000_000 / scheduled.sleepColorTempKelvin;
+  const dayMired = 1_000_000 / scheduled.maxColorTempKelvin;
+  // Half-way through the rise, the colour is half-way in mireds.
+  assert.equal(adaptivePayload("ON", false, false, clock(7, 30), scheduled).color_temp, Math.round((sleepMired + dayMired) / 2));
+});
+
+test("a refresh skips lights already at their level and re-sends to one that is not", () => {
+  const scheduled = {...config, wakeTime: "07:00", bedTime: "23:00"};
+  const report = (state: Parameters<typeof transitionRoom>[0], level: Record<string, unknown>, at: Date) =>
+    transitionRoom(state, {topic: "home/kitchen/light/group/cooking", payload: {state: "ON", ...level}, lighting: {kind: "observed"}}, scheduled, at);
+  let result = transitionRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, scheduled, clock(13));
+  const sent = payload(result, 0);
+  result = report(result.state, {brightness: sent.brightness, color_temp: sent.color_temp}, clock(13, 0));
+
+  // Flat daytime: the bulb already reports the level, so nothing is sent.
+  const flat = transitionRoom(result.state, {lighting: {kind: "refresh"}}, scheduled, clock(14));
+  assert.equal(flat.outputs.filter((entry) => entry.lighting_command).length, 0);
+  assert.equal(flat.traces.some((entry) => entry.reason === "already-at-level"), true);
+
+  // A bulb that missed a command reports something else and gets it again.
+  const missed = report(result.state, {brightness: 120, color_temp: sent.color_temp}, clock(14));
+  const resent = transitionRoom(missed.state, {lighting: {kind: "refresh"}}, scheduled, clock(14, 1));
+  assert.equal(resent.outputs.filter((entry) => entry.lighting_command).length, 1);
+
+  // During the wind-down the level moves, so the refresh sends.
+  const ramp = transitionRoom(result.state, {lighting: {kind: "refresh"}}, scheduled, clock(21, 30));
+  assert.equal(ramp.outputs.filter((entry) => entry.lighting_command).length, 1);
+  assert.notEqual(payload(ramp, 0).brightness, sent.brightness);
 });

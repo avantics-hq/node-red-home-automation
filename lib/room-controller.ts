@@ -1,16 +1,5 @@
 "use strict";
 
-interface SunCalcApi {
-  getTimes(date: Date, latitude: number, longitude: number): {
-    sunrise: Date;
-    solarNoon: Date;
-    sunset: Date;
-    nadir: Date;
-  };
-}
-
-const SunCalc: SunCalcApi = require("suncalc");
-
 export interface RoomTarget {
   id: string;
   stateTopic: string;
@@ -22,16 +11,16 @@ export interface RoomConfig {
   displayName: string;
   targets: RoomTarget[];
   initialSleep: boolean;
-  latitude: number;
-  longitude: number;
   sleepBrightnessPct: number;
   maxBrightnessPct: number;
-  minBrightnessPct: number;
   sleepColorTempKelvin: number;
-  minColorTempKelvin: number;
   maxColorTempKelvin: number;
   refreshTransitionSeconds: number;
   initialTransitionSeconds: number;
+  // The daily schedule, as "HH:MM" in the Node-RED host's local time;
+  // DEFAULT_WAKE_TIME and DEFAULT_BED_TIME when unset.
+  wakeTime?: string;
+  bedTime?: string;
 }
 
 export interface RoomObservation {
@@ -146,44 +135,48 @@ export function createRoomState(
   };
 }
 
-// The sun-position curve below and the brightness and colour-temperature rules
-// in adaptivePayload are adapted (ported to TypeScript and modified) from
-// Adaptive Lighting by basnijholt, https://github.com/basnijholt/adaptive-lighting
-// (custom_components/adaptive_lighting/color_and_brightness.py), licensed under
-// Apache-2.0; see THIRD-PARTY-NOTICES.md. They are due to be replaced by an
-// original implementation.
-export function sunPosition(now: Date, config: Pick<RoomConfig, "latitude" | "longitude">): number {
-  const events: Array<{name: string; at: number}> = [];
-  for (const dayOffset of [-1, 0, 1]) {
-    const date = new Date(now);
-    date.setHours(12, 0, 0, 0);
-    date.setDate(date.getDate() + dayOffset);
-    const times = SunCalc.getTimes(date, config.latitude, config.longitude);
-    for (const [name, at] of [
-      ["sunrise", times.sunrise],
-      ["noon", times.solarNoon],
-      ["sunset", times.sunset],
-      ["midnight", times.nadir]
-    ] as const) {
-      if (at instanceof Date && Number.isFinite(at.getTime())) events.push({name, at: at.getTime()});
-    }
-  }
-  events.sort((left, right) => left.at - right.at);
-  const target = now.getTime();
-  const nextIndex = events.findIndex((event) => event.at > target);
-  if (nextIndex < 1) throw new Error("cannot bracket the current solar event");
-  const previous = events[nextIndex - 1];
-  const next = events[nextIndex];
-  if (!previous || !next) throw new Error("cannot bracket the current solar event");
-  const nextIsHorizon = next.name === "sunrise" || next.name === "sunset";
-  const h = nextIsHorizon ? previous.at : next.at;
-  const x = nextIsHorizon ? next.at : previous.at;
-  const sign = next.name === "sunset" || next.name === "noon" ? 1 : -1;
-  return clamp(sign * (1 - Math.pow((target - h) / (h - x), 2)), -1, 1);
+// After waking, light rises to the daytime level over this long; before bed it
+// winds down to the sleep settings over the three hours that evidence on
+// evening light exposure points to (Brown et al. 2022, PLOS Biology).
+export const WAKE_RISE_MINUTES = 60;
+export const WIND_DOWN_MINUTES = 180;
+// A conventional day, used until a room is given its own times.
+export const DEFAULT_WAKE_TIME = "07:00";
+export const DEFAULT_BED_TIME = "23:00";
+
+const CLOCK_TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+// Minutes after midnight for an "HH:MM" clock time, or null if it is not one.
+export function clockMinutes(value: unknown): number | null {
+  const match = typeof value === "string" ? CLOCK_TIME.exec(value.trim()) : null;
+  return match ? Number(match[1]) * 60 + Number(match[2]) : null;
 }
 
-// Brightness and colour-temperature rules adapted from Adaptive Lighting
-// (Apache-2.0); see the note above sunPosition.
+// How far into the day the lights are, from 0 (sleep settings) to 1 (daytime
+// settings), for the given local time. Times wrap at midnight, so a bed time
+// after midnight or a wake time later than the bed time both work. When the
+// waking day is shorter than the rise and the wind-down together, both are
+// shortened in proportion.
+export function scheduleLevel(now: Date, wakeTime: string, bedTime: string): number {
+  const wake = clockMinutes(wakeTime);
+  const bed = clockMinutes(bedTime);
+  if (wake === null || bed === null || wake === bed) throw new Error("wake and bed times must be different HH:MM times");
+  const day = 24 * 60;
+  const awake = (bed - wake + day) % day;
+  const minute = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+  const sinceWake = (minute - wake + day) % day;
+  if (sinceWake >= awake) return 0;
+  const scale = Math.min(1, awake / (WAKE_RISE_MINUTES + WIND_DOWN_MINUTES));
+  const rise = WAKE_RISE_MINUTES * scale;
+  const windDown = WIND_DOWN_MINUTES * scale;
+  // Ease in and out so neither end of a ramp is a visible step.
+  const ease = (fraction: number) => fraction * fraction * (3 - 2 * fraction);
+  if (sinceWake < rise) return ease(sinceWake / rise);
+  const untilBed = awake - sinceWake;
+  if (untilBed < windDown) return ease(untilBed / windDown);
+  return 1;
+}
+
 export function adaptivePayload(
   lightState: string,
   isRefresh: boolean,
@@ -192,21 +185,20 @@ export function adaptivePayload(
   config: RoomConfig
 ) {
   if (lightState === "OFF") return {state: lightState};
-  const position = sunPosition(now, config);
-  const brightnessPct = sleeping
-    ? config.sleepBrightnessPct
-    : position > 0
-      ? config.maxBrightnessPct
-      : (config.maxBrightnessPct - config.minBrightnessPct) * (1 + position) + config.minBrightnessPct;
-  const kelvin = sleeping
-    ? config.sleepColorTempKelvin
-    : position > 0
-      ? 5 * Math.round((config.minColorTempKelvin + (config.maxColorTempKelvin - config.minColorTempKelvin) * position) / 5)
-      : config.minColorTempKelvin;
+  // Between the sleep settings (level 0) and the brightest, coolest daytime
+  // settings (level 1).
+  const level = sleeping
+    ? 0
+    : scheduleLevel(now, config.wakeTime || DEFAULT_WAKE_TIME, config.bedTime || DEFAULT_BED_TIME);
+  const brightnessPct = config.sleepBrightnessPct + (config.maxBrightnessPct - config.sleepBrightnessPct) * level;
+  // Colour moves evenly in mireds, the unit bulbs take: equal mired steps look
+  // evenly spaced, where equal kelvin steps would bunch up at the cool end.
+  const sleepMired = 1_000_000 / config.sleepColorTempKelvin;
+  const dayMired = 1_000_000 / config.maxColorTempKelvin;
   return {
     state: lightState,
     brightness: clamp(Math.round(brightnessPct * 254 / 100), 1, 254),
-    color_temp: Math.floor(1000000 / kelvin),
+    color_temp: Math.round(sleepMired + (dayMired - sleepMired) * level),
     transition: isRefresh ? config.refreshTransitionSeconds : config.initialTransitionSeconds
   };
 }
@@ -310,7 +302,7 @@ export function transitionRoom(
           name: config.displayName + " Circadian Lighting",
           unique_id: objectId,
           default_entity_id: "switch." + objectId,
-          icon: "mdi:theme-light-dark",
+          icon: "mdi:clock-time-seven-outline",
           command_topic: "home/" + config.area + "/circadian/set",
           state_topic: "home/" + config.area + "/circadian/state",
           payload_on: "ON",
@@ -338,11 +330,16 @@ export function transitionRoom(
     const commands: Array<RoomOutput | null> = [];
     for (const target of config.targets) {
       if (!intendedOn(target.id) || controlOf(target.id) !== "in-control") continue;
-      commands.push(command(
-        target.id,
-        adaptivePayload("ON", true, state.sleeping, now, config),
-        source
-      ));
+      const payload = adaptivePayload("ON", true, state.sleeping, now, config);
+      // Nothing to change: the light last reported exactly these levels. A
+      // bulb that missed a command reports something else and is re-sent.
+      const observed = state.observed[target.id];
+      if (observed?.on === true && Number(observed.brightness) === payload.brightness &&
+        Number(observed.color_temp) === payload.color_temp) {
+        trace("refresh", "skipped", "already-at-level", {target: target.id});
+        continue;
+      }
+      commands.push(command(target.id, payload, source));
     }
     return commands.filter((entry): entry is RoomOutput => entry !== null);
   }

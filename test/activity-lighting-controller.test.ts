@@ -193,11 +193,7 @@ test("activity lighting holds its room lights through refresh and hands them bac
       {id: "wall", stateTopic: "lounge/wall", commandTopic: "lounge/wall/set"},
       {id: "lamp", stateTopic: "lounge/lamp", commandTopic: "lounge/lamp/set"}
     ],
-    latitude: 51.5074,
-    longitude: -0.1278,
-    minBrightnessPct: 1,
     maxBrightnessPct: 100,
-    minColorTempKelvin: 2000,
     maxColorTempKelvin: 5500,
     sleepBrightnessPct: 1,
     sleepColorTempKelvin: 1000,
@@ -205,7 +201,7 @@ test("activity lighting holds its room lights through refresh and hands them bac
     refreshTransitionSeconds: 45,
     initialSleep: false
   };
-  const noon = (seconds: number) => new Date(Date.parse("2026-06-21T12:00:00Z") + seconds * 1000);
+  const noon = (seconds: number) => new Date(new Date(2026, 5, 21, 12, 0).getTime() + seconds * 1000);
   let room = transitionRoom(undefined, {lighting: {kind: "intent", targets: ["wall", "lamp"], state: "ON", source: "motion"}}, roomConfig, noon(0));
   const feed = (lighting: ReturnType<typeof transitionActivityLighting>, seconds: number) => {
     for (const command of lighting.commands) {

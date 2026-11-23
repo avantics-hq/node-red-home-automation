@@ -12,7 +12,7 @@ Most home automations translate an event directly into a command. This package a
 ## What it solves
 
 - **Occupancy without flicker:** combine PIR motion with optional presence sensing before changing room state.
-- **Adaptive lighting with manual ownership:** calculate circadian brightness and colour temperature without immediately overwriting wall-switch changes.
+- **Circadian lighting with manual ownership:** calculate circadian brightness and colour temperature without immediately overwriting wall-switch changes.
 - **Honest wall inputs:** preserve restart baselines while exposing unconfirmed, stale and unavailable physical-input evidence.
 - **Reliable AV transitions:** coordinate AVR inputs, TV power, projector warm-up and cooldown, and motorised screens from observed state rather than blind toggles.
 - **Honest source readiness:** model controllable, externally controlled, and unavailable playback sources without claiming success from an input selection alone.
@@ -79,7 +79,11 @@ The nodes come in three groups. Each group has an importable example flow
 
 Motion, presence, illuminance and wall switches drive one room's lights, with
 circadian styling and manual ownership. Wire occupancy fusion into the motion
-policy, and the motion and switch policies into the room controller.
+policy, and the motion and switch policies into the room controller. Circadian
+levels follow the room controller's wake and bed times (default 07:00 and
+23:00): they rise over the hour after waking, stay bright and cool through the
+day, and wind down to the sleep settings over the three hours before bed. Times
+are the Node-RED host's local time.
 Example: [`Room lighting.json`](examples/Room%20lighting.json).
 
 | Node | Purpose |
@@ -319,12 +323,9 @@ Contributions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md) and the
 
 ## Acknowledgements
 
-The circadian sun-position curve and the brightness and colour-temperature rules
-in the room lighting controller are adapted from
+Versions up to 2.2.1 adapted the circadian curve and its default values from
 [Adaptive Lighting](https://github.com/basnijholt/adaptive-lighting) by
-basnijholt, licensed under Apache-2.0. See
-[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). They are due to be replaced by
-an original implementation.
+basnijholt (Apache-2.0). From this version, the circadian lighting is our own.
 
 ## License
 

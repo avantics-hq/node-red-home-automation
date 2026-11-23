@@ -3,7 +3,7 @@
     "id": "example-room-lighting-room-lighting-example",
     "type": "comment",
     "name": "Room lighting example",
-    "info": "Motion and illuminance feed occupancy fusion and the motion policy; a wall switch feeds the switch policy. Both send lighting intents to the room controller, which owns the light's commands.\n\nReplace the inject nodes with your sensors and wire the room controller's output to your MQTT broker. Set the room's latitude and longitude before deploying.",
+    "info": "Motion and illuminance feed occupancy fusion and the motion policy; a wall switch feeds the switch policy. Both send lighting intents to the room controller, which owns the light's commands.\n\nReplace the inject nodes with your sensors and wire the room controller's output to your MQTT broker. Set the room's wake and bed times (Node-RED host time) before deploying.",
     "x": 170,
     "y": 40,
     "wires": []
@@ -175,17 +175,13 @@
     "area": "room",
     "displayName": "Room",
     "targets": "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]",
-    "latitude": 0,
-    "longitude": 0,
-    "minBrightnessPct": 1,
     "maxBrightnessPct": 100,
-    "minColorTempKelvin": 2000,
-    "maxColorTempKelvin": 5500,
+    "maxColorTempKelvin": 6500,
     "sleepBrightnessPct": 1,
-    "sleepColorTempKelvin": 1000,
+    "sleepColorTempKelvin": 2200,
     "initialTransitionSeconds": 1,
-    "refreshTransitionSeconds": 45,
-    "refreshSeconds": 90,
+    "refreshTransitionSeconds": 60,
+    "refreshSeconds": 60,
     "initialSleep": false,
     "x": 880,
     "y": 180,
@@ -193,7 +189,9 @@
       [
         "example-room-lighting-room-commands"
       ]
-    ]
+    ],
+    "wakeTime": "07:00",
+    "bedTime": "23:00"
   },
   {
     "id": "example-room-lighting-room-commands",

@@ -3,6 +3,9 @@
 import type {Node, NodeDef, NodeInitializer, NodeMessage} from "node-red";
 import {appendTrace} from "../lib/bounded-trace";
 import {
+  DEFAULT_BED_TIME,
+  DEFAULT_WAKE_TIME,
+  clockMinutes,
   transitionRoom,
   type RoomConfig,
   type RoomMessage,
@@ -14,11 +17,7 @@ interface RoomControllerConfig extends NodeDef {
   area?: string;
   displayName?: string;
   targets?: string;
-  latitude?: number | string;
-  longitude?: number | string;
-  minBrightnessPct?: number | string;
   maxBrightnessPct?: number | string;
-  minColorTempKelvin?: number | string;
   maxColorTempKelvin?: number | string;
   sleepBrightnessPct?: number | string;
   sleepColorTempKelvin?: number | string;
@@ -26,6 +25,8 @@ interface RoomControllerConfig extends NodeDef {
   refreshTransitionSeconds?: number | string;
   refreshSeconds?: number | string;
   initialSleep?: boolean | string;
+  wakeTime?: string;
+  bedTime?: string;
 }
 
 interface RoomControllerNode extends Node {}
@@ -38,14 +39,17 @@ function number(value: unknown, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function requiredNumber(value: unknown, name: string): number {
-  if (value === "" || value === null || value === undefined) {
-    throw new Error(`${name} is required`);
-  }
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) throw new Error(`${name} must be a number`);
-  return parsed;
+// Each time "HH:MM" (a blank one takes its default), and not the same time.
+function schedule(wakeTime: unknown, bedTime: unknown): {wakeTime: string; bedTime: string} {
+  const wake = (typeof wakeTime === "string" ? wakeTime.trim() : "") || DEFAULT_WAKE_TIME;
+  const bed = (typeof bedTime === "string" ? bedTime.trim() : "") || DEFAULT_BED_TIME;
+  const wakeMinutes = clockMinutes(wake);
+  const bedMinutes = clockMinutes(bed);
+  if (wakeMinutes === null || bedMinutes === null) throw new Error("wake and bed times must both be HH:MM (24-hour)");
+  if (wakeMinutes === bedMinutes) throw new Error("wake and bed times must differ");
+  return {wakeTime: wake, bedTime: bed};
 }
+
 
 function parseTargets(value: string | undefined): RoomTarget[] {
   const targets: unknown = JSON.parse(value || "[]");
@@ -78,21 +82,20 @@ const registerRoomController: NodeInitializer = (RED) => {
         area: config.area || "room",
         displayName: config.displayName || config.area || "Room",
         targets: parseTargets(config.targets),
-        latitude: requiredNumber(config.latitude, "latitude"),
-        longitude: requiredNumber(config.longitude, "longitude"),
-        minBrightnessPct: number(config.minBrightnessPct, 1),
+        // Saved latitude, longitude and minimum settings from earlier versions
+        // are ignored.
         maxBrightnessPct: number(config.maxBrightnessPct, 100),
-        minColorTempKelvin: number(config.minColorTempKelvin, 2000),
-        maxColorTempKelvin: number(config.maxColorTempKelvin, 5500),
+        maxColorTempKelvin: number(config.maxColorTempKelvin, 6500),
         sleepBrightnessPct: number(config.sleepBrightnessPct, 1),
-        sleepColorTempKelvin: number(config.sleepColorTempKelvin, 1000),
+        sleepColorTempKelvin: number(config.sleepColorTempKelvin, 2200),
         initialTransitionSeconds: number(config.initialTransitionSeconds, 1),
-        refreshTransitionSeconds: number(config.refreshTransitionSeconds, 45),
-        initialSleep: config.initialSleep === true || config.initialSleep === "true"
+        refreshTransitionSeconds: number(config.refreshTransitionSeconds, 60),
+        initialSleep: config.initialSleep === true || config.initialSleep === "true",
+        ...schedule(config.wakeTime, config.bedTime)
       };
     } catch (error) {
       node.status({fill: "red", shape: "ring", text: "invalid configuration"});
-      node.error(error);
+      node.error("invalid configuration: " + (error instanceof Error ? error.message : String(error)));
       return;
     }
 
@@ -140,7 +143,7 @@ const registerRoomController: NodeInitializer = (RED) => {
       }
     });
 
-    const refreshSeconds = Math.max(10, number(config.refreshSeconds, 90));
+    const refreshSeconds = Math.max(10, number(config.refreshSeconds, 60));
     refreshTimer = setInterval(() => {
       try {
         process({lighting: {kind: "refresh"}}, node.send.bind(node));
