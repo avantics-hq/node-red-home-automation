@@ -14,7 +14,7 @@ import {
   type SourceMessage,
   type SourceState
 } from "../lib/source-capability-controller";
-import {guarded, invalidConfig, objectField, onInput, runReducer, type Send} from "./adapter";
+import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
 
 interface SourceControllerConfig extends NodeDef {
   area?: string;
@@ -69,7 +69,7 @@ const registerSourceCapabilityController: NodeInitializer = (RED) => {
     }
 
     function process(msg: SourceMessage, send: Send) {
-      const result = runReducer(node, {area: config.area || "lounge", component: "source-capability-controller"},
+      const result = runReducer(node, {area: optionalArea(config), component: "source-capability-controller"},
         (saved: Partial<SourceState> | undefined, now) => transitionSource(saved, msg, controllerConfig, now));
       if (result.commands.length) {
         send([

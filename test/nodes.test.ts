@@ -925,9 +925,12 @@ test("the example theatre flow reaches ready with no translation and stays ready
   for (const entry of flow) {
     const register = registers[entry.type];
     if (!register) continue;
+    // What the example leaves for the user to fill in.
     const config = entry.type === "home-display-mode-controller"
       ? {...entry, tvHost: "tv.example", screenHost: "screen.example", projectorMeterHost: "meter.example"}
-      : entry;
+      : entry.type === "home-theatre-state-contract"
+        ? {...entry, area: "lounge"}
+        : entry;
     const node = new (runtime(register, {tvPsk: "example"}).Constructor)(config);
     assert.deepEqual(node.errors, [], entry.type);
     nodes.set(entry.id, node);
@@ -1021,7 +1024,8 @@ test("the example theatre flow reaches ready with no translation and stays ready
   for (const entry of flow.filter((candidate) => candidate.type === "inject")) {
     const msg: Record<string, unknown> = {};
     for (const prop of entry.props as Array<{p: string; v: string; vt: string}>) {
-      msg[prop.p] = prop.vt === "json" ? JSON.parse(prop.v) : prop.v;
+      // The inject's topic names the area the user gives the contract.
+      msg[prop.p] = prop.vt === "json" ? JSON.parse(prop.v) : prop.v.replace("<area>", "lounge");
     }
     queue.push([entry.wires![0]![0]!, msg]);
     await settle();
@@ -1046,7 +1050,7 @@ test("the example theatre flow reaches ready with no translation and stays ready
 
   // The example's off activity confirms too: the receiver goes to standby.
   const contractId = idOf("home-theatre-state-contract");
-  queue.push([contractId, {topic: "home/room/theatre/request", payload: {requestId: "example-request-2", activity: "off"}}]);
+  queue.push([contractId, {topic: "home/lounge/theatre/request", payload: {requestId: "example-request-2", activity: "off"}}]);
   await settle();
   for (let second = 0; second < 180 && activity().currentActivity !== "off"; second += 1) {
     t.mock.timers.tick(1000);
@@ -1110,4 +1114,64 @@ test("a number setting absent from an older saved flow takes its default; a type
   const state = node.context().get("state") as {delaySeconds: number; illuminanceCutoff: number};
   assert.equal(state.delaySeconds, 120, "absent: the default");
   assert.equal(state.illuminanceCutoff, 0, "typed 0 is kept");
+});
+
+test("the theatre contract requires an area: its topics and Home Assistant IDs are built from it", () => {
+  for (const [name, register] of [["theatre state contract", registerTheatreStateContract]] as const) {
+    for (const area of [undefined, "", "  "]) {
+      const node = new (runtime(register).Constructor)(area === undefined ? {} : {area});
+      assert.deepEqual(node.statuses.at(-1), {fill: "red", shape: "ring", text: "invalid configuration"}, `${name} ${JSON.stringify(area)}`);
+      assert.deepEqual(node.errors.map(String), ["invalid configuration: area is required"], name);
+    }
+  }
+});
+
+test("every other node runs with no area, and reports none instead of a made-up one", async (t) => {
+  const backlighting = new (runtime(registerBacklighting).Constructor)({});
+  t.after(() => close(backlighting));
+  assert.deepEqual(backlighting.errors, []);
+  await receive(backlighting, {backlighting: {kind: "intent", requestId: "r1", generation: 1, power: "on"}});
+  assert.equal(traces(backlighting).at(-1)?.area, "");
+
+  const receiver = new (runtime(registerAvr).Constructor)({sources: "{\"shield\":\"SAT/CBL\"}"});
+  t.after(() => close(receiver));
+  assert.deepEqual(receiver.errors, []);
+  const sent = await receive<SendEnvelope>(receiver, {avr: {kind: "intent", requestId: "r1", generation: 1, power: "on"}});
+  const events = sent.flatMap((envelope) => envelope[1] ?? []);
+  assert.ok(events.length > 0);
+  for (const event of events as Array<{avr?: {area?: string}}>) if (event.avr) assert.equal(event.avr.area, "");
+
+  const theatre = new (runtime(registerTheatreActivity).Constructor)({activityProfiles: JSON.stringify({
+    off: {display: {mode: "off"}, avr: {power: "standby"}, source: {action: "deactivate", readiness: "optional"}, lighting: {profile: "off"}, backlighting: {power: "off"}}
+  })});
+  t.after(() => close(theatre));
+  assert.deepEqual(theatre.errors, []);
+  const state = await receive<SendEnvelope>(theatre, {theatre: {kind: "intent", requestId: "r1", generation: 1, activity: "off"}});
+  const snapshot = state.flatMap((envelope) => envelope[1] ?? []).find((message) => message.theatre?.kind === "state");
+  assert.equal(snapshot?.theatre?.area, "");
+
+  // The rest may reject {} for other settings, but never for the area. A node
+  // that rejected its configuration started nothing, so only started ones close.
+  for (const register of [registerActivityLighting, registerDisplay, registerMotion, registerSwitch, registerOccupancy, registerSource]) {
+    const node = new (runtime(register).Constructor)({});
+    // Occupancy keeps no timers and registers no close handler.
+    if (node.errors.length === 0 && register !== registerOccupancy) t.after(() => close(node));
+    assert.equal(node.errors.some((error) => /area/.test(String(error))), false);
+  }
+});
+
+test("a room controller with no area still commands its lights, and publishes no area topics or discovery", async (t) => {
+  const node = new (runtime(registerRoom).Constructor)({
+    targets: "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]"
+  });
+  t.after(() => close(node));
+  assert.deepEqual(node.errors, []);
+  const startup = await receive<Array<Array<{topic?: string}>>>(node, {lighting: {kind: "startup"}});
+  const on = await receive<Array<Array<{topic?: string; payload?: Record<string, unknown>}>>>(node, {
+    lighting: {kind: "intent", targets: ["main"], state: "ON", source: "motion"}
+  });
+  const circadian = await receive<Array<Array<{topic?: string}>>>(node, {lighting: {kind: "circadian", enabled: false}});
+  const topics = [...startup, ...on, ...circadian].flat(2).map((message) => message.topic);
+  assert.deepEqual(topics, ["room/light/main/set"], "only the light's own command topic");
+  assert.equal((on.flat(2).find((message) => message.topic === "room/light/main/set") as {payload?: Record<string, unknown>}).payload?.state, "ON");
 });

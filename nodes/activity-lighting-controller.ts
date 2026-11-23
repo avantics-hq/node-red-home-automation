@@ -14,7 +14,7 @@ import {
   type ActivityLightingMessage,
   type ActivityLightingState
 } from "../lib/activity-lighting-controller";
-import {guarded, invalidConfig, objectField, onInput, runReducer, type Send} from "./adapter";
+import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
 import {numberSetting} from "../lib/settings";
 
 interface ActivityLightingNodeConfig extends NodeDef {
@@ -71,7 +71,7 @@ const registerActivityLightingController: NodeInitializer = (RED) => {
     }
 
     function process(msg: ActivityLightingMessage, send: Send) {
-      const result = runReducer(node, {area: config.area || "lounge", component: "activity-lighting-controller"},
+      const result = runReducer(node, {area: optionalArea(config), component: "activity-lighting-controller"},
         (saved: Partial<ActivityLightingState> | undefined, now) =>
           transitionActivityLighting(saved, msg, controllerConfig, now));
       if (result.commands.length) {

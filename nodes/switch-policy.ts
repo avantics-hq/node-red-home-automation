@@ -8,7 +8,7 @@ import {
   type SwitchPolicyInput,
   type SwitchPolicyState
 } from "../lib/switch-policy";
-import {guarded, invalidConfig, onInput, runReducer, type Send} from "./adapter";
+import {guarded, invalidConfig, onInput, optionalArea, runReducer, type Send} from "./adapter";
 import {numberSetting} from "../lib/settings";
 
 interface SwitchLightingPolicyConfig extends NodeDef {
@@ -46,7 +46,7 @@ const registerSwitchPolicy: NodeInitializer = (RED) => {
     let policyConfig: SwitchPolicyConfig & {area: string};
     try {
       policyConfig = {
-        area: config.area || "room",
+        area: optionalArea(config),
         targets: parseTargets(config.targets),
         switchWindowMs: numberSetting(config.switchWindowMs, "switch window", 500),
         switchFreshnessMs: numberSetting(config.switchFreshnessSeconds, "switch freshness", 3600) * 1000

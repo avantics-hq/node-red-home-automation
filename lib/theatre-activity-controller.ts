@@ -115,7 +115,8 @@ export function normaliseConfig(
     ? config.recoveryOffActivity
     : "off";
   return {
-    area: typeof config.area === "string" && config.area ? config.area : "room",
+    // Optional: an empty area means none.
+    area: typeof config.area === "string" ? config.area.trim() : "",
     freshnessMs: Math.max(1000, numberSetting(config.freshnessMs, "freshness", 30000)),
     activityProfiles,
     recoveryOffActivity

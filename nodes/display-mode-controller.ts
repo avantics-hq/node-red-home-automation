@@ -16,7 +16,7 @@ import {
   type DisplayState
 } from "../lib/display-mode-controller";
 import {DisplayTransport} from "../lib/display-transport";
-import {guarded, invalidConfig, objectField, onInput, runReducer, type Send} from "./adapter";
+import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
 import {numberSetting} from "../lib/settings";
 
 interface DisplayControllerConfig extends NodeDef {
@@ -111,7 +111,7 @@ const registerDisplayModeController: NodeInitializer = (RED) => {
     }
 
     function process(msg: DisplayMessage, send: Send) {
-      const result = runReducer(node, {area: config.area || "lounge", component: "display-mode-controller"},
+      const result = runReducer(node, {area: optionalArea(config), component: "display-mode-controller"},
         (saved: Partial<DisplayState> | undefined, now) => transitionDisplay(saved, msg, controllerConfig, now));
       const outputs = [...result.events, ...result.targetStates];
       if (outputs.length) {

@@ -4,7 +4,7 @@
     color: "#d8bfd8",
     defaults: {
       name: {value: ""},
-      area: {value: "room", required: true},
+      area: {value: ""},
       targets: {value: "[\"main\"]", required: true},
       switchWindowMs: {value: 500, required: true, validate: RED.validators.number()},
       switchFreshnessSeconds: {value: 3600, required: true, validate: RED.validators.number()}
@@ -12,7 +12,7 @@
     inputs: 1,
     outputs: 1,
     icon: "font-awesome/fa-toggle-on",
-    label: function () { return this.name || this.area + " switch policy"; }
+    label: function () { return this.name || (this.area ? this.area + " " : "") + "switch policy"; }
   });
 </script>
 

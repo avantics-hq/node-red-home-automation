@@ -11,7 +11,7 @@ import {
 import {scheduledLighting} from "../lib/circadian";
 import {resolveSchedule} from "../lib/circadian-schedule";
 import type {LightLevels} from "../lib/light-styling";
-import {guarded, invalidConfig, objectField, onInput, runReducer, type Send} from "./adapter";
+import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
 import {numberSetting} from "../lib/settings";
 
 interface RoomControllerConfig extends NodeDef {
@@ -56,6 +56,8 @@ const registerRoomController: NodeInitializer = (RED) => {
   function HomeRoomLightingController(this: RoomControllerNode, config: RoomControllerConfig) {
     RED.nodes.createNode(this, config);
     const node = this;
+    // Optional: with no area the room publishes no area topics or discovery.
+    const area = optionalArea(config);
     let refreshTimer: ReturnType<typeof setInterval> | undefined;
 
     let controllerConfig: RoomConfig;
@@ -72,8 +74,8 @@ const registerRoomController: NodeInitializer = (RED) => {
       };
       const schedule = resolveSchedule(config.wakeTime, config.bedTime);
       controllerConfig = {
-        area: config.area || "room",
-        displayName: config.displayName || config.area || "Room",
+        area,
+        displayName: config.displayName || area,
         targets: parseTargets(config.targets),
         initialTransitionSeconds: numberSetting(config.initialTransitionSeconds, "initial transition", 1),
         refreshTransitionSeconds: numberSetting(config.refreshTransitionSeconds, "refresh transition", 60),

@@ -19,7 +19,7 @@ test("a number setting is a number, or its default only when absent from an olde
 
 test("the receiver's settings are read from editor strings with its deployed defaults", () => {
   const sources = {shield: "SAT/CBL"};
-  assert.deepEqual(normaliseAvrConfig({sources}), {area: "room", sources, retryMs: 2000, maxAttempts: 3, minVolume: 0, maxVolume: 60});
+  assert.deepEqual(normaliseAvrConfig({sources}), {area: "", sources, retryMs: 2000, maxAttempts: 3, minVolume: 0, maxVolume: 60});
   assert.deepEqual(normaliseAvrConfig({area: "area-a", sources, retryMs: "100", maxAttempts: "2.7", minVolume: "10", maxVolume: "40.5"}),
     {area: "area-a", sources, retryMs: 250, maxAttempts: 2, minVolume: 10, maxVolume: 40.5});
   // An emptied or non-numeric field is an error naming the setting.

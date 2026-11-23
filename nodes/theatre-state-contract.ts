@@ -8,7 +8,7 @@ import {
   type TheatreStateContractMessage,
   type TheatreStateContractState
 } from "../lib/theatre-state-contract";
-import {invalidConfig, objectField, onInput, runReducer, type Send} from "./adapter";
+import {configuredArea, invalidConfig, objectField, onInput, runReducer, type Send} from "./adapter";
 import {numberSetting} from "../lib/settings";
 
 interface TheatreStateContractNodeConfig extends NodeDef {
@@ -29,14 +29,17 @@ const registerTheatreStateContract: NodeInitializer = (RED) => {
   function HomeTheatreStateContract(this: TheatreStateContractNode, config: TheatreStateContractNodeConfig) {
     RED.nodes.createNode(this, config);
     const node = this;
+    const configuredAreaName = configuredArea(node, config);
+    if (configuredAreaName === null) return;
+    const area: string = configuredAreaName;
 
     let controllerConfig: TheatreStateContractConfig;
     try {
       const activities: unknown = JSON.parse(config.activities || "[]");
       controllerConfig = normaliseStateContractConfig({
-        area: config.area || "lounge",
-        displayName: config.displayName || config.area || "Lounge",
-        baseTopic: config.baseTopic || `home/${config.area || "lounge"}/theatre`,
+        area,
+        displayName: config.displayName || area,
+        baseTopic: config.baseTopic || `home/${area}/theatre`,
         discoveryPrefix: config.discoveryPrefix || "homeassistant",
         activities: Array.isArray(activities) ? activities.map(String) : [],
         slo: {

@@ -8,7 +8,7 @@ import {
   type MotionInput,
   type MotionState
 } from "../lib/motion-policy";
-import {guarded, invalidConfig, onInput, runReducer, type Send} from "./adapter";
+import {guarded, invalidConfig, onInput, optionalArea, runReducer, type Send} from "./adapter";
 
 interface MotionPolicyConfig extends NodeDef {
   area?: string;
@@ -33,7 +33,7 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
 
     let policyConfig: MotionConfig & {area: string};
     try {
-      policyConfig = {area: config.area || "room", ...normaliseMotionConfig(config)};
+      policyConfig = {area: optionalArea(config), ...normaliseMotionConfig(config)};
     } catch (error) {
       invalidConfig(node, error);
       return;
