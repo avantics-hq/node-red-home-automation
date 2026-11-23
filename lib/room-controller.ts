@@ -2,6 +2,8 @@
 
 import type {TraceEntry} from "./bounded-trace";
 import type {CircadianLighting} from "./circadian";
+import type {DaySchedule} from "./circadian-schedule";
+import {requestedSchedule, savedSchedule, withActiveSchedule} from "./room-schedule";
 import {alreadyStyled, lightCommand, readLightReport, setsLightValues, type LightCommand, type LightReport} from "./z2m-light";
 import {checkCommandEcho, checkStateReport, parsePayload, rememberCommand, type ExpectedCommand} from "./command-echo";
 
@@ -31,6 +33,9 @@ export interface RoomConfig {
   // How a light should look at a given moment; the node builds it from its
   // schedule and light settings.
   lighting: CircadianLighting;
+  // The wake and bed times that lighting follows, as configured. Absent means
+  // the default day.
+  schedule?: DaySchedule;
 }
 
 export interface RoomObservation extends LightReport {
@@ -51,6 +56,11 @@ export interface RoomState {
   expected: Record<string, ExpectedCommand[]>;
   circadianEnabled: boolean;
   sleeping: boolean;
+  // The wake and bed times in use, and the configured times they were based
+  // on. A "schedule" message changes a time until the node is deployed with
+  // a different setting for it, which then applies.
+  schedule: DaySchedule;
+  scheduleSetting: DaySchedule;
   // When a person last set each light: a person or manual intent, or someone
   // else's command seen on the light's command topic (epoch ms).
   personAt: Record<string, number>;
@@ -75,6 +85,9 @@ export interface LightingEvent {
   enabled?: boolean;
   // On a motion OFF: when the room went vacant (ISO time).
   vacantSince?: string;
+  // On a "schedule" message: new wake or bed times, "HH:MM".
+  wakeTime?: string;
+  bedTime?: string;
 }
 
 export interface RoomMessage {
@@ -114,6 +127,7 @@ export function createRoomState(
     ),
     circadianEnabled: saved.circadianEnabled !== false,
     sleeping: saved.sleeping === undefined ? config.initialSleep : saved.sleeping === true,
+    ...savedSchedule(config, saved),
     personAt: Object.fromEntries(Object.entries(saved.personAt || {})
       .filter(([, at]) => Number.isFinite(at)))
   };
@@ -141,6 +155,9 @@ export function transitionRoom(
   const now = nowValue instanceof Date ? nowValue : new Date(nowValue);
   const nowMs = now.getTime();
   const state = createRoomState(config, saved);
+  // The settings with lighting on the times in use; a schedule change
+  // below replaces it.
+  let active = withActiveSchedule(config, state);
   const targetById = Object.fromEntries(config.targets.map((target) => [target.id, target]));
   const traces: TraceEntry[] = [];
   const outputs: RoomOutput[] = [];
@@ -196,11 +213,11 @@ export function transitionRoom(
     for (const target of config.targets) {
       if (!intendedOn(target.id) || controlOf(target.id) !== "in-control") continue;
       // Nothing to change when the light last reported exactly this style.
-      if (alreadyStyled(config.lighting.styleAt(now, state.sleeping), state.observed[target.id])) {
+      if (alreadyStyled(active.lighting.styleAt(now, state.sleeping), state.observed[target.id])) {
         trace("refresh", "skipped", "already-at-level", {target: target.id});
         continue;
       }
-      commands.push(command(target.id, adaptivePayload("ON", true, state.sleeping, now, config), source));
+      commands.push(command(target.id, adaptivePayload("ON", true, state.sleeping, now, active), source));
     }
     return commands.filter((entry): entry is RoomOutput => entry !== null);
   }
@@ -258,7 +275,7 @@ export function transitionRoom(
           payload.transition = config.initialTransitionSeconds;
         }
       } else if (state.circadianEnabled && controlOf(targetId) === "in-control") {
-        payload = adaptivePayload("ON", event.refresh === true, state.sleeping, now, config);
+        payload = adaptivePayload("ON", event.refresh === true, state.sleeping, now, active);
       } else {
         payload = {state: "ON"};
       }
@@ -321,7 +338,7 @@ export function transitionRoom(
           } else if (state.circadianEnabled && controlOf(target.id) === "in-control") {
             const corrective = command(
               target.id,
-              adaptivePayload("ON", false, state.sleeping, now, config),
+              adaptivePayload("ON", false, state.sleeping, now, active),
               "external-bare-on"
             );
             if (corrective) outputs.push(corrective);
@@ -355,6 +372,16 @@ export function transitionRoom(
     state.sleeping = event.enabled === true;
     if (previous !== state.sleeping) trace("sleep", "changed", null, {enabled: state.sleeping});
     outputs.push(...refreshCommands("sleep-policy"));
+  } else if (event.kind === "schedule") {
+    const next = requestedSchedule(state.schedule, event);
+    if (!next) {
+      trace("schedule", "ignored", "invalid-times", {wakeTime: event.wakeTime, bedTime: event.bedTime});
+    } else if (next.wakeTime !== state.schedule.wakeTime || next.bedTime !== state.schedule.bedTime) {
+      state.schedule = next;
+      active = withActiveSchedule(config, state);
+      trace("schedule", "changed", null, {...next});
+      outputs.push(...refreshCommands("schedule-changed"));
+    }
   } else if (event.kind === "refresh") {
     outputs.push(...refreshCommands("periodic-refresh"));
   } else if (event.kind === "release") {
@@ -366,7 +393,7 @@ export function transitionRoom(
       if (!targetById[targetId] || entry?.state !== "overridden" || (owner && entry.owner !== owner)) continue;
       setControl(targetId, null, "released");
       if (state.circadianEnabled && intendedOn(targetId)) {
-        const restyle = command(targetId, adaptivePayload("ON", true, state.sleeping, now, config), event.source || "release");
+        const restyle = command(targetId, adaptivePayload("ON", true, state.sleeping, now, active), event.source || "release");
         if (restyle) outputs.push(restyle);
       }
     }

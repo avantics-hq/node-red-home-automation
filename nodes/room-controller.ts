@@ -103,7 +103,8 @@ const registerRoomController: NodeInitializer = (RED) => {
         initialSleep: booleanSetting(config.initialSleep, "initial sleep", false),
         // The adapter picks the circadian lighting; the controller only asks
         // it how a light should look.
-        lighting: scheduledLighting(schedule, levels)
+        lighting: scheduledLighting(schedule, levels),
+        schedule
       };
     } catch (error) {
       invalidConfig(node, error);

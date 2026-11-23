@@ -1408,14 +1408,24 @@ test("ID schemes: after an area change, a node clears the retained topics it no 
   assert.deepEqual(await topicsCleared("node"), [
     ["home/hall/lighting/availability", ""],
     ["home/hall/circadian/state", ""],
+    ["home/hall/sleep/state", ""],
+    ["home/hall/wake-time/state", ""],
+    ["home/hall/bed-time/state", ""],
     ["home/hall/lighting/main/control", ""]
   ]);
   // A saved node's discovery topic is named after the area, so it moves too
   // and the old entry is cleared, rather than left behind as before.
   assert.deepEqual(await topicsCleared(null), [
     ["homeassistant/switch/hall_circadian_lighting/config", ""],
+    ["homeassistant/switch/hall_sleep/config", ""],
+    ["homeassistant/time/hall_wake_time/config", ""],
+    ["homeassistant/time/hall_bed_time/config", ""],
+    ["homeassistant/sensor/hall_main_control/config", ""],
     ["home/hall/lighting/availability", ""],
     ["home/hall/circadian/state", ""],
+    ["home/hall/sleep/state", ""],
+    ["home/hall/wake-time/state", ""],
+    ["home/hall/bed-time/state", ""],
     ["home/hall/lighting/main/control", ""]
   ]);
 });
@@ -1435,6 +1445,9 @@ test("ID schemes: after a redeploy that changes the area, the old topics are cle
   assert.deepEqual(started[0]?.[0]?.map(({topic, payload}) => [topic, payload]), [
     ["home/hall/lighting/availability", ""],
     ["home/hall/circadian/state", ""],
+    ["home/hall/sleep/state", ""],
+    ["home/hall/wake-time/state", ""],
+    ["home/hall/bed-time/state", ""],
     ["home/hall/lighting/main/control", ""],
     ["home/den/lighting/availability", "online"]
   ]);
@@ -1442,7 +1455,8 @@ test("ID schemes: after a redeploy that changes the area, the old topics are cle
   // clears them again, and from then on nothing.
   const startup = await receive<SendEnvelope>(renamed, {lighting: {kind: "startup"}});
   assert.deepEqual((startup[0]?.[0] ?? []).map(({topic}) => topic),
-    ["home/hall/lighting/availability", "home/hall/circadian/state", "home/hall/lighting/main/control"]);
+    ["home/hall/lighting/availability", "home/hall/circadian/state", "home/hall/sleep/state", "home/hall/wake-time/state",
+      "home/hall/bed-time/state", "home/hall/lighting/main/control"]);
   const again = await receive<SendEnvelope>(renamed, {lighting: {kind: "startup"}});
   assert.equal(again.length, 1, "settled: no clears");
 
@@ -1480,8 +1494,15 @@ test("entity cleanup: a deleted node clears what it published; a disabled or red
   const cleared = await stop(deleted, true) as Array<Array<Array<{topic: string; payload: unknown; retain: boolean}>>>;
   assert.deepEqual(cleared[0]?.[0]?.map(({topic, payload, retain}) => [topic, payload, retain]), [
     ["homeassistant/switch/nrha_r1_circadian_lighting/config", "", true],
+    ["homeassistant/switch/nrha_r1_sleep/config", "", true],
+    ["homeassistant/time/nrha_r1_wake_time/config", "", true],
+    ["homeassistant/time/nrha_r1_bed_time/config", "", true],
+    ["homeassistant/sensor/nrha_r1_main_control/config", "", true],
     ["home/hall/lighting/availability", "", true],
     ["home/hall/circadian/state", "", true],
+    ["home/hall/sleep/state", "", true],
+    ["home/hall/wake-time/state", "", true],
+    ["home/hall/bed-time/state", "", true],
     ["home/hall/lighting/main/control", "", true]
   ]);
 
@@ -1508,6 +1529,9 @@ test("entity cleanup: switching Publish state off clears the room's state topics
   assert.deepEqual((startup[0]?.[0] ?? []).map(({topic, payload}) => [topic, payload]), [
     ["home/hall/lighting/availability", ""],
     ["home/hall/circadian/state", ""],
+    ["home/hall/sleep/state", ""],
+    ["home/hall/wake-time/state", ""],
+    ["home/hall/bed-time/state", ""],
     ["home/hall/lighting/main/control", ""]
   ]);
 });

@@ -24,8 +24,15 @@ test("the room controller decides about lights only; publishing adds the topics"
   assert.deepEqual(decided.controlChanged, []);
   assert.deepEqual(publishRoom(undefined, {lighting: {kind: "startup"}}, config, now).outputs.map(({topic}) => topic), [
     "homeassistant/switch/kitchen_circadian_lighting/config",
+    "homeassistant/switch/kitchen_sleep/config",
+    "homeassistant/time/kitchen_wake_time/config",
+    "homeassistant/time/kitchen_bed_time/config",
+    "homeassistant/sensor/kitchen_cooking_control/config",
     "home/kitchen/lighting/availability",
     "home/kitchen/circadian/state",
+    "home/kitchen/sleep/state",
+    "home/kitchen/wake-time/state",
+    "home/kitchen/bed-time/state",
     "home/kitchen/lighting/cooking/control"
   ]);
   // The controller reports which lights' control changed; publishing names the topic.
