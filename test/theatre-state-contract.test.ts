@@ -298,7 +298,7 @@ test("the transition's timing and degraded targets reach Home Assistant as the P
   assert.equal(phase && JSON.parse(phase.payload).json_attributes_topic, "home/lounge/theatre/transition");
 });
 
-test("a node-named contract needs no area: entity IDs and the suggested area come from the display name", () => {
+test("a node-named contract needs no area: entity IDs come from the display name, and only a typed area is suggested", () => {
   const base = {...config, nodeId: "c7", idScheme: "node" as const, area: "", displayName: "Media Room", baseTopic: "media/theatre"};
   const normalised = normaliseStateContractConfig(base);
   assert.equal(normalised.area, "");
@@ -306,7 +306,7 @@ test("a node-named contract needs no area: entity IDs and the suggested area com
   const select = startup.find(({topic}) => topic === "homeassistant/select/nrha_c7_theatre_activity/config");
   const payload = JSON.parse(select!.payload) as {default_entity_id: string; device: {suggested_area?: string}};
   assert.equal(payload.default_entity_id, ["select", "media_room_theatre_activity"].join("."));
-  assert.equal(payload.device.suggested_area, "Media Room");
+  assert.equal(payload.device.suggested_area, undefined, "no area typed, so no suggested area");
   // With an area, the area names them.
   const withArea = transitionTheatreStateContract(undefined, {theatreStateContract: {kind: "startup"}},
     normaliseStateContractConfig({...base, area: "Lounge"}), at(0)).publications;

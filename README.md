@@ -135,9 +135,9 @@ Version 3.0 changes some behaviour. Check these after upgrading:
 - **No node assumes a room.** An empty area is allowed. A node that publishes needs one where it names something:
   the theatre state contract for its default base topic (`home/<area>/theatre`), and a room lighting controller for
   the topics it publishes. A theatre state contract added from now on doesn't need one for Home Assistant
-  discovery: its entity IDs and suggested area come from its display name. One saved before needs an area for
-  discovery, as before. A room lighting controller with no area still controls its lights, but publishes no state
-  or discovery.
+  discovery: its entity IDs then come from its display name. With an area, it suggests that area to Home Assistant,
+  which creates it if no area of that name exists. One saved before needs an area for discovery, as before. A room
+  lighting controller with no area still controls its lights, but publishes no state or discovery.
 - **MQTT state publishing and Home Assistant discovery are opt-in** on the room lighting controller and the theatre
   state contract. New nodes start with them off. Nodes in a flow saved before 3.0 keep publishing until you untick
   the setting. Switching discovery off removes the entities from Home Assistant.

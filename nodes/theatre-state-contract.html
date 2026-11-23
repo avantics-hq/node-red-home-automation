@@ -77,6 +77,9 @@
   <p>Bridges non-retained MQTT activity requests to the theatre controller and publishes retained controller truth.</p>
   <p>Requests arrive on <code>&lt;base&gt;/request</code> with a request ID and activity. Retained requests are inert. Complete <code>msg.theatre</code> state snapshots publish desired, current, phase, transition (started and completed times and degraded targets, shown as the
     Phase sensor's attributes in Home Assistant), failure, readiness, operational SLO and per-target health topics. </p>
+  <p>With discovery, a contract added since node IDs suggests its <b>Area</b> to Home Assistant for its device, and
+    Home Assistant creates an area of that name if none exists. With no area, its entity IDs come from the
+    <b>Display name</b> and no area is suggested.</p>
   <p>Once the flows start it publishes a retained <code>online</code> on <code>&lt;base&gt;/availability</code>, and
     <code>offline</code> as it stops; its Home Assistant entities follow it. These get through only
     when this node is deployed on its own, so set the MQTT broker node's Birth, Close and Will messages to the same (see the

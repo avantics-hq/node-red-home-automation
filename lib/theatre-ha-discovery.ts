@@ -36,8 +36,8 @@ export interface TheatreDiscoveryConfig extends DiscoveryOwner {
   activities: string[];
 }
 
-// Under the node scheme the area is optional: entity IDs and the device's
-// suggested area then come from the display name.
+// Under the node scheme the area is optional: entity IDs then come from the
+// display name.
 function namedArea(config: TheatreDiscoveryConfig): string {
   return config.area || config.displayName;
 }
@@ -45,7 +45,9 @@ function namedArea(config: TheatreDiscoveryConfig): string {
 function device(config: TheatreDiscoveryConfig) {
   return {
     ...discoveryDevice(config, "theatre"),
-    ...(config.idScheme === "node" ? {suggested_area: namedArea(config)} : {}),
+    // Only an area the user typed: Home Assistant creates an area of that name
+    // if none exists, so a display name such as "Home Cinema" would make one.
+    ...(config.idScheme === "node" && config.area ? {suggested_area: config.area} : {}),
     name: `${config.displayName} Theatre Controller`,
     manufacturer: "Node-RED",
     model: "Deterministic theatre activity controller"
