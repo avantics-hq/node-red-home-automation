@@ -11,11 +11,13 @@ import {
 import {scheduledLighting} from "../lib/circadian";
 import {resolveSchedule} from "../lib/circadian-schedule";
 import type {LightLevels} from "../lib/light-styling";
-import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
+import {guarded, invalidConfig, objectField, onInput, onUnlessOff, optionalArea, runReducer, type Send} from "./adapter";
 import {numberSetting} from "../lib/settings";
 
 interface RoomControllerConfig extends NodeDef {
   area?: string;
+  publishState?: boolean | string;
+  discovery?: boolean | string;
   displayName?: string;
   targets?: string;
   maxBrightnessPct?: number | string;
@@ -56,8 +58,15 @@ const registerRoomController: NodeInitializer = (RED) => {
   function HomeRoomLightingController(this: RoomControllerNode, config: RoomControllerConfig) {
     RED.nodes.createNode(this, config);
     const node = this;
-    // Optional: with no area the room publishes no area topics or discovery.
     const area = optionalArea(config);
+    // A saved flow without these settings keeps publishing as before.
+    const publishState = onUnlessOff(config.publishState);
+    const discovery = onUnlessOff(config.discovery);
+    // Both publish under topics and IDs named after the area.
+    if ((publishState || discovery) && !area) {
+      invalidConfig(node, new Error("area is required"));
+      return;
+    }
     let refreshTimer: ReturnType<typeof setInterval> | undefined;
 
     let controllerConfig: RoomConfig;
@@ -76,6 +85,8 @@ const registerRoomController: NodeInitializer = (RED) => {
       controllerConfig = {
         area,
         displayName: config.displayName || area,
+        publishState,
+        discovery,
         targets: parseTargets(config.targets),
         initialTransitionSeconds: numberSetting(config.initialTransitionSeconds, "initial transition", 1),
         refreshTransitionSeconds: numberSetting(config.refreshTransitionSeconds, "refresh transition", 60),

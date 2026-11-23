@@ -19,6 +19,12 @@ export interface RoomConfig {
   displayName: string;
   targets: RoomTarget[];
   initialSleep: boolean;
+  // Publish each light's control state and the circadian state over MQTT,
+  // and the circadian switch's Home Assistant discovery (which needs the
+  // state). Both are named after the area. Unset means on, as before these
+  // settings existed.
+  publishState?: boolean;
+  discovery?: boolean;
   refreshTransitionSeconds: number;
   initialTransitionSeconds: number;
   // How a light should look at a given moment; the node builds it from its
@@ -193,9 +199,10 @@ export function transitionRoom(
   }
 
   // What the room publishes for MQTT and Home Assistant to see is named after
-  // its area, so a room with no area publishes none of it; light control
-  // does not depend on it.
-  const publishesArea = config.area !== "";
+  // its area, so it needs one, and is switched on by its settings; light
+  // control depends on neither.
+  const publishesArea = config.area !== "" && config.publishState !== false;
+  const publishesDiscovery = publishesArea && config.discovery !== false;
 
   function refreshCommands(source: string): RoomOutput[] {
     if (!state.circadianEnabled) return [];
@@ -277,7 +284,13 @@ export function transitionRoom(
 
   const event: LightingEvent = msg.lighting || {};
   if (event.kind === "startup") {
-    if (publishesArea) outputs.push(...roomLightingDiscovery(config.area, config.displayName, state.circadianEnabled));
+    if (config.area !== "") {
+      const entry = roomLightingDiscovery(config.area, config.displayName, state.circadianEnabled)[0]!;
+      // Discovery switched off: an empty retained entry removes the switch
+      // from Home Assistant.
+      outputs.push(publishesDiscovery ? entry : {topic: entry.topic, payload: "", retain: true});
+    }
+    if (publishesArea) outputs.push(circadianStateMessage(config.area, state.circadianEnabled));
     for (const target of config.targets) controlChanged.add(target.id);
   } else if (event.kind === "observed") {
     const target = event.target ? targetById[event.target] : targetForTopic(msg.topic, "stateTopic");

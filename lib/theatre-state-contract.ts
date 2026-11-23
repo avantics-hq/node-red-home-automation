@@ -22,6 +22,9 @@ export interface TheatreStateContractConfig {
   discoveryPrefix: string;
   activities: string[];
   slo: TheatreSloConfig;
+  // Publish Home Assistant discovery. Unset means on, as before the setting
+  // existed.
+  discovery?: boolean;
 }
 
 export interface ContractRequest {
@@ -76,10 +79,14 @@ export interface ContractRequestOutput {
 export function normaliseStateContractConfig(
   config: Partial<TheatreStateContractConfig> = {}
 ): TheatreStateContractConfig {
+  const discovery = config.discovery !== false;
+  // The area names the discovery entities and the default base topic, so it
+  // is needed for either; otherwise it is optional.
   const area = String(config.area || "").trim();
-  if (!NAME.test(area)) throw new Error("area must be a lowercase identifier");
-  const displayName = String(config.displayName || "").trim();
-  if (!displayName) throw new Error("displayName is required");
+  if (!area && (discovery || !config.baseTopic)) throw new Error("area is required");
+  if (area && !NAME.test(area)) throw new Error("area must be a lowercase identifier");
+  const displayName = String(config.displayName || area).trim();
+  if (discovery && !displayName) throw new Error("displayName is required");
   const baseTopic = String(config.baseTopic || `home/${area}/theatre`).replace(/^\/+|\/+$/g, "");
   const discoveryPrefix = String(config.discoveryPrefix || "homeassistant").replace(/^\/+|\/+$/g, "");
   if (!baseTopic || /[+#]/.test(baseTopic)) throw new Error("baseTopic must be a concrete MQTT topic");
@@ -100,7 +107,8 @@ export function normaliseStateContractConfig(
     baseTopic,
     discoveryPrefix,
     activities,
-    slo: normaliseTheatreSloConfig(config.slo)
+    slo: normaliseTheatreSloConfig(config.slo),
+    discovery
   };
 }
 
@@ -250,7 +258,11 @@ export function transitionTheatreStateContract(
   }
 
   if (msg.theatreStateContract?.kind === "startup") {
-    publications.push(...theatreDiscovery(config).map(({topic, payload}) => publication(topic, payload)));
+    // Discovery switched off: empty retained entries remove the entities
+    // from Home Assistant.
+    const entries = config.discovery !== false || config.area ? theatreDiscovery(config) : [];
+    publications.push(...entries.map(({topic, payload}) =>
+      publication(topic, config.discovery !== false ? payload : "")));
     trace("startup", "discovery", null, {publications: publications.length});
   } else if (msg.topic === theatreTopic(config.baseTopic, "request")) {
     if (msg.retain === true) {

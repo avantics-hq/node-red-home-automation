@@ -60,13 +60,13 @@ export function optionalArea(config: {area?: unknown}): string {
   return typeof config.area === "string" ? config.area.trim() : "";
 }
 
-// The area of a node that builds MQTT topics or Home Assistant IDs from it,
-// or null after showing "invalid configuration" when it has none, in which
-// case the node should not start.
-export function configuredArea(node: Node, config: {area?: unknown}): string | null {
-  const area = optionalArea(config);
-  if (!area) invalidConfig(node, new Error("area is required"));
-  return area || null;
+// A publishing setting. A saved flow from before the setting existed has no
+// value (undefined, or null once the editor has loaded it), and keeps
+// publishing as it did; a node added since has an explicit true or false.
+// Only false, or "false", is off; anything else, including an unexpected "",
+// counts as on.
+export function onUnlessOff(value: unknown): boolean {
+  return value !== false && value !== "false";
 }
 
 // The one badge for a configuration the node cannot use, with the reason in

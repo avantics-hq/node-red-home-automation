@@ -671,3 +671,34 @@ test("a confirmed OFF leaves control as the OFF intent set it", () => {
   assert.equal(JSON.stringify(confirmed.state.control), controlBefore);
   assert.equal(confirmed.outputs.some((entry) => entry.topic.endsWith("/control")), false, "no control change is published");
 });
+
+test("publish settings: state and discovery each switch on and off, and unset means on", () => {
+  const startupTopics = (settings: Partial<RoomConfig>) =>
+    transitionRoom(undefined, {lighting: {kind: "startup"}}, {...config, ...settings}, now).outputs.map(({topic, payload}) => [topic, payload]);
+  const discoveryTopic = "homeassistant/switch/kitchen_circadian_lighting/config";
+  const controlTopic = "home/kitchen/lighting/cooking/control";
+
+  // Unset (a saved flow from before the settings): both on, as before.
+  const legacy = startupTopics({});
+  assert.ok(legacy.some(([topic, payload]) => topic === discoveryTopic && typeof payload === "object"));
+  assert.ok(legacy.some(([topic]) => topic === controlTopic));
+  assert.ok(legacy.some(([topic]) => topic === "home/kitchen/circadian/state"));
+
+  // State on, discovery off: the state is published, and the switch is
+  // removed from Home Assistant with an empty retained entry.
+  const stateOnly = startupTopics({publishState: true, discovery: false});
+  assert.ok(stateOnly.some(([topic]) => topic === controlTopic));
+  assert.deepEqual(stateOnly.filter(([topic]) => topic === discoveryTopic), [[discoveryTopic, ""]]);
+
+  // Discovery needs the state: with state off, nothing named after the area
+  // is published, and the discovery entry is cleared.
+  const off = startupTopics({publishState: false, discovery: true});
+  assert.deepEqual(off, [[discoveryTopic, ""]]);
+  assert.deepEqual(startupTopics({publishState: false, discovery: false}), [[discoveryTopic, ""]]);
+
+  // Circadian changes publish their state only with state on.
+  const circadian = (settings: Partial<RoomConfig>) =>
+    transitionRoom(undefined, {lighting: {kind: "circadian", enabled: false}}, {...config, ...settings}, now).outputs.map(({topic}) => topic);
+  assert.deepEqual(circadian({publishState: true}), ["home/kitchen/circadian/state"]);
+  assert.deepEqual(circadian({publishState: false}), []);
+});

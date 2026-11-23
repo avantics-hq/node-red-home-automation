@@ -72,7 +72,8 @@ function request(
 }
 
 test("state-contract configuration owns topics and activity names", () => {
-  assert.deepEqual(normaliseStateContractConfig(config), config);
+  // Discovery is on unless switched off.
+  assert.deepEqual(normaliseStateContractConfig(config), {...config, discovery: true});
   assert.throws(
     () => normaliseStateContractConfig({...config, baseTopic: "home/+/theatre"}),
     /concrete MQTT topic/
@@ -214,4 +215,27 @@ test("stale controller snapshots cannot overwrite a newer requested generation",
   assert.equal(result.publications.length, 0);
   assert.equal(result.state.lastRequest?.requestId, "new-request");
   assert.equal(result.traces.at(-1)?.reason, "stale-generation");
+});
+
+test("discovery is a setting: on publishes it, off clears it, unset means on", () => {
+  const startup = (settings: Partial<TheatreStateContractConfig>) =>
+    transitionTheatreStateContract(undefined, {theatreStateContract: {kind: "startup"}}, {...config, ...settings}, at(0)).publications;
+  const on = startup({});
+  assert.equal(on.length, 13);
+  assert.ok(on.every(({payload}) => payload.startsWith("{")));
+  const off = startup({discovery: false});
+  assert.deepEqual(off.map(({topic}) => topic), on.map(({topic}) => topic), "the same discovery topics");
+  assert.ok(off.every(({payload, retain}) => payload === "" && retain), "each cleared with an empty retained message");
+  // With no area there are no entities to clear.
+  assert.deepEqual(startup({discovery: false, area: ""}), []);
+});
+
+test("the area is needed for discovery or the default base topic, and optional otherwise", () => {
+  const noArea = {...config, area: "", displayName: ""};
+  assert.throws(() => normaliseStateContractConfig(noArea), /area is required/, "discovery unset means on");
+  assert.throws(() => normaliseStateContractConfig({...noArea, discovery: true}), /area is required/);
+  assert.throws(() => normaliseStateContractConfig({...noArea, discovery: false, baseTopic: ""}), /area is required/);
+  const topicOnly = normaliseStateContractConfig({...noArea, discovery: false, baseTopic: "media/theatre"});
+  assert.equal(topicOnly.area, "");
+  assert.equal(topicOnly.baseTopic, "media/theatre");
 });

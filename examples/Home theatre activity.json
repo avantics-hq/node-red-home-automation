@@ -83,7 +83,8 @@
       [
         "example-home-theatre-activity-retained-state"
       ]
-    ]
+    ],
+    "discovery": false
   },
   {
     "id": "example-home-theatre-activity-retained-state",
