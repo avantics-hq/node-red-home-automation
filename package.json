@@ -25,6 +25,7 @@
     "dist/nodes",
     "examples",
     "contract-examples",
+    "THIRD-PARTY-NOTICES.md",
     "!dist/**/*.js.map"
   ],
   "scripts": {

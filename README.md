@@ -316,6 +316,15 @@ The strict TypeScript build, compiled test suite, executable contract examples, 
 Contributions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md) and the
 [Code of Conduct](CODE_OF_CONDUCT.md).
 
+## Acknowledgements
+
+The circadian sun-position curve and the brightness and colour-temperature rules
+in the room lighting controller are adapted from
+[Adaptive Lighting](https://github.com/basnijholt/adaptive-lighting) by
+basnijholt, licensed under Apache-2.0. See
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). They are due to be replaced by
+an original implementation.
+
 ## License
 
 [MIT](LICENSE)
