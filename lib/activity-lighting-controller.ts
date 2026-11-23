@@ -455,6 +455,11 @@ export function transitionActivityLighting(
       else {
         commands.push(commandFor(state, config, "observe", 0));
         state.phase = "confirming";
+        // After a restart nothing else would end an unanswered observe: give
+        // it a deadline, so it re-applies and then fails as a live request.
+        if (event.kind === "startup" && state.blockedGeneration !== state.generation) {
+          state.pending = {attempt: 0, deadlineAt: nowMs + config.confirmationTimeoutMs};
+        }
         trace(event.kind, "observing", null, {profile: state.desired.profile});
       }
     } else {

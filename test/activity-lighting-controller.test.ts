@@ -250,3 +250,22 @@ test("release uses the lights actually applied, even after profiles change on a 
   assert.deepEqual(releases(result), [{kind: "release", owner: "lounge-activity", source: "activity"}]);
   assert.equal(result.commands[0]?.profile, "retired");
 });
+
+test("a restart's observe has a deadline and ends as a live request would", () => {
+  // A tv request was in flight when Node-RED restarted.
+  const restored = intent(undefined, "tv", 1, 0).state;
+  let result = apply(restored, {kind: "startup"}, 10);
+  assert.equal(result.state.phase, "confirming");
+  assert.ok(result.state.pending, "the startup observe has a deadline");
+
+  // No light answers: at the deadline the profile is applied again, and
+  // after the last attempt the request fails instead of confirming forever.
+  const operations: string[] = [];
+  for (let seconds = 11; seconds <= 40; seconds += 1) {
+    result = apply(result.state, {kind: "tick", generation: 1}, seconds);
+    operations.push(...result.commands.map((command) => String(command.operation)));
+  }
+  assert.ok(operations.includes("apply"));
+  assert.equal(result.state.phase, "failed");
+  assert.equal(result.state.failure?.reason, "confirmation-timeout");
+});
