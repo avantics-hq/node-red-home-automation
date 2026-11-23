@@ -842,6 +842,29 @@ test("wired contract and activity controller never lose a request to a recovery 
   assert.equal(contractState.generation, state.desired.generation);
 });
 
+test("AVR adapter rejects a configuration the reducer would reject, at deploy", () => {
+  for (const [label, overrides, reason] of [
+    ["lowercase source code", {sources: "{\"shield\":\"sat/cbl\"}"}, /Denon source codes/],
+    ["minimum volume above maximum", {minVolume: 70, maxVolume: 60}, /volume bounds/]
+  ] as const) {
+    const {Constructor} = runtime(registerAvr);
+    const node = new Constructor({
+      area: "lounge",
+      sources: "{\"shield\":\"SAT/CBL\"}",
+      retryMs: 2000,
+      maxAttempts: 3,
+      ...overrides
+    });
+    const status = node.statuses.at(-1) as {fill?: string; text?: string} | undefined;
+    assert.equal(status?.fill, "red", label);
+    assert.equal(status?.text, "invalid configuration", label);
+    assert.match(String(node.errors[0]), /^invalid configuration: /, label);
+    assert.match(String(node.errors[0]), reason, label);
+    // Inert: no input handler was registered.
+    assert.equal(node.emit("input", {avr: {kind: "startup"}}, () => {}, () => {}), false, label);
+  }
+});
+
 test("room adapter rejects an unusable wake and bed schedule at deploy", () => {
   for (const [label, times, reason] of [
     ["not a time", {wakeTime: "7am", bedTime: "23:00"}, /HH:MM/],
