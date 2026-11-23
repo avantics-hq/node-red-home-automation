@@ -11,7 +11,7 @@ import {
   type TheatreSloState
 } from "./theatre-slo";
 import type {TraceEntry} from "./bounded-trace";
-import {IDENTIFIER, areaId, discoveryPrefixSetting, publishingArea} from "./ha-discovery";
+import {IDENTIFIER, OFFLINE, ONLINE, areaId, discoveryPrefixSetting, publishingArea} from "./ha-discovery";
 
 const REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 
@@ -171,7 +171,7 @@ function statePublications(
     publication(theatreTopic(base, "current"), event.currentActivity),
     publication(theatreTopic(base, "phase"), event.phase),
     publication(theatreTopic(base, "failure"), event.failure),
-    publication(theatreTopic(base, "availability"), event.availability),
+    publication(theatreTopic(base, "readiness"), event.availability),
     publication(theatreTopic(base, "metrics"), event.metrics || {
       requests: 0,
       ready: 0,
@@ -211,7 +211,7 @@ function requestPublications(
     publication(theatreTopic(base, "desired"), request),
     publication(theatreTopic(base, "phase"), "requested"),
     publication(theatreTopic(base, "failure"), null),
-    publication(theatreTopic(base, "availability"), "unknown")
+    publication(theatreTopic(base, "readiness"), "unknown")
   ];
 }
 
@@ -232,6 +232,12 @@ function asStateSnapshot(value: unknown): TheatreStateSnapshot {
     throw new Error("theatre state targets must be an object");
   }
   return event as TheatreStateSnapshot;
+}
+
+// What the contract publishes as it stops, so Home Assistant shows its
+// entities as unavailable rather than stale.
+export function theatreStoppingPublications(config: TheatreStateContractConfig): ContractPublication[] {
+  return [publication(theatreTopic(config.baseTopic, "availability"), OFFLINE)];
 }
 
 export function transitionTheatreStateContract(
@@ -258,6 +264,7 @@ export function transitionTheatreStateContract(
     const entries = config.discovery !== false || config.area ? theatreDiscovery(config) : [];
     publications.push(...entries.map(({topic, payload}) =>
       publication(topic, config.discovery !== false ? payload : "")));
+    publications.push(publication(theatreTopic(config.baseTopic, "availability"), ONLINE));
     trace("startup", "discovery", null, {publications: publications.length});
   } else if (msg.topic === theatreTopic(config.baseTopic, "request")) {
     if (msg.retain === true) {

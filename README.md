@@ -137,11 +137,18 @@ Version 3.0 changes some behaviour. Check these after upgrading:
   lowercase, with each run of spaces or other characters (anything but letters, digits, `_` and `-`) as `_`:
   "Living Room" publishes under `home/living_room/…`, and "living-room" is unchanged.
   Names shown in Home Assistant keep the area as you typed it.
+- **Availability:** each publishing node sends a retained `online` when it starts and `offline` when it stops, on
+  `home/<area>/lighting/availability` (room) or `<base>/availability` (theatre), and its Home Assistant entities
+  follow it. Node-RED stops the MQTT out node at the same moment on a full deploy, a restart or a shutdown, so the
+  node's own `offline` only gets through when it is deployed alone. To cover the rest, and crashes, set the MQTT
+  broker node's **Close message** and **Will message** to `offline`, retained, on the same topic; with several
+  publishing nodes, the broker can cover one of them. The theatre's readiness (`unknown`, `available`, `degraded`
+  or `unavailable`), which used `<base>/availability` before, is now on `<base>/readiness`.
 
 The whole-theatre MQTT contract uses non-retained requests at
 `home/<area>/theatre/request`; every request supplies a unique `requestId` and an
 explicit configured activity. Controller output is retained under `desired`,
-`current`, `phase`, `failure`, `availability`, `metrics`, `slo`, and
+`current`, `phase`, `failure`, `readiness`, `metrics`, `slo`, and
 `health/<target>`. Metrics expose transition latency and outcome counts plus
 per-target retry, fallback, confirmation-latency, failure, manual-override, and
 availability evidence. The SLO evaluator keeps a bounded outcome window,

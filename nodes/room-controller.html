@@ -91,7 +91,10 @@
   <dl class="message-properties">
     <dt>Publish state over MQTT</dt><dd>each light's control state on
       <code>home/&lt;area&gt;/lighting/&lt;target&gt;/control</code> and the circadian state on
-      <code>home/&lt;area&gt;/circadian/state</code>.</dd>
+      <code>home/&lt;area&gt;/circadian/state</code>. It also publishes a retained <code>online</code> on
+      <code>home/&lt;area&gt;/lighting/availability</code> at startup and <code>offline</code> as it stops, which the
+      circadian switch in Home Assistant follows. The <code>offline</code> gets through only when this node is
+      deployed alone, so set the MQTT broker node's Close and Will messages to the same (see the README).</dd>
     <dt>Home Assistant discovery</dt><dd>a circadian switch in Home Assistant, which reads that state and sends
       ON/OFF to <code>home/&lt;area&gt;/circadian/set</code>. To act on it, wire an MQTT in node subscribed to that
       topic into this node. It needs <b>Publish state</b>. Switching it off

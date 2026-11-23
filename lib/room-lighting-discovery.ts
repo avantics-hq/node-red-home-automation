@@ -4,7 +4,7 @@
 // circadian switch and the retained state that entry reads. Home Assistant
 // may send ON/OFF on the command topic, which the room controller acts on.
 
-import {DISCOVERY_ORIGIN, areaId} from "./ha-discovery";
+import {DISCOVERY_ORIGIN, OFFLINE, ONLINE, areaId} from "./ha-discovery";
 
 export interface DiscoveryMessage {
   topic: string;
@@ -18,6 +18,15 @@ export function circadianStateTopic(area: string): string {
 
 export function circadianCommandTopic(area: string): string {
   return "home/" + areaId(area) + "/circadian/set";
+}
+
+// The room's own availability, online or offline, for Home Assistant.
+export function roomAvailabilityTopic(area: string): string {
+  return "home/" + areaId(area) + "/lighting/availability";
+}
+
+export function roomAvailabilityMessage(area: string, online: boolean): DiscoveryMessage {
+  return {topic: roomAvailabilityTopic(area), payload: online ? ONLINE : OFFLINE, retain: true};
 }
 
 // The retained circadian state, as Home Assistant reads it.
@@ -45,6 +54,7 @@ export function roomLightingDiscovery(config: RoomDiscoveryConfig, circadianEnab
         icon: "mdi:clock-time-seven-outline",
         command_topic: circadianCommandTopic(area),
         state_topic: circadianStateTopic(area),
+        availability_topic: roomAvailabilityTopic(area),
         payload_on: "ON",
         payload_off: "OFF",
         optimistic: false,

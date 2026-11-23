@@ -25,8 +25,16 @@ test("theatre discovery describes every published topic under the discovery pref
 
   const stateTopics = entries.slice(1).map(({payload}) => payload.state_topic);
   assert.deepEqual(stateTopics, [
-    ...(["current", "phase", "availability", "failure", "metrics", "slo", "slo/breach"] as const)
+    ...(["current", "phase", "readiness", "failure", "metrics", "slo", "slo/breach"] as const)
       .map((name) => theatreTopic(config.baseTopic, name)),
     ...TARGETS.map((target) => theatreTopic(config.baseTopic, `health/${target}`))
   ]);
+});
+
+test("every theatre entity follows the node's availability, and readiness has its own name and topic", () => {
+  const entries = theatreDiscovery(config);
+  for (const {topic, payload} of entries) assert.equal(payload.availability_topic, theatreTopic(config.baseTopic, "availability"), topic);
+  const readiness = entries.find(({payload}) => payload.state_topic === theatreTopic(config.baseTopic, "readiness"));
+  assert.equal(readiness?.payload.name, "Readiness");
+  assert.equal(readiness?.payload.unique_id, "lounge_theatre_availability", "the unique ID is kept, so the entity carries over");
 });

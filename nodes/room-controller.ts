@@ -2,6 +2,7 @@
 
 import type {Node, NodeDef, NodeInitializer} from "node-red";
 import {
+  roomStoppingOutputs,
   transitionRoom,
   type RoomConfig,
   type RoomMessage,
@@ -138,6 +139,11 @@ const registerRoomController: NodeInitializer = (RED) => {
 
     node.on("close", (_removed: boolean, done: () => void) => {
       clearInterval(refreshTimer);
+      // Reaches the broker only if the MQTT out node is still running, as in a
+      // deploy of this node alone; the broker's own Close and Will messages
+      // cover a full deploy, a restart and a crash (see the README).
+      const stopping = roomStoppingOutputs(controllerConfig);
+      if (stopping.length) node.send([stopping.map((output) => ({...output}))]);
       done();
     });
   }

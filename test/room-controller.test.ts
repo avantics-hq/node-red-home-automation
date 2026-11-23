@@ -179,11 +179,12 @@ test("off-only intents preserve active lights while applying a bedtime level to 
 
 test("startup publishes stable discovery and state messages", () => {
   const result = transitionRoom(undefined, {lighting: {kind: "startup"}}, config, now);
-  assert.equal(result.outputs.length, 4);
+  assert.equal(result.outputs.length, 5);
   assert.equal(output(result, 0).topic, "homeassistant/switch/kitchen_circadian_lighting/config");
   assert.equal(output(result, 0).retain, true);
-  assert.equal(output(result, 1).topic, "home/kitchen/circadian/state");
-  assert.deepEqual(result.outputs.slice(2), [
+  assert.deepEqual(output(result, 1), {topic: "home/kitchen/lighting/availability", payload: "online", retain: true});
+  assert.equal(output(result, 2).topic, "home/kitchen/circadian/state");
+  assert.deepEqual(result.outputs.slice(3), [
     {topic: "home/kitchen/lighting/cooking/control", payload: {state: "in-control", owner: null}, retain: true},
     {topic: "home/kitchen/lighting/dining/control", payload: {state: "in-control", owner: null}, retain: true}
   ]);
@@ -734,6 +735,7 @@ test("an area that isn't an identifier publishes under its ID, and keeps its nam
   const startup = transitionRoom(undefined, {lighting: {kind: "startup"}}, living, now);
   assert.deepEqual(startup.outputs.map(({topic}) => topic), [
     "homeassistant/switch/living_room_circadian_lighting/config",
+    "home/living_room/lighting/availability",
     "home/living_room/circadian/state",
     "home/living_room/lighting/cooking/control",
     "home/living_room/lighting/dining/control"

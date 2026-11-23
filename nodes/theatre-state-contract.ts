@@ -3,6 +3,7 @@
 import type {Node, NodeDef, NodeInitializer} from "node-red";
 import {
   normaliseStateContractConfig,
+  theatreStoppingPublications,
   transitionTheatreStateContract,
   type TheatreStateContractConfig,
   type TheatreStateContractMessage,
@@ -92,6 +93,10 @@ const registerTheatreStateContract: NodeInitializer = (RED) => {
     });
 
     node.on("close", (_removed: boolean, done: () => void) => {
+      // Reaches the broker only if the MQTT out node is still running, as in a
+      // deploy of this node alone; the broker's own Close and Will messages
+      // cover a full deploy, a restart and a crash (see the README).
+      node.send([null, theatreStoppingPublications(controllerConfig).map((entry) => ({...entry}))]);
       done();
     });
   }

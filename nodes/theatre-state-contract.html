@@ -66,7 +66,11 @@
 
 <script type="text/html" data-help-name="home-theatre-state-contract">
   <p>Bridges non-retained MQTT activity requests to the theatre controller and publishes retained controller truth.</p>
-  <p>Requests arrive on <code>&lt;base&gt;/request</code> with a request ID and activity. Retained requests are inert. Complete <code>msg.theatre</code> state snapshots publish desired, current, phase, failure, availability, operational SLO and per-target health topics. </p>
+  <p>Requests arrive on <code>&lt;base&gt;/request</code> with a request ID and activity. Retained requests are inert. Complete <code>msg.theatre</code> state snapshots publish desired, current, phase, failure, readiness, operational SLO and per-target health topics. </p>
+  <p>On startup it publishes a retained <code>online</code> on <code>&lt;base&gt;/availability</code>, and
+    <code>offline</code> as it stops; its Home Assistant entities follow it. The <code>offline</code> gets through only
+    when this node is deployed alone, so set the MQTT broker node's Close and Will messages to the same (see the
+    README).</p>
   <p>With <b>Home Assistant discovery</b> on, a startup event also publishes discovery for the activity selector and
     status sensors; switched off, it clears them, so Home Assistant removes them. New nodes start with it off; a node
     saved before the setting existed keeps it on.</p>
