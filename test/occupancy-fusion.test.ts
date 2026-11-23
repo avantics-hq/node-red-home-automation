@@ -62,3 +62,24 @@ test("unknown and unavailable sensor states do not clear occupancy", () => {
   assert.equal(occupancy(unknown).length, 0);
   assert.equal(unknown.traces[0]!.reason, "unknown-state");
 });
+
+test("the fused state changes only with an emit", () => {
+  // dev-review repro: motion off while presence is on set occupied silently.
+  let result = transitionOccupancy(undefined, {source: "presence", payload: true}, pirAndPresence);
+  result = transitionOccupancy(result.state, {source: "motion", payload: false}, pirAndPresence);
+  assert.equal(result.status.occupied, false);
+  assert.deepEqual(occupancy(result), []);
+
+  // Every change of the fused state is emitted, and nothing else is.
+  let occupied = result.state.occupied;
+  for (const [source, payload] of [
+    ["motion", true], ["motion", false], ["presence", false], ["presence", true],
+    ["motion", false], ["motion", true], ["presence", false], ["motion", false]
+  ] as const) {
+    result = transitionOccupancy(result.state, {source, payload}, pirAndPresence);
+    const emitted = occupancy(result).map(({occupied: value}) => value);
+    if (result.state.occupied !== occupied) assert.deepEqual(emitted, [result.state.occupied], `${source}=${payload}`);
+    else if (!(source === "motion" && payload === true)) assert.deepEqual(emitted, [], `${source}=${payload}`);
+    occupied = result.state.occupied;
+  }
+});
