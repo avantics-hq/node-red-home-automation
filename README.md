@@ -123,6 +123,8 @@ Version 3.0 changes some behaviour. Check these after upgrading:
 - **Wall switches go through the switch lighting policy node.** The motion lighting policy no longer handles them,
   and ignores switch messages, so rewire any wall switch that feeds a motion node. The room lighting controller now
   keeps a light that a person set after the room went vacant, instead of the motion node.
+- **The motion node's `delay` message takes seconds,** the same unit as its "Vacancy seconds" setting; it took
+  minutes before. A redeploy with a changed vacancy delay or lux cutoff now takes effect.
 - **Settings are checked when you deploy.** An emptied or unusable setting shows "invalid configuration", and the
   node's log says which setting is wrong. A setting your flow saved before it existed still takes its default.
 - **No node assumes a room.** An empty area is allowed, except on the theatre state contract, which needs one to name
