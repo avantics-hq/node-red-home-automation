@@ -85,9 +85,17 @@ export function whenFlowsStarted(RED: NodeAPI, node: Node, action: () => void): 
 // record is kept in the node's context, so it survives redeploys, which is
 // when what a node publishes changes; it survives a restart only if the
 // default context store persists.
-export function clearStaleRetained(node: Node, current: string[]): RetainedClear[] {
+//
+// It runs twice: once the flows have started, so no startup message is
+// needed, and again at the startup message. The first may go out before the
+// MQTT broker has reconnected (after a full deploy or a restart), when the
+// broker node drops it, so it keeps the cleared topics in the record and the
+// second clears them again and settles the record. Clearing a topic twice
+// does no harm.
+export function clearStaleRetained(node: Node, current: string[], when: "flows-started" | "startup" = "startup"): RetainedClear[] {
   const context = node.context();
-  const {clears, record} = staleRetainedTopics(context.get("retainedTopics") as string[] | undefined, current);
+  const recorded = context.get("retainedTopics") as string[] | undefined;
+  const {clears, record} = staleRetainedTopics(recorded, current, when === "flows-started");
   context.set("retainedTopics", record);
   return clears;
 }

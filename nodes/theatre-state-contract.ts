@@ -107,7 +107,8 @@ const registerTheatreStateContract: NodeInitializer = (RED) => {
     // Available again as soon as this node runs, as after a redeploy of it
     // alone, rather than waiting for the flow's startup message.
     whenFlowsStarted(RED, node, () => {
-      node.send([null, theatreStartingPublications(controllerConfig).map((entry) => ({...entry}))]);
+      const clears = clearStaleRetained(node, theatreRetainedTopics(controllerConfig), "flows-started");
+      node.send([null, [...clears, ...theatreStartingPublications(controllerConfig)].map((entry) => ({...entry}))]);
     });
 
     node.on("close", (_removed: boolean, done: () => void) => {

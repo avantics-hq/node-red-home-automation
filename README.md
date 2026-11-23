@@ -142,10 +142,14 @@ Version 3.0 changes some behaviour. Check these after upgrading:
   area or display name updates the same entities. Nodes in flows saved before this keep naming them after the area,
   exactly as before, so nothing changes for them in Home Assistant. Either way, the entity ID Home Assistant first
   gives an entity comes from the area, with `-` as `_`.
-- **Topics no longer published are cleared.** At its startup message a node clears any retained topic it published
-  before and no longer does, for example after an area, base topic, discovery prefix or target change. It remembers
-  what it published in its node context, which lasts across deploys; it lasts across a Node-RED restart only if your
-  default context store is persistent, so a change deployed just before a restart may leave its old topics behind.
+  Importing a node in the editor, including Import > Replace (which keeps the node's ID), sets it up as a new node,
+  so an older node brought in that way switches to node-based IDs at its next start: its area-named entities are
+  removed and new ones created with the same entity IDs, keeping their history but not changes made to them in Home
+  Assistant (name, area, icon).
+- **Topics no longer published are cleared.** Once the flows have started, and again at its startup message, a node
+  clears any retained topic it published before and no longer does, for example after an area, base topic,
+  discovery prefix or target change. It remembers what it published in its node context, which lasts across deploys;
+  it lasts across a Node-RED restart only if your default context store is persistent.
 - **Availability:** each publishing node sends a retained `online` once the flows have started (and again at its
   startup message) and `offline` when it stops, on `home/<area>/lighting/availability` (room) or
   `<base>/availability` (theatre), and its Home Assistant entities follow it. These get through when the node is

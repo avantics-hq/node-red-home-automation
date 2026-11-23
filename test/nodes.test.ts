@@ -1328,7 +1328,8 @@ test("availability: a node redeployed on its own is available again without a st
   roomRuntime.events.emit("flows:started");
   assert.equal(after.sent.length, 1, "once per construction");
 
-  const quiet = new roomRuntime.Constructor({targets, area: "hall", publishState: false, discovery: false});
+  // A different node, so its own context.
+  const quiet = new roomRuntime.Constructor({id: "quiet", targets, area: "hall", publishState: false, discovery: false});
   t.after(() => close(quiet));
   const quietRuntime = roomRuntime;
   quietRuntime.events.emit("flows:started");
@@ -1411,4 +1412,42 @@ test("ID schemes: after an area change, a node clears the retained topics it no 
     ["home/hall/circadian/state", ""],
     ["home/hall/lighting/main/control", ""]
   ]);
+});
+
+test("ID schemes: after a redeploy that changes the area, the old topics are cleared once the flows start", async (t) => {
+  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
+  const roomRuntime = runtime(registerRoom);
+  const settings = {id: "r5", idScheme: "node", targets, publishState: true, discovery: true};
+  const first = new roomRuntime.Constructor({...settings, area: "hall"});
+  roomRuntime.events.emit("flows:started");
+  await close(first);
+  const renamed = new roomRuntime.Constructor({...settings, area: "den"});
+  t.after(() => close(renamed));
+  // No startup message: the flows starting is enough.
+  roomRuntime.events.emit("flows:started");
+  const started = renamed.sent as Array<Array<Array<{topic: string; payload: unknown}>>>;
+  assert.deepEqual(started[0]?.[0]?.map(({topic, payload}) => [topic, payload]), [
+    ["home/hall/lighting/availability", ""],
+    ["home/hall/circadian/state", ""],
+    ["home/hall/lighting/main/control", ""],
+    ["home/den/lighting/availability", "online"]
+  ]);
+  // The broker may not have been connected yet, so the startup message
+  // clears them again, and from then on nothing.
+  const startup = await receive<SendEnvelope>(renamed, {lighting: {kind: "startup"}});
+  assert.deepEqual((startup[0]?.[0] ?? []).map(({topic}) => topic),
+    ["home/hall/lighting/availability", "home/hall/circadian/state", "home/hall/lighting/main/control"]);
+  const again = await receive<SendEnvelope>(renamed, {lighting: {kind: "startup"}});
+  assert.equal(again.length, 1, "settled: no clears");
+
+  const contractRuntime = runtime(registerTheatreStateContract);
+  const before = new contractRuntime.Constructor({id: "c5", area: "lounge", activities: "[\"off\"]"});
+  contractRuntime.events.emit("flows:started");
+  await close(before);
+  const moved = new contractRuntime.Constructor({id: "c5", area: "lounge", baseTopic: "media/theatre", activities: "[\"off\"]"});
+  t.after(() => close(moved));
+  contractRuntime.events.emit("flows:started");
+  const topics = ((moved.sent[0] as SendEnvelope)[1] ?? []).map((message) => [String(message.topic), message.payload]);
+  assert.ok(topics.some(([topic, payload]) => topic === "home/lounge/theatre/current" && payload === ""), JSON.stringify(topics));
+  assert.deepEqual(topics.at(-1), ["media/theatre/availability", "online"]);
 });

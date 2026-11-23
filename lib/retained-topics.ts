@@ -13,14 +13,17 @@ export interface RetainedClear {
   retain: true;
 }
 
+// `keepStale` keeps the stale topics in the record, to clear again next
+// time: for a clear sent when the broker may not be connected yet.
 export function staleRetainedTopics(
   recorded: readonly string[] | undefined,
-  current: readonly string[]
+  current: readonly string[],
+  keepStale = false
 ): {clears: RetainedClear[]; record: string[]} {
   const publishing = new Set(current);
   const stale = [...new Set(recorded ?? [])].filter((topic) => !publishing.has(topic));
   return {
     clears: stale.map((topic) => ({topic, payload: "", retain: true})),
-    record: [...publishing]
+    record: keepStale ? [...publishing, ...stale] : [...publishing]
   };
 }

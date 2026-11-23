@@ -17,3 +17,13 @@ test("with a record, only recorded topics the node no longer publishes are clear
   assert.deepEqual(record, ["home/den/x", "same"]);
   assert.deepEqual(staleRetainedTopics(record, record).clears, [], "nothing changed, nothing cleared");
 });
+
+test("a clear that may not reach the broker keeps the topic in the record, to clear it again", () => {
+  const first = staleRetainedTopics(["old", "same"], ["same", "new"], true);
+  assert.deepEqual(first.clears.map(({topic}) => topic), ["old"]);
+  assert.deepEqual(first.record, ["same", "new", "old"]);
+  const second = staleRetainedTopics(first.record, ["same", "new"]);
+  assert.deepEqual(second.clears.map(({topic}) => topic), ["old"]);
+  assert.deepEqual(second.record, ["same", "new"]);
+  assert.deepEqual(staleRetainedTopics(["old"], ["old"], true).record, ["old"], "a topic in use again is no longer stale");
+});

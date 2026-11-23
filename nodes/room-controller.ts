@@ -150,7 +150,8 @@ const registerRoomController: NodeInitializer = (RED) => {
     // Available again as soon as this node runs, as after a redeploy of it
     // alone, rather than waiting for the flow's startup message.
     whenFlowsStarted(RED, node, () => {
-      const starting = roomStartingOutputs(controllerConfig);
+      const clears = clearStaleRetained(node, roomRetainedTopics(controllerConfig), "flows-started");
+      const starting = [...clears, ...roomStartingOutputs(controllerConfig)];
       if (starting.length) node.send([starting.map((output) => ({...output}))]);
     });
 
