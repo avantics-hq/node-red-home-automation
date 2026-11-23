@@ -80,6 +80,13 @@ export function whenFlowsStarted(RED: NodeAPI, node: Node, action: () => void): 
   });
 }
 
+// Every retained topic a node publishes now or recorded at its last start,
+// for clearing them all when it is deleted.
+export function allRetainedTopics(node: Node, current: string[]): string[] {
+  const recorded = node.context().get("retainedTopics") as string[] | undefined;
+  return [...current, ...(recorded ?? [])];
+}
+
 // At a node's start: the empty retained messages that clear what it
 // published before and no longer does, recording what it publishes now. The
 // record is kept in the node's context, so it survives redeploys, which is
@@ -98,4 +105,20 @@ export function clearStaleRetained(node: Node, current: string[], when: "flows-s
   const {clears, record} = staleRetainedTopics(recorded, current, when === "flows-started");
   context.set("retainedTopics", record);
   return clears;
+}
+
+// Whether a closing node was deleted, rather than disabled or redeployed.
+// Node-RED 5 reports `removed` for a deleted node and for a disabled node or
+// flow alike. During a deploy, RED.nodes.eachNode already lists the new
+// flows, which still hold a disabled node but not a deleted one. A node in a
+// subflow instance is looked up by the subflow's own copy of it (_alias), so
+// it never counts as deleted.
+export function wasDeleted(RED: NodeAPI, node: Node, removed: boolean): boolean {
+  if (!removed) return false;
+  const id = (node as Node & {_alias?: string})._alias ?? node.id;
+  let listed = false;
+  RED.nodes.eachNode((entry) => {
+    if (entry.id === id) listed = true;
+  });
+  return !listed;
 }

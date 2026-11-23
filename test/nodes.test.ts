@@ -68,7 +68,7 @@ type RuntimeConstructor = new (config: Record<string, unknown>) => RuntimeNode;
 function runtime(
   register: NodeInitializer,
   credentials: Record<string, string> = {}
-): {Constructor: RuntimeConstructor; events: EventEmitter} {
+): {Constructor: RuntimeConstructor; events: EventEmitter; flowNodeIds: Set<string>} {
   let Constructor: RuntimeConstructor | undefined;
   const globalValues = new Map<string, unknown>([["MOTION_ENABLED_STATE", true]]);
   // Shared by every node built from this runtime, as Node-RED keeps a node's
@@ -76,6 +76,7 @@ function runtime(
   const values = new Map<string, unknown>();
   // Node-RED's runtime events, such as "flows:started" after a deploy.
   const events = new EventEmitter();
+  const flowNodeIds = new Set<string>();
   const RED = {
     events,
     nodes: {
@@ -83,6 +84,7 @@ function runtime(
         (node as RuntimeNode & {credentials: Record<string, string>}).credentials = credentials;
         // As Node-RED does, the node takes its ID from its saved config.
         (node as RuntimeNode & {id?: string}).id = config?.id;
+        flowNodeIds.add(config?.id ?? "");
         const emitter = new EventEmitter();
         node.on = emitter.on.bind(emitter);
         node.emit = emitter.emit.bind(emitter);
@@ -114,6 +116,10 @@ function runtime(
           }
         });
       },
+      // The deployed flows: every node built here, until a test deletes one.
+      eachNode(callback: (node: {id: string}) => void) {
+        for (const id of flowNodeIds) callback({id});
+      },
       registerType(_name: string, implementation: RuntimeConstructor) {
         Constructor = implementation;
       }
@@ -121,7 +127,7 @@ function runtime(
   };
   register(RED as unknown as Parameters<NodeInitializer>[0]);
   assert.ok(Constructor);
-  return {Constructor, events};
+  return {Constructor, events, flowNodeIds};
 }
 
 function receive<T>(
@@ -1450,4 +1456,58 @@ test("ID schemes: after a redeploy that changes the area, the old topics are cle
   const topics = ((moved.sent[0] as SendEnvelope)[1] ?? []).map((message) => [String(message.topic), message.payload]);
   assert.ok(topics.some(([topic, payload]) => topic === "home/lounge/theatre/current" && payload === ""), JSON.stringify(topics));
   assert.deepEqual(topics.at(-1), ["media/theatre/availability", "online"]);
+});
+
+test("entity cleanup: a deleted node clears what it published; a disabled or redeployed one doesn't", async () => {
+  const stop = (node: RuntimeNode, removed: boolean) => new Promise<unknown[]>((resolve) => {
+    const before = node.sent.length;
+    node.emit("close", removed, () => resolve(node.sent.slice(before)));
+  });
+  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
+  const roomRuntime = runtime(registerRoom);
+  const roomConfig = {id: "r1", idScheme: "node", targets, area: "hall", publishState: true, discovery: true};
+  const offline = [[[{topic: "home/hall/lighting/availability", payload: "offline", retain: true}]]];
+
+  const redeployed = new roomRuntime.Constructor(roomConfig);
+  await receive(redeployed, {lighting: {kind: "startup"}});
+  assert.deepEqual(await stop(redeployed, false), offline, "redeployed: only offline");
+  // Disabled: Node-RED says removed, but the node is still in the flows.
+  const disabled = new roomRuntime.Constructor(roomConfig);
+  assert.deepEqual(await stop(disabled, true), offline, "disabled: entities kept");
+  // Deleted: removed, and gone from the flows.
+  const deleted = new roomRuntime.Constructor(roomConfig);
+  roomRuntime.flowNodeIds.delete("r1");
+  const cleared = await stop(deleted, true) as Array<Array<Array<{topic: string; payload: unknown; retain: boolean}>>>;
+  assert.deepEqual(cleared[0]?.[0]?.map(({topic, payload, retain}) => [topic, payload, retain]), [
+    ["homeassistant/switch/nrha_r1_circadian_lighting/config", "", true],
+    ["home/hall/lighting/availability", "", true],
+    ["home/hall/circadian/state", "", true],
+    ["home/hall/lighting/main/control", "", true]
+  ]);
+
+  const contractRuntime = runtime(registerTheatreStateContract);
+  const contract = new contractRuntime.Constructor({id: "c1", idScheme: "node", area: "lounge", activities: "[\"off\"]"});
+  assert.deepEqual(await stop(contract, true), [[null, [{topic: "home/lounge/theatre/availability", payload: "offline", retain: true}]]], "disabled");
+  const gone = new contractRuntime.Constructor({id: "c1", idScheme: "node", area: "lounge", activities: "[\"off\"]"});
+  contractRuntime.flowNodeIds.delete("c1");
+  const goneSent = await stop(gone, true) as Array<Array<Array<{topic: string; payload: unknown}> | null>>;
+  const goneTopics = (goneSent[0]?.[1] ?? []).map(({topic, payload}) => (payload === "" ? topic : "not cleared"));
+  assert.ok(goneTopics.includes("homeassistant/select/nrha_c1_theatre_activity/config"), goneTopics.join());
+  assert.ok(goneTopics.includes("home/lounge/theatre/current") && !goneTopics.includes("not cleared"), goneTopics.join());
+});
+
+test("entity cleanup: switching Publish state off clears the room's state topics at its next start", async (t) => {
+  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
+  const room = runtime(registerRoom).Constructor;
+  const publishing = new room({id: "r2", targets, area: "hall", publishState: true, discovery: false});
+  await receive(publishing, {lighting: {kind: "startup"}});
+  await close(publishing);
+  const quiet = new room({id: "r2", targets, area: "hall", publishState: false, discovery: false});
+  t.after(() => close(quiet));
+  const startup = await receive<SendEnvelope>(quiet, {lighting: {kind: "startup"}});
+  assert.deepEqual((startup[0]?.[0] ?? []).map(({topic, payload}) => [topic, payload]), [
+    ["home/hall/lighting/availability", ""],
+    ["home/hall/circadian/state", ""],
+    ["home/hall/lighting/main/control", ""]
+  ]);
 });

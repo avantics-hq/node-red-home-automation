@@ -13,6 +13,11 @@ export interface RetainedClear {
   retain: true;
 }
 
+// Empty retained messages, which remove what the topics held.
+export function retainedClears(topics: readonly string[]): RetainedClear[] {
+  return [...new Set(topics)].map((topic) => ({topic, payload: "", retain: true}));
+}
+
 // `keepStale` keeps the stale topics in the record, to clear again next
 // time: for a clear sent when the broker may not be connected yet.
 export function staleRetainedTopics(
@@ -23,7 +28,7 @@ export function staleRetainedTopics(
   const publishing = new Set(current);
   const stale = [...new Set(recorded ?? [])].filter((topic) => !publishing.has(topic));
   return {
-    clears: stale.map((topic) => ({topic, payload: "", retain: true})),
+    clears: retainedClears(stale),
     record: keepStale ? [...publishing, ...stale] : [...publishing]
   };
 }
