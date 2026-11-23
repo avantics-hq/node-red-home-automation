@@ -1,6 +1,7 @@
 # Node-RED Home Automation
 
 [![CI](https://github.com/avantics-hq/node-red-home-automation/actions/workflows/ci.yml/badge.svg)](https://github.com/avantics-hq/node-red-home-automation/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-0969da)](https://avantics-hq.github.io/node-red-home-automation/)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-support-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/avantics)
 
 State-aware Node-RED controllers for reliable lighting and home-theatre automation.
@@ -20,52 +21,7 @@ Most home automations translate an event directly into a command. This package a
 - **Bounded receiver volume:** coordinate absolute and relative requests through one transport owner while preserving later physical adjustments.
 - **Recoverable automation:** adopt one fresh, uniquely matching physical activity after lost state; otherwise coordinate a safe Off request.
 
-```mermaid
-flowchart LR
-  subgraph In[Inputs]
-    SENS[Motion and presence sensors]
-    LUX[Illuminance]
-    WALL[Wall switches]
-    REQ[Theatre request<br/>MQTT .../theatre/request]
-  end
-  subgraph Room[Room lighting]
-    OCC[occupancy-fusion]
-    MOT[motion-lighting-policy]
-    SW[switch-lighting-policy]
-    ROOM[room-lighting-controller]
-  end
-  subgraph Act[Theatre activities]
-    CON[theatre-state-contract]
-    ACT[theatre-activity-controller]
-    ROUTE{{your flow: route by target}}
-    AL[activity-lighting-controller]
-  end
-  subgraph Eq[Theatre equipment]
-    EQ[avr / display-mode /<br/>source-capability /<br/>backlighting controllers]
-  end
-  LIGHTS[(Lights, e.g. Zigbee2MQTT)]
-  DEV[(Device transports)]
-  STATE[(Retained theatre state<br/>and HA discovery)]
-
-  SENS --> OCC --> MOT
-  LUX --> MOT
-  WALL --> SW
-  MOT --> ROOM
-  SW --> ROOM
-  ROOM -- set commands --> LIGHTS
-  LIGHTS -. observed state .-> ROOM
-  REQ --> CON
-  CON -- activity intent --> ACT
-  ACT -- state snapshot --> CON
-  CON --> STATE
-  ACT -- theatreCommand --> ROUTE
-  ROUTE --> EQ
-  ROUTE --> AL
-  EQ -- device commands --> DEV
-  EQ -. target state .-> ACT
-  AL -. target state .-> ACT
-  AL -- held-light intents --> ROOM
-```
+![Architecture diagram. Inputs (wall switches, motion and presence sensors, illuminance, and theatre requests over MQTT) feed two groups of nodes. Room lighting: occupancy-fusion, motion-lighting-policy and switch-lighting-policy feed room-lighting-controller, which sends set commands to the lights (for example Zigbee2MQTT) and reads back their observed state. Theatre activities: theatre-state-contract passes activity intents to theatre-activity-controller and publishes retained theatre state and Home Assistant discovery; your flow routes each theatreCommand by target to the theatre equipment controllers (AVR, display mode, source capability, backlighting), which command the devices, or to activity-lighting-controller, which holds room lights; both report target state back to the activity controller.](https://avantics-hq.github.io/node-red-home-automation/images/architecture.svg)
 
 Each controller keeps the desired and the observed state, sends semantic
 commands, and reports done only when fresh observations confirm them.
@@ -84,7 +40,7 @@ levels follow the room controller's wake and bed times (default 07:00 and
 23:00): they rise over the hour after waking, stay bright and cool through the
 day, and wind down to the sleep settings over the three hours before bed. Times
 are the Node-RED host's local time.
-Example: [`Room lighting.json`](examples/Room%20lighting.json).
+Example: [`Room lighting.json`](https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/Room%20lighting.json).
 
 | Node | Purpose |
 |---|---|
@@ -97,7 +53,7 @@ Example: [`Room lighting.json`](examples/Room%20lighting.json).
 
 Each controller owns one kind of device. It accepts a generation-scoped intent,
 sends commands for your device transport on output 1, and reports target state
-on output 2. Example: [`Home theatre equipment.json`](examples/Home%20theatre%20equipment.json).
+on output 2. Example: [`Home theatre equipment.json`](https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/Home%20theatre%20equipment.json).
 
 | Node | Purpose |
 |---|---|
@@ -121,7 +77,7 @@ observedAt}`, alongside its own events: wire each controller's output 2 straight
 back to the activity controller. The activity controller refreshes settled
 targets, and each controller answers a refresh from fresh readings. Activity
 lighting feeds the room lighting controller.
-Example: [`Home theatre activity.json`](examples/Home%20theatre%20activity.json).
+Example: [`Home theatre activity.json`](https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/Home%20theatre%20activity.json).
 
 | Node | Purpose |
 |---|---|
@@ -131,7 +87,7 @@ Example: [`Home theatre activity.json`](examples/Home%20theatre%20activity.json)
 
 Pure TypeScript policy modules live in `lib/`; thin Node-RED runtime and editor adapters live in `nodes/`.
 
-Importable example flows for the Node-RED editor live in [`examples/`](examples/) (**Import → Examples**). Executable, deployment-neutral contract examples live in [`contract-examples/`](contract-examples/) and exercise the same reducers as the runtime adapters.
+Importable example flows for the Node-RED editor live in [`examples/`](https://github.com/avantics-hq/node-red-home-automation/tree/main/examples) (**Import → Examples**). Executable, deployment-neutral contract examples live in [`contract-examples/`](https://github.com/avantics-hq/node-red-home-automation/tree/main/contract-examples) and exercise the same reducers as the runtime adapters.
 
 ## Requirements
 
@@ -284,13 +240,13 @@ npm run examples
 
 | Example | Boundary demonstrated |
 |---|---|
-| [`occupancy-fusion.mjs`](contract-examples/occupancy-fusion.mjs) | Motion establishes occupancy; optional presence can hold it. |
-| [`motion-lighting.mjs`](contract-examples/motion-lighting.mjs) | Occupancy and illuminance produce semantic lighting intent. |
-| [`switch-gestures.mjs`](contract-examples/switch-gestures.mjs) | Wall actions produce toggle or explicit manual-brightness intent. |
-| [`room-lighting.mjs`](contract-examples/room-lighting.mjs) | The room owner converts semantic intent into a transport command. |
-| [`source-readiness.mjs`](contract-examples/source-readiness.mjs) | Fresh application evidence confirms source readiness. |
-| [`volume-ownership.mjs`](contract-examples/volume-ownership.mjs) | Bounded relative requests accumulate and release ownership after fresh confirmation. |
-| [`theatre-activity.mjs`](contract-examples/theatre-activity.mjs) | Coordinated activity waits for fresh target-owner evidence. |
+| [`occupancy-fusion.mjs`](https://github.com/avantics-hq/node-red-home-automation/blob/main/contract-examples/occupancy-fusion.mjs) | Motion establishes occupancy; optional presence can hold it. |
+| [`motion-lighting.mjs`](https://github.com/avantics-hq/node-red-home-automation/blob/main/contract-examples/motion-lighting.mjs) | Occupancy and illuminance produce semantic lighting intent. |
+| [`switch-gestures.mjs`](https://github.com/avantics-hq/node-red-home-automation/blob/main/contract-examples/switch-gestures.mjs) | Wall actions produce toggle or explicit manual-brightness intent. |
+| [`room-lighting.mjs`](https://github.com/avantics-hq/node-red-home-automation/blob/main/contract-examples/room-lighting.mjs) | The room owner converts semantic intent into a transport command. |
+| [`source-readiness.mjs`](https://github.com/avantics-hq/node-red-home-automation/blob/main/contract-examples/source-readiness.mjs) | Fresh application evidence confirms source readiness. |
+| [`volume-ownership.mjs`](https://github.com/avantics-hq/node-red-home-automation/blob/main/contract-examples/volume-ownership.mjs) | Bounded relative requests accumulate and release ownership after fresh confirmation. |
+| [`theatre-activity.mjs`](https://github.com/avantics-hq/node-red-home-automation/blob/main/contract-examples/theatre-activity.mjs) | Coordinated activity waits for fresh target-owner evidence. |
 
 Each example uses synthetic identifiers and configuration, asserts its central invariant, and prints the complete input/output contract as JSON.
 
@@ -301,7 +257,7 @@ The repository contains no home-network addresses, deployment coordinates, or li
 The display controller stores its Bravia PSK as a Node-RED credential. Keep credentials in Node-RED's encrypted credential store rather than flow fields or repository files.
 
 Report suspected vulnerabilities privately using the process in
-[`SECURITY.md`](SECURITY.md), not through a public issue.
+[`SECURITY.md`](https://github.com/avantics-hq/node-red-home-automation/blob/main/SECURITY.md), not through a public issue.
 
 ## Public repository boundary
 
@@ -319,12 +275,12 @@ npm test
 npm run examples
 ```
 
-The strict TypeScript build, compiled test suite, executable contract examples, dependency audit, public-content scan, and secret scan run in CI. See [CONTRIBUTING.md](CONTRIBUTING.md) for local checks and the optional pre-commit setup.
+The strict TypeScript build, compiled test suite, executable contract examples, dependency audit, public-content scan, and secret scan run in CI. See [CONTRIBUTING.md](https://github.com/avantics-hq/node-red-home-automation/blob/main/CONTRIBUTING.md) for local checks and the optional pre-commit setup.
 
 ## Contributing
 
-Contributions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md) and the
-[Code of Conduct](CODE_OF_CONDUCT.md).
+Contributions are welcome: see [CONTRIBUTING.md](https://github.com/avantics-hq/node-red-home-automation/blob/main/CONTRIBUTING.md) and the
+[Code of Conduct](https://github.com/avantics-hq/node-red-home-automation/blob/main/CODE_OF_CONDUCT.md).
 
 ## Acknowledgements
 
@@ -334,4 +290,4 @@ basnijholt (Apache-2.0). From this version, the circadian lighting is our own.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](https://github.com/avantics-hq/node-red-home-automation/blob/main/LICENSE)

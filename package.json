@@ -34,7 +34,8 @@
     "examples": "npm run build && node contract-examples/run.mjs",
     "scan:public": "node scripts/check-public.mjs",
     "hooks:install": "git config core.hooksPath .githooks",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "diagrams": "node scripts/render-diagrams.mjs"
   },
   "engines": {
     "node": ">=22.9"
