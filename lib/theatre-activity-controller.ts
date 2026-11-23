@@ -737,19 +737,30 @@ export function transitionTheatre(
 
   // Refresh each confirmed target at half its freshness window, so a settled
   // activity stays fresh, and re-send an unanswered refresh a bounded number
-  // of times before reporting the target as not responding.
+  // of times before reporting the target as not responding. A target that
+  // has stopped responding is still asked once per freshness window, so it
+  // recovers when it answers again.
   function tickRefreshes() {
     const intervalMs = config.freshnessMs / 2;
     for (const target of TARGETS) {
       const pending = state.refreshPending[target];
       if (pending) {
-        if (pending.exhausted || nowMs - pending.sentAt < intervalMs) continue;
+        if (pending.exhausted) {
+          if (nowMs - pending.sentAt >= config.freshnessMs) {
+            commands.push(targetCommand(target, "refresh", state.desired));
+            pending.sentAt = nowMs;
+            trace("refresh", "retried", "no-response", {target});
+          }
+          continue;
+        }
+        if (nowMs - pending.sentAt < intervalMs) continue;
         if (pending.attempts < REFRESH_ATTEMPTS) {
           commands.push(targetCommand(target, "refresh", state.desired));
           state.refreshPending[target] = {sentAt: nowMs, attempts: pending.attempts + 1, exhausted: false};
           trace("refresh", "retried", null, {target, attempt: pending.attempts + 1});
         } else {
           pending.exhausted = true;
+          pending.sentAt = nowMs;
           noResponse(target);
         }
         continue;
