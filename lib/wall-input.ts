@@ -2,6 +2,7 @@
 
 import {CLOCK_SKEW_MS, parseObservedAt} from "./observation-time";
 import type {TraceEntry} from "./bounded-trace";
+import {numberSetting} from "./settings";
 
 export interface WallInputConfig {
   switchWindowMs: number;
@@ -24,7 +25,9 @@ export type WallInputInput =
   | {kind: "startup"}
   | {kind: "observation"; payload?: unknown; retain?: boolean; baseline?: boolean; observedAt?: unknown}
   | {kind: "availability"; payload?: unknown}
-  | {kind: "timer"; generation?: number; edgeAt?: number};
+  | {kind: "timer"; generation?: number; edgeAt?: number}
+  // An explicit action that ends any gesture in progress.
+  | {kind: "cancel"; reason: string};
 
 export type WallInputEffect =
   | {kind: "cancel-switch-timer"}
@@ -37,6 +40,67 @@ export interface WallInputStatus {
   available: boolean | null;
   observedAt: number | null;
   ageMs: number | null;
+}
+
+// The policy input sources that carry wall-switch evidence.
+export type WallInputSource = "switch-startup" | "switch" | "switch-availability" | "switch-timer";
+
+export function isWallInputSource(source: string): source is WallInputSource {
+  return source === "switch-startup" || source === "switch" ||
+    source === "switch-availability" || source === "switch-timer";
+}
+
+// The wall-input event for a policy input from one of those sources.
+export function wallInputFor(
+  source: WallInputSource,
+  input: {payload?: unknown; retain?: boolean; baseline?: boolean; observedAt?: unknown; generation?: number; switchAt?: number}
+): WallInputInput {
+  if (source === "switch-startup") return {kind: "startup"};
+  if (source === "switch") {
+    return {kind: "observation", payload: input.payload, retain: input.retain, baseline: input.baseline, observedAt: input.observedAt};
+  }
+  if (source === "switch-availability") return {kind: "availability", payload: input.payload};
+  return {kind: "timer", generation: input.generation, edgeAt: input.switchAt};
+}
+
+// What a wall gesture means: a single press toggles the targets, a double
+// press turns them fully on and marks them manual.
+export interface WallGestureIntent {
+  lighting: {
+    kind: "intent";
+    targets: string[];
+    state: "ON" | "TOGGLE";
+    source: "wall";
+    person: true;
+    manual?: boolean;
+    values?: {brightness: number};
+  };
+}
+
+export function wallGestureIntent(targets: string[], gesture: "single" | "double"): WallGestureIntent {
+  return {
+    lighting: {
+      kind: "intent",
+      targets: [...targets],
+      state: gesture === "single" ? "TOGGLE" : "ON",
+      source: "wall",
+      person: true,
+      ...(gesture === "double" ? {manual: true, values: {brightness: 254}} : {})
+    }
+  };
+}
+
+// The wall-input settings from a node's configuration. The switch window
+// defaults to 500 ms and the freshness to an hour, which must be positive.
+export function normaliseWallInputConfig(raw: {switchWindowMs?: unknown; switchFreshnessSeconds?: unknown}): WallInputConfig {
+  const config = {
+    switchWindowMs: numberSetting(raw.switchWindowMs, "switch window", 500),
+    switchFreshnessMs: numberSetting(raw.switchFreshnessSeconds, "switch freshness", 3600) * 1000
+  };
+  if (!Number.isFinite(config.switchFreshnessMs) || config.switchFreshnessMs <= 0) {
+    throw new Error("switch freshness must be a positive number");
+  }
+  return config;
 }
 
 export function createWallInputState(saved: Partial<WallInputState> = {}): WallInputState {
@@ -141,6 +205,9 @@ export function transitionWallInput(
     trace("switch-startup", state.baselineKnown ? "baseline-preserved" : "awaiting-baseline", null, {
       observedAt: state.observedAt
     });
+  } else if (input.kind === "cancel") {
+    state.edgeAt = 0;
+    cancelTimer(input.reason);
   } else if (input.kind === "availability") {
     const nextAvailability = availability(input.payload);
     if (nextAvailability === null) {

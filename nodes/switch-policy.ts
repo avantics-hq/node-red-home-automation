@@ -1,7 +1,7 @@
 "use strict";
 
 import type {Node, NodeDef, NodeInitializer} from "node-red";
-import {wallInputStatus, type WallInputStatus} from "../lib/wall-input";
+import {normaliseWallInputConfig, wallInputStatus, type WallInputStatus} from "../lib/wall-input";
 import {
   transitionSwitchPolicy,
   type SwitchPolicyConfig,
@@ -9,7 +9,6 @@ import {
   type SwitchPolicyState
 } from "../lib/switch-policy";
 import {guarded, invalidConfig, onInput, runReducer, type Send} from "./adapter";
-import {numberSetting} from "../lib/settings";
 
 interface SwitchLightingPolicyConfig extends NodeDef {
   area?: string;
@@ -48,14 +47,10 @@ const registerSwitchPolicy: NodeInitializer = (RED) => {
       policyConfig = {
         area: config.area || "room",
         targets: parseTargets(config.targets),
-        switchWindowMs: numberSetting(config.switchWindowMs, "switch window", 500),
-        switchFreshnessMs: numberSetting(config.switchFreshnessSeconds, "switch freshness", 3600) * 1000
+        ...normaliseWallInputConfig(config)
       };
       if (!Number.isFinite(policyConfig.switchWindowMs) || policyConfig.switchWindowMs < 0) {
         throw new Error("switch window must be a non-negative number");
-      }
-      if (!Number.isFinite(policyConfig.switchFreshnessMs) || policyConfig.switchFreshnessMs <= 0) {
-        throw new Error("switch freshness must be a positive number");
       }
     } catch (error) {
       invalidConfig(node, error);

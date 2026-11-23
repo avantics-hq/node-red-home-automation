@@ -3,12 +3,16 @@
 import type {TraceEntry} from "./bounded-trace";
 import {
   createWallInputState,
+  isWallInputSource,
   transitionWallInput,
+  wallGestureIntent,
+  wallInputFor,
   wallInputStatus,
+  type WallGestureIntent,
   type WallInputConfig,
+  type WallInputInput,
   type WallInputState
 } from "./wall-input";
-
 
 export interface SwitchPolicyConfig extends WallInputConfig {
   targets: string[];
@@ -28,17 +32,7 @@ export interface SwitchPolicyInput {
   observedAt?: unknown;
 }
 
-export interface SwitchLightingIntent {
-  lighting: {
-    kind: "intent";
-    targets: string[];
-    state: "ON" | "TOGGLE";
-    source: "wall";
-    person: true;
-    manual?: boolean;
-    values?: {brightness: number};
-  };
-}
+export type SwitchLightingIntent = WallGestureIntent;
 
 export type SwitchPolicyEffect =
   | {kind: "cancel-switch-timer"}
@@ -64,23 +58,6 @@ export function createSwitchPolicyState(saved: Partial<SwitchPolicyState> = {}):
   };
 }
 
-function intent(
-  targets: string[],
-  state: "ON" | "TOGGLE",
-  manual = false
-): SwitchLightingIntent {
-  return {
-    lighting: {
-      kind: "intent",
-      targets: [...targets],
-      state,
-      source: "wall",
-      person: true,
-      ...(manual ? {manual: true, values: {brightness: 254}} : {})
-    }
-  };
-}
-
 export function transitionSwitchPolicy(
   saved: Partial<SwitchPolicyState> | undefined,
   input: SwitchPolicyInput,
@@ -95,13 +72,13 @@ export function transitionSwitchPolicy(
     traces.push({event, outcome, reason, details});
   }
 
-  function cancelTimer(reason: string | null) {
-    const wasActive = Number(state.wallInput.timerDueAt) > now;
-    state.wallInput.generation += 1;
-    state.wallInput.edgeAt = 0;
-    state.wallInput.timerDueAt = null;
-    effects.push({kind: "cancel-switch-timer"});
-    if (wasActive && reason) trace("switch-timer", "cancelled", reason);
+  // Feed wall-input an event and take on its state, effects and traces.
+  function wallInput(event: WallInputInput) {
+    const result = transitionWallInput(state.wallInput, event, config, now);
+    state.wallInput = result.state;
+    effects.push(...result.effects);
+    traces.push(...result.traces);
+    return result;
   }
 
   function emit(message: SwitchLightingIntent, event: string) {
@@ -113,42 +90,9 @@ export function transitionSwitchPolicy(
     });
   }
 
-  if (
-    input.source === "switch-startup" ||
-    input.source === "switch" ||
-    input.source === "switch-availability" ||
-    input.source === "switch-timer"
-  ) {
-    const wallInput = transitionWallInput(
-      state.wallInput,
-      input.source === "switch-startup"
-        ? {kind: "startup"}
-        : input.source === "switch"
-          ? {
-            kind: "observation",
-            payload: input.payload,
-            retain: input.retain,
-            baseline: input.baseline,
-            observedAt: input.observedAt
-          }
-          : input.source === "switch-availability"
-            ? {kind: "availability", payload: input.payload}
-            : {
-              kind: "timer",
-              generation: input.generation,
-              edgeAt: input.switchAt
-            },
-      config,
-      now
-    );
-    state.wallInput = wallInput.state;
-    effects.push(...wallInput.effects);
-    traces.push(...wallInput.traces);
-    if (wallInput.gesture === "single") {
-      emit(intent(config.targets, "TOGGLE"), "switch");
-    } else if (wallInput.gesture === "double") {
-      emit(intent(config.targets, "ON", true), "switch");
-    }
+  if (isWallInputSource(input.source)) {
+    const {gesture} = wallInput(wallInputFor(input.source, input));
+    if (gesture) emit(wallGestureIntent(config.targets, gesture), "switch");
   } else if (input.source === "switch-action") {
     const action = String(
       input.payload && typeof input.payload === "object"
@@ -158,8 +102,8 @@ export function transitionSwitchPolicy(
     if (input.retain === true) {
       trace("switch-action", "ignored", "retained-message", {action});
     } else if (action === "single" || action === "double") {
-      cancelTimer("explicit-action");
-      emit(intent(config.targets, action === "single" ? "TOGGLE" : "ON", action === "double"), "switch-action");
+      wallInput({kind: "cancel", reason: "explicit-action"});
+      emit(wallGestureIntent(config.targets, action), "switch-action");
     } else {
       trace("switch-action", "ignored", "unsupported-action", {action});
     }

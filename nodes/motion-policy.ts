@@ -1,7 +1,7 @@
 "use strict";
 
 import type {Node, NodeDef, NodeInitializer} from "node-red";
-import {wallInputStatus, type WallInputStatus} from "../lib/wall-input";
+import {normaliseWallInputConfig, wallInputStatus, type WallInputStatus} from "../lib/wall-input";
 import {
   transitionMotion,
   type MotionConfig,
@@ -71,12 +71,8 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
         offTargets: parseArray(config.offTargets, onTargets),
         defaultDelaySeconds: numberSetting(config.defaultDelaySeconds, "vacancy delay", 120),
         defaultIlluminanceCutoff: numberSetting(config.defaultIlluminanceCutoff, "illuminance cutoff", 10),
-        switchWindowMs: numberSetting(config.switchWindowMs, "switch window", 500),
-        switchFreshnessMs: numberSetting(config.switchFreshnessSeconds, "switch freshness", 3600) * 1000
+        ...normaliseWallInputConfig(config)
       };
-      if (!Number.isFinite(policyConfig.switchFreshnessMs) || policyConfig.switchFreshnessMs <= 0) {
-        throw new Error("switch freshness must be a positive number");
-      }
     } catch (error) {
       invalidConfig(node, error);
       return;

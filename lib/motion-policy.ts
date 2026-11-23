@@ -3,7 +3,10 @@
 import type {TraceEntry} from "./bounded-trace";
 import {
   createWallInputState,
+  isWallInputSource,
   transitionWallInput,
+  wallGestureIntent,
+  wallInputFor,
   wallInputStatus,
   type WallInputConfig,
   type WallInputState
@@ -253,34 +256,8 @@ export function transitionMotion(
       state.offTimerDueAt = null;
       emitIntent(lightingIntent(config.offTargets, "OFF", "motion"), "off-timer");
     }
-  } else if (
-    source === "switch-startup" ||
-    source === "switch" ||
-    source === "switch-availability" ||
-    source === "switch-timer"
-  ) {
-    const wallInput = transitionWallInput(
-      state.wallInput,
-      source === "switch-startup"
-        ? {kind: "startup"}
-        : source === "switch"
-          ? {
-            kind: "observation",
-            payload,
-            retain: input.retain,
-            baseline: input.baseline,
-            observedAt: input.observedAt
-          }
-          : source === "switch-availability"
-            ? {kind: "availability", payload}
-            : {
-              kind: "timer",
-              generation: input.generation,
-              edgeAt: input.switchAt
-            },
-      config,
-      now
-    );
+  } else if (isWallInputSource(source)) {
+    const wallInput = transitionWallInput(state.wallInput, wallInputFor(source, input), config, now);
     state.wallInput = wallInput.state;
     effects.push(...wallInput.effects);
     traces.push(...wallInput.traces);
@@ -291,15 +268,7 @@ export function transitionMotion(
     );
     if (startedGesture) cancelOffTimer("wall-switch");
 
-    if (wallInput.gesture === "single") {
-      emitIntent(lightingIntent(config.onTargets, "TOGGLE", "wall", {person: true}), "switch");
-    } else if (wallInput.gesture === "double") {
-      emitIntent(lightingIntent(config.onTargets, "ON", "wall", {
-        person: true,
-        manual: true,
-        values: {brightness: 254}
-      }), "switch");
-    }
+    if (wallInput.gesture) emitIntent(wallGestureIntent(config.onTargets, wallInput.gesture), "switch");
   }
 
   return {
