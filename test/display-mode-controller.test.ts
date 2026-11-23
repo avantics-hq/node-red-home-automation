@@ -332,7 +332,8 @@ test("the display reports target state for the theatre activity controller", () 
   ]);
   assert.equal(result.state.phase, "ready");
   assert.deepEqual(targetStatus(result), ["ready"]);
-  assert.equal(result.targetStates[0]?.theatre.observedAt, at(0.3).toISOString());
+  // Stamped with the oldest of the readings that confirm it.
+  assert.equal(result.targetStates[0]?.theatre.observedAt, at(0.1).toISOString());
 
   // A tick while settled claims nothing new.
   assert.deepEqual(targetStatus(apply(result.state, {kind: "tick", generation: 1}, 30)), []);
@@ -356,8 +357,14 @@ test("a display refresh is answered from fresh readings", () => {
   // No ready claim until a reading arrives.
   assert.deepEqual(targetStatus(result), []);
   assert.equal(result.state.phase, "ready");
+  // Each reading re-sends ready, stamped with the oldest device reading the
+  // mode relies on: one answered device does not make the display fresh.
   result = observe(result.state, "tv", {power: "on"}, 40.2);
   assert.deepEqual(targetStatus(result), ["ready"]);
+  assert.equal(result.targetStates[0]?.theatre.observedAt, at(0.2).toISOString());
+  result = observe(result.state, "screen", {position: 0, state: "closed"}, 40.3);
+  assert.equal(result.targetStates[0]?.theatre.observedAt, at(0.3).toISOString());
+  result = observe(result.state, "projector", {watts: 2.1}, 40.4);
   assert.equal(result.targetStates[0]?.theatre.observedAt, at(40.2).toISOString());
 
   // A failed refresh query does not fail a settled display.

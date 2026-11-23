@@ -701,8 +701,12 @@ export function transitionDisplay(
   }
 
   // The theatre activity controller's view of this target. A settled display
-  // reports ready only with a reading taken in this event.
+  // reports ready only with a reading taken in this event, stamped with the
+  // oldest of the device readings every mode relies on, so it is only as
+  // fresh as its least recent confirmation.
   if (state.desired) {
+    const readings = DEVICES.map((device) => parseObservedAt(state.observed[device]?.observedAt));
+    const confirmedMs = readings.every((ms): ms is number => ms !== null) ? Math.min(...readings) : null;
     const status = state.phase === "manual_override"
       ? "transitioning"
       : state.phase === "idle" ? "confirming" : state.phase;
@@ -713,7 +717,7 @@ export function transitionDisplay(
         requestId: state.desired.requestId,
         generation: state.desired.generation,
         status,
-        observedAt: now.toISOString(),
+        observedAt: status === "ready" && confirmedMs !== null ? new Date(confirmedMs).toISOString() : now.toISOString(),
         details: {
           mode: state.desired.mode,
           observed: {
