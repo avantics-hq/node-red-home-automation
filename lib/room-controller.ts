@@ -301,8 +301,14 @@ export function transitionRoom(
       }
       const report = checkStateReport(state.expected[target.id], nextOn, nowMs);
       state.expected[target.id] = report.queue;
-      if (report.inFlight) {
-        trace("state-observed", "ignored", "own-command-in-flight", {target: target.id, state: nextOn ? "ON" : "OFF"});
+      if (report.verdict === "confirms") {
+        // Our own command, now done: the intended state already says so.
+        // A confirmed OFF deliberately leaves control alone: our OFFs come
+        // from OFF intents, which already returned the light to in-control.
+        trace("state-observed", "confirmed", "own-command", {target: target.id, state: nextOn ? "ON" : "OFF"});
+      } else if (report.verdict === "stale") {
+        // Older than our pending command; the light will report again.
+        trace("state-observed", "ignored", "stale-report", {target: target.id, state: nextOn ? "ON" : "OFF"});
       } else {
         // A change the controller didn't cause becomes the intended state.
         state.desired[target.id] = nextOn;

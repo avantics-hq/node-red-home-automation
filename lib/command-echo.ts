@@ -53,22 +53,28 @@ export function rememberCommand(queue: ExpectedCommand[] | undefined, payload: u
   return next.slice(-ECHO_QUEUE_LIMIT);
 }
 
-// A state report against the commands in flight. `inFlight` is true while
-// a power command was still unconfirmed, whether or not this report
-// confirms it; a report that matches the newest one confirms them all.
+// What a state report means against the power commands still pending:
+// - "confirms": it matches our latest pending power command, which is now
+//   done, so the pending power commands are cleared;
+// - "stale": it contradicts that command, which is still on its way;
+// - "external": no power command is pending, so the change came from
+//   someone else.
+export type StateReportVerdict = "confirms" | "stale" | "external";
+
 export function checkStateReport(
   queue: ExpectedCommand[] | undefined,
   observedOn: boolean,
   nowMs: number
-): {queue: ExpectedCommand[]; inFlight: boolean} {
+): {queue: ExpectedCommand[]; verdict: StateReportVerdict} {
   const next = live(queue, nowMs);
   const latest = next.filter((entry) => entry.on !== undefined).at(-1);
-  if (latest && latest.on === observedOn) {
+  const verdict: StateReportVerdict = latest === undefined ? "external" : latest.on === observedOn ? "confirms" : "stale";
+  if (verdict === "confirms") {
     for (const entry of next) delete entry.on;
   }
   return {
     queue: next.filter((entry) => entry.on !== undefined || entry.echoed !== true),
-    inFlight: latest !== undefined && latest.on !== observedOn
+    verdict
   };
 }
 

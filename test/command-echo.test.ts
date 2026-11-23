@@ -31,17 +31,17 @@ test("our own echo is recognised once; someone else's is not", () => {
   assert.equal(checkCommandEcho(sent, {state: "OFF"}, 100).own, false);
 });
 
-test("state reports while a power command is in flight", () => {
+test("a state report confirms our command, is stale against it, or is someone else's change", () => {
   const sent = checkCommandEcho(rememberCommand(undefined, {state: "ON"}, 0), {state: "ON"}, 50).queue;
   const stale = checkStateReport(sent, false, 100);
-  assert.equal(stale.inFlight, true);
-  assert.equal(stale.queue.length, 1);
-  // A matching report confirms the command and clears it; it is still
-  // reported as in flight, as the room controller has always treated it.
-  const confirming = checkStateReport(sent, true, 100);
-  assert.equal(confirming.inFlight, true);
-  assert.deepEqual(confirming.queue, []);
-  assert.deepEqual(checkStateReport(confirming.queue, false, 200), {queue: [], inFlight: false});
+  assert.equal(stale.verdict, "stale");
+  assert.equal(stale.queue.length, 1, "the command is still pending");
+  const confirms = checkStateReport(sent, true, 100);
+  assert.equal(confirms.verdict, "confirms");
+  assert.deepEqual(confirms.queue, [], "a confirmed command is cleared");
+  assert.deepEqual(checkStateReport(confirms.queue, false, 200), {queue: [], verdict: "external"});
+  // Only power commands count: a pending value command is not a power command.
+  assert.equal(checkStateReport(rememberCommand(undefined, {brightness: 10}, 0), true, 100).verdict, "external");
   // The input queue is not changed.
   assert.equal(sent[0]!.on, true);
 });
