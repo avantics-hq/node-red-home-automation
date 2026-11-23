@@ -92,7 +92,6 @@ export interface SourceState {
   observed: SourceObservation | null;
   pending: SourcePending | null;
   failure: SourceFailure | null;
-  blockedGeneration: number | null;
   classification: "manual_override" | null;
   lastAttempt: number;
   fallbackUsed: boolean;
@@ -203,7 +202,6 @@ function initialState(
       : null,
     pending: saved.pending && typeof saved.pending === "object" ? {...saved.pending} : null,
     failure: saved.failure && typeof saved.failure === "object" ? {...saved.failure} : null,
-    blockedGeneration: Number.isInteger(saved.blockedGeneration) ? saved.blockedGeneration! : null,
     classification: saved.classification === "manual_override" ? "manual_override" : null,
     lastAttempt: Number.isInteger(saved.lastAttempt) && (saved.lastAttempt ?? -1) >= 0
       ? saved.lastAttempt!
@@ -266,24 +264,34 @@ function descriptorFor(state: SourceState, sources: SourceCapabilities): SourceD
   return sources[state.desired.sourceId] ?? null;
 }
 
-function readinessEvidence(
+interface ReadinessFacts {
+  available: boolean;
+  active: boolean;
+  application: string | null;
+  playback: SourcePlaybackState;
+}
+
+// What each kind of confirmation needs from an observation before the source
+// counts as ready.
+const READINESS: Record<SourceConfirmation, (facts: ReadinessFacts) => boolean> = {
+  available: ({available}) => available,
+  active: ({active}) => active,
+  application: ({active, application}) => active && application !== null,
+  playing: ({active, playback}) => active && playback === "playing",
+  unavailable: () => false
+};
+
+export function readinessEvidence(
   observation: SourceObservation | null,
   required: SourceConfirmation
 ) {
-  const available = observation?.status === "active" || observation?.status === "available";
-  const active = observation?.status === "active";
-  const application = observation?.application ?? null;
-  const playback = observation?.playback ?? "unknown";
-  const satisfied = required === "available"
-    ? available
-    : required === "active"
-      ? active
-      : required === "application"
-        ? active && application !== null
-        : required === "playing"
-          ? active && playback === "playing"
-          : false;
-  return {required, available, active, application, playback, satisfied};
+  const facts: ReadinessFacts = {
+    available: observation?.status === "active" || observation?.status === "available",
+    active: observation?.status === "active",
+    application: observation?.application ?? null,
+    playback: observation?.playback ?? "unknown"
+  };
+  return {required, ...facts, satisfied: READINESS[required](facts)};
 }
 
 
@@ -368,7 +376,6 @@ export function transitionSource(
   function fail(operation: string, reason: string) {
     state.pending = null;
     state.phase = "failed";
-    state.blockedGeneration = state.generation;
     state.failure = {operation, reason, occurredAt: iso(now)};
     trace("source", "failed", reason, {sourceId: state.desired?.sourceId ?? null, operation});
   }
@@ -403,7 +410,6 @@ export function transitionSource(
     if (observationSatisfies(state.observed)) {
       state.pending = null;
       state.failure = null;
-      state.blockedGeneration = null;
       state.classification = null;
       state.phase = "ready";
       const readiness = readinessEvidence(state.observed, descriptor()?.confirmation ?? "unavailable");
@@ -463,7 +469,6 @@ export function transitionSource(
     state.refreshAsked = false;
     state.pending = null;
     state.failure = null;
-    state.blockedGeneration = null;
     state.classification = null;
     state.lastAttempt = 0;
     state.fallbackUsed = false;

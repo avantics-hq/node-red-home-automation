@@ -10,10 +10,12 @@ import {
 } from "../lib/theatre-activity-controller";
 import {
   normaliseCapabilities,
+  readinessEvidence,
   transitionSource,
   type SourceAction,
   type SourceConfig,
   type SourceEvent,
+  type SourceObservation,
   type SourceOutputEvent,
   type SourceState
 } from "../lib/source-capability-controller";
@@ -333,4 +335,25 @@ test("a source whose clock runs behind is stamped with when its report arrived",
   const answered = transitionTheatre(theatre.state, {theatre: {...theatreState(result), kind: "target_state"} as TheatreInputEvent},
     theatreConfig, at(3));
   assert.equal(answered.state.targets.source?.status, "ready");
+});
+
+test("each kind of confirmation needs its own evidence", () => {
+  const seen = (status: "active" | "available" | "inactive", extra: {application?: string | null; playback?: "playing" | "paused"} = {}): SourceObservation =>
+    ({sourceId: "streamer", status, observedAt: at(0).toISOString(), application: extra.application ?? null, playback: extra.playback ?? "unknown"});
+  const ready = (required: Parameters<typeof readinessEvidence>[1], observation: SourceObservation | null) =>
+    readinessEvidence(observation, required).satisfied;
+
+  assert.equal(ready("available", seen("available")), true);
+  assert.equal(ready("available", seen("inactive")), false);
+  assert.equal(ready("active", seen("available")), false);
+  assert.equal(ready("active", seen("active")), true);
+  assert.equal(ready("application", seen("active")), false);
+  assert.equal(ready("application", seen("active", {application: "player"})), true);
+  assert.equal(ready("playing", seen("active", {playback: "paused"})), false);
+  assert.equal(ready("playing", seen("active", {playback: "playing"})), true);
+  assert.equal(ready("unavailable", seen("active", {playback: "playing"})), false);
+  assert.equal(ready("active", null), false);
+  assert.deepEqual(readinessEvidence(seen("active", {application: "player"}), "application"), {
+    required: "application", available: true, active: true, application: "player", playback: "unknown", satisfied: true
+  });
 });
