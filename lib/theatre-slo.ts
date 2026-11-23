@@ -1,5 +1,7 @@
 "use strict";
 
+import {numberSetting} from "./settings";
+
 export type TheatreSloStatus = "learning" | "healthy" | "at_risk" | "breached";
 export type TheatreSloOutcome = "ready" | "failed";
 
@@ -48,21 +50,19 @@ export interface TheatreSloAssessment {
   evaluatedAt: string;
 }
 
-function boundedInteger(value: unknown, fallback: number, minimum: number, maximum: number): number {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return fallback;
-  return Math.max(minimum, Math.min(maximum, Math.round(parsed)));
+function boundedInteger(value: unknown, label: string, fallback: number, minimum: number, maximum: number): number {
+  return Math.max(minimum, Math.min(maximum, Math.round(numberSetting(value, label, fallback))));
 }
 
 export function normaliseTheatreSloConfig(
   config: Partial<TheatreSloConfig> = {}
 ): TheatreSloConfig {
-  const windowSize = boundedInteger(config.windowSize, 20, 5, 100);
+  const windowSize = boundedInteger(config.windowSize, "SLO window", 20, 5, 100);
   return {
     windowSize,
-    minimumSamples: boundedInteger(config.minimumSamples, 5, 1, windowSize),
-    latencyBudgetMs: boundedInteger(config.latencyBudgetMs, 60000, 1000, 3600000),
-    successObjectivePct: boundedInteger(config.successObjectivePct, 95, 50, 100)
+    minimumSamples: boundedInteger(config.minimumSamples, "minimum samples", 5, 1, windowSize),
+    latencyBudgetMs: boundedInteger(config.latencyBudgetMs, "latency budget", 60000, 1000, 3600000),
+    successObjectivePct: boundedInteger(config.successObjectivePct, "success objective", 95, 50, 100)
   };
 }
 

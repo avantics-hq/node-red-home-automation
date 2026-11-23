@@ -5,13 +5,9 @@
 
 import type {Node, NodeMessage} from "node-red";
 import {appendTrace, type TraceInput, type TraceMetadata} from "../lib/bounded-trace";
-import {finiteOr} from "../lib/settings";
 
 export type Send = (msg: NodeMessage | Array<NodeMessage | NodeMessage[] | null>) => void;
 export type InputMessage = NodeMessage & Record<string, unknown>;
-
-// A configured number, or the fallback when it is missing or not a number.
-export const number = finiteOr;
 
 // The object a message carries under a key, or undefined.
 export function objectField<T>(msg: InputMessage, key: string): T | undefined {

@@ -1,5 +1,7 @@
 "use strict";
 
+import {numberSetting} from "./settings";
+
 import {boundObservedAt, isOutOfOrder, parseObservedAt} from "./observation-time";
 import type {LightingEvent} from "./room-controller";
 import {asTargetStatus, targetStateEvent, type TargetStateEvent} from "./target-state";
@@ -169,8 +171,8 @@ export function normaliseActivityLightingConfig(
   return {
     profiles: normaliseLightingProfiles(config.profiles),
     owner: owner || "activity",
-    confirmationTimeoutMs: Math.max(1000, Number(config.confirmationTimeoutMs) || 15000),
-    maxAttempts: Math.max(1, Math.floor(Number(config.maxAttempts) || 2))
+    confirmationTimeoutMs: Math.max(1000, numberSetting(config.confirmationTimeoutMs, "confirmation timeout", 15000)),
+    maxAttempts: Math.max(1, Math.floor(numberSetting(config.maxAttempts, "max attempts", 2)))
   };
 }
 

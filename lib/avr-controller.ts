@@ -1,6 +1,6 @@
 "use strict";
 
-import {finiteOr} from "./settings";
+import {numberSetting} from "./settings";
 import {asTargetStatus, targetStateEvent, type TargetStateEvent} from "./target-state";
 
 export const QUERY_COMMAND = "PW?\rZM?\rSI?\rMV?\r";
@@ -279,8 +279,8 @@ export function parseAvrLine(
 // defaults: retry 2000 ms (at least 250), 3 attempts (at least 1) and volume
 // bounds 0 to 60.
 export function normaliseAvrConfig(rawConfig: {[K in keyof AvrConfig]?: unknown}): AvrConfig {
-  const rawMinVolume = finiteOr(rawConfig.minVolume, 0);
-  const rawMaxVolume = finiteOr(rawConfig.maxVolume, 60);
+  const rawMinVolume = numberSetting(rawConfig.minVolume, "minimum volume", 0);
+  const rawMaxVolume = numberSetting(rawConfig.maxVolume, "maximum volume", 60);
   const minVolume = roundVolume(rawMinVolume);
   const maxVolume = roundVolume(rawMaxVolume);
   if (!Number.isFinite(rawMinVolume) || !Number.isFinite(rawMaxVolume) ||
@@ -291,8 +291,8 @@ export function normaliseAvrConfig(rawConfig: {[K in keyof AvrConfig]?: unknown}
   return {
     area: typeof rawConfig.area === "string" && rawConfig.area ? rawConfig.area : "room",
     sources: parseSources(rawConfig.sources),
-    retryMs: Math.max(250, finiteOr(rawConfig.retryMs, 2000)),
-    maxAttempts: Math.max(1, Math.floor(finiteOr(rawConfig.maxAttempts, 3))),
+    retryMs: Math.max(250, numberSetting(rawConfig.retryMs, "retry interval", 2000)),
+    maxAttempts: Math.max(1, Math.floor(numberSetting(rawConfig.maxAttempts, "max attempts", 3))),
     minVolume,
     maxVolume
   };

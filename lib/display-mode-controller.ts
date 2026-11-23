@@ -1,5 +1,7 @@
 "use strict";
 
+import {numberSetting} from "./settings";
+
 import {boundObservedAt, isOutOfOrder, parseObservedAt} from "./observation-time";
 import {asTargetStatus, targetStateEvent, type TargetStateEvent} from "./target-state";
 
@@ -248,32 +250,26 @@ function operationSatisfied(
   }
 }
 
-// A finite number, or the default for missing or unusable input.
-function setting(value: unknown, fallback: number): number {
-  const parsed = Number(value ?? fallback);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
 // Settings may be editor strings; missing or unusable numbers take defaults.
 export function normaliseConfig(config: {[K in keyof DisplayConfig]?: unknown} = {}): DisplayConfig {
-  const projectorWarmupMs = Math.max(1000, setting(config.projectorWarmupMs, 60000));
+  const projectorWarmupMs = Math.max(1000, numberSetting(config.projectorWarmupMs, "projector warm-up", 60000));
   return {
-    screenOpenPosition: setting(config.screenOpenPosition, 82),
-    screenTolerance: Math.max(0, setting(config.screenTolerance, 2)),
-    pollMs: Math.max(250, setting(config.pollMs, 2000)),
-    queryTimeoutMs: Math.max(1000, setting(config.queryTimeoutMs, 5000)),
-    tvTimeoutMs: Math.max(1000, setting(config.tvTimeoutMs, 30000)),
-    screenTimeoutMs: Math.max(1000, setting(config.screenTimeoutMs, 65000)),
+    screenOpenPosition: numberSetting(config.screenOpenPosition, "screen open position", 82),
+    screenTolerance: Math.max(0, numberSetting(config.screenTolerance, "screen tolerance", 2)),
+    pollMs: Math.max(250, numberSetting(config.pollMs, "poll interval", 2000)),
+    queryTimeoutMs: Math.max(1000, numberSetting(config.queryTimeoutMs, "query timeout", 5000)),
+    tvTimeoutMs: Math.max(1000, numberSetting(config.tvTimeoutMs, "TV timeout", 30000)),
+    screenTimeoutMs: Math.max(1000, numberSetting(config.screenTimeoutMs, "screen timeout", 65000)),
     projectorWarmupMs,
     projectorMinimumWarmupMs: Math.min(
       projectorWarmupMs,
-      Math.max(0, setting(config.projectorMinimumWarmupMs, 15000))
+      Math.max(0, numberSetting(config.projectorMinimumWarmupMs, "projector minimum warm-up", 15000))
     ),
-    projectorShutdownConfirmMs: Math.max(1000, setting(config.projectorShutdownConfirmMs, 5000)),
-    projectorCooldownMs: Math.max(1000, setting(config.projectorCooldownMs, 120000)),
-    maxAttempts: Math.max(1, Math.floor(setting(config.maxAttempts, 2))),
-    projectorOnWatts: setting(config.projectorOnWatts, 20),
-    projectorOffWatts: setting(config.projectorOffWatts, 10),
+    projectorShutdownConfirmMs: Math.max(1000, numberSetting(config.projectorShutdownConfirmMs, "projector shutdown confirmation", 5000)),
+    projectorCooldownMs: Math.max(1000, numberSetting(config.projectorCooldownMs, "projector cool-down", 120000)),
+    maxAttempts: Math.max(1, Math.floor(numberSetting(config.maxAttempts, "max attempts", 2))),
+    projectorOnWatts: numberSetting(config.projectorOnWatts, "projector on watts", 20),
+    projectorOffWatts: numberSetting(config.projectorOffWatts, "projector off watts", 10),
     projectorPowerFallback: config.projectorPowerFallback === true
   };
 }

@@ -307,12 +307,11 @@ test("an older display reading cannot override a newer one", () => {
   assert.equal(result.traces.at(-1)?.reason, "out-of-order");
 });
 
-test("unusable timing settings fall back to their defaults, keeping valid zeros", () => {
-  const normalised = transitionDisplay(undefined, {display: {kind: "startup"}}, {pollMs: "soon" as never, screenTolerance: 0, projectorMinimumWarmupMs: 0}, at(0));
-  assert.equal(normalised.state.pending, null);
-  const config = normaliseConfig({pollMs: "soon" as never, queryTimeoutMs: Number.NaN, screenTolerance: 0, projectorMinimumWarmupMs: 0});
-  assert.equal(config.pollMs, 2000);
-  assert.equal(config.queryTimeoutMs, 5000);
+test("unusable timing settings are an error naming the setting; valid zeros are kept", () => {
+  assert.throws(() => transitionDisplay(undefined, {display: {kind: "startup"}}, {pollMs: "soon" as never}, at(0)), /poll interval must be a number/);
+  assert.throws(() => normaliseConfig({queryTimeoutMs: Number.NaN}), /query timeout must be a number/);
+  const config = normaliseConfig({screenTolerance: 0, projectorMinimumWarmupMs: 0});
+  assert.equal(config.pollMs, 2000, "absent: the default");
   assert.equal(config.screenTolerance, 0);
   assert.equal(config.projectorMinimumWarmupMs, 0);
 });

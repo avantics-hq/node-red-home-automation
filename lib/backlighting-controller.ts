@@ -1,5 +1,7 @@
 "use strict";
 
+import {numberSetting} from "./settings";
+
 import {boundObservedAt, isOutOfOrder, parseObservedAt} from "./observation-time";
 import {asTargetStatus, targetStateEvent, type TargetStateEvent} from "./target-state";
 
@@ -91,9 +93,9 @@ export interface BacklightingOutputEvent {
 
 export function normaliseBacklightingConfig(config: Partial<BacklightingConfig> = {}): BacklightingConfig {
   return {
-    pollMs: Math.max(250, Number(config.pollMs) || 2000),
-    confirmationTimeoutMs: Math.max(1000, Number(config.confirmationTimeoutMs) || 15000),
-    maxAttempts: Math.max(1, Math.floor(Number(config.maxAttempts) || 2))
+    pollMs: Math.max(250, numberSetting(config.pollMs, "poll interval", 2000)),
+    confirmationTimeoutMs: Math.max(1000, numberSetting(config.confirmationTimeoutMs, "confirmation timeout", 15000)),
+    maxAttempts: Math.max(1, Math.floor(numberSetting(config.maxAttempts, "max attempts", 2)))
   };
 }
 

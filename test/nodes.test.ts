@@ -1079,15 +1079,35 @@ test("every adapter shows the same badge for a configuration it cannot use, and 
   }
 });
 
-test("a motion node with a blank or unusable delay or cutoff uses the defaults", async (t) => {
-  const {Constructor} = runtime(registerMotion);
-  for (const [delay, cutoff] of [["", ""], ["abc", "dark"]]) {
-    const node = new Constructor({area: "hall", onTargets: "[\"main\"]", defaultDelaySeconds: delay, defaultIlluminanceCutoff: cutoff});
-    t.after(() => close(node));
-    assert.deepEqual(node.errors, []);
-    await receive(node, {source: "motion", payload: true});
-    const state = node.context().get("state") as {delaySeconds: number; illuminanceCutoff: number};
-    assert.equal(state.delaySeconds, 120, `delay ${JSON.stringify(delay)}`);
-    assert.equal(state.illuminanceCutoff, 10, `cutoff ${JSON.stringify(cutoff)}`);
+test("an emptied or non-numeric number setting is an invalid configuration that names the setting", () => {
+  // One node per family; the setting is otherwise valid config for that node.
+  const cases: Array<[string, NodeInitializer, Record<string, unknown>, string]> = [
+    ["receiver", registerAvr, {area: "a", sources: "{}", retryMs: ""}, "retry interval"],
+    ["display", registerDisplay, {area: "a", tvHost: "tv", screenHost: "s", projectorMeterHost: "m", tvTimeoutMs: "  "}, "TV timeout"],
+    ["source", registerSource, {area: "a", sources: "{\"streamer\":{\"activation\":\"command\",\"deactivation\":\"command\",\"confirmation\":\"active\"}}", pollMs: "abc"}, "poll interval"],
+    ["backlighting", registerBacklighting, {area: "a", maxAttempts: ""}, "max attempts"],
+    ["activity lighting", registerActivityLighting, {area: "a", profiles: "{\"off\":{\"targets\":[],\"values\":{}}}", confirmationTimeoutMs: ""}, "confirmation timeout"],
+    ["room", registerRoom, {area: "a", targets: "[]", refreshSeconds: ""}, "refresh interval"],
+    ["motion", registerMotion, {area: "a", onTargets: "[\"main\"]", defaultDelaySeconds: "abc"}, "vacancy delay"],
+    ["switch", registerSwitch, {area: "a", targets: "[\"main\"]", switchWindowMs: ""}, "switch window"],
+    ["theatre activity", registerTheatreActivity, {area: "a", freshnessMs: "", activityProfiles: JSON.stringify({
+      off: {display: {mode: "off"}, avr: {power: "standby"}, source: {action: "deactivate", readiness: "optional"}, lighting: {profile: "off"}, backlighting: {power: "off"}}
+    })}, "freshness"],
+    ["theatre state contract", registerTheatreStateContract, {area: "a", activities: "[\"off\"]", sloWindowSize: ""}, "SLO window"]
+  ];
+  for (const [name, register, config, label] of cases) {
+    const node = new (runtime(register, {tvPsk: "key"}).Constructor)(config);
+    assert.deepEqual(node.statuses.at(-1), {fill: "red", shape: "ring", text: "invalid configuration"}, name);
+    assert.deepEqual(node.errors.map(String), [`invalid configuration: ${label} must be a number`], name);
   }
+});
+
+test("a number setting absent from an older saved flow takes its default; a typed 0 is kept", async (t) => {
+  const node = new (runtime(registerMotion).Constructor)({area: "hall", onTargets: "[\"main\"]", defaultIlluminanceCutoff: "0"});
+  t.after(() => close(node));
+  assert.deepEqual(node.errors, []);
+  await receive(node, {source: "motion", payload: true});
+  const state = node.context().get("state") as {delaySeconds: number; illuminanceCutoff: number};
+  assert.equal(state.delaySeconds, 120, "absent: the default");
+  assert.equal(state.illuminanceCutoff, 0, "typed 0 is kept");
 });

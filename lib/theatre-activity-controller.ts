@@ -1,5 +1,7 @@
 "use strict";
 
+import {numberSetting} from "./settings";
+
 import {boundObservedAt, isFresh as isFreshAt, isOutOfOrder, parseObservedAt} from "./observation-time";
 import {isTargetStatus} from "./target-state";
 import {
@@ -113,7 +115,7 @@ export function normaliseConfig(
     : "off";
   return {
     area: typeof config.area === "string" && config.area ? config.area : "room",
-    freshnessMs: Math.max(1000, Number(config.freshnessMs) || 30000),
+    freshnessMs: Math.max(1000, numberSetting(config.freshnessMs, "freshness", 30000)),
     activityProfiles,
     recoveryOffActivity
   };

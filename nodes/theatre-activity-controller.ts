@@ -14,7 +14,8 @@ import {
   type TheatreMessage,
   type TheatreState
 } from "../lib/theatre-activity-controller";
-import {guarded, invalidConfig, number, objectField, onInput, runReducer, type Send} from "./adapter";
+import {guarded, invalidConfig, objectField, onInput, runReducer, type Send} from "./adapter";
+import {numberSetting} from "../lib/settings";
 
 interface TheatreActivityNodeConfig extends NodeDef {
   area?: string;
@@ -33,19 +34,18 @@ const registerTheatreActivityController: NodeInitializer = (RED) => {
     const context = node.context();
     let timer: ReturnType<typeof setInterval> | undefined;
 
-    let activityProfiles: TheatreConfig["activityProfiles"];
+    let controllerConfig: TheatreConfig;
     try {
-      activityProfiles = normaliseActivityProfiles(JSON.parse(config.activityProfiles || "{}") as unknown);
+      controllerConfig = {
+        area: config.area || "lounge",
+        freshnessMs: Math.max(1000, numberSetting(config.freshnessMs, "freshness", 30000)),
+        activityProfiles: normaliseActivityProfiles(JSON.parse(config.activityProfiles || "{}") as unknown),
+        recoveryOffActivity: config.recoveryOffActivity || "off"
+      };
     } catch (error) {
       invalidConfig(node, error);
       return;
     }
-    const controllerConfig: TheatreConfig = {
-      area: config.area || "lounge",
-      freshnessMs: Math.max(1000, number(config.freshnessMs, 30000)),
-      activityProfiles,
-      recoveryOffActivity: config.recoveryOffActivity || "off"
-    };
 
     function updateStatus(status: TheatreStatus) {
       const appearances: Record<string, {fill: NodeStatusFill; shape: NodeStatusShape}> = {

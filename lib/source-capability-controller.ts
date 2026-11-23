@@ -1,5 +1,7 @@
 "use strict";
 
+import {numberSetting} from "./settings";
+
 import {boundObservedAt, isOutOfOrder, parseObservedAt} from "./observation-time";
 import {targetStateEvent, type TargetStateEvent, type TargetStatus} from "./target-state";
 
@@ -173,9 +175,9 @@ export function normaliseCapabilities(value: unknown): SourceCapabilities {
 export function normaliseConfig(config: {[K in keyof SourceConfig]?: unknown} = {}): SourceConfig {
   return {
     sources: normaliseCapabilities(config.sources),
-    pollMs: Math.max(250, Number(config.pollMs) || 2000),
-    confirmationTimeoutMs: Math.max(1000, Number(config.confirmationTimeoutMs) || 15000),
-    maxAttempts: Math.max(1, Math.floor(Number(config.maxAttempts) || 2))
+    pollMs: Math.max(250, numberSetting(config.pollMs, "poll interval", 2000)),
+    confirmationTimeoutMs: Math.max(1000, numberSetting(config.confirmationTimeoutMs, "confirmation timeout", 15000)),
+    maxAttempts: Math.max(1, Math.floor(numberSetting(config.maxAttempts, "max attempts", 2)))
   };
 }
 
