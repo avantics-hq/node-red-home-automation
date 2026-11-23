@@ -94,3 +94,12 @@ test("new nodes name their Home Assistant entities after the node; saved nodes k
     assert.equal(node.idScheme, "node", file);
   }
 });
+
+test("occupancy publishing starts off, and a new occupancy node is named after itself", () => {
+  const definition = editorDefinition("occupancy-fusion.html");
+  assert.equal(definition.defaults.publishState?.value, false);
+  assert.equal(definition.defaults.discovery?.value, false);
+  const node: Record<string, unknown> = {};
+  definition.onadd!.call(node);
+  assert.equal(node.idScheme, "node");
+});
