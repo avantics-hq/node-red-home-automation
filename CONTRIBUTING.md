@@ -88,6 +88,21 @@ npm test
 
 The public-content scan rejects credential-like files, private network addresses (IPv4, CGNAT, private IPv6, .local and .lan names), MAC addresses, email addresses outside reserved example domains, Zigbee IEEE addresses, Home Assistant entity ids, Zigbee2MQTT device topics, absolute user-home paths, high-precision coordinates, exported flow identifiers, and private-key blocks.
 
+### What never goes in a commit
+
+This repository holds reusable controller code and general delivery status, never a
+real installation. Keep these out of commits, examples, tests and issues:
+
+- live flows exported from a real Node-RED instance;
+- private hostnames and IP addresses;
+- Home Assistant entity IDs from a real home;
+- backup paths and other local file paths;
+- credentials, tokens and pre-shared keys;
+- infrastructure and operations details.
+
+Use synthetic names and addresses instead. `npm run scan:public` catches the
+machine-detectable cases; the rest is up to the author and the reviewer.
+
 ## Public reports and dependency updates
 
 Use the structured bug-report form for reproducible package defects. Security

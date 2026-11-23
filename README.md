@@ -259,14 +259,6 @@ The display controller stores its Bravia PSK as a Node-RED credential. Keep cred
 Report suspected vulnerabilities privately using the process in
 [`SECURITY.md`](https://github.com/avantics-hq/node-red-home-automation/blob/main/SECURITY.md), not through a public issue.
 
-## Public repository boundary
-
-This repository contains reusable controller code and general delivery status.
-Live flows, private hostnames and IP addresses, Home Assistant entity IDs,
-backup paths, credentials, and infrastructure operations belong only in the
-private deployment repositories. `npm run scan:public` enforces the machine-
-detectable parts of that boundary.
-
 ## Development
 
 ```sh
@@ -282,11 +274,19 @@ The strict TypeScript build, compiled test suite, executable contract examples, 
 Contributions are welcome: see [CONTRIBUTING.md](https://github.com/avantics-hq/node-red-home-automation/blob/main/CONTRIBUTING.md) and the
 [Code of Conduct](https://github.com/avantics-hq/node-red-home-automation/blob/main/CODE_OF_CONDUCT.md).
 
-## Acknowledgements
+## Inspiration and thanks
 
-Versions up to 2.2.1 adapted the circadian curve and its default values from
-[Adaptive Lighting](https://github.com/basnijholt/adaptive-lighting) by
-basnijholt (Apache-2.0). From this version, the circadian lighting is our own.
+- [Node-RED](https://nodered.org): the platform these nodes run on.
+- [Home Assistant](https://www.home-assistant.io): the nodes publish state and
+  discovery to it as a read-only view.
+- [Zigbee2MQTT](https://www.zigbee2mqtt.io): the light transport the room
+  controller and the examples are designed around.
+- [Adaptive Lighting](https://github.com/basnijholt/adaptive-lighting) by
+  basnijholt: the inspiration for circadian lighting in Node-RED.
+
+BRAVIA is a trademark of Sony Group Corporation. Node-RED, Home Assistant,
+Zigbee2MQTT and the other names here are trademarks of their respective owners.
+This project is not affiliated with or endorsed by any of them.
 
 ## License
 
