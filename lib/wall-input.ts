@@ -1,6 +1,7 @@
 "use strict";
 
 import {CLOCK_SKEW_MS, parseObservedAt} from "./observation-time";
+import type {TraceEntry} from "./bounded-trace";
 
 export interface WallInputConfig {
   switchWindowMs: number;
@@ -28,13 +29,6 @@ export type WallInputInput =
 export type WallInputEffect =
   | {kind: "cancel-switch-timer"}
   | {kind: "schedule-switch-timer"; delayMs: number; generation: number; switchAt: number};
-
-export interface WallInputTrace {
-  event: string;
-  outcome: string;
-  reason: string | null;
-  details: Record<string, unknown>;
-}
 
 export interface WallInputStatus {
   phase: "awaiting-baseline" | "unavailable" | "stale" | "fresh";
@@ -124,7 +118,7 @@ export function transitionWallInput(
 ) {
   const state = createWallInputState(saved);
   const effects: WallInputEffect[] = [];
-  const traces: WallInputTrace[] = [];
+  const traces: TraceEntry[] = [];
   let gesture: "single" | "double" | null = null;
 
   function trace(event: string, outcome: string, reason: string | null, details: Record<string, unknown> = {}) {

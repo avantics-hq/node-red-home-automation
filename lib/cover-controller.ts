@@ -1,5 +1,6 @@
 "use strict";
 
+import type {TraceEntry} from "./bounded-trace";
 import {boundObservedAt, isOutOfOrder, parseObservedAt} from "./observation-time";
 import {targetStateEvent, type TargetStateEvent} from "./target-state";
 
@@ -171,7 +172,7 @@ export function transitionCover(
   const event = msg?.cover;
   const commands: CoverCommand[] = [];
   const events: CoverOutputEvent[] = [];
-  const traces: Array<{event: string; outcome: string; reason: string | null; details: Record<string, unknown>}> = [];
+  const traces: TraceEntry[] = [];
 
   if (!event || typeof event.kind !== "string") throw new Error("msg.cover.kind is required");
 

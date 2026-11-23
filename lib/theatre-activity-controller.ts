@@ -1,5 +1,6 @@
 "use strict";
 
+import type {TraceEntry} from "./bounded-trace";
 import {numberSetting} from "./settings";
 
 import {boundObservedAt, isFresh as isFreshAt, isOutOfOrder, parseObservedAt} from "./observation-time";
@@ -215,7 +216,7 @@ export function transitionTheatre(
   const event = msg?.theatre;
   const commands: TargetCommand[] = [];
   const events: TheatreOutput[] = [];
-  const traces: Array<{event: string; outcome: string; reason: string | null; details: Record<string, unknown>}> = [];
+  const traces: TraceEntry[] = [];
 
   if (!event || typeof event.kind !== "string") throw new Error("msg.theatre.kind is required");
 

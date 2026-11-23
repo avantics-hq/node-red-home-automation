@@ -1,5 +1,6 @@
 "use strict";
 
+import type {TraceEntry} from "./bounded-trace";
 import {numberSetting} from "./settings";
 
 import {boundObservedAt, isOutOfOrder, parseObservedAt} from "./observation-time";
@@ -262,7 +263,7 @@ export function transitionActivityLighting(
   const event = msg?.activityLighting;
   const commands: ActivityLightingCommand[] = [];
   const events: ActivityLightingOutputEvent[] = [];
-  const traces: Array<{event: string; outcome: string; reason: string | null; details: Record<string, unknown>}> = [];
+  const traces: TraceEntry[] = [];
   let counts = {matched: 0, preserved: 0, expected: 0};
 
   if (!event || typeof event.kind !== "string") {

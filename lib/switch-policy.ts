@@ -1,4 +1,6 @@
 "use strict";
+
+import type {TraceEntry} from "./bounded-trace";
 import {
   createWallInputState,
   transitionWallInput,
@@ -42,13 +44,6 @@ export type SwitchPolicyEffect =
   | {kind: "cancel-switch-timer"}
   | {kind: "schedule-switch-timer"; delayMs: number; generation: number; switchAt: number}
   | {kind: "send"; message: SwitchLightingIntent};
-
-export interface SwitchPolicyTrace {
-  event: string;
-  outcome: string;
-  reason: string | null;
-  details: Record<string, unknown>;
-}
 
 export function createSwitchPolicyState(saved: Partial<SwitchPolicyState> = {}): SwitchPolicyState {
   const legacy = saved as Partial<SwitchPolicyState> & {
@@ -94,7 +89,7 @@ export function transitionSwitchPolicy(
 ) {
   const state = createSwitchPolicyState(saved);
   const effects: SwitchPolicyEffect[] = [];
-  const traces: SwitchPolicyTrace[] = [];
+  const traces: TraceEntry[] = [];
 
   function trace(event: string, outcome: string, reason: string | null, details: Record<string, unknown> = {}) {
     traces.push({event, outcome, reason, details});

@@ -1,5 +1,6 @@
 "use strict";
 
+import type {TraceEntry} from "./bounded-trace";
 import type {CircadianLighting} from "./circadian";
 import {alreadyStyled} from "./circadian-refresh";
 import {circadianStateMessage, roomLightingDiscovery} from "./room-lighting-discovery";
@@ -156,7 +157,7 @@ export function transitionRoom(
   const nowMs = now.getTime();
   const state = createRoomState(config, saved);
   const targetById = Object.fromEntries(config.targets.map((target) => [target.id, target]));
-  const traces: Array<{event: string; outcome: string; reason: string | null; details: Record<string, unknown>}> = [];
+  const traces: TraceEntry[] = [];
   const outputs: RoomOutput[] = [];
 
   function trace(event: string, outcome: string, reason: string | null = null, details: Record<string, unknown> = {}) {
