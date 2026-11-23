@@ -17,7 +17,7 @@ import {
 } from "../lib/display-mode-controller";
 import {DisplayTransport} from "../lib/display-transport";
 import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
-import {numberSetting} from "../lib/settings";
+import {numberSetting, textSetting} from "../lib/settings";
 
 interface DisplayControllerConfig extends NodeDef {
   area?: string;
@@ -63,10 +63,11 @@ const registerDisplayModeController: NodeInitializer = (RED) => {
     try {
       controllerConfig = normaliseConfig(config);
       transport = new DisplayTransport({
-        tvHost: String(config.tvHost ?? ""),
+        // No defaults: these name the user's own devices.
+        tvHost: textSetting(config.tvHost, "TV host"),
         tvPsk: String(node.credentials?.tvPsk ?? ""),
-        screenHost: String(config.screenHost ?? ""),
-        projectorMeterHost: String(config.projectorMeterHost ?? ""),
+        screenHost: textSetting(config.screenHost, "screen host"),
+        projectorMeterHost: textSetting(config.projectorMeterHost, "projector meter host"),
         timeoutMs: numberSetting(config.transportTimeoutMs, "transport timeout", 5000)
       });
     } catch (error) {

@@ -176,9 +176,10 @@ test("re-enabling motion switches nothing off; a later vacancy schedules OFF as 
 
 test("motion settings are read once, from the node's editor values", () => {
   assert.deepEqual(normaliseMotionConfig({}), {onTargets: ["main"], offTargets: ["main"], defaultDelaySeconds: 120, defaultIlluminanceCutoff: 10});
-  const read = normaliseMotionConfig({onTargets: "[\"ceiling\",\"lamp\"]", offTargets: "", defaultDelaySeconds: "300", defaultIlluminanceCutoff: "0"});
+  const read = normaliseMotionConfig({onTargets: "[\"ceiling\",\"lamp\"]", defaultDelaySeconds: "300", defaultIlluminanceCutoff: "0"});
   assert.deepEqual(read, {onTargets: ["ceiling", "lamp"], offTargets: ["ceiling", "lamp"], defaultDelaySeconds: 300, defaultIlluminanceCutoff: 0});
-  assert.throws(() => normaliseMotionConfig({onTargets: "[1]"}), /JSON array of strings/);
+  assert.throws(() => normaliseMotionConfig({onTargets: "[1]"}), /on targets must be a JSON array of strings/);
+  assert.throws(() => normaliseMotionConfig({offTargets: ""}), /off targets must be valid JSON/);
   assert.throws(() => normaliseMotionConfig({defaultDelaySeconds: ""}), /vacancy delay must be a number/);
   assert.throws(() => normaliseMotionConfig({defaultIlluminanceCutoff: "dark"}), /illuminance cutoff must be a number/);
 });

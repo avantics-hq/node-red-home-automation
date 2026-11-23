@@ -22,7 +22,9 @@
         displayName: {value: ""},
         baseTopic: {value: ""},
         discoveryPrefix: {value: "homeassistant", required: true},
-        activities: {value: "[]", required: true},
+        // User data with no sensible default: empty until the user fills it in,
+        // and marked invalid until then, as the runtime rejects it.
+        activities: {value: "[]", required: true, validate: function (v) { try { var parsed = JSON.parse(v); return Array.isArray(parsed) && parsed.length > 0; } catch (e) { return false; } }},
         sloWindowSize: {value: 20, required: true, validate: RED.validators.number()},
         sloMinimumSamples: {value: 5, required: true, validate: RED.validators.number()},
         sloLatencyBudgetMs: {value: 60000, required: true, validate: RED.validators.number()},

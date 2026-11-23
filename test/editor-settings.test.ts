@@ -52,3 +52,24 @@ test("the editor flags a missing area only when publishing needs it", () => {
   assert.equal(contract.call({discovery: true, baseTopic: "media/theatre"}, ""), false);
   assert.equal(contract.call({discovery: true, baseTopic: ""}, "hall"), true);
 });
+
+test("JSON fields with no sensible default are flagged until filled in, matching the runtime", () => {
+  const examples = Object.fromEntries(["Home theatre activity.json", "Home theatre equipment.json"].flatMap((file) =>
+    (JSON.parse(readFileSync(resolve(__dirname, "../../examples", file), "utf8")) as Array<Record<string, unknown>>)
+      .map((node) => [String(node.type), node])));
+  const fields = [
+    ["activity-lighting-controller.html", "profiles", "home-activity-lighting-controller"],
+    ["source-capability-controller.html", "sources", "home-source-capability-controller"],
+    ["theatre-activity-controller.html", "activityProfiles", "home-theatre-activity-controller"],
+    ["theatre-state-contract.html", "activities", "home-theatre-state-contract"]
+  ] as const;
+  for (const [file, field, type] of fields) {
+    const setting = editorDefinition(file).defaults[field]!;
+    const valid = (value: unknown) => setting.validate!.call({}, value);
+    assert.equal(valid(setting.value), false, `${file} ${field}: the empty default is flagged`);
+    assert.equal(valid(examples[type]![field]), true, `${file} ${field}: the example's value passes`);
+    for (const junk of ["", "{broken", "null", "5", field === "activities" ? "{}" : "[]"]) {
+      assert.equal(valid(junk), false, `${file} ${field}: ${JSON.stringify(junk)}`);
+    }
+  }
+});

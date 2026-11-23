@@ -7,7 +7,9 @@
       area: {value: ""},
       freshnessMs: {value: 30000, required: true, validate: RED.validators.number()},
       recoveryOffActivity: {value: "off", required: true},
-      activityProfiles: {value: "{}", required: true}
+      // User data with no sensible default: empty until the user fills it in,
+      // and marked invalid until then, as the runtime rejects it.
+      activityProfiles: {value: "{}", required: true, validate: function (v) { try { var parsed = JSON.parse(v); return Boolean(parsed) && typeof parsed === "object" && !Array.isArray(parsed) && Object.keys(parsed).length > 0; } catch (e) { return false; } }}
     },
     inputs: 1,
     outputs: 2,

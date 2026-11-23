@@ -5,7 +5,7 @@
     defaults: {
       name: {value: ""},
       area: {value: ""},
-      sources: {value: "{\"shield\":\"SAT/CBL\",\"playstation\":\"GAME\"}", required: true},
+      sources: {value: "{\"shield\":\"SAT/CBL\",\"playstation\":\"GAME\"}", required: true, validate: function (v) { try { JSON.parse(v); return true; } catch (e) { return false; } }},
       retryMs: {value: 2000, required: true, validate: RED.validators.number()},
       maxAttempts: {value: 3, required: true, validate: RED.validators.number()},
       minVolume: {value: 0, required: true, validate: RED.validators.number()},

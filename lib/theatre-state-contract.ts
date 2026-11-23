@@ -11,6 +11,7 @@ import {
   type TheatreSloState
 } from "./theatre-slo";
 import type {TraceEntry} from "./bounded-trace";
+import {textSetting} from "./settings";
 
 const NAME = /^[a-z][a-z0-9_-]*$/;
 const REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
@@ -88,7 +89,7 @@ export function normaliseStateContractConfig(
   const displayName = String(config.displayName || area).trim();
   if (discovery && !displayName) throw new Error("displayName is required");
   const baseTopic = String(config.baseTopic || `home/${area}/theatre`).replace(/^\/+|\/+$/g, "");
-  const discoveryPrefix = String(config.discoveryPrefix || "homeassistant").replace(/^\/+|\/+$/g, "");
+  const discoveryPrefix = textSetting(config.discoveryPrefix, "discovery prefix", "homeassistant").replace(/^\/+|\/+$/g, "");
   if (!baseTopic || /[+#]/.test(baseTopic)) throw new Error("baseTopic must be a concrete MQTT topic");
   if (!discoveryPrefix || /[+#]/.test(discoveryPrefix)) {
     throw new Error("discoveryPrefix must be a concrete MQTT topic prefix");

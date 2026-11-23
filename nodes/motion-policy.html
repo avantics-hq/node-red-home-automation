@@ -5,8 +5,8 @@
     defaults: {
       name: {value: ""},
       area: {value: ""},
-      onTargets: {value: "[\"main\"]", required: true},
-      offTargets: {value: "[\"main\"]", required: true},
+      onTargets: {value: "[\"main\"]", required: true, validate: function (v) { try { JSON.parse(v); return true; } catch (e) { return false; } }},
+      offTargets: {value: "[\"main\"]", required: true, validate: function (v) { try { JSON.parse(v); return true; } catch (e) { return false; } }},
       defaultDelaySeconds: {value: 120, required: true, validate: RED.validators.number()},
       defaultIlluminanceCutoff: {value: 10, required: true, validate: RED.validators.number()}
     },

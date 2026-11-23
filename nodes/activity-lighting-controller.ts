@@ -15,7 +15,7 @@ import {
   type ActivityLightingState
 } from "../lib/activity-lighting-controller";
 import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
-import {numberSetting} from "../lib/settings";
+import {jsonSetting, numberSetting, textSetting} from "../lib/settings";
 
 interface ActivityLightingNodeConfig extends NodeDef {
   area?: string;
@@ -38,8 +38,8 @@ const registerActivityLightingController: NodeInitializer = (RED) => {
     let controllerConfig: ActivityLightingConfig;
     try {
       controllerConfig = {
-        profiles: normaliseLightingProfiles(JSON.parse(config.profiles || "{}") as unknown),
-        owner: config.owner || "activity",
+        profiles: normaliseLightingProfiles(jsonSetting(config.profiles, "profiles", {})),
+        owner: textSetting(config.owner, "owner", "activity"),
         confirmationTimeoutMs: numberSetting(config.confirmationTimeoutMs, "confirmation timeout", 15000),
         maxAttempts: numberSetting(config.maxAttempts, "max attempts", 2)
       };

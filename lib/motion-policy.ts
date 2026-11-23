@@ -1,7 +1,7 @@
 "use strict";
 
 import type {TraceEntry} from "./bounded-trace";
-import {numberSetting} from "./settings";
+import {jsonSetting, numberSetting} from "./settings";
 
 // Motion handles occupancy, illuminance and whether it is enabled. Wall
 // switches belong to the switch policy; the room controller keeps motion from
@@ -54,13 +54,12 @@ function finiteNumber(value: unknown): number | null {
   return Number.isFinite(number) ? number : null;
 }
 
-// Saved wall-switch state from earlier versions (wallInput and the older
-// switch* fields) is not read.
-// A JSON array of target names from the editor, or the fallback when blank.
-function targetList(value: unknown, fallback: string[]): string[] {
-  const parsed: unknown = JSON.parse(typeof value === "string" && value ? value : JSON.stringify(fallback));
+// A JSON array of target names from the editor, or the fallback when the
+// setting is absent from an older saved flow.
+function targetList(value: unknown, label: string, fallback: string[]): string[] {
+  const parsed = jsonSetting(value, label, fallback);
   if (!Array.isArray(parsed) || parsed.some((item) => typeof item !== "string")) {
-    throw new Error("targets must be a JSON array of strings");
+    throw new Error(`${label} must be a JSON array of strings`);
   }
   return parsed as string[];
 }
@@ -75,15 +74,17 @@ export function normaliseMotionConfig(raw: {
   defaultDelaySeconds?: unknown;
   defaultIlluminanceCutoff?: unknown;
 }): MotionConfig {
-  const onTargets = targetList(raw.onTargets, ["main"]);
+  const onTargets = targetList(raw.onTargets, "on targets", ["main"]);
   return {
     onTargets,
-    offTargets: targetList(raw.offTargets, onTargets),
+    offTargets: targetList(raw.offTargets, "off targets", onTargets),
     defaultDelaySeconds: numberSetting(raw.defaultDelaySeconds, "vacancy delay", 120),
     defaultIlluminanceCutoff: numberSetting(raw.defaultIlluminanceCutoff, "illuminance cutoff", 10)
   };
 }
 
+// Saved wall-switch state from earlier versions (wallInput and the older
+// switch* fields) is not read.
 export function createMotionState(
   config: MotionConfig,
   saved: Partial<MotionState> = {}

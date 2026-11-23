@@ -15,6 +15,7 @@ import {
   type AvrState
 } from "../lib/avr-controller";
 import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
+import {jsonSetting} from "../lib/settings";
 
 interface AvrControllerConfig extends NodeDef {
   area?: string;
@@ -29,8 +30,8 @@ interface AvrControllerNode extends Node {}
 
 type AvrStatus = ReturnType<typeof transitionAvr>["status"];
 
-function parseSources(value: string | undefined): unknown {
-  const sources: unknown = JSON.parse(value || "{}");
+function parseSources(value: unknown): unknown {
+  const sources = jsonSetting(value, "sources", {});
   if (!sources || Array.isArray(sources) || typeof sources !== "object") {
     throw new Error("sources must be a JSON object");
   }

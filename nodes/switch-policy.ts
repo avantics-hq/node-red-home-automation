@@ -9,7 +9,7 @@ import {
   type SwitchPolicyState
 } from "../lib/switch-policy";
 import {guarded, invalidConfig, onInput, optionalArea, runReducer, type Send} from "./adapter";
-import {numberSetting} from "../lib/settings";
+import {jsonSetting, numberSetting} from "../lib/settings";
 
 interface SwitchLightingPolicyConfig extends NodeDef {
   area?: string;
@@ -27,8 +27,8 @@ function ageText(ageMs: number | null): string {
   return `${Math.floor(ageMs / 3_600_000)}h`;
 }
 
-function parseTargets(value: string | undefined): string[] {
-  const parsed: unknown = JSON.parse(value || "[\"main\"]");
+function parseTargets(value: unknown): string[] {
+  const parsed = jsonSetting(value, "targets", ["main"]);
   if (!Array.isArray(parsed) || parsed.length === 0 || parsed.some((item) => typeof item !== "string")) {
     throw new Error("targets must be a non-empty JSON array of strings");
   }

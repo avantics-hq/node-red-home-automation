@@ -156,9 +156,9 @@ function releases(result: ReturnType<typeof transitionActivityLighting>) {
   return result.commands.filter((command) => command.operation === "release").map((command) => command.lighting);
 }
 
-test("the owner defaults to one name per node", () => {
+test("the owner defaults to one name per node, and can't be emptied", () => {
   assert.equal(normaliseActivityLightingConfig({profiles: config.profiles}).owner, "activity");
-  assert.equal(normaliseActivityLightingConfig({profiles: config.profiles, owner: "  "}).owner, "activity");
+  assert.throws(() => normaliseActivityLightingConfig({profiles: config.profiles, owner: "  "}), /owner is required/);
   assert.equal(normaliseActivityLightingConfig({profiles: config.profiles, owner: "den"}).owner, "den");
 });
 

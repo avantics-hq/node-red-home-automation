@@ -1,7 +1,7 @@
 "use strict";
 
 import type {TraceEntry} from "./bounded-trace";
-import {numberSetting} from "./settings";
+import {numberSetting, textSetting} from "./settings";
 
 import {boundObservedAt, isFresh as isFreshAt, isOutOfOrder, parseObservedAt} from "./observation-time";
 import {isTargetStatus} from "./target-state";
@@ -110,10 +110,7 @@ export function normaliseConfig(
   config: Partial<TheatreConfig> & {activityProfiles?: unknown} = {}
 ): TheatreConfig {
   const activityProfiles = normaliseActivityProfiles(config.activityProfiles);
-  const recoveryOffActivity = typeof config.recoveryOffActivity === "string" &&
-    config.recoveryOffActivity
-    ? config.recoveryOffActivity
-    : "off";
+  const recoveryOffActivity = textSetting(config.recoveryOffActivity, "recovery off activity", "off");
   return {
     // Optional: an empty area means none.
     area: typeof config.area === "string" ? config.area.trim() : "",

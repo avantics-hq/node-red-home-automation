@@ -1,7 +1,7 @@
 "use strict";
 
 import type {TraceEntry} from "./bounded-trace";
-import {numberSetting} from "./settings";
+import {booleanSetting, numberSetting} from "./settings";
 
 import {boundObservedAt, isOutOfOrder, parseObservedAt} from "./observation-time";
 import {asTargetStatus, targetStateEvent, type TargetStateEvent} from "./target-state";
@@ -271,7 +271,7 @@ export function normaliseConfig(config: {[K in keyof DisplayConfig]?: unknown} =
     maxAttempts: Math.max(1, Math.floor(numberSetting(config.maxAttempts, "max attempts", 2))),
     projectorOnWatts: numberSetting(config.projectorOnWatts, "projector on watts", 20),
     projectorOffWatts: numberSetting(config.projectorOffWatts, "projector off watts", 10),
-    projectorPowerFallback: config.projectorPowerFallback === true
+    projectorPowerFallback: booleanSetting(config.projectorPowerFallback, "projector power fallback", false)
   };
 }
 

@@ -21,7 +21,7 @@
         publishState: {value: null},
         discovery: {value: null},
         displayName: {value: ""},
-        targets: {value: "[]", required: true},
+        targets: {value: "[]", required: true, validate: function (v) { try { JSON.parse(v); return true; } catch (e) { return false; } }},
         maxBrightnessPct: {value: 100, required: true, validate: RED.validators.number()},
         maxColorTempKelvin: {value: 6500, required: true, validate: RED.validators.number()},
         sleepBrightnessPct: {value: 1, required: true, validate: RED.validators.number()},

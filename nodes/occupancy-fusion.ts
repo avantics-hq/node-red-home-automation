@@ -7,7 +7,8 @@ import {
   type OccupancyInput,
   type OccupancyState
 } from "../lib/occupancy-fusion";
-import {onInput, optionalArea, runReducer} from "./adapter";
+import {invalidConfig, onInput, optionalArea, runReducer} from "./adapter";
+import {textSetting} from "../lib/settings";
 
 interface OccupancyFusionConfig extends NodeDef {
   area?: string;
@@ -22,10 +23,16 @@ const registerOccupancyFusion: NodeInitializer = (RED) => {
   function HomeOccupancyFusion(this: OccupancyFusionNode, config: OccupancyFusionConfig) {
     RED.nodes.createNode(this, config);
     const node = this;
-    const fusionConfig: OccupancyConfig & {area: string} = {
-      area: optionalArea(config),
-      presenceMode: config.presenceMode === "hold" ? "hold" : "ignore"
-    };
+    let fusionConfig: OccupancyConfig & {area: string};
+    try {
+      // The editor offers "none" (PIR only) and "hold" (PIR plus presence).
+      const presence = textSetting(config.presenceMode, "presence sensor", "none");
+      if (presence !== "none" && presence !== "hold") throw new Error("presence sensor must be none or hold");
+      fusionConfig = {area: optionalArea(config), presenceMode: presence === "hold" ? "hold" : "ignore"};
+    } catch (error) {
+      invalidConfig(node, error);
+      return;
+    }
 
     function updateStatus(status: OccupancyStatus) {
       const details = [status.occupied ? "occupied" : "vacant"];
