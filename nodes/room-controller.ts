@@ -75,8 +75,6 @@ const registerRoomController: NodeInitializer = (RED) => {
         area: config.area || "room",
         displayName: config.displayName || config.area || "Room",
         targets: parseTargets(config.targets),
-        ...levels,
-        ...schedule,
         initialTransitionSeconds: numberSetting(config.initialTransitionSeconds, "initial transition", 1),
         refreshTransitionSeconds: numberSetting(config.refreshTransitionSeconds, "refresh transition", 60),
         initialSleep: config.initialSleep === true || config.initialSleep === "true",

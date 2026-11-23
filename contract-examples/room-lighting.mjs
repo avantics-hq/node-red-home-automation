@@ -1,3 +1,5 @@
+import {scheduledLighting} from "../dist/lib/circadian.js";
+import {resolveSchedule} from "../dist/lib/circadian-schedule.js";
 import {transitionRoom} from "../dist/lib/room-controller.js";
 import {assert, runWhenMain} from "./_shared.mjs";
 
@@ -13,15 +15,18 @@ export function run() {
       commandTopic: "demo/lighting/ceiling/set"
     }],
     initialSleep: false,
-    sleepBrightnessPct: 5,
-    maxBrightnessPct: 100,
-    sleepColorTempKelvin: 1800,
-    maxColorTempKelvin: 5000,
-    wakeTime: "07:00",
-    bedTime: "23:00",
     refreshTransitionSeconds: 30,
     initialTransitionSeconds: 1
   };
+  const schedule = resolveSchedule("07:00", "23:00");
+  // The node builds the circadian lighting from its schedule and light
+  // settings; the room controller only asks it how a light should look.
+  configuration.lighting = scheduledLighting(schedule, {
+    sleepBrightnessPct: 5,
+    maxBrightnessPct: 100,
+    sleepColorTempKelvin: 1800,
+    maxColorTempKelvin: 5000
+  });
   const input = {
     lighting: {
       kind: "intent",
@@ -47,7 +52,7 @@ export function run() {
     configuration: {
       area: configuration.area,
       targets: configuration.targets.map(({id}) => id),
-      schedule: {wakeTime: configuration.wakeTime, bedTime: configuration.bedTime}
+      schedule
     },
     inputs: [input],
     outputs,
