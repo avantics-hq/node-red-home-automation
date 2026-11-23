@@ -383,9 +383,45 @@ test("a restart reports a pending volume request as failed instead of dropping i
   let result = volume(readyState("PWON\rZMON\rSISAT/CBL\rMV40\r"), "before-restart", "absolute", 45, 1);
   result = transitionAvr(result.state, {avr: {kind: "startup"}}, config, at(2));
   const failed = result.events.find((message) => message.avr.kind === "volume_failed");
-  assert.equal(failed?.avr.requestId, "before-restart");
-  assert.equal(failed?.avr.reason, "restart");
+  assert.deepEqual(failed?.avr, {
+    kind: "volume_failed", area: "lounge", requestId: "before-restart", reason: "restart", operation: null, attempts: null
+  });
+  assert.equal(result.traces.some((entry) => entry.event === "volume" && entry.outcome === "failed" && entry.reason === "restart"), true);
   assert.equal(result.state.volumeRequest, null);
   assert.equal(result.state.volumeMetrics.failures, 1);
   assert.equal(result.commands.filter((command) => command.payload.startsWith("MV4")).length, 0);
+});
+
+test("a refresh re-reads the receiver without failing or resetting work in flight", () => {
+  // Lead repro: a theatre refresh 0.2 s after a volume command failed it as a restart.
+  let result = volume(readyState("PWON\rZMON\rSISAT/CBL\rMV31\r"), "v1", "absolute", 40, 1);
+  assert.equal(result.commands[0]?.payload, "MV40\r");
+  result = transitionAvr(result.state, {avr: {kind: "refresh"}}, config, at(1.2));
+  assert.deepEqual(result.commands.map((command) => command.payload), [QUERY_COMMAND]);
+  assert.deepEqual(volumeKinds(result), []);
+  assert.equal(result.state.volumeRequest?.requestId, "v1");
+  assert.equal(result.state.pending?.operation, "volume");
+  result = observed(result.state, "MV40", 1.4);
+  assert.deepEqual(volumeKinds(result), ["volume_ready"]);
+
+  // A source change in flight is not reset either.
+  let source = transitionAvr(readyState(), {
+    avr: {kind: "intent", requestId: "source-1", generation: 1, power: "on", source: "playstation"}
+  }, config, at(2));
+  const phase = source.state.phase;
+  source = transitionAvr(source.state, {avr: {kind: "refresh"}}, config, at(2.2));
+  assert.equal(source.state.pending?.operation, "source");
+  assert.equal(source.state.phase, phase);
+  source = observed(source.state, "SIGAME", 2.4);
+  assert.equal(source.state.phase, "ready");
+});
+
+test("every failed volume request is reported in one shape", () => {
+  let result = volume(readyState("PWON\rZMON\rSISAT/CBL\rMV31\r"), "unanswered", "absolute", 40, 1);
+  for (const seconds of [2.1, 3.2, 4.3]) result = transitionAvr(result.state, {avr: {kind: "tick"}}, config, at(seconds));
+  const failed = result.events.find((message) => message.avr.kind === "volume_failed");
+  assert.deepEqual(failed?.avr, {
+    kind: "volume_failed", area: "lounge", requestId: "unanswered", reason: "attempts-exhausted", operation: "volume", attempts: 3
+  });
+  assert.equal(result.traces.some((entry) => entry.event === "volume" && entry.outcome === "failed" && entry.reason === "attempts-exhausted"), true);
 });

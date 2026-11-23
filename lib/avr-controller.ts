@@ -420,6 +420,15 @@ export function transitionAvr(
     return state.desired && targetSatisfied() ? "ready" : "idle";
   }
 
+  // Every failed volume request is reported in one shape; operation and
+  // attempts are null when no command was involved (a restart).
+  function volumeFailed(requestId: string | null, reason: "restart" | "attempts-exhausted",
+    operation: string | null, attempts: number | null) {
+    state.volumeMetrics.failures += 1;
+    events.push({avr: {kind: "volume_failed", area: config.area, requestId, reason, operation, attempts}});
+    trace("volume", "failed", reason, {requestId, operation, attempts});
+  }
+
   function completeVolume() {
     const request = state.volumeRequest;
     if (!request || request.target === null) return;
@@ -588,22 +597,27 @@ export function transitionAvr(
     return null;
   }
 
-  if (event.kind === "startup" || event.kind === "refresh") {
+  if (event.kind === "refresh") {
+    // Re-read the receiver without touching work in flight: desired state,
+    // pending commands, the volume request and the phase all carry on.
+    commands.push({
+      payload: QUERY_COMMAND,
+      avrCommand: {
+        area: config.area,
+        operation: "query",
+        requestId: state.desired?.requestId || null,
+        generation: state.desired?.generation ?? state.generation,
+        attempt: 1
+      }
+    });
+    trace("refresh", "querying", null, {pending: state.pending?.operation ?? null});
+    forceStateEvent = true;
+  } else if (event.kind === "startup") {
     const requestBlocked = state.desired &&
       state.blockedGeneration === state.desired.generation;
     const abandonedVolumeRequest = state.volumeRequest?.requestId || null;
-    if (abandonedVolumeRequest) {
-      // Not replayed after a restart: the caller hears it failed.
-      state.volumeMetrics.failures += 1;
-      events.push({
-        avr: {
-          kind: "volume_failed",
-          area: config.area,
-          requestId: abandonedVolumeRequest,
-          reason: "restart"
-        }
-      });
-    }
+    // Not replayed after a restart: the caller hears it failed.
+    if (abandonedVolumeRequest) volumeFailed(abandonedVolumeRequest, "restart", null, null);
     state.seen = {power: false, mainZone: false, source: false, volume: false};
     state.pending = null;
     state.volumeRequest = null;
@@ -852,23 +866,9 @@ export function transitionAvr(
         state.pending = null;
         if (isVolumeOperation(failed.operation)) {
           const requestId = state.volumeRequest?.requestId || null;
-          state.volumeMetrics.failures += 1;
           state.volumeRequest = null;
           state.phase = restingPhase();
-          events.push({
-            avr: {
-              kind: "volume_failed",
-              area: config.area,
-              requestId,
-              operation: failed.operation,
-              attempts: failed.attempt
-            }
-          });
-          trace("volume", "failed", "attempts-exhausted", {
-            requestId,
-            operation: failed.operation,
-            attempts: failed.attempt
-          });
+          volumeFailed(requestId, "attempts-exhausted", failed.operation, failed.attempt);
           reconcile(false);
         } else {
           state.phase = "failed";
