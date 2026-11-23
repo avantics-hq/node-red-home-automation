@@ -1,15 +1,11 @@
 "use strict";
 
 import type {TraceEntry} from "./bounded-trace";
-import {
-  createWallInputState,
-  transitionWallInput,
-  wallInputStatus,
-  type WallInputConfig,
-  type WallInputState
-} from "./wall-input";
 
-export interface MotionConfig extends WallInputConfig {
+// Motion handles occupancy, illuminance and whether it is enabled. Wall
+// switches belong to the switch policy; the room controller keeps motion from
+// switching off a light a person has just set.
+export interface MotionConfig {
   defaultIlluminanceCutoff: number;
   defaultDelaySeconds: number;
   onTargets: string[];
@@ -21,19 +17,16 @@ export interface MotionState {
   illuminance: number | null;
   illuminanceCutoff: number;
   delaySeconds: number;
-  wallInput: WallInputState;
   offTimerGeneration: number;
   offTimerDueAt: number | null;
+  // When the room went vacant and the pending off-timer started.
+  offTimerArmedAt: number | null;
 }
 
 export interface MotionInput {
   source: string;
-  observedAt?: unknown;
-  baseline?: boolean;
   payload?: unknown;
   generation?: number;
-  switchAt?: number;
-  retain?: boolean;
 }
 
 export interface LightingIntent {
@@ -49,8 +42,6 @@ export interface LightingIntent {
 export type MotionEffect =
   | {kind: "cancel-off-timer"}
   | {kind: "schedule-off-timer"; delayMs: number; generation: number}
-  | {kind: "cancel-switch-timer"}
-  | {kind: "schedule-switch-timer"; delayMs: number; generation: number; switchAt: number}
   | {kind: "send"; message: LightingIntent};
 
 export function booleanOn(value: unknown): boolean {
@@ -62,31 +53,20 @@ function finiteNumber(value: unknown): number | null {
   return Number.isFinite(number) ? number : null;
 }
 
+// Saved wall-switch state from earlier versions (wallInput and the older
+// switch* fields) is not read.
 export function createMotionState(
   config: MotionConfig,
   saved: Partial<MotionState> = {}
 ): MotionState {
-  const legacy = saved as Partial<MotionState> & {
-    switchStateKnown?: boolean;
-    switchState?: boolean | null;
-    switchGeneration?: number;
-    switchAt?: number;
-    switchTimerDueAt?: number | null;
-  };
   return {
     areaEnabled: saved.areaEnabled !== false,
     illuminance: saved.illuminance ?? null,
     illuminanceCutoff: saved.illuminanceCutoff ?? config.defaultIlluminanceCutoff,
     delaySeconds: saved.delaySeconds ?? config.defaultDelaySeconds,
-    wallInput: createWallInputState(saved.wallInput ?? {
-      baselineKnown: legacy.switchStateKnown,
-      value: legacy.switchState === true,
-      generation: legacy.switchGeneration,
-      edgeAt: legacy.switchAt,
-      timerDueAt: legacy.switchTimerDueAt
-    }),
     offTimerGeneration: Number(saved.offTimerGeneration) || 0,
-    offTimerDueAt: Number(saved.offTimerDueAt) || null
+    offTimerDueAt: Number(saved.offTimerDueAt) || null,
+    offTimerArmedAt: Number(saved.offTimerArmedAt) || null
   };
 }
 
@@ -131,6 +111,7 @@ export function transitionMotion(
     const wasActive = Number(state.offTimerDueAt) > now;
     state.offTimerGeneration += 1;
     state.offTimerDueAt = null;
+    state.offTimerArmedAt = null;
     effects.push({kind: "cancel-off-timer"});
     if (wasActive && reason) trace("off-timer", "cancelled", reason);
   }
@@ -138,6 +119,7 @@ export function transitionMotion(
   function scheduleOffTimer() {
     cancelOffTimer("rescheduled");
     const delayMs = Math.max(0, state.delaySeconds) * 1000;
+    state.offTimerArmedAt = now;
     state.offTimerDueAt = now + delayMs;
     effects.push({
       kind: "schedule-off-timer",
@@ -250,56 +232,15 @@ export function transitionMotion(
         globalEnabled: nextGlobalEnabled
       });
     } else {
+      // vacantSince lets the room controller keep a light a person set after
+      // the room went vacant.
+      const vacantSince = new Date(state.offTimerArmedAt ?? now).toISOString();
       state.offTimerDueAt = null;
-      emitIntent(lightingIntent(config.offTargets, "OFF", "motion"), "off-timer");
+      state.offTimerArmedAt = null;
+      emitIntent(lightingIntent(config.offTargets, "OFF", "motion", {vacantSince}), "off-timer");
     }
-  } else if (
-    source === "switch-startup" ||
-    source === "switch" ||
-    source === "switch-availability" ||
-    source === "switch-timer"
-  ) {
-    const wallInput = transitionWallInput(
-      state.wallInput,
-      source === "switch-startup"
-        ? {kind: "startup"}
-        : source === "switch"
-          ? {
-            kind: "observation",
-            payload,
-            retain: input.retain,
-            baseline: input.baseline,
-            observedAt: input.observedAt
-          }
-          : source === "switch-availability"
-            ? {kind: "availability", payload}
-            : {
-              kind: "timer",
-              generation: input.generation,
-              edgeAt: input.switchAt
-            },
-      config,
-      now
-    );
-    state.wallInput = wallInput.state;
-    effects.push(...wallInput.effects);
-    traces.push(...wallInput.traces);
-
-    const startedGesture = source === "switch" && (
-      wallInput.gesture === "double" ||
-      wallInput.effects.some((effect) => effect.kind === "schedule-switch-timer")
-    );
-    if (startedGesture) cancelOffTimer("wall-switch");
-
-    if (wallInput.gesture === "single") {
-      emitIntent(lightingIntent(config.onTargets, "TOGGLE", "wall", {person: true}), "switch");
-    } else if (wallInput.gesture === "double") {
-      emitIntent(lightingIntent(config.onTargets, "ON", "wall", {
-        person: true,
-        manual: true,
-        values: {brightness: 254}
-      }), "switch");
-    }
+  } else if (source.startsWith("switch")) {
+    trace("message", "ignored", "wall switches belong to the switch policy", {source});
   }
 
   return {
@@ -310,8 +251,7 @@ export function transitionMotion(
     status: {
       enabled: enabled(),
       illuminance: state.illuminance,
-      delaySeconds: state.delaySeconds,
-      switch: wallInputStatus(state.wallInput, config.switchFreshnessMs, now)
+      delaySeconds: state.delaySeconds
     }
   };
 }

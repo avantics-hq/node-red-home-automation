@@ -52,6 +52,9 @@ export interface RoomState {
   expected: Record<string, ExpectedCommand[]>;
   circadianEnabled: boolean;
   sleeping: boolean;
+  // When a person last set each light: a person or manual intent, or someone
+  // else's command seen on the light's command topic (epoch ms).
+  personAt: Record<string, number>;
 }
 
 export interface LightingEvent {
@@ -71,6 +74,8 @@ export interface LightingEvent {
   refresh?: boolean;
   retained?: boolean;
   enabled?: boolean;
+  // On a motion OFF: when the room went vacant (ISO time).
+  vacantSince?: string;
 }
 
 export interface RoomMessage {
@@ -127,7 +132,9 @@ export function createRoomState(
       Object.entries(saved.expected || {}).map(([target, entries]) => [target, entries.map((entry) => ({...entry}))])
     ),
     circadianEnabled: saved.circadianEnabled !== false,
-    sleeping: saved.sleeping === undefined ? config.initialSleep : saved.sleeping === true
+    sleeping: saved.sleeping === undefined ? config.initialSleep : saved.sleeping === true,
+    personAt: Object.fromEntries(Object.entries(saved.personAt || {})
+      .filter(([, at]) => Number.isFinite(at)))
   };
 }
 
@@ -275,6 +282,15 @@ export function transitionRoom(
       }
       const wasOn = intendedOn(targetId);
       const resolvedState = requestedState === "TOGGLE" ? (wasOn ? "OFF" : "ON") : requestedState;
+      // Motion switches off a vacant room, but not a light a person set after
+      // the room went vacant: they are using it.
+      const vacantSince = typeof event.vacantSince === "string" ? Date.parse(event.vacantSince) : NaN;
+      if (event.source === "motion" && resolvedState === "OFF" && Number.isFinite(vacantSince) &&
+        (state.personAt[targetId] ?? -Infinity) >= vacantSince) {
+        trace("intent", "ignored", "person-set-after-vacancy", {target: targetId, vacantSince: event.vacantSince});
+        continue;
+      }
+      if (person) state.personAt[targetId] = now.getTime();
       if (event.updateOnOnly === true && !wasOn) continue;
       if (event.updateOffOnly === true && wasOn) continue;
       if (event.preserveManual === true && controlOf(targetId) === "manual") continue;
@@ -375,6 +391,7 @@ export function transitionRoom(
         } else if (requestedState === "TOGGLE") {
           state.desired[target.id] = !intendedOn(target.id);
         }
+        state.personAt[target.id] = now.getTime();
         trace("external-command", "observed", null, {
           target: target.id,
           state: requestedState || "UNKNOWN",
