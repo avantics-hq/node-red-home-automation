@@ -1,5 +1,6 @@
 "use strict";
 
+import {finiteOr} from "./settings";
 import {asTargetStatus, targetStateEvent, type TargetStateEvent} from "./target-state";
 
 export const QUERY_COMMAND = "PW?\rZM?\rSI?\rMV?\r";
@@ -274,9 +275,12 @@ export function parseAvrLine(
 // Validates AVR configuration and fills its defaults. The Node-RED adapter
 // calls this at deploy, so a bad configuration shows on the node instead of
 // failing every message.
-export function normaliseAvrConfig(rawConfig: Omit<Partial<AvrConfig>, "sources"> & {sources?: unknown}): AvrConfig {
-  const rawMinVolume = Number(rawConfig.minVolume);
-  const rawMaxVolume = Number(rawConfig.maxVolume);
+// Settings may be editor strings. Missing or unusable numbers take their
+// defaults: retry 2000 ms (at least 250), 3 attempts (at least 1) and volume
+// bounds 0 to 60.
+export function normaliseAvrConfig(rawConfig: {[K in keyof AvrConfig]?: unknown}): AvrConfig {
+  const rawMinVolume = finiteOr(rawConfig.minVolume, 0);
+  const rawMaxVolume = finiteOr(rawConfig.maxVolume, 60);
   const minVolume = roundVolume(rawMinVolume);
   const maxVolume = roundVolume(rawMaxVolume);
   if (!Number.isFinite(rawMinVolume) || !Number.isFinite(rawMaxVolume) ||
@@ -285,10 +289,10 @@ export function normaliseAvrConfig(rawConfig: Omit<Partial<AvrConfig>, "sources"
     throw new Error("volume bounds must be half-step values between 0 and 98 with minimum below maximum");
   }
   return {
-    area: rawConfig.area || "room",
+    area: typeof rawConfig.area === "string" && rawConfig.area ? rawConfig.area : "room",
     sources: parseSources(rawConfig.sources),
-    retryMs: Math.max(250, Number(rawConfig.retryMs) || 2000),
-    maxAttempts: Math.max(1, Math.floor(Number(rawConfig.maxAttempts) || 3)),
+    retryMs: Math.max(250, finiteOr(rawConfig.retryMs, 2000)),
+    maxAttempts: Math.max(1, Math.floor(finiteOr(rawConfig.maxAttempts, 3))),
     minVolume,
     maxVolume
   };

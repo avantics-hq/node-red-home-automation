@@ -254,7 +254,8 @@ function setting(value: unknown, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-export function normaliseConfig(config: Partial<DisplayConfig> = {}): DisplayConfig {
+// Settings may be editor strings; missing or unusable numbers take defaults.
+export function normaliseConfig(config: {[K in keyof DisplayConfig]?: unknown} = {}): DisplayConfig {
   const projectorWarmupMs = Math.max(1000, setting(config.projectorWarmupMs, 60000));
   return {
     screenOpenPosition: setting(config.screenOpenPosition, 82),
