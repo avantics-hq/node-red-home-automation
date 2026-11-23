@@ -5,7 +5,9 @@
     defaults: {
       name: {value: ""},
       area: {value: ""},
-      profiles: {value: "{}", required: true, validate: function (v) { try { JSON.parse(v); return true; } catch (e) { return false; } }},
+      // User data with no sensible default: empty until the user fills it in,
+      // and marked invalid until then, as the runtime rejects it.
+      profiles: {value: "{}", required: true, validate: function (v) { try { var parsed = JSON.parse(v); return Boolean(parsed) && typeof parsed === "object" && !Array.isArray(parsed) && Object.keys(parsed).length > 0; } catch (e) { return false; } }},
       owner: {value: "activity", required: true},
       confirmationTimeoutMs: {value: 15000, required: true, validate: RED.validators.number()},
       maxAttempts: {value: 2, required: true, validate: RED.validators.number()}
