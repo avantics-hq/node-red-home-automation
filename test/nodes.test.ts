@@ -1207,3 +1207,21 @@ test("publish settings: the area is required only when something named after it 
   const clearedMessages = cleared.flat(2).filter((message) => message !== null);
   assert.ok(clearedMessages.length > 0 && clearedMessages.every((message) => message.payload === ""), "discovery off clears its entries");
 });
+
+test("publish settings: null and a missing field mean on; only false means off", async (t) => {
+  const room = runtime(registerRoom).Constructor;
+  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
+  const discoveryOf = async (settings: Record<string, unknown>) => {
+    const node = new room({targets, area: "hall", ...settings});
+    t.after(() => close(node));
+    assert.deepEqual(node.errors, []);
+    const startup = await receive<Array<Array<{topic?: string; payload?: unknown} | null>>>(node, {lighting: {kind: "startup"}});
+    const entry = startup.flat(2).find((message) => message?.topic === "homeassistant/switch/hall_circadian_lighting/config");
+    return entry ? (typeof entry.payload === "object" ? "published" : "cleared") : "none";
+  };
+  assert.equal(await discoveryOf({publishState: null, discovery: null}), "published", "null (the editor's not-set) is on");
+  assert.equal(await discoveryOf({}), "published", "an old flow without the fields is on");
+  assert.equal(await discoveryOf({publishState: true, discovery: false}), "cleared", "false (what onadd sets) is off");
+  assert.equal(await discoveryOf({publishState: true, discovery: "false"}), "cleared");
+  assert.equal(await discoveryOf({publishState: "", discovery: ""}), "published", "an unexpected empty string counts as on");
+});

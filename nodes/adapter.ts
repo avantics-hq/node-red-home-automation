@@ -61,8 +61,10 @@ export function optionalArea(config: {area?: unknown}): string {
 }
 
 // A publishing setting. A saved flow from before the setting existed has no
-// value, and keeps publishing as it did; a node added since has an explicit
-// true or false.
+// value (undefined, or null once the editor has loaded it), and keeps
+// publishing as it did; a node added since has an explicit true or false.
+// Only false, or "false", is off; anything else, including an unexpected "",
+// counts as on.
 export function onUnlessOff(value: unknown): boolean {
   return value !== false && value !== "false";
 }

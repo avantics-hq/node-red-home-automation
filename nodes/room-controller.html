@@ -1,6 +1,7 @@
 <script type="text/javascript">
   (function () {
-    // A setting is on unless it was explicitly switched off.
+    // A setting is on unless it was explicitly switched off; null ("not set")
+    // shows as ticked.
     function on(value) { return value !== false && value !== "false"; }
     RED.nodes.registerType("home-room-lighting-controller", {
       category: "home automation",
@@ -14,10 +15,11 @@
             : on(this.publishState) || on(this.discovery);
           return !publishing || Boolean(v && v.trim());
         }},
-        // Empty means "not set": a saved flow from before these settings keeps
-        // publishing. New nodes start with both off (onadd).
-        publishState: {value: ""},
-        discovery: {value: ""},
+        // null means "not set": Node-RED fills it into a saved flow from before
+        // these settings, which keeps publishing. New nodes start with both
+        // off (onadd).
+        publishState: {value: null},
+        discovery: {value: null},
         displayName: {value: ""},
         targets: {value: "[]", required: true},
         maxBrightnessPct: {value: 100, required: true, validate: RED.validators.number()},

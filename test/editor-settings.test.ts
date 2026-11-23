@@ -33,8 +33,8 @@ test("new nodes start with publishing off; saved flows keep their behaviour", ()
     definition.onadd!.call(node);
     for (const setting of settings) {
       assert.equal(node[setting], false, `${file} ${setting} for a new node`);
-      // Empty means "not set", so the editor never fills in "off" for an older node.
-      assert.equal(definition.defaults[setting]!.value, "", `${file} ${setting} default`);
+      // null means "not set", so the editor never fills in "off" for an older node.
+      assert.equal(definition.defaults[setting]!.value, null, `${file} ${setting} default`);
     }
   }
 });
@@ -43,7 +43,8 @@ test("the editor flags a missing area only when publishing needs it", () => {
   const room = editorDefinition("room-controller.html").defaults.area!.validate!;
   assert.equal(room.call({publishState: false, discovery: false}, ""), true);
   assert.equal(room.call({publishState: true, discovery: false}, ""), false);
-  assert.equal(room.call({publishState: "", discovery: ""}, ""), false, "an older node publishes");
+  assert.equal(room.call({publishState: null, discovery: null}, ""), false, "an older node, loaded with null, publishes");
+  assert.equal(room.call({}, ""), false, "an older node without the fields publishes");
   assert.equal(room.call({publishState: true, discovery: true}, "hall"), true);
   const contract = editorDefinition("theatre-state-contract.html").defaults.area!.validate!;
   assert.equal(contract.call({discovery: false, baseTopic: "media/theatre"}, ""), true);
