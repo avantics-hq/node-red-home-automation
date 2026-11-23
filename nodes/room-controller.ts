@@ -13,12 +13,14 @@ import {resolveSchedule} from "../lib/circadian-schedule";
 import type {LightLevels} from "../lib/light-styling";
 import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
 import {booleanSetting, jsonSetting, numberSetting, optionalBooleanSetting, textSetting} from "../lib/settings";
+import {discoveryPrefixSetting, publishingArea} from "../lib/ha-discovery";
 
 interface RoomControllerConfig extends NodeDef {
   area?: string;
   publishState?: boolean | string;
   discovery?: boolean | string;
   displayName?: string;
+  discoveryPrefix?: string;
   targets?: string;
   maxBrightnessPct?: number | string;
   maxColorTempKelvin?: number | string;
@@ -68,8 +70,9 @@ const registerRoomController: NodeInitializer = (RED) => {
       // means on, so an older flow keeps publishing as before.
       const publishState = optionalBooleanSetting(config.publishState, "publish state") ?? true;
       const discovery = optionalBooleanSetting(config.discovery, "Home Assistant discovery") ?? true;
-      // Both publish under topics and IDs named after the area.
-      if ((publishState || discovery) && !area) throw new Error("area is required");
+      // Both publish under topics and IDs named after the area; otherwise the
+      // area is only a label.
+      if (publishState || discovery) publishingArea(area, true);
       refreshSeconds = Math.max(10, numberSetting(config.refreshSeconds, "refresh interval", 60));
       // Saved latitude, longitude and minimum settings from earlier versions
       // are ignored.
@@ -83,6 +86,7 @@ const registerRoomController: NodeInitializer = (RED) => {
       controllerConfig = {
         area,
         displayName: config.displayName || area,
+        discoveryPrefix: discoveryPrefixSetting(config.discoveryPrefix),
         publishState,
         discovery,
         targets: parseTargets(config.targets),

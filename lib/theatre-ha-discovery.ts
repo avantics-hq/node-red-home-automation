@@ -4,6 +4,7 @@
 // on, and the discovery entries that describe them. Home Assistant may send
 // a request on the request topic, which the state contract acts on.
 
+import {DISCOVERY_ORIGIN} from "./ha-discovery";
 import {TARGETS, type TheatreTarget} from "./theatre-profiles";
 
 export type TheatreTopicName =
@@ -179,6 +180,6 @@ export function theatreDiscovery(config: TheatreDiscoveryConfig): Array<{topic: 
   }
   return entries.map(({component, objectId, payload}) => ({
     topic: `${discoveryPrefix}/${component}/${objectId}/config`,
-    payload
+    payload: {...payload, origin: DISCOVERY_ORIGIN}
   }));
 }

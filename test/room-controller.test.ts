@@ -728,3 +728,8 @@ test("the circadian set topic switches circadian lighting on and off", () => {
   assert.deepEqual(set(lit, "maybe").traces.map(({event, outcome, reason}) => [event, outcome, reason]), [["circadian-set", "ignored", "not-on-or-off"]]);
   assert.deepEqual(set(lit, "OFF", {retain: true}).traces.map(({reason}) => reason), ["retained-message"]);
 });
+
+test("a room that publishes nothing sends nothing under a free-text area at startup", () => {
+  const result = transitionRoom(undefined, {lighting: {kind: "startup"}}, {...config, area: "Living Room", publishState: false, discovery: false}, now);
+  assert.deepEqual(result.outputs.filter(({topic}) => String(topic).includes("Living Room")), []);
+});

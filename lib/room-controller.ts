@@ -3,6 +3,7 @@
 import type {TraceEntry} from "./bounded-trace";
 import type {CircadianLighting} from "./circadian";
 import {alreadyStyled, lightCommand, readLightReport, setsLightValues, type LightCommand, type LightReport} from "./z2m-light";
+import {IDENTIFIER} from "./ha-discovery";
 import {circadianCommandTopic, circadianStateMessage, roomLightingDiscovery} from "./room-lighting-discovery";
 import {checkCommandEcho, checkStateReport, parsePayload, rememberCommand, type ExpectedCommand} from "./command-echo";
 
@@ -17,6 +18,8 @@ export interface RoomTarget {
 export interface RoomConfig {
   area: string;
   displayName: string;
+  // Where Home Assistant listens for discovery. Absent means its default.
+  discoveryPrefix?: string;
   targets: RoomTarget[];
   initialSleep: boolean;
   // Publish each light's control state and the circadian state over MQTT,
@@ -300,8 +303,10 @@ export function transitionRoom(
     }
   }
   if (event.kind === "startup") {
-    if (config.area !== "") {
-      const entry = roomLightingDiscovery(config.area, config.displayName, state.circadianEnabled)[0]!;
+    // An area that isn't an identifier never published, and can't name a topic.
+    if (IDENTIFIER.test(config.area)) {
+      const discoveryConfig = {...config, discoveryPrefix: config.discoveryPrefix ?? "homeassistant"};
+      const entry = roomLightingDiscovery(discoveryConfig, state.circadianEnabled)[0]!;
       // Discovery switched off: an empty retained entry removes the switch
       // from Home Assistant.
       outputs.push(publishesDiscovery ? entry : {topic: entry.topic, payload: "", retain: true});

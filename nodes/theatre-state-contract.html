@@ -8,12 +8,14 @@
       color: "#d9c7f1",
       defaults: {
         name: {value: ""},
-        // Required for discovery, and for the default base topic home/<area>/theatre.
+        // Required for discovery, and for the default base topic home/<area>/theatre;
+        // when set, a lowercase identifier.
         area: {value: "", validate: function (v) {
           var dialog = $("#node-input-discovery").length > 0;
           var discovery = dialog ? $("#node-input-discovery").prop("checked") : on(this.discovery);
           var baseTopic = dialog ? $("#node-input-baseTopic").val() : this.baseTopic;
-          return !(discovery || !baseTopic) || Boolean(v && v.trim());
+          var area = String(v || "").trim();
+          return area ? /^[a-z][a-z0-9_-]*$/.test(area) : !(discovery || !baseTopic);
         }},
         // null means "not set": Node-RED fills it into a saved flow from before
         // this setting, which keeps publishing discovery. New nodes start with
@@ -21,7 +23,7 @@
         discovery: {value: null},
         displayName: {value: ""},
         baseTopic: {value: ""},
-        discoveryPrefix: {value: "homeassistant", required: true},
+        discoveryPrefix: {value: "homeassistant", required: true, validate: function (v) { var prefix = String(v || "").trim().replace(/^\/+|\/+$/g, ""); return Boolean(prefix) && !/[+#]/.test(prefix); }},
         // User data with no sensible default: empty until the user fills it in,
         // and marked invalid until then, as the runtime rejects it.
         activities: {value: "[]", required: true, validate: function (v) { try { var parsed = JSON.parse(v); return Array.isArray(parsed) && parsed.length > 0; } catch (e) { return false; } }},

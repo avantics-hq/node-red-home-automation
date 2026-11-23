@@ -11,9 +11,8 @@ import {
   type TheatreSloState
 } from "./theatre-slo";
 import type {TraceEntry} from "./bounded-trace";
-import {textSetting} from "./settings";
+import {IDENTIFIER, discoveryPrefixSetting, publishingArea} from "./ha-discovery";
 
-const NAME = /^[a-z][a-z0-9_-]*$/;
 const REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 
 export interface TheatreStateContractConfig {
@@ -83,22 +82,17 @@ export function normaliseStateContractConfig(
   const discovery = config.discovery !== false;
   // The area names the discovery entities and the default base topic, so it
   // is needed for either; otherwise it is optional.
-  const area = String(config.area || "").trim();
-  if (!area && (discovery || !config.baseTopic)) throw new Error("area is required");
-  if (area && !NAME.test(area)) throw new Error("area must be a lowercase identifier");
+  const area = publishingArea(String(config.area || "").trim(), discovery || !config.baseTopic);
   const displayName = String(config.displayName || area).trim();
   if (discovery && !displayName) throw new Error("displayName is required");
   const baseTopic = String(config.baseTopic || `home/${area}/theatre`).replace(/^\/+|\/+$/g, "");
-  const discoveryPrefix = textSetting(config.discoveryPrefix, "discovery prefix", "homeassistant").replace(/^\/+|\/+$/g, "");
+  const discoveryPrefix = discoveryPrefixSetting(config.discoveryPrefix);
   if (!baseTopic || /[+#]/.test(baseTopic)) throw new Error("baseTopic must be a concrete MQTT topic");
-  if (!discoveryPrefix || /[+#]/.test(discoveryPrefix)) {
-    throw new Error("discoveryPrefix must be a concrete MQTT topic prefix");
-  }
   if (!Array.isArray(config.activities) || config.activities.length === 0) {
     throw new Error("activities must be a non-empty array");
   }
   const activities = config.activities.map((activity) => String(activity));
-  if (activities.some((activity) => !NAME.test(activity))) {
+  if (activities.some((activity) => !IDENTIFIER.test(activity))) {
     throw new Error("activities must contain lowercase identifiers");
   }
   if (new Set(activities).size !== activities.length) throw new Error("activities must be unique");

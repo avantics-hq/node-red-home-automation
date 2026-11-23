@@ -1259,3 +1259,25 @@ test("the display's projector fallback reads \"true\" as on", async (t) => {
   assert.equal(normaliseDisplayConfig({projectorPowerFallback: "false"}).projectorPowerFallback, false);
   assert.throws(() => normaliseDisplayConfig({projectorPowerFallback: "maybe"}), /projector power fallback must be on or off/);
 });
+
+test("discovery basics: the room checks a publishing area and uses its discovery prefix", async (t) => {
+  const room = runtime(registerRoom).Constructor;
+  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
+  for (const settings of [{publishState: true, discovery: false}, {publishState: false, discovery: true}]) {
+    const node = new room({targets, area: "Living Room", ...settings});
+    assert.deepEqual(node.errors.map(String), ["invalid configuration: area must be a lowercase identifier"], JSON.stringify(settings));
+  }
+  const emptiedPrefix = new room({targets, area: "hall", discoveryPrefix: " "});
+  assert.deepEqual(emptiedPrefix.errors.map(String), ["invalid configuration: discovery prefix is required"]);
+
+  // A room that publishes nothing may use any label.
+  const quiet = new room({targets, area: "Living Room", publishState: false, discovery: false});
+  t.after(() => close(quiet));
+  assert.deepEqual(quiet.errors, []);
+
+  const prefixed = new room({targets, area: "hall", discoveryPrefix: "ha", publishState: true, discovery: true});
+  t.after(() => close(prefixed));
+  const startup = await receive<Array<Array<{topic?: string; payload?: Record<string, unknown>} | null>>>(prefixed, {lighting: {kind: "startup"}});
+  const entry = startup.flat(2).find((message) => message?.topic === "ha/switch/hall_circadian_lighting/config");
+  assert.equal((entry?.payload?.origin as {name?: string} | undefined)?.name, "@avantics/node-red-home-automation");
+});

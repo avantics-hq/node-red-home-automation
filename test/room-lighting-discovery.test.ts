@@ -2,12 +2,16 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import {readFileSync} from "node:fs";
+import {resolve} from "node:path";
 import {
   circadianCommandTopic,
   circadianStateMessage,
   circadianStateTopic,
   roomLightingDiscovery
 } from "../lib/room-lighting-discovery";
+
+const {version} = JSON.parse(readFileSync(resolve(__dirname, "../../package.json"), "utf8")) as {version: string};
 
 test("circadian topics follow the room's area", () => {
   assert.equal(circadianStateTopic("kitchen"), "home/kitchen/circadian/state");
@@ -16,7 +20,7 @@ test("circadian topics follow the room's area", () => {
 });
 
 test("room discovery announces a circadian switch and then its retained state", () => {
-  const [config, state] = roomLightingDiscovery("kitchen", "Kitchen", true);
+  const [config, state] = roomLightingDiscovery({area: "kitchen", displayName: "Kitchen", discoveryPrefix: "homeassistant"}, true);
   assert.equal(config?.topic, "homeassistant/switch/kitchen_circadian_lighting/config");
   assert.equal(config?.retain, true);
   assert.deepEqual(config?.payload, {
@@ -34,7 +38,13 @@ test("room discovery announces a circadian switch and then its retained state", 
       name: "Kitchen Lighting Controller",
       manufacturer: "Node-RED",
       model: "Composable circadian lighting"
-    }
+    },
+    origin: {name: "@avantics/node-red-home-automation", sw: version, url: "https://github.com/avantics-hq/node-red-home-automation"}
   });
   assert.deepEqual(state, {topic: "home/kitchen/circadian/state", payload: "ON", retain: true});
+});
+
+test("room discovery uses the configured discovery prefix", () => {
+  const [config] = roomLightingDiscovery({area: "kitchen", displayName: "Kitchen", discoveryPrefix: "ha/discovery"}, false);
+  assert.equal(config?.topic, "ha/discovery/switch/kitchen_circadian_lighting/config");
 });

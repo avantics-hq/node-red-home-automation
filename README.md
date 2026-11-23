@@ -132,6 +132,9 @@ Version 3.0 changes some behaviour. Check these after upgrading:
 - **MQTT state publishing and Home Assistant discovery are opt-in** on the room lighting controller and the theatre
   state contract. New nodes start with them off. Nodes in a flow saved before 3.0 keep publishing until you untick
   the setting. Switching discovery off removes the entities from Home Assistant.
+- **Discovery** goes under the **Discovery prefix** setting (`homeassistant` by default, as in Home Assistant) on
+  both nodes, and every entry names this package and its version as its origin. A node that publishes needs its area
+  to be a lowercase identifier (a letter, then letters, digits, `_` or `-`), because it names topics and IDs.
 
 The whole-theatre MQTT contract uses non-retained requests at
 `home/<area>/theatre/request`; every request supplies a unique `requestId` and an
