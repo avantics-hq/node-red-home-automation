@@ -253,12 +253,10 @@ export function parseAvrLine(
   return null;
 }
 
-export function transitionAvr(
-  saved: Partial<AvrState> | undefined,
-  msg: AvrMessage,
-  rawConfig: Partial<AvrConfig>,
-  nowValue: Date | string | number = new Date()
-) {
+// Validates AVR configuration and fills its defaults. The Node-RED adapter
+// calls this at deploy, so a bad configuration shows on the node instead of
+// failing every message.
+export function normaliseAvrConfig(rawConfig: Omit<Partial<AvrConfig>, "sources"> & {sources?: unknown}): AvrConfig {
   const rawMinVolume = Number(rawConfig.minVolume);
   const rawMaxVolume = Number(rawConfig.maxVolume);
   const minVolume = roundVolume(rawMinVolume);
@@ -268,7 +266,7 @@ export function transitionAvr(
       minVolume < 0 || maxVolume > 98 || minVolume >= maxVolume) {
     throw new Error("volume bounds must be half-step values between 0 and 98 with minimum below maximum");
   }
-  const config: AvrConfig = {
+  return {
     area: rawConfig.area || "room",
     sources: parseSources(rawConfig.sources),
     retryMs: Math.max(250, Number(rawConfig.retryMs) || 2000),
@@ -276,6 +274,15 @@ export function transitionAvr(
     minVolume,
     maxVolume
   };
+}
+
+export function transitionAvr(
+  saved: Partial<AvrState> | undefined,
+  msg: AvrMessage,
+  rawConfig: Partial<AvrConfig>,
+  nowValue: Date | string | number = new Date()
+) {
+  const config = normaliseAvrConfig(rawConfig);
   const now = nowValue instanceof Date ? nowValue : new Date(nowValue);
   const nowMs = now.getTime();
   const state = createAvrState(config, saved);
