@@ -10,6 +10,8 @@ import {
   type ActivityLightingEvent,
   type ActivityLightingState
 } from "../lib/activity-lighting-controller";
+import {scheduledLighting} from "../lib/circadian";
+import {resolveSchedule} from "../lib/circadian-schedule";
 import {transitionRoom, type RoomConfig, type RoomState} from "../lib/room-controller";
 
 const config: ActivityLightingConfig = {
@@ -193,13 +195,15 @@ test("activity lighting holds its room lights through refresh and hands them bac
       {id: "wall", stateTopic: "lounge/wall", commandTopic: "lounge/wall/set"},
       {id: "lamp", stateTopic: "lounge/lamp", commandTopic: "lounge/lamp/set"}
     ],
-    maxBrightnessPct: 100,
-    maxColorTempKelvin: 5500,
-    sleepBrightnessPct: 1,
-    sleepColorTempKelvin: 1000,
     initialTransitionSeconds: 1,
     refreshTransitionSeconds: 45,
-    initialSleep: false
+    initialSleep: false,
+    lighting: scheduledLighting(resolveSchedule(), {
+      maxBrightnessPct: 100,
+      maxColorTempKelvin: 5500,
+      sleepBrightnessPct: 1,
+      sleepColorTempKelvin: 1000
+    })
   };
   const noon = (seconds: number) => new Date(new Date(2026, 5, 21, 12, 0).getTime() + seconds * 1000);
   let room = transitionRoom(undefined, {lighting: {kind: "intent", targets: ["wall", "lamp"], state: "ON", source: "motion"}}, roomConfig, noon(0));

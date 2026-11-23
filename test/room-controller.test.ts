@@ -3,7 +3,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {transitionSwitchPolicy} from "../lib/switch-policy";
-import {DEFAULT_BED_TIME, DEFAULT_WAKE_TIME, scheduleLevel} from "../lib/circadian-schedule";
+import {scheduledLighting} from "../lib/circadian";
+import {DEFAULT_BED_TIME, DEFAULT_WAKE_TIME, resolveSchedule, scheduleLevel} from "../lib/circadian-schedule";
+import type {LightLevels} from "../lib/light-styling";
 import {
   adaptivePayload,
   transitionRoom,
@@ -11,6 +13,12 @@ import {
   type RoomOutput
 } from "../lib/room-controller";
 
+const levels: LightLevels = {
+  maxBrightnessPct: 100,
+  maxColorTempKelvin: 5500,
+  sleepBrightnessPct: 1,
+  sleepColorTempKelvin: 1000
+};
 const config: RoomConfig = {
   area: "kitchen",
   displayName: "Kitchen",
@@ -18,14 +26,14 @@ const config: RoomConfig = {
     {id: "cooking", stateTopic: "home/kitchen/light/group/cooking", commandTopic: "home/kitchen/light/group/cooking/set"},
     {id: "dining", stateTopic: "home/kitchen/light/group/dining", commandTopic: "home/kitchen/light/group/dining/set"}
   ],
-  maxBrightnessPct: 100,
-  maxColorTempKelvin: 5500,
-  sleepBrightnessPct: 1,
-  sleepColorTempKelvin: 1000,
   initialTransitionSeconds: 1,
   refreshTransitionSeconds: 45,
-  initialSleep: false
+  initialSleep: false,
+  lighting: scheduledLighting(resolveSchedule(), levels)
 };
+// The room on a given wake and bed schedule.
+const onSchedule = (wakeTime: string, bedTime: string): RoomConfig =>
+  ({...config, lighting: scheduledLighting({wakeTime, bedTime}, levels)});
 // Local noon, so the default schedule is in its daytime in any timezone.
 const now = new Date(2026, 5, 21, 12, 0);
 
@@ -495,13 +503,13 @@ test("a wake and bed schedule shapes the circadian day", () => {
     previous = current;
   }
 
-  const scheduled = {...config, wakeTime: "07:00", bedTime: "23:00"};
+  const scheduled = onSchedule("07:00", "23:00");
   const day = adaptivePayload("ON", false, false, clock(13), scheduled);
   assert.equal(day.brightness, 254);
-  assert.equal(day.color_temp, Math.round(1_000_000 / scheduled.maxColorTempKelvin));
+  assert.equal(day.color_temp, Math.round(1_000_000 / levels.maxColorTempKelvin));
   const night = adaptivePayload("ON", false, false, clock(3), scheduled);
-  assert.equal(night.brightness, Math.round(scheduled.sleepBrightnessPct * 254 / 100) || 1);
-  assert.equal(night.color_temp, Math.round(1_000_000 / scheduled.sleepColorTempKelvin));
+  assert.equal(night.brightness, Math.round(levels.sleepBrightnessPct * 254 / 100) || 1);
+  assert.equal(night.color_temp, Math.round(1_000_000 / levels.sleepColorTempKelvin));
   // Sleep mode still overrides the schedule.
   assert.deepEqual(adaptivePayload("ON", false, true, clock(13), scheduled), night);
 });
@@ -522,11 +530,11 @@ test("schedules may cross midnight or run through the night", () => {
 });
 
 test("the room controller styles lights from the schedule", () => {
-  const scheduled = {...config, wakeTime: "07:00", bedTime: "23:00"};
+  const scheduled = onSchedule("07:00", "23:00");
   let result = transitionRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, scheduled, clock(21, 30));
   assert.equal(payload(result, 0).brightness, 128);
   result = transitionRoom(result.state, {lighting: {kind: "refresh"}}, scheduled, clock(23, 30));
-  assert.equal(payload(result, 0).brightness, Math.round(scheduled.sleepBrightnessPct * 254 / 100) || 1);
+  assert.equal(payload(result, 0).brightness, Math.round(levels.sleepBrightnessPct * 254 / 100) || 1);
 });
 
 test("without wake and bed times the default schedule applies", () => {
@@ -534,7 +542,7 @@ test("without wake and bed times the default schedule applies", () => {
     const at = clock(hours, minutes);
     assert.deepEqual(
       adaptivePayload("ON", false, false, at, config),
-      adaptivePayload("ON", false, false, at, {...config, wakeTime: DEFAULT_WAKE_TIME, bedTime: DEFAULT_BED_TIME}),
+      adaptivePayload("ON", false, false, at, onSchedule(DEFAULT_WAKE_TIME, DEFAULT_BED_TIME)),
       `${hours}:${minutes}`
     );
   }
@@ -553,15 +561,15 @@ test("the room controller has no sun dependency left", () => {
 });
 
 test("colour moves evenly in mireds with no kelvin rounding", () => {
-  const scheduled = {...config, wakeTime: "07:00", bedTime: "23:00"};
-  const sleepMired = 1_000_000 / scheduled.sleepColorTempKelvin;
-  const dayMired = 1_000_000 / scheduled.maxColorTempKelvin;
+  const scheduled = onSchedule("07:00", "23:00");
+  const sleepMired = 1_000_000 / levels.sleepColorTempKelvin;
+  const dayMired = 1_000_000 / levels.maxColorTempKelvin;
   // Half-way through the rise, the colour is half-way in mireds.
   assert.equal(adaptivePayload("ON", false, false, clock(7, 30), scheduled).color_temp, Math.round((sleepMired + dayMired) / 2));
 });
 
 test("a refresh skips lights already at their level and re-sends to one that is not", () => {
-  const scheduled = {...config, wakeTime: "07:00", bedTime: "23:00"};
+  const scheduled = onSchedule("07:00", "23:00");
   const report = (state: Parameters<typeof transitionRoom>[0], level: Record<string, unknown>, at: Date) =>
     transitionRoom(state, {topic: "home/kitchen/light/group/cooking", payload: {state: "ON", ...level}, lighting: {kind: "observed"}}, scheduled, at);
   let result = transitionRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, scheduled, clock(13));

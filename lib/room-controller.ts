@@ -1,10 +1,8 @@
 "use strict";
 
-import {scheduledLighting, type CircadianLighting} from "./circadian";
+import type {CircadianLighting} from "./circadian";
 import {alreadyStyled} from "./circadian-refresh";
 import {circadianStateMessage, roomLightingDiscovery} from "./room-lighting-discovery";
-import {resolveSchedule} from "./circadian-schedule";
-import type {LightLevels} from "./light-styling";
 
 export interface RoomTarget {
   id: string;
@@ -12,23 +10,16 @@ export interface RoomTarget {
   commandTopic: string;
 }
 
-export interface RoomConfig extends LightLevels {
+export interface RoomConfig {
   area: string;
   displayName: string;
   targets: RoomTarget[];
   initialSleep: boolean;
-  sleepBrightnessPct: number;
-  maxBrightnessPct: number;
-  sleepColorTempKelvin: number;
-  maxColorTempKelvin: number;
   refreshTransitionSeconds: number;
   initialTransitionSeconds: number;
-  // The daily schedule, as "HH:MM" in the Node-RED host's local time;
-  // defaults from circadian-schedule when unset.
-  wakeTime?: string;
-  bedTime?: string;
-  // Circadian lighting to use instead of the schedule above.
-  lighting?: CircadianLighting;
+  // How a light should look at a given moment; the node builds it from its
+  // schedule and light settings.
+  lighting: CircadianLighting;
 }
 
 export interface RoomObservation {
@@ -139,12 +130,6 @@ export function createRoomState(
   };
 }
 
-// The circadian lighting a room uses: the one passed in, or the wake and bed
-// schedule from its configuration.
-function lightingFor(config: RoomConfig): CircadianLighting {
-  return config.lighting ?? scheduledLighting(resolveSchedule(config.wakeTime, config.bedTime), config);
-}
-
 // A circadian light command for this moment.
 export function adaptivePayload(
   lightState: string,
@@ -156,7 +141,7 @@ export function adaptivePayload(
   if (lightState === "OFF") return {state: lightState};
   return {
     state: lightState,
-    ...lightingFor(config).styleAt(now, sleeping),
+    ...config.lighting.styleAt(now, sleeping),
     transition: isRefresh ? config.refreshTransitionSeconds : config.initialTransitionSeconds
   };
 }
@@ -257,7 +242,7 @@ export function transitionRoom(
     for (const target of config.targets) {
       if (!intendedOn(target.id) || controlOf(target.id) !== "in-control") continue;
       // Nothing to change when the light last reported exactly this style.
-      if (alreadyStyled(lightingFor(config).styleAt(now, state.sleeping), state.observed[target.id])) {
+      if (alreadyStyled(config.lighting.styleAt(now, state.sleeping), state.observed[target.id])) {
         trace("refresh", "skipped", "already-at-level", {target: target.id});
         continue;
       }
