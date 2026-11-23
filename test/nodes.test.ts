@@ -11,6 +11,7 @@ import registerBacklighting from "../nodes/backlighting-controller";
 import registerTheatreActivity from "../nodes/theatre-activity-controller";
 import registerTheatreStateContract from "../nodes/theatre-state-contract";
 import registerAvr from "../nodes/avr-controller";
+import registerCover from "../nodes/cover-controller";
 import registerDisplay from "../nodes/display-mode-controller";
 import registerMotion from "../nodes/motion-policy";
 import registerSwitch from "../nodes/switch-policy";
@@ -1919,4 +1920,26 @@ test("house schedule node: announces on every flows:started, not only its own, u
   houseRuntime.events.emit("flows:started");
   assert.equal(toRooms(), 2, "closed: no longer listening");
   assert.equal(houseRuntime.events.listenerCount("flows:started"), 1, "one listener for the runtime, not one per node");
+});
+
+test("cover node: simple requests, presets, and a moving signal on output 3", async (t) => {
+  const node = new (runtime(registerCover).Constructor)({presets: "{\"partial\":60}"});
+  t.after(() => close(node));
+  assert.deepEqual(node.errors, []);
+  const opened = await receive<SendEnvelope>(node, {payload: "partial"});
+  const command = (opened[0]?.[0]?.[0] as {cover_command?: {operation: string; position: number}} | undefined)?.cover_command;
+  assert.deepEqual([command?.operation, command?.position], ["set_position", 60]);
+  assert.deepEqual(opened[0]?.[2], {topic: "moving", payload: true}, "moving while the move is unconfirmed");
+  const reported = await receive<SendEnvelope>(node, {cover: {kind: "observed", position: 60, motion: "stopped", observedAt: new Date().toISOString(), battery: 90}});
+  assert.deepEqual(reported[0]?.[2], {topic: "moving", payload: false});
+  const theatre = (reported[0]?.[1]?.[0] as {theatre?: {status: string; details: {position: number}}} | undefined)?.theatre;
+  assert.deepEqual([theatre?.status, theatre?.details.position], ["ready", 60]);
+  assert.match(String((node.statuses.at(-1) as {text: string}).text), /battery 90%/);
+  assert.deepEqual(await receive(node, {payload: "half"}), [], "unknown requests are ignored");
+  assert.equal(traces(node).at(-1)?.reason, "unknown-request");
+  // Already there: nothing to send.
+  assert.deepEqual((await receive<SendEnvelope>(node, {payload: 60}))[0]?.[0], null);
+
+  const bad = new (runtime(registerCover).Constructor)({presets: "{\"open\":10}"});
+  assert.match(String(bad.errors[0]), /invalid configuration: preset name open/);
 });

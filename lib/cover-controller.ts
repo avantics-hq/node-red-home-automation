@@ -2,6 +2,7 @@
 
 import type {TraceEntry} from "./bounded-trace";
 import {boundObservedAt, isOutOfOrder, parseObservedAt} from "./observation-time";
+import {booleanSetting, numberSetting} from "./settings";
 import {targetStateEvent, type TargetStateEvent} from "./target-state";
 
 // Positions inside the reducer always mean 0 = closed, 100 = open. With
@@ -38,6 +39,9 @@ export interface CoverObservation {
   position: number;
   motion: CoverMotion | null;
   observedAt: string;
+  // Reported facts the cover never acts on, when the device reports them.
+  battery?: number | null;
+  charging?: string | null;
 }
 
 export interface CoverPending {
@@ -81,12 +85,16 @@ interface IntentBase {
   generation: number;
   source?: string;
   requestedAt?: string;
+  // An automatic target (from a schedule or a computed position, say): it
+  // waits while a person's move holds the cover, which only a request
+  // without this overrides.
+  respectManual?: boolean;
 }
 
 export type CoverEvent =
   | (IntentBase & {kind: "set_position"; position: number})
   | (IntentBase & {kind: "open" | "close" | "stop"})
-  | {kind: "observed"; position: number; motion?: CoverMotion; observedAt: string}
+  | {kind: "observed"; position: number; motion?: CoverMotion; observedAt: string; battery?: number; charging?: string}
   | {kind: "command_result"; generation: number; ok: boolean; reason?: string}
   | {kind: "tick"; generation: number}
   | {kind: "startup" | "refresh"};
@@ -116,16 +124,17 @@ export interface CoverOutputEvent {
   }, CoverFailure>;
 }
 
-export function normaliseCoverConfig(config: Partial<CoverConfig> = {}): CoverConfig {
-  const tolerance = Number(config.positionTolerance);
-  const pollMs = Math.max(250, Number(config.pollMs) || 5000);
+export function normaliseCoverConfig(config: Partial<Record<keyof CoverConfig, unknown>> = {}): CoverConfig {
+  const tolerance = numberSetting(config.positionTolerance, "position tolerance", 2);
+  if (tolerance < 0) throw new Error("position tolerance must not be negative");
+  const pollMs = Math.max(250, numberSetting(config.pollMs, "poll interval", 5000));
   return {
-    positionTolerance: Number.isFinite(tolerance) && tolerance >= 0 ? Math.min(tolerance, 50) : 2,
-    invert: config.invert === true,
-    travelTimeoutMs: Math.max(1000, Number(config.travelTimeoutMs) || 90000),
-    maxAttempts: Math.max(1, Math.floor(Number(config.maxAttempts) || 2)),
+    positionTolerance: Math.min(tolerance, 50),
+    invert: booleanSetting(config.invert, "invert", false),
+    travelTimeoutMs: Math.max(1000, numberSetting(config.travelTimeoutMs, "travel timeout", 90000)),
+    maxAttempts: Math.max(1, Math.floor(numberSetting(config.maxAttempts, "maximum attempts", 2))),
     pollMs,
-    settleMs: Math.max(250, Number(config.settleMs) || pollMs)
+    settleMs: Math.max(250, numberSetting(config.settleMs, "settle time", pollMs))
   };
 }
 
@@ -150,11 +159,19 @@ function validPosition(value: unknown, label: string): number {
   return value;
 }
 
+// Whether the cover is moving: as the device reports it, or, from a device
+// without motion reports, while a move or stop it was sent is unconfirmed.
+export function coverMoving(state: Pick<CoverState, "observed" | "phase">): boolean {
+  const motion = state.observed?.motion ?? null;
+  if (motion !== null) return motion !== "stopped";
+  return state.phase === "moving" || state.phase === "stopping";
+}
+
 function statusFor(state: CoverState) {
   const target = state.desired?.operation === "stop" && state.desired.position === null
     ? "stop"
     : state.desired?.position ?? "none";
-  return {phase: state.phase, text: `${target}: ${state.phase}`};
+  return {phase: state.phase, text: `${target}: ${state.phase}`, moving: coverMoving(state)};
 }
 
 export function transitionCover(
@@ -237,6 +254,10 @@ export function transitionCover(
   }
 
   function acceptIntent(intent: Extract<CoverEvent, IntentBase>) {
+    if (intent.respectManual === true && state.classification === "manual_override") {
+      trace("intent", "ignored", "manual-hold", {kind: intent.kind});
+      return;
+    }
     if (typeof intent.requestId !== "string" || !intent.requestId) throw new Error("cover requestId is required");
     if (!Number.isInteger(intent.generation) || intent.generation < 1) {
       throw new Error("cover generation must be a positive integer");
@@ -268,6 +289,16 @@ export function transitionCover(
     state.blockedGeneration = null;
     state.classification = null;
     state.lastAttempt = 0;
+    // Already there and still: confirmed from what the cover reported since
+    // the last start, with nothing to send.
+    const observed = state.observed;
+    if (position !== null && observed && observed.motion !== "opening" && observed.motion !== "closing" &&
+      Math.abs(observed.position - position) <= config.positionTolerance) {
+      state.pending = null;
+      trace("intent", "accepted", "already-there", {kind: intent.kind, position, generation: intent.generation});
+      ready(position);
+      return;
+    }
     issue(state.desired.operation, 1);
     trace("intent", "accepted", null, {kind: intent.kind, position, generation: intent.generation});
   }
@@ -291,7 +322,13 @@ export function transitionCover(
     const position = config.invert ? 100 - devicePosition : devicePosition;
     const motion = observation.motion ?? null;
     const previous = state.observed;
-    state.observed = {position, motion, observedAt: bounded.observedAt};
+    state.observed = {
+      position,
+      motion,
+      observedAt: bounded.observedAt,
+      battery: typeof observation.battery === "number" && Number.isFinite(observation.battery) ? observation.battery : previous?.battery ?? null,
+      charging: typeof observation.charging === "string" ? observation.charging : previous?.charging ?? null
+    };
     if (!state.desired) return;
 
     const pending = state.pending;

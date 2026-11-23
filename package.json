@@ -54,7 +54,8 @@
       "home-backlighting-controller": "dist/nodes/backlighting-controller.js",
       "home-theatre-activity-controller": "dist/nodes/theatre-activity-controller.js",
       "home-theatre-state-contract": "dist/nodes/theatre-state-contract.js",
-      "home-house-schedule": "dist/nodes/house-schedule.js"
+      "home-house-schedule": "dist/nodes/house-schedule.js",
+      "home-cover-controller": "dist/nodes/cover-controller.js"
     }
   },
   "devDependencies": {

@@ -1,0 +1,79 @@
+<script type="text/javascript">
+  RED.nodes.registerType("home-cover-controller", {
+    category: "home automation",
+    color: "#e2d96e",
+    defaults: {
+      name: {value: ""},
+      area: {value: ""},
+      presets: {value: "{\"partial\":60}", required: true, validate: function (v) {
+        try {
+          var parsed = JSON.parse(v);
+          return Boolean(parsed) && typeof parsed === "object" && !Array.isArray(parsed) && Object.keys(parsed).every(function (name) {
+            var position = parsed[name];
+            return /^[a-z][a-z0-9_-]*$/.test(name) && ["open", "close", "stop"].indexOf(name) === -1 &&
+              typeof position === "number" && position >= 0 && position <= 100;
+          });
+        } catch (e) { return false; }
+      }},
+      positionTolerance: {value: 2, required: true, validate: RED.validators.number()},
+      invert: {value: false},
+      travelTimeoutMs: {value: 90000, required: true, validate: RED.validators.number()},
+      maxAttempts: {value: 2, required: true, validate: RED.validators.number()},
+      pollMs: {value: 5000, required: true, validate: RED.validators.number()},
+      settleMs: {value: 5000, required: true, validate: RED.validators.number()}
+    },
+    inputs: 1,
+    outputs: 3,
+    outputLabels: ["device commands", "state and results", "moving"],
+    icon: "font-awesome/fa-columns",
+    label: function () { return this.name || (this.area ? this.area + " " : "") + "cover"; }
+  });
+</script>
+
+<script type="text/html" data-template-name="home-cover-controller">
+  <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
+  <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area"></div>
+  <div class="form-row"><label for="node-input-presets">Presets</label><input type="text" id="node-input-presets"></div>
+  <div class="form-row"><label for="node-input-positionTolerance">Position tolerance</label><input type="number" id="node-input-positionTolerance"></div>
+  <div class="form-row"><label for="node-input-invert">Invert positions</label><input type="checkbox" id="node-input-invert" style="display:inline-block; width:auto;"> <span>(the device reports 0 as open)</span></div>
+  <div class="form-row"><label for="node-input-travelTimeoutMs">Travel timeout (ms)</label><input type="number" id="node-input-travelTimeoutMs"></div>
+  <div class="form-row"><label for="node-input-maxAttempts">Maximum attempts</label><input type="number" id="node-input-maxAttempts"></div>
+  <div class="form-row"><label for="node-input-pollMs">Poll interval (ms)</label><input type="number" id="node-input-pollMs"></div>
+  <div class="form-row"><label for="node-input-settleMs">Settle time (ms)</label><input type="number" id="node-input-settleMs"></div>
+</script>
+
+<script type="text/html" data-help-name="home-cover-controller">
+  <p>Owns one position cover: a blind, shutter or curtain motor that takes and reports a position from 0 (closed) to
+    100 (open). It sends a move, confirms it from what the cover reports, retries a bounded number of times, and
+    leaves a cover a person moved where they put it.</p>
+  <h3>Inputs</h3>
+  <dl class="message-properties">
+    <dt>payload</dt><dd><code>"open"</code>, <code>"close"</code> or <code>"stop"</code>; a position from 0 to 100;
+      or the name of one of the <b>Presets</b>. A position the cover is already at, and still, is confirmed without
+      a command.</dd>
+    <dt>respectManual <span class="property-type">boolean</span></dt><dd><code>true</code> for an automatic target,
+      such as a schedule or a position computed from the weather: it waits while a person's move holds the cover.
+      A request without it (a button, say) takes the cover back.</dd>
+    <dt>cover <span class="property-type">object</span></dt><dd>what the cover reports, as
+      <code>{kind: "observed", position, motion, observedAt, battery, charging}</code>, where <code>motion</code> is
+      <code>opening</code>, <code>closing</code> or <code>stopped</code> and <code>battery</code> and
+      <code>charging</code> are optional. Also <code>{kind: "startup"}</code> after a deploy (it re-reads the cover
+      rather than trusting old state), <code>{kind: "command_result", generation, ok}</code> from the device path,
+      or a full request such as <code>{kind: "set_position", requestId, generation, position}</code>.</dd>
+  </dl>
+  <h3>Outputs</h3>
+  <ol class="node-ports">
+    <li>Device commands, in a neutral shape: <code>msg.cover_command = {operation, position, requestId, generation,
+      attempt}</code>, where <code>operation</code> is <code>set_position</code>, <code>stop</code> or
+      <code>observe</code> (read the cover now). Map them to your device, as the example flow does for a
+      Zigbee2MQTT cover.</li>
+    <li>State and results: <code>msg.theatre = {kind: "target_state", target: "cover", status, details}</code>, with
+      the confirmed and observed positions and any failure or manual override.</li>
+    <li>Whether the cover is moving, <code>msg.payload</code> <code>true</code> or <code>false</code> with
+      <code>topic</code> <code>moving</code>, sent when it changes: from the cover's own motion reports, or, for a
+      device without them, while a move is unconfirmed. Wire it to switch other policies, for example to pause
+      motion lighting while a blind moves.</li>
+  </ol>
+  <p>Battery and charging status, when the cover reports them, are kept as facts and shown in the status; the node
+    never acts on them.</p>
+</script>

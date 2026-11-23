@@ -33,7 +33,7 @@ commands, and reports done only when fresh observations confirm them.
 
 ## Included nodes
 
-The nodes come in three groups. Each group has an importable example flow
+The nodes come in four groups. Each group has an importable example flow
 (**Import → Examples** in the Node-RED editor).
 
 ### Room lighting
@@ -111,6 +111,27 @@ Example: [`Home theatre activity.json`](https://github.com/avantics-hq/node-red-
 Pure TypeScript policy modules live in `lib/`; thin Node-RED runtime and editor adapters live in `nodes/`.
 
 Importable example flows for the Node-RED editor live in [`examples/`](https://github.com/avantics-hq/node-red-home-automation/tree/main/examples) (**Import → Examples**). Executable, deployment-neutral contract examples live in [`contract-examples/`](https://github.com/avantics-hq/node-red-home-automation/tree/main/contract-examples) and exercise the same reducers as the runtime adapters.
+
+
+### Covers
+
+One cover controller owns one position cover: a blind, shutter or curtain motor
+that takes and reports a position from 0 (closed) to 100 (open). Send it
+`"open"`, `"close"`, `"stop"`, a position, or the name of a preset such as
+`partial`. It confirms a move from what the cover reports, retries a bounded
+number of times, and leaves a cover a person moved where they put it. An
+automatic target, such as a position computed from the weather, sets
+`msg.respectManual = true` so it waits while a person's move holds; a target
+the cover is already at is confirmed without a command. Its third output says
+whether the cover is moving, so other policies can react; the example pauses
+motion lighting while a blind moves. Device commands come out in a neutral
+shape (`set_position`, `stop` or `observe`); the example flow maps them to and
+from a Zigbee2MQTT cover. Battery and charging status are kept as reported
+facts and never acted on.
+
+| Node | Purpose |
+|---|---|
+| `home-cover-controller` | Owns one position cover's moves, confirmed from observed position, with presets, manual ownership and a moving signal. |
 
 ## Requirements
 

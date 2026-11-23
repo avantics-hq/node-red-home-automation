@@ -1,0 +1,291 @@
+[
+  {
+    "id": "example-cover-control-cover-control-example",
+    "type": "comment",
+    "name": "Cover control example",
+    "info": "A position cover (blind, shutter or curtain motor) owned by the cover controller. Requests go in as \"open\", \"close\", \"stop\", a position from 0 to 100, or a preset name; an automatic target sets respectManual so a person's move holds. The function nodes show the mapping to and from a Zigbee2MQTT cover: wire them to MQTT out and in nodes on your cover's topic. Output 3 says whether the cover is moving; here it pauses motion lighting while the cover moves.",
+    "x": 170,
+    "y": 40,
+    "wires": []
+  },
+  {
+    "id": "example-cover-control-startup",
+    "type": "inject",
+    "name": "startup",
+    "props": [
+      {
+        "p": "cover",
+        "v": "{\"kind\":\"startup\"}",
+        "vt": "json"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": true,
+    "onceDelay": 3,
+    "topic": "",
+    "x": 130,
+    "y": 100,
+    "wires": [
+      [
+        "example-cover-control-cover"
+      ]
+    ]
+  },
+  {
+    "id": "example-cover-control-open",
+    "type": "inject",
+    "name": "open",
+    "props": [
+      {
+        "p": "payload",
+        "v": "open",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 120,
+    "y": 140,
+    "wires": [
+      [
+        "example-cover-control-cover"
+      ]
+    ]
+  },
+  {
+    "id": "example-cover-control-close",
+    "type": "inject",
+    "name": "close",
+    "props": [
+      {
+        "p": "payload",
+        "v": "close",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 120,
+    "y": 180,
+    "wires": [
+      [
+        "example-cover-control-cover"
+      ]
+    ]
+  },
+  {
+    "id": "example-cover-control-partial",
+    "type": "inject",
+    "name": "partial preset",
+    "props": [
+      {
+        "p": "payload",
+        "v": "partial",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 140,
+    "y": 220,
+    "wires": [
+      [
+        "example-cover-control-cover"
+      ]
+    ]
+  },
+  {
+    "id": "example-cover-control-computed",
+    "type": "inject",
+    "name": "computed target 40",
+    "props": [
+      {
+        "p": "payload",
+        "v": "40",
+        "vt": "num"
+      },
+      {
+        "p": "respectManual",
+        "v": "true",
+        "vt": "bool"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 160,
+    "y": 260,
+    "wires": [
+      [
+        "example-cover-control-cover"
+      ]
+    ]
+  },
+  {
+    "id": "example-cover-control-report",
+    "type": "inject",
+    "name": "state report from the cover",
+    "props": [
+      {
+        "p": "payload",
+        "v": "{\"position\":60,\"motor_state\":\"stopped\",\"battery\":87,\"charging_status\":\"false\"}",
+        "vt": "json"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 180,
+    "y": 320,
+    "wires": [
+      [
+        "example-cover-control-from-device"
+      ]
+    ]
+  },
+  {
+    "id": "example-cover-control-from-device",
+    "type": "function",
+    "name": "from Zigbee2MQTT",
+    "func": "// A Zigbee2MQTT cover's state report (from an MQTT in node on its topic)\n// as what the cover controller reads. Position 100 is open.\nconst report = typeof msg.payload === \"string\" ? JSON.parse(msg.payload) : msg.payload;\nif (!report || typeof report.position !== \"number\") return null;\nconst motion = [\"opening\", \"closing\", \"stopped\"].includes(report.motor_state) ? report.motor_state : undefined;\nreturn {cover: {\n  kind: \"observed\",\n  position: report.position,\n  motion,\n  observedAt: new Date().toISOString(),\n  battery: typeof report.battery === \"number\" ? report.battery : undefined,\n  charging: typeof report.charging_status === \"string\" ? report.charging_status : undefined\n}};",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 420,
+    "y": 320,
+    "wires": [
+      [
+        "example-cover-control-cover"
+      ]
+    ]
+  },
+  {
+    "id": "example-cover-control-cover",
+    "type": "home-cover-controller",
+    "name": "",
+    "area": "",
+    "presets": "{\"partial\":60}",
+    "positionTolerance": 2,
+    "invert": false,
+    "travelTimeoutMs": 90000,
+    "maxAttempts": 2,
+    "pollMs": 5000,
+    "settleMs": 5000,
+    "x": 640,
+    "y": 200,
+    "wires": [
+      [
+        "example-cover-control-to-device"
+      ],
+      [
+        "example-cover-control-state"
+      ],
+      [
+        "example-cover-control-pause-motion"
+      ]
+    ]
+  },
+  {
+    "id": "example-cover-control-to-device",
+    "type": "function",
+    "name": "to Zigbee2MQTT",
+    "func": "// Neutral cover commands to a Zigbee2MQTT cover. Put your cover's name in\n// the topic; wire the result to an MQTT out node.\nconst topic = \"zigbee2mqtt/<your cover>\";\nconst command = msg.cover_command;\nif (command.operation === \"observe\") return {topic: topic + \"/get\", payload: {position: \"\"}};\nif (command.operation === \"stop\") return {topic: topic + \"/set\", payload: \"STOP\"};\nreturn {topic: topic + \"/set\", payload: {position: command.position}};",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 880,
+    "y": 140,
+    "wires": [
+      [
+        "example-cover-control-device-commands"
+      ]
+    ]
+  },
+  {
+    "id": "example-cover-control-device-commands",
+    "type": "debug",
+    "name": "to the MQTT out node",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 1110,
+    "y": 140,
+    "wires": []
+  },
+  {
+    "id": "example-cover-control-state",
+    "type": "debug",
+    "name": "state and results",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 870,
+    "y": 200,
+    "wires": []
+  },
+  {
+    "id": "example-cover-control-pause-motion",
+    "type": "function",
+    "name": "pause motion while moving",
+    "func": "// While the cover moves, switch this room's motion lighting off, and back\n// on when it stops: wire to the motion lighting policy.\nreturn {source: \"area-enabled\", payload: msg.payload ? \"OFF\" : \"ON\"};",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 900,
+    "y": 260,
+    "wires": [
+      [
+        "example-cover-control-motion-enable"
+      ]
+    ]
+  },
+  {
+    "id": "example-cover-control-motion-enable",
+    "type": "debug",
+    "name": "to the motion lighting policy",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 1150,
+    "y": 260,
+    "wires": []
+  }
+]

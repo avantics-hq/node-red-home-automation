@@ -365,3 +365,45 @@ test("restart mid-travel that finds the cover stopped off target latches manual,
   reported = observe(reported.state, 40, 4, "stopped");
   assert.equal(reported.state.phase, "manual_override");
 });
+
+test("a target the cover is already at, and still, is confirmed without a command", () => {
+  let result = observe(undefined, 60, 0, "stopped");
+  result = setPosition(result.state, 61, 1, 1);
+  assert.deepEqual(result.commands, []);
+  assert.equal(result.state.phase, "ready");
+  assert.equal(result.traces.find(({event}) => event === "intent")?.reason, "already-there");
+  // Moving, or not yet seen since the last start: it is commanded.
+  const moving = observe(undefined, 60, 0, "opening");
+  assert.equal(setPosition(moving.state, 60, 1, 1).commands.length, 1);
+  assert.equal(setPosition(undefined, 60).commands.length, 1);
+});
+
+test("an automatic target waits while a person's move holds the cover; a plain request takes it back", () => {
+  let result = setPosition(undefined, 40);
+  result = observe(result.state, 40, 6, "stopped");
+  assert.equal(result.state.phase, "ready");
+  result = observe(result.state, 80, 60, "stopped");
+  assert.equal(result.state.phase, "manual_override");
+  const automatic = apply(result.state, {kind: "set_position", requestId: "weather-1", generation: 2, position: 20, respectManual: true}, 70);
+  assert.deepEqual(automatic.commands, []);
+  assert.equal(automatic.state.phase, "manual_override");
+  assert.equal(automatic.traces.at(-1)?.reason, "manual-hold");
+  const button = apply(automatic.state, {kind: "close", requestId: "button-1", generation: 2}, 80);
+  assert.equal(button.commands[0]?.position, 0);
+});
+
+test("battery and charging are kept as reported facts, and moving follows the cover's motion", () => {
+  let result = apply(undefined, {kind: "observed", position: 50, motion: "opening", observedAt: at(0).toISOString(), battery: 87, charging: "false"});
+  assert.deepEqual([result.state.observed?.battery, result.state.observed?.charging, result.status.moving], [87, "false", true]);
+  result = observe(result.state, 70, 5, "stopped");
+  assert.deepEqual([result.state.observed?.battery, result.status.moving], [87, false], "a report without battery keeps the last");
+  // Without motion reports, moving while a move is unconfirmed.
+  const commanded = setPosition(undefined, 30);
+  assert.equal(commanded.status.moving, true);
+});
+
+test("cover settings are read with the shared readers", () => {
+  assert.throws(() => transitionCover(undefined, {cover: {kind: "startup"}}, {travelTimeoutMs: ""} as never, at(0)), /travel timeout must be a number/);
+  assert.throws(() => transitionCover(undefined, {cover: {kind: "startup"}}, {positionTolerance: -1}, at(0)), /position tolerance must not be negative/);
+  assert.throws(() => transitionCover(undefined, {cover: {kind: "startup"}}, {invert: "maybe"} as never, at(0)), /invert must be on or off/);
+});
