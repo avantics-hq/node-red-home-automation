@@ -45,8 +45,8 @@ const registerActivityLightingController: NodeInitializer = (RED) => {
     try {
       profiles = normaliseLightingProfiles(JSON.parse(config.profiles || "{}") as unknown);
     } catch (error) {
-      node.status({fill: "red", shape: "ring", text: "invalid profile JSON"});
-      node.error(error);
+      node.status({fill: "red", shape: "ring", text: "invalid configuration"});
+      node.error("invalid configuration: " + (error instanceof Error ? error.message : String(error)));
       return;
     }
     const controllerConfig: ActivityLightingConfig = {

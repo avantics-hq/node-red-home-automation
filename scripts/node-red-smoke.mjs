@@ -63,6 +63,8 @@ try {
 
 // Deploys each example flow on its own tab. A node the runtime could not
 // create, or an unexpected "invalid configuration" status, fails the smoke.
+// Every adapter uses that one badge text for a configuration it cannot use
+// (test/nodes.test.ts checks it).
 // The display controller needs device hosts, which the examples leave blank.
 async function checkExamples() {
   const expectedInvalid = new Set(["home-display-mode-controller"]);

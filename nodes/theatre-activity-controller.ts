@@ -44,8 +44,8 @@ const registerTheatreActivityController: NodeInitializer = (RED) => {
     try {
       activityProfiles = normaliseActivityProfiles(JSON.parse(config.activityProfiles || "{}") as unknown);
     } catch (error) {
-      node.status({fill: "red", shape: "ring", text: "invalid activity profiles"});
-      node.error(error);
+      node.status({fill: "red", shape: "ring", text: "invalid configuration"});
+      node.error("invalid configuration: " + (error instanceof Error ? error.message : String(error)));
       return;
     }
     const controllerConfig: TheatreConfig = {

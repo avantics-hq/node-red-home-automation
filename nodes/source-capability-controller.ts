@@ -46,8 +46,8 @@ const registerSourceCapabilityController: NodeInitializer = (RED) => {
     try {
       sources = normaliseCapabilities(JSON.parse(config.sources || "{}") as unknown);
     } catch (error) {
-      node.status({fill: "red", shape: "ring", text: "invalid source JSON"});
-      node.error(error);
+      node.status({fill: "red", shape: "ring", text: "invalid configuration"});
+      node.error("invalid configuration: " + (error instanceof Error ? error.message : String(error)));
       return;
     }
     const controllerConfig: SourceConfig = {
