@@ -238,7 +238,7 @@ test("a stale state report does not undo the controller's own command in flight"
   }, config, later(1050));
   result = observeState(result.state, false, 1100);
   assert.equal(result.state.desired.cooking, true);
-  assert.equal(result.traces.at(-1)?.reason, "own-command-in-flight");
+  assert.equal(result.traces.at(-1)?.reason, "stale-report");
 
   result = observeState(result.state, true, 1400);
   assert.equal(result.state.desired.cooking, true);
@@ -636,4 +636,38 @@ test("someone else's command counts as a person's change for the vacancy rule", 
   result = transitionRoom(result.state, {topic: "home/kitchen/light/group/cooking/set", payload: {state: "ON", brightness: 40}, lighting: {kind: "command-observed"}}, config, at(20));
   const off = transitionRoom(result.state, {lighting: {kind: "intent", targets: ["cooking"], state: "OFF", source: "motion", vacantSince: at(10).toISOString()}}, config, at(40));
   assert.equal(off.outputs.some((entry) => entry.lighting_command), false);
+});
+
+test("state reports are traced as confirming our command, stale, or someone else's change", () => {
+  const report = (state: RoomState, on: boolean, ms: number) =>
+    transitionRoom(state, {topic: "home/kitchen/light/group/cooking", payload: {state: on ? "ON" : "OFF"}, lighting: {kind: "observed"}}, config, new Date(now.getTime() + ms));
+  const traced = (result: ReturnType<typeof transitionRoom>) =>
+    result.traces.filter((entry) => entry.event === "state-observed" && entry.outcome !== "changed").map((entry) => [entry.outcome, entry.reason]);
+  const sent = transitionRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, now);
+
+  const stale = report(sent.state as RoomState, false, 100);
+  assert.deepEqual(traced(stale), [["ignored", "stale-report"]]);
+  assert.equal(stale.state.desired.cooking, true, "a stale report doesn't change the intended state");
+
+  const confirmed = report(sent.state as RoomState, true, 100);
+  assert.deepEqual(traced(confirmed), [["confirmed", "own-command"]]);
+  assert.equal(confirmed.state.desired.cooking, true);
+
+  const external = report(confirmed.state as RoomState, false, 200);
+  assert.deepEqual(traced(external), []);
+  assert.equal(external.state.desired.cooking, false, "someone else's change becomes the intended state");
+});
+
+test("a confirmed OFF leaves control as the OFF intent set it", () => {
+  // A person set values, so the light is manual; our OFF intent returns it to
+  // in-control. The confirming report changes nothing more.
+  let result = transitionRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "wall", manual: true, values: {brightness: 80}}}, config, now);
+  assert.equal(result.state.control.cooking?.state, "manual");
+  result = transitionRoom(result.state, {lighting: {kind: "intent", targets: ["cooking"], state: "OFF", source: "wall"}}, config, new Date(now.getTime() + 100));
+  assert.equal(result.state.control.cooking, undefined);
+  const controlBefore = JSON.stringify(result.state.control);
+  const confirmed = transitionRoom(result.state, {topic: "home/kitchen/light/group/cooking", payload: {state: "OFF"}, lighting: {kind: "observed"}}, config, new Date(now.getTime() + 200));
+  assert.equal(confirmed.traces.some((entry) => entry.outcome === "confirmed" && entry.reason === "own-command"), true);
+  assert.equal(JSON.stringify(confirmed.state.control), controlBefore);
+  assert.equal(confirmed.outputs.some((entry) => entry.topic.endsWith("/control")), false, "no control change is published");
 });

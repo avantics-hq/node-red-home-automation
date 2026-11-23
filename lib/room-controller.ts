@@ -4,6 +4,9 @@ import type {TraceEntry} from "./bounded-trace";
 import type {CircadianLighting} from "./circadian";
 import {alreadyStyled} from "./circadian-refresh";
 import {circadianStateMessage, roomLightingDiscovery} from "./room-lighting-discovery";
+import {checkCommandEcho, checkStateReport, parsePayload, rememberCommand, type ExpectedCommand} from "./command-echo";
+
+export {fingerprint, parsePayload, type ExpectedCommand} from "./command-echo";
 
 export interface RoomTarget {
   id: string;
@@ -30,14 +33,6 @@ export interface RoomObservation {
   observedAt: string;
 }
 
-export interface ExpectedCommand {
-  fingerprint: string;
-  expires: number;
-  // Power state this command sets, while no state report has confirmed it yet.
-  on?: boolean;
-  // The command topic echo has been seen; the entry now only marks the command in flight.
-  echoed?: boolean;
-}
 
 // Who controls a light. A target with no entry is "in-control": circadian may
 // style and refresh it. "overridden": another owner (an activity, a scene)
@@ -90,24 +85,6 @@ export interface RoomOutput {
   payload: unknown;
   retain: boolean;
   lighting_command?: {area: string; target: string; source: string};
-}
-
-export function parsePayload(payload: unknown): unknown {
-  if (typeof payload !== "string") return payload;
-  try { return JSON.parse(payload) as unknown; } catch { return payload; }
-}
-
-function stable(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(stable);
-  if (value && typeof value === "object") {
-    const record = value as Record<string, unknown>;
-    return Object.fromEntries(Object.keys(record).sort().map((key) => [key, stable(record[key])]));
-  }
-  return value;
-}
-
-export function fingerprint(payload: unknown): string {
-  return JSON.stringify(stable(payload));
 }
 
 function savedControl(saved: Partial<RoomState> & {manual?: Record<string, boolean>}): Record<string, TargetControl> {
@@ -209,33 +186,10 @@ export function transitionRoom(
     return state.observed[targetId]?.on === true;
   }
 
-  function rememberExpected(targetId: string, payload: unknown) {
-    const queue = (state.expected[targetId] || []).filter((entry) => entry.expires > nowMs);
-    const entry: ExpectedCommand = {fingerprint: fingerprint(payload), expires: nowMs + 5000};
-    const requested = payload && typeof payload === "object"
-      ? String((payload as Record<string, unknown>).state || "").toUpperCase()
-      : "";
-    if (requested === "ON" || requested === "OFF") entry.on = requested === "ON";
-    queue.push(entry);
-    state.expected[targetId] = queue.slice(-8);
-  }
-
-  // Whether a state report is stale against the controller's own command in
-  // flight. A report that matches the newest unconfirmed command confirms it.
-  function contradictsOwnCommand(targetId: string, observedOn: boolean): boolean {
-    const queue = (state.expected[targetId] || []).filter((entry) => entry.expires > nowMs);
-    const latest = queue.filter((entry) => entry.on !== undefined).at(-1);
-    if (latest && latest.on === observedOn) {
-      for (const entry of queue) delete entry.on;
-    }
-    state.expected[targetId] = queue.filter((entry) => entry.on !== undefined || entry.echoed !== true);
-    return latest !== undefined && latest.on !== observedOn;
-  }
-
   function command(targetId: string, payload: unknown, source: string): RoomOutput | null {
     const target = targetById[targetId];
     if (!target) return null;
-    rememberExpected(targetId, payload);
+    state.expected[targetId] = rememberCommand(state.expected[targetId], payload, nowMs);
     return {
       topic: target.commandTopic,
       payload,
@@ -345,8 +299,16 @@ export function transitionRoom(
           state: nextOn ? "ON" : "OFF"
         });
       }
-      if (contradictsOwnCommand(target.id, nextOn)) {
-        trace("state-observed", "ignored", "own-command-in-flight", {target: target.id, state: nextOn ? "ON" : "OFF"});
+      const report = checkStateReport(state.expected[target.id], nextOn, nowMs);
+      state.expected[target.id] = report.queue;
+      if (report.verdict === "confirms") {
+        // Our own command, now done: the intended state already says so.
+        // A confirmed OFF deliberately leaves control alone: our OFFs come
+        // from OFF intents, which already returned the light to in-control.
+        trace("state-observed", "confirmed", "own-command", {target: target.id, state: nextOn ? "ON" : "OFF"});
+      } else if (report.verdict === "stale") {
+        // Older than our pending command; the light will report again.
+        trace("state-observed", "ignored", "stale-report", {target: target.id, state: nextOn ? "ON" : "OFF"});
       } else {
         // A change the controller didn't cause becomes the intended state.
         state.desired[target.id] = nextOn;
@@ -358,16 +320,9 @@ export function transitionRoom(
     const parsed = parsePayload(msg.payload);
     const payload = parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : null;
     if (msg.retain !== true && event.retained !== true && target && payload) {
-      const queue = (state.expected[target.id] || []).filter((entry) => entry.expires > nowMs);
-      const ownIndex = queue.findIndex((entry) => entry.echoed !== true && entry.fingerprint === fingerprint(payload));
-      const own = queue[ownIndex];
-      if (own) {
-        // Keep an unconfirmed power command as in flight for state reports.
-        if (own.on === undefined) queue.splice(ownIndex, 1);
-        else own.echoed = true;
-        state.expected[target.id] = queue;
-      } else {
-        state.expected[target.id] = queue;
+      const echo = checkCommandEcho(state.expected[target.id], payload, nowMs);
+      state.expected[target.id] = echo.queue;
+      if (!echo.own) {
         const requestedState = String(payload.state || "").toUpperCase();
         const fields = [
           "brightness", "brightness_percent", "color", "color_temp", "color_temp_kelvin",
