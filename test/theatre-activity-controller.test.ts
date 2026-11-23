@@ -635,3 +635,36 @@ test("recovery with no observations times out to the configured off activity", (
   assert.equal(result.events.some(({theatre}) => theatre.kind === "recovery_safe_off"), true);
   assert.equal(kinds.filter((kind) => kind === "intent").length, 5);
 });
+
+test("a request is never lost to a generation the controller used for recovery", () => {
+  // dev-review repro: recovery bumps the controller to generation 1 while the
+  // contract, not yet told, numbers the user's request 1 as well.
+  let result = apply(undefined, {kind: "startup"}, 0);
+  result = apply(result.state, {kind: "recover", reason: "startup", observations: {}}, 1);
+  assert.equal(result.state.desired?.activity, "off");
+  assert.equal(result.state.generation, 1);
+
+  result = request(result.state, "tv_shield", 1, 2, "user-request-1");
+  assert.equal(result.events.some(({theatre}) => theatre.kind === "rejected"), false);
+  assert.equal(result.state.desired?.requestId, "user-request-1");
+  assert.equal(result.state.generation, 2);
+  assert.equal(result.traces.some((entry) => entry.outcome === "reassigned"), true);
+  assert.equal(result.commands.every((command) => command.generation === 2), true);
+
+  // Back-to-back requests before any snapshot syncs the contract: it proposes
+  // 2 for the next one, which is now taken too, and must not be lost.
+  const quick = request(result.state, "off", 2, 2.1, "user-request-quick");
+  assert.equal(quick.events.some(({theatre}) => theatre.kind === "rejected"), false);
+  assert.equal(quick.state.desired?.requestId, "user-request-quick");
+  assert.equal(quick.state.generation, 3);
+
+  // The contract learns 2 from the snapshot and proposes 3 next: used as given.
+  result = request(result.state, "off", 3, 3, "user-request-2");
+  assert.equal(result.state.generation, 3);
+  // A request the controller already moved past is still rejected.
+  result = request(result.state, "tv_shield", 2, 4, "late-request");
+  assert.equal(result.events.find(({theatre}) => theatre.kind === "rejected")?.theatre.reason, "stale-generation");
+  // And a different request reusing the current generation still conflicts.
+  result = request(result.state, "tv_shield", 3, 5, "other-request");
+  assert.equal(result.events.find(({theatre}) => theatre.kind === "rejected")?.theatre.reason, "generation-conflict");
+});

@@ -139,6 +139,10 @@ export interface TheatreState {
   desired: TheatreDesired | null;
   currentActivity: string;
   generation: number;
+  // The highest generation proposed by a request from outside (not
+  // recovery). A new request proposing more than that is never lost to a
+  // generation the controller used meanwhile; it gets the next free one.
+  lastProposedGeneration: number;
   phase: string;
   targets: Record<TheatreTarget, TargetState | null>;
   refreshPending: Record<TheatreTarget, RefreshPending | null>;
@@ -333,6 +337,11 @@ export function createTheatreState(
       ? saved.currentActivity
       : "unknown",
     generation: Number.isInteger(saved.generation) && (saved.generation ?? -1) >= 0 ? saved.generation! : 0,
+    lastProposedGeneration: Number.isInteger(saved.lastProposedGeneration)
+      ? saved.lastProposedGeneration!
+      : savedDesired && !savedDesired.requestId.startsWith("recovery-") && Number.isInteger(savedDesired.generation)
+        ? savedDesired.generation
+        : 0,
     phase: typeof saved.phase === "string" ? saved.phase : "idle",
     targets: emptyTargets(saved.targets),
     refreshPending: emptyRefreshPending(saved.refreshPending),
@@ -767,7 +776,7 @@ export function transitionTheatre(
     }
   }
 
-  function acceptIntent(event: Extract<TheatreInputEvent, {kind: "intent"}>) {
+  function acceptIntent(event: Extract<TheatreInputEvent, {kind: "intent"}>, internal = false) {
     if (typeof event.requestId !== "string" || !event.requestId) {
       throw new Error("theatre requestId is required");
     }
@@ -782,12 +791,20 @@ export function transitionTheatre(
     }
 
 
-    if (event.generation < state.generation) {
+    // The controller owns generations: a new request whose proposed number is
+    // already taken (for example by a recovery) gets the next free one.
+    let generation = event.generation;
+    const taken = generation < state.generation || (generation === state.generation && state.desired !== null);
+    if (taken && !internal && state.desired?.requestId !== event.requestId &&
+      event.generation > state.lastProposedGeneration) {
+      generation = state.generation + 1;
+      trace("intent", "reassigned", "generation-taken", {requestId: event.requestId, proposed: event.generation, assigned: generation});
+    } else if (event.generation < state.generation) {
       emit("rejected", {reason: "stale-generation", rejectedRequestId: event.requestId});
       trace("intent", "rejected", "stale-generation");
       return;
     }
-    if (event.generation === state.generation && state.desired) {
+    if (generation === state.generation && state.desired) {
       const duplicate = state.desired.requestId === event.requestId &&
         state.desired.activity === event.activity;
       if (duplicate) {
@@ -815,11 +832,12 @@ export function transitionTheatre(
     const requestedAt = event.requestedAt || now.toISOString();
     state.desired = {
       requestId: event.requestId,
-      generation: event.generation,
+      generation,
       activity: event.activity,
       requestedAt
     };
-    state.generation = event.generation;
+    state.generation = generation;
+    if (!internal) state.lastProposedGeneration = Math.max(state.lastProposedGeneration, event.generation);
     state.phase = "preparing";
     state.currentActivity = "unknown";
     state.targets = emptyTargets();
@@ -832,7 +850,7 @@ export function transitionTheatre(
     state.metrics.requests += 1;
     resetTransitionMetrics();
     commands.push(...targetIntentCommands(state.desired, config, previousDesired));
-    trace("intent", "accepted", null, {activity: event.activity, generation: event.generation});
+    trace("intent", "accepted", null, {activity: event.activity, generation});
   }
 
   function acceptTargetState(event: Extract<TheatreInputEvent, {kind: "target_state"}>) {
@@ -961,7 +979,7 @@ export function transitionTheatre(
         generation: state.generation + 1,
         activity: config.recoveryOffActivity!,
         requestedAt: now.toISOString()
-      });
+      }, true);
       emit("recovery_safe_off", {
         matchCount: matches.length,
         matchedActivities: matches
