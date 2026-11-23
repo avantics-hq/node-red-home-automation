@@ -595,8 +595,9 @@ test("an unanswered refresh is retried a bounded number of times, then reported"
     sent.push(result.commands.length);
     reported.push(result.traces.filter((entry) => entry.event === "refresh" && entry.outcome === "no-response").length);
   }
-  // First refresh, two retries, then each target is reported once and left alone.
-  assert.deepEqual(sent, [4, 4, 4, 0, 0, 0]);
+  // First refresh, two retries, then each target is reported once and asked
+  // again a freshness window later.
+  assert.deepEqual(sent, [4, 4, 4, 0, 0, 4]);
   assert.deepEqual(reported, [0, 0, 0, 4, 0, 0]);
   assert.equal(result.state.phase, "ready");
   assert.deepEqual(Object.fromEntries(result.state.degraded.map(({target: name, reason}) => [name, reason])), {
@@ -667,4 +668,47 @@ test("a request is never lost to a generation the controller used for recovery",
   // And a different request reusing the current generation still conflicts.
   result = request(result.state, "tv_shield", 3, 5, "other-request");
   assert.equal(result.events.find(({theatre}) => theatre.kind === "rejected")?.theatre.reason, "generation-conflict");
+});
+
+test("transition time covers only the transition, not later overrides or failures", () => {
+  const settled = confirmActivity("tv_shield", 1);
+  const transitionMs = settled.state.metrics.lastTransitionMs;
+  assert.equal(transitionMs, 1200);
+
+  // A person takes over the receiver an hour later.
+  const manual = target(settled.state, "avr", "transitioning", 1, 3600, {classification: "manual_override"});
+  assert.equal(manual.state.phase, "manual_override");
+  assert.equal(manual.state.metrics.lastTransitionMs, transitionMs);
+  assert.equal(manual.state.metrics.maxTransitionMs, transitionMs);
+
+  // A target fails an hour later: the activity fails, but the transition
+  // it completed is not retimed.
+  const failed = target(settled.state, "display", "failed", 1, 3600, {
+    failure: {operation: "query", reason: "timeout", occurredAt: at(3600).toISOString()}
+  });
+  assert.equal(failed.state.phase, "failed");
+  assert.equal(failed.state.metrics.lastTransitionMs, transitionMs);
+  assert.equal(failed.state.transitionCompletedAt, settled.state.transitionCompletedAt);
+});
+
+test("a target that stopped answering is still refreshed on later cycles", () => {
+  let result = confirmActivity("tv_shield", 1);
+  const asked: number[] = [];
+  for (let seconds = 5; seconds <= 120; seconds += 5) {
+    result = apply(result.state, {kind: "tick", generation: 1}, seconds);
+    // Everyone answers except the receiver.
+    for (const command of result.commands) {
+      if (command.target === "avr") asked.push(seconds);
+      else result = target(result.state, command.target as TheatreTarget, "ready", 1, seconds + 0.1);
+    }
+  }
+  // Long after it was reported, the receiver is still asked, once per
+  // freshness window, and still shown as not responding.
+  assert.ok(asked.some((seconds) => seconds > 60), JSON.stringify(asked));
+  assert.ok(asked.filter((seconds) => seconds > 60).length <= 6, JSON.stringify(asked));
+  assert.deepEqual(result.state.degraded.filter(({target: name}) => name === "avr"), [{target: "avr", reason: "no-response"}]);
+
+  // When it answers again, it is no longer reported.
+  result = target(result.state, "avr", "ready", 1, 121);
+  assert.equal(result.state.degraded.some(({target: name}) => name === "avr"), false);
 });

@@ -1,6 +1,7 @@
 "use strict";
 
 import {boundObservedAt, isOutOfOrder, parseObservedAt} from "./observation-time";
+import {asTargetStatus, targetStateEvent, type TargetStateEvent} from "./target-state";
 
 export type DisplayMode = "off" | "tv" | "projector";
 export type DisplayDevice = "tv" | "screen" | "projector";
@@ -126,17 +127,7 @@ export interface DisplayMessage {
   display?: DisplayInputEvent;
 }
 
-export interface DisplayTargetState {
-  kind: "target_state";
-  target: "display";
-  requestId: string;
-  generation: number;
-  status: string;
-  observedAt: string;
-  details: Record<string, unknown>;
-  classification?: "manual_override";
-  failure?: DisplayFailure;
-}
+export type DisplayTargetState = TargetStateEvent<"display", Record<string, unknown>, DisplayFailure>;
 
 export interface DisplayOutputEvent {
   display: Record<string, unknown>;
@@ -709,10 +700,9 @@ export function transitionDisplay(
     const confirmedMs = readings.every((ms): ms is number => ms !== null) ? Math.min(...readings) : null;
     const status = state.phase === "manual_override"
       ? "transitioning"
-      : state.phase === "idle" ? "confirming" : state.phase;
+      : asTargetStatus(state.phase, "confirming");
     if (!(status === "ready" && previousPhase === "ready" && !observationAccepted)) {
-      const theatre: DisplayTargetState = {
-        kind: "target_state",
+      const theatre: DisplayTargetState = targetStateEvent({
         target: "display",
         requestId: state.desired.requestId,
         generation: state.desired.generation,
@@ -731,10 +721,10 @@ export function transitionDisplay(
             retries: Math.max(0, state.lastAttempt - 1),
             fallbackUsed: state.fallbackUsed
           }
-        }
-      };
-      if (state.classification) theatre.classification = state.classification;
-      if (state.failure) theatre.failure = {...state.failure};
+        },
+        classification: state.classification,
+        failure: state.failure
+      });
       targetStates.push({theatre});
     }
   }

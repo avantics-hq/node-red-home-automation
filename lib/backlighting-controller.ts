@@ -1,6 +1,7 @@
 "use strict";
 
 import {boundObservedAt, isOutOfOrder, parseObservedAt} from "./observation-time";
+import {asTargetStatus, targetStateEvent, type TargetStateEvent} from "./target-state";
 
 export type BacklightingPower = "on" | "off";
 
@@ -80,22 +81,12 @@ export interface BacklightingCommand {
 }
 
 export interface BacklightingOutputEvent {
-  theatre: {
-    kind: "target_state";
-    target: "backlighting";
-    requestId: string;
-    generation: number;
-    status: string;
-    observedAt: string;
-    details: {
-      power: BacklightingPower;
-      observedPower: BacklightingPower | null;
-      recovery: Record<string, unknown>;
-      metrics: {attempts: number; retries: number; fallbackUsed: boolean};
-    };
-    classification?: "manual_override";
-    failure?: BacklightingFailure;
-  };
+  theatre: TargetStateEvent<"backlighting", {
+    power: BacklightingPower;
+    observedPower: BacklightingPower | null;
+    recovery: Record<string, unknown>;
+    metrics: {attempts: number; retries: number; fallbackUsed: boolean};
+  }, BacklightingFailure>;
 }
 
 export function normaliseBacklightingConfig(config: Partial<BacklightingConfig> = {}): BacklightingConfig {
@@ -327,18 +318,11 @@ export function transitionBacklighting(
   }
 
   if (state.desired) {
-    const theatre: BacklightingOutputEvent["theatre"] = {
-      kind: "target_state",
+    const theatre = targetStateEvent({
       target: "backlighting",
       requestId: state.desired.requestId,
       generation: state.generation,
-      status: state.phase === "failed"
-        ? "failed"
-        : state.phase === "ready"
-          ? "ready"
-          : state.phase === "manual_override"
-            ? "transitioning"
-            : state.phase,
+      status: state.phase === "manual_override" ? "transitioning" : asTargetStatus(state.phase, "confirming"),
       observedAt: now.toISOString(),
       details: {
         power: state.desired.power,
@@ -349,10 +333,10 @@ export function transitionBacklighting(
           retries: Math.max(0, state.lastAttempt - 1),
           fallbackUsed: false
         }
-      }
-    };
-    if (state.classification) theatre.classification = state.classification;
-    if (state.failure) theatre.failure = {...state.failure};
+      },
+      classification: state.classification,
+      failure: state.failure
+    });
     events.push({theatre});
   }
 

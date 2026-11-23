@@ -1,6 +1,7 @@
 "use strict";
 
 import {boundObservedAt, isOutOfOrder, parseObservedAt} from "./observation-time";
+import {targetStateEvent, type TargetStateEvent} from "./target-state";
 
 // Positions inside the reducer always mean 0 = closed, 100 = open. With
 // `invert`, device positions are converted on the way in (observations) and
@@ -103,25 +104,15 @@ export interface CoverCommand {
 }
 
 export interface CoverOutputEvent {
-  theatre: {
-    kind: "target_state";
-    target: "cover";
-    requestId: string;
-    generation: number;
-    status: string;
-    observedAt: string;
-    details: {
-      operation: "set_position" | "stop";
-      position: number | null;
-      observedPosition: number | null;
-      motion: CoverMotion | null;
-      source: string | null;
-      recovery: Record<string, unknown>;
-      metrics: {attempts: number; retries: number; fallbackUsed: boolean};
-    };
-    classification?: "manual_override";
-    failure?: CoverFailure;
-  };
+  theatre: TargetStateEvent<"cover", {
+    operation: "set_position" | "stop";
+    position: number | null;
+    observedPosition: number | null;
+    motion: CoverMotion | null;
+    source: string | null;
+    recovery: Record<string, unknown>;
+    metrics: {attempts: number; retries: number; fallbackUsed: boolean};
+  }, CoverFailure>;
 }
 
 export function normaliseCoverConfig(config: Partial<CoverConfig> = {}): CoverConfig {
@@ -415,8 +406,7 @@ export function transitionCover(
   }
 
   if (state.desired) {
-    const theatre: CoverOutputEvent["theatre"] = {
-      kind: "target_state",
+    const theatre = targetStateEvent({
       target: "cover",
       requestId: state.desired.requestId,
       generation: state.generation,
@@ -424,7 +414,7 @@ export function transitionCover(
       // are all "transitioning" there.
       status: state.phase === "failed" || state.phase === "ready" || state.phase === "confirming"
         ? state.phase
-        : "transitioning",
+        : "transitioning" as const,
       observedAt: now.toISOString(),
       details: {
         operation: state.desired.operation,
@@ -438,10 +428,10 @@ export function transitionCover(
           retries: Math.max(0, state.lastAttempt - 1),
           fallbackUsed: false
         }
-      }
-    };
-    if (state.classification) theatre.classification = state.classification;
-    if (state.failure) theatre.failure = {...state.failure};
+      },
+      classification: state.classification,
+      failure: state.failure
+    });
     events.push({theatre});
   }
 

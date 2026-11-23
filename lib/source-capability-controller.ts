@@ -1,6 +1,7 @@
 "use strict";
 
 import {boundObservedAt, isOutOfOrder, parseObservedAt} from "./observation-time";
+import {targetStateEvent, type TargetStateEvent, type TargetStatus} from "./target-state";
 
 export type SourceAction = "activate" | "deactivate";
 export type SourceControlMode = "command" | "external" | "unavailable";
@@ -65,8 +66,7 @@ export interface SourceObservation {
   sourceId: string;
   status: SourceObservationStatus;
   observedAt: string;
-  // When this reading was confirmed: its arrival when it answers a refresh,
-  // which a quiet source reports with an unchanged observedAt.
+  // When the reading arrived; theatre's target state is stamped with this.
   confirmedAt?: string;
   application: string | null;
   playback: SourcePlaybackState;
@@ -92,7 +92,6 @@ export interface SourceState {
   observed: SourceObservation | null;
   pending: SourcePending | null;
   failure: SourceFailure | null;
-  blockedGeneration: number | null;
   classification: "manual_override" | null;
   lastAttempt: number;
   fallbackUsed: boolean;
@@ -203,7 +202,6 @@ function initialState(
       : null,
     pending: saved.pending && typeof saved.pending === "object" ? {...saved.pending} : null,
     failure: saved.failure && typeof saved.failure === "object" ? {...saved.failure} : null,
-    blockedGeneration: Number.isInteger(saved.blockedGeneration) ? saved.blockedGeneration! : null,
     classification: saved.classification === "manual_override" ? "manual_override" : null,
     lastAttempt: Number.isInteger(saved.lastAttempt) && (saved.lastAttempt ?? -1) >= 0
       ? saved.lastAttempt!
@@ -221,31 +219,20 @@ export interface SourceCommand {
   attempt: number;
 }
 export interface SourceOutputEvent {
-  theatre: {
-    kind: "target_state";
-    target: "source";
-    requestId: string;
-    generation: number;
-    status: string;
-    observedAt: string;
-    sourceId: string | null;
-    action: SourceAction;
-    classification?: "manual_override";
-    details: {
-      observedStatus: SourceObservationStatus | null;
-      readiness: {
-        required: SourceConfirmation;
-        available: boolean;
-        active: boolean;
-        application: string | null;
-        playback: SourcePlaybackState;
-        satisfied: boolean;
-      };
-      recovery: Record<string, unknown>;
-      metrics: {attempts: number; retries: number; fallbackUsed: boolean};
+  // The envelope, plus the source and action it answers.
+  theatre: TargetStateEvent<"source", {
+    observedStatus: SourceObservationStatus | null;
+    readiness: {
+      required: SourceConfirmation;
+      available: boolean;
+      active: boolean;
+      application: string | null;
+      playback: SourcePlaybackState;
+      satisfied: boolean;
     };
-    failure?: SourceFailure;
-  };
+    recovery: Record<string, unknown>;
+    metrics: {attempts: number; retries: number; fallbackUsed: boolean};
+  }, SourceFailure> & {sourceId: string | null; action: SourceAction};
 }
 
 
@@ -264,7 +251,7 @@ function commandFor(
   };
 }
 
-function targetStatus(phase: string): string {
+function targetStatus(phase: string): TargetStatus {
   if (phase === "ready") return "ready";
   if (phase === "failed") return "failed";
   if (phase === "unavailable") return "unavailable";
@@ -277,24 +264,34 @@ function descriptorFor(state: SourceState, sources: SourceCapabilities): SourceD
   return sources[state.desired.sourceId] ?? null;
 }
 
-function readinessEvidence(
+interface ReadinessFacts {
+  available: boolean;
+  active: boolean;
+  application: string | null;
+  playback: SourcePlaybackState;
+}
+
+// What each kind of confirmation needs from an observation before the source
+// counts as ready.
+const READINESS: Record<SourceConfirmation, (facts: ReadinessFacts) => boolean> = {
+  available: ({available}) => available,
+  active: ({active}) => active,
+  application: ({active, application}) => active && application !== null,
+  playing: ({active, playback}) => active && playback === "playing",
+  unavailable: () => false
+};
+
+export function readinessEvidence(
   observation: SourceObservation | null,
   required: SourceConfirmation
 ) {
-  const available = observation?.status === "active" || observation?.status === "available";
-  const active = observation?.status === "active";
-  const application = observation?.application ?? null;
-  const playback = observation?.playback ?? "unknown";
-  const satisfied = required === "available"
-    ? available
-    : required === "active"
-      ? active
-      : required === "application"
-        ? active && application !== null
-        : required === "playing"
-          ? active && playback === "playing"
-          : false;
-  return {required, available, active, application, playback, satisfied};
+  const facts: ReadinessFacts = {
+    available: observation?.status === "active" || observation?.status === "available",
+    active: observation?.status === "active",
+    application: observation?.application ?? null,
+    playback: observation?.playback ?? "unknown"
+  };
+  return {required, ...facts, satisfied: READINESS[required](facts)};
 }
 
 
@@ -305,15 +302,12 @@ function targetEvent(
 ): SourceOutputEvent | null {
   if (!state.desired) return null;
   const readiness = readinessEvidence(state.observed, descriptorFor(state, sources)?.confirmation ?? "unavailable");
-  const theatre: SourceOutputEvent["theatre"] = {
-    kind: "target_state",
+  const envelope = targetStateEvent({
     target: "source",
     requestId: state.desired.requestId,
     generation: state.generation,
     status: targetStatus(state.phase),
     observedAt: state.observed?.confirmedAt ?? state.observed?.observedAt ?? iso(now),
-    sourceId: state.desired.sourceId,
-    action: state.desired.action,
     details: {
       observedStatus: state.observed?.status ?? null,
       readiness,
@@ -327,11 +321,11 @@ function targetEvent(
         retries: Math.max(0, state.lastAttempt - 1),
         fallbackUsed: state.fallbackUsed
       }
-    }
-  };
-  if (state.failure) theatre.failure = {...state.failure};
-  if (state.classification) theatre.classification = state.classification;
-  return {theatre};
+    },
+    classification: state.classification,
+    failure: state.failure
+  });
+  return {theatre: {...envelope, sourceId: state.desired.sourceId, action: state.desired.action}};
 }
 
 function statusFor(state: SourceState) {
@@ -382,7 +376,6 @@ export function transitionSource(
   function fail(operation: string, reason: string) {
     state.pending = null;
     state.phase = "failed";
-    state.blockedGeneration = state.generation;
     state.failure = {operation, reason, occurredAt: iso(now)};
     trace("source", "failed", reason, {sourceId: state.desired?.sourceId ?? null, operation});
   }
@@ -417,7 +410,6 @@ export function transitionSource(
     if (observationSatisfies(state.observed)) {
       state.pending = null;
       state.failure = null;
-      state.blockedGeneration = null;
       state.classification = null;
       state.phase = "ready";
       const readiness = readinessEvidence(state.observed, descriptor()?.confirmation ?? "unavailable");
@@ -477,7 +469,6 @@ export function transitionSource(
     state.refreshAsked = false;
     state.pending = null;
     state.failure = null;
-    state.blockedGeneration = null;
     state.classification = null;
     state.lastAttempt = 0;
     state.fallbackUsed = false;
@@ -534,10 +525,11 @@ export function transitionSource(
       application,
       playback
     };
-    if (state.refreshAsked) {
-      state.observed.confirmedAt = new Date(Math.max(bounded.ms, nowMs)).toISOString();
-      state.refreshAsked = false;
-    }
+    // Theatre gets the time the report arrived, as from every other target:
+    // a quiet source repeats an unchanged time, and a device clock running
+    // behind would otherwise date it before the request it answers.
+    state.observed.confirmedAt = new Date(Math.max(bounded.ms, nowMs)).toISOString();
+    state.refreshAsked = false;
     reconcileObservation();
   }
 
