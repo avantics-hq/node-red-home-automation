@@ -728,3 +728,22 @@ test("the circadian set topic switches circadian lighting on and off", () => {
   assert.deepEqual(set(lit, "maybe").traces.map(({event, outcome, reason}) => [event, outcome, reason]), [["circadian-set", "ignored", "not-on-or-off"]]);
   assert.deepEqual(set(lit, "OFF", {retain: true}).traces.map(({reason}) => reason), ["retained-message"]);
 });
+
+test("an area that isn't an identifier publishes under its ID, and keeps its name for people", () => {
+  const living = {...config, area: "Living Room", displayName: "Living Room"};
+  const startup = transitionRoom(undefined, {lighting: {kind: "startup"}}, living, now);
+  assert.deepEqual(startup.outputs.map(({topic}) => topic), [
+    "homeassistant/switch/living_room_circadian_lighting/config",
+    "home/living_room/circadian/state",
+    "home/living_room/lighting/cooking/control",
+    "home/living_room/lighting/dining/control"
+  ]);
+  const entry = startup.outputs[0]!.payload as Record<string, unknown>;
+  assert.equal(entry.unique_id, "living_room_circadian_lighting");
+  assert.equal(entry.default_entity_id, ["switch", "living_room_circadian_lighting"].join("."));
+  assert.equal(entry.name, "Living Room Circadian Lighting");
+  assert.deepEqual((entry.device as {identifiers: string[]}).identifiers, ["nodered_living_room_lighting"]);
+  // The set topic is matched under the ID too.
+  const off = transitionRoom(startup.state, {topic: "home/living_room/circadian/set", payload: "OFF"}, living, now);
+  assert.equal(off.state.circadianEnabled, false);
+});

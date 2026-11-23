@@ -73,3 +73,14 @@ test("JSON fields with no sensible default are flagged until filled in, matching
     }
   }
 });
+
+test("the discovery prefix field matches the runtime on both publishing nodes", () => {
+  for (const file of ["room-controller.html", "theatre-state-contract.html"]) {
+    const setting = editorDefinition(file).defaults.discoveryPrefix!;
+    const valid = (value: unknown) => setting.validate!.call({}, value);
+    assert.equal(setting.value, "homeassistant", file);
+    assert.equal(valid("homeassistant"), true, file);
+    assert.equal(valid("/ha/discovery/"), true, file);
+    for (const value of ["", " ", "/", "ha/+", "#"]) assert.equal(valid(value), false, `${file} ${JSON.stringify(value)}`);
+  }
+});

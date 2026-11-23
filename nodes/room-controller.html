@@ -8,12 +8,13 @@
       color: "#ffd27f",
       defaults: {
         name: {value: ""},
-        // Required only when the room publishes something named after it.
+        // Required only when the room publishes something named after it, and
+        // then with a letter or digit, from which its topics and IDs are made.
         area: {value: "", validate: function (v) {
           var publishing = $("#node-input-publishState").length
             ? $("#node-input-publishState").prop("checked") || $("#node-input-discovery").prop("checked")
             : on(this.publishState) || on(this.discovery);
-          return !publishing || Boolean(v && v.trim());
+          return !publishing || /[a-z0-9]/i.test(String(v || ""));
         }},
         // null means "not set": Node-RED fills it into a saved flow from before
         // these settings, which keeps publishing. New nodes start with both
@@ -21,6 +22,7 @@
         publishState: {value: null},
         discovery: {value: null},
         displayName: {value: ""},
+        discoveryPrefix: {value: "homeassistant", required: true, validate: function (v) { var prefix = String(v || "").trim().replace(/^\/+|\/+$/g, ""); return Boolean(prefix) && !/[+#]/.test(prefix); }},
         targets: {value: "[]", required: true, validate: function (v) { try { JSON.parse(v); return true; } catch (e) { return false; } }},
         maxBrightnessPct: {value: 100, required: true, validate: RED.validators.number()},
         maxColorTempKelvin: {value: 6500, required: true, validate: RED.validators.number()},
@@ -65,6 +67,7 @@
   <div class="form-row"><label for="node-input-publishState">Publish state over MQTT</label><input type="checkbox" id="node-input-publishState" style="display:inline-block; width:auto;"></div>
   <div class="form-row"><label for="node-input-discovery">Home Assistant discovery</label><input type="checkbox" id="node-input-discovery" style="display:inline-block; width:auto;"> <span>(needs Publish state)</span></div>
   <div class="form-row"><label for="node-input-displayName">Display name</label><input type="text" id="node-input-displayName"></div>
+  <div class="form-row"><label for="node-input-discoveryPrefix">Discovery prefix</label><input type="text" id="node-input-discoveryPrefix"></div>
   <div class="form-row"><label for="node-input-targets">Targets JSON</label><input type="text" id="node-input-targets"></div>
   <div class="form-row"><label for="node-input-maxBrightnessPct">Daytime brightness %</label><input type="number" id="node-input-maxBrightnessPct"></div>
   <div class="form-row"><label for="node-input-maxColorTempKelvin">Daytime kelvin</label><input type="number" id="node-input-maxColorTempKelvin"></div>
@@ -82,7 +85,9 @@
   <p>Owns room MQTT commands, adaptive colour and brightness, manual overrides, discovery and bounded tracing.</p>
   <h3>Publishing</h3>
   <p>The room always commands its lights on each target's own command topic. Two settings add what it publishes
-    for other systems to see; both are named after the <b>Area</b>, which is needed only when one of them is on.</p>
+    for other systems to see; both are named after the <b>Area</b>, which is needed only when one of them is on. Topics
+    and IDs use it in lowercase, with spaces and other characters (anything but letters, digits, <code>_</code> and
+    <code>-</code>) as <code>_</code>: <i>Living Room</i> publishes under <code>home/living_room/…</code>.</p>
   <dl class="message-properties">
     <dt>Publish state over MQTT</dt><dd>each light's control state on
       <code>home/&lt;area&gt;/lighting/&lt;target&gt;/control</code> and the circadian state on
@@ -91,6 +96,8 @@
       ON/OFF to <code>home/&lt;area&gt;/circadian/set</code>. To act on it, wire an MQTT in node subscribed to that
       topic into this node. It needs <b>Publish state</b>. Switching it off
       removes the switch from Home Assistant at the next start.</dd>
+    <dt>Discovery prefix</dt><dd>the topic prefix Home Assistant listens on for discovery: <code>homeassistant</code>
+      unless you changed it in Home Assistant's MQTT settings.</dd>
   </dl>
   <p>New nodes start with both off. A node saved before these settings existed keeps publishing both.</p>
   <h3>Circadian schedule</h3>

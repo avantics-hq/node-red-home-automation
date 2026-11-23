@@ -4,6 +4,8 @@
 // circadian switch and the retained state that entry reads. Home Assistant
 // may send ON/OFF on the command topic, which the room controller acts on.
 
+import {DISCOVERY_ORIGIN, areaId} from "./ha-discovery";
+
 export interface DiscoveryMessage {
   topic: string;
   payload: unknown;
@@ -11,11 +13,11 @@ export interface DiscoveryMessage {
 }
 
 export function circadianStateTopic(area: string): string {
-  return "home/" + area + "/circadian/state";
+  return "home/" + areaId(area) + "/circadian/state";
 }
 
 export function circadianCommandTopic(area: string): string {
-  return "home/" + area + "/circadian/set";
+  return "home/" + areaId(area) + "/circadian/set";
 }
 
 // The retained circadian state, as Home Assistant reads it.
@@ -23,12 +25,19 @@ export function circadianStateMessage(area: string, enabled: boolean): Discovery
   return {topic: circadianStateTopic(area), payload: enabled ? "ON" : "OFF", retain: true};
 }
 
+export interface RoomDiscoveryConfig {
+  area: string;
+  displayName: string;
+  discoveryPrefix: string;
+}
+
 // The discovery entry for the room's circadian switch, then its state.
-export function roomLightingDiscovery(area: string, displayName: string, circadianEnabled: boolean): DiscoveryMessage[] {
-  const objectId = area + "_circadian_lighting";
+export function roomLightingDiscovery(config: RoomDiscoveryConfig, circadianEnabled: boolean): DiscoveryMessage[] {
+  const {area, displayName} = config;
+  const objectId = areaId(area) + "_circadian_lighting";
   return [
     {
-      topic: "homeassistant/switch/" + objectId + "/config",
+      topic: config.discoveryPrefix + "/switch/" + objectId + "/config",
       payload: {
         name: displayName + " Circadian Lighting",
         unique_id: objectId,
@@ -40,11 +49,12 @@ export function roomLightingDiscovery(area: string, displayName: string, circadi
         payload_off: "OFF",
         optimistic: false,
         device: {
-          identifiers: ["nodered_" + area + "_lighting"],
+          identifiers: ["nodered_" + areaId(area) + "_lighting"],
           name: displayName + " Lighting Controller",
           manufacturer: "Node-RED",
           model: "Composable circadian lighting"
-        }
+        },
+        origin: DISCOVERY_ORIGIN
       },
       retain: true
     },

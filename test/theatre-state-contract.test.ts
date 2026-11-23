@@ -217,6 +217,16 @@ test("stale controller snapshots cannot overwrite a newer requested generation",
   assert.equal(result.traces.at(-1)?.reason, "stale-generation");
 });
 
+test("a contract area that isn't an identifier names topics and IDs by its ID", () => {
+  const living = normaliseStateContractConfig({...config, area: "Living Room", displayName: "", baseTopic: ""});
+  assert.equal(living.area, "Living Room");
+  assert.equal(living.displayName, "Living Room");
+  assert.equal(living.baseTopic, "home/living_room/theatre");
+  const topics = transitionTheatreStateContract(undefined, {theatreStateContract: {kind: "startup"}}, living, at(0)).publications.map(({topic}) => topic);
+  assert.ok(topics.includes("homeassistant/select/living_room_theatre_activity/config"), topics.join());
+  assert.ok(topics.every((topic) => !/[A-Z ]/.test(topic)), topics.join());
+});
+
 test("discovery is a setting: on publishes it, off clears it, unset means on", () => {
   const startup = (settings: Partial<TheatreStateContractConfig>) =>
     transitionTheatreStateContract(undefined, {theatreStateContract: {kind: "startup"}}, {...config, ...settings}, at(0)).publications;
