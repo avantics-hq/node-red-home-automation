@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {EventEmitter} from "node:events";
 import test from "node:test";
 import type {Node} from "node-red";
-import {guarded, invalidConfig, number, objectField, onInput, runReducer, type InputMessage} from "../nodes/adapter";
+import {guarded, invalidConfig, objectField, onInput, runReducer, type InputMessage} from "../nodes/adapter";
 
 // The parts of a Node-RED node the helpers use.
 function fakeNode() {
@@ -21,14 +21,6 @@ function fakeNode() {
   };
   return {node, asNode: node as unknown as Node, values};
 }
-
-test("number keeps finite values and falls back otherwise", () => {
-  assert.equal(number("12", 5), 12);
-  assert.equal(number(0, 5), 0);
-  assert.equal(number("", 5), 0);
-  assert.equal(number("twelve", 5), 5);
-  assert.equal(number(undefined, 5), 5);
-});
 
 test("objectField returns only objects", () => {
   const msg = {payload: 1, avr: {kind: "tick"}, text: "x", empty: null} as unknown as InputMessage;

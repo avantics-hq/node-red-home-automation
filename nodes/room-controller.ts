@@ -11,7 +11,8 @@ import {
 import {scheduledLighting} from "../lib/circadian";
 import {resolveSchedule} from "../lib/circadian-schedule";
 import type {LightLevels} from "../lib/light-styling";
-import {guarded, invalidConfig, number, objectField, onInput, runReducer, type Send} from "./adapter";
+import {guarded, invalidConfig, objectField, onInput, runReducer, type Send} from "./adapter";
+import {numberSetting} from "../lib/settings";
 
 interface RoomControllerConfig extends NodeDef {
   area?: string;
@@ -58,14 +59,16 @@ const registerRoomController: NodeInitializer = (RED) => {
     let refreshTimer: ReturnType<typeof setInterval> | undefined;
 
     let controllerConfig: RoomConfig;
+    let refreshSeconds: number;
     try {
+      refreshSeconds = Math.max(10, numberSetting(config.refreshSeconds, "refresh interval", 60));
       // Saved latitude, longitude and minimum settings from earlier versions
       // are ignored.
       const levels: LightLevels = {
-        maxBrightnessPct: number(config.maxBrightnessPct, 100),
-        maxColorTempKelvin: number(config.maxColorTempKelvin, 6500),
-        sleepBrightnessPct: number(config.sleepBrightnessPct, 1),
-        sleepColorTempKelvin: number(config.sleepColorTempKelvin, 2200)
+        maxBrightnessPct: numberSetting(config.maxBrightnessPct, "daytime brightness", 100),
+        maxColorTempKelvin: numberSetting(config.maxColorTempKelvin, "daytime colour temperature", 6500),
+        sleepBrightnessPct: numberSetting(config.sleepBrightnessPct, "sleep brightness", 1),
+        sleepColorTempKelvin: numberSetting(config.sleepColorTempKelvin, "sleep colour temperature", 2200)
       };
       const schedule = resolveSchedule(config.wakeTime, config.bedTime);
       controllerConfig = {
@@ -74,8 +77,8 @@ const registerRoomController: NodeInitializer = (RED) => {
         targets: parseTargets(config.targets),
         ...levels,
         ...schedule,
-        initialTransitionSeconds: number(config.initialTransitionSeconds, 1),
-        refreshTransitionSeconds: number(config.refreshTransitionSeconds, 60),
+        initialTransitionSeconds: numberSetting(config.initialTransitionSeconds, "initial transition", 1),
+        refreshTransitionSeconds: numberSetting(config.refreshTransitionSeconds, "refresh transition", 60),
         initialSleep: config.initialSleep === true || config.initialSleep === "true",
         // The adapter picks the circadian lighting; the controller only asks
         // it how a light should look.
@@ -116,7 +119,6 @@ const registerRoomController: NodeInitializer = (RED) => {
       }, send);
     });
 
-    const refreshSeconds = Math.max(10, number(config.refreshSeconds, 60));
     refreshTimer = setInterval(guarded(node, () => {
       process({lighting: {kind: "refresh"}}, node.send.bind(node));
     }), refreshSeconds * 1000);

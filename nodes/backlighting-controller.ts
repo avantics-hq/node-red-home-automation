@@ -13,7 +13,8 @@ import {
   type BacklightingMessage,
   type BacklightingState
 } from "../lib/backlighting-controller";
-import {guarded, number, objectField, onInput, runReducer, type Send} from "./adapter";
+import {guarded, invalidConfig, objectField, onInput, runReducer, type Send} from "./adapter";
+import {numberSetting} from "../lib/settings";
 
 interface BacklightingNodeConfig extends NodeDef {
   area?: string;
@@ -31,11 +32,17 @@ const registerBacklightingController: NodeInitializer = (RED) => {
     const node = this;
     const context = node.context();
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const controllerConfig: BacklightingConfig = {
-      pollMs: number(config.pollMs, 2000),
-      confirmationTimeoutMs: number(config.confirmationTimeoutMs, 15000),
-      maxAttempts: number(config.maxAttempts, 2)
-    };
+    let controllerConfig: BacklightingConfig;
+    try {
+      controllerConfig = {
+        pollMs: numberSetting(config.pollMs, "poll interval", 2000),
+        confirmationTimeoutMs: numberSetting(config.confirmationTimeoutMs, "confirmation timeout", 15000),
+        maxAttempts: numberSetting(config.maxAttempts, "max attempts", 2)
+      };
+    } catch (error) {
+      invalidConfig(node, error);
+      return;
+    }
 
     function updateStatus(status: BacklightingStatus) {
       const appearances: Record<string, {fill: NodeStatusFill; shape: NodeStatusShape}> = {

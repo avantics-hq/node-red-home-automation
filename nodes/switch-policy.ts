@@ -9,6 +9,7 @@ import {
   type SwitchPolicyState
 } from "../lib/switch-policy";
 import {guarded, invalidConfig, onInput, runReducer, type Send} from "./adapter";
+import {numberSetting} from "../lib/settings";
 
 interface SwitchLightingPolicyConfig extends NodeDef {
   area?: string;
@@ -47,8 +48,8 @@ const registerSwitchPolicy: NodeInitializer = (RED) => {
       policyConfig = {
         area: config.area || "room",
         targets: parseTargets(config.targets),
-        switchWindowMs: Number(config.switchWindowMs ?? 500),
-        switchFreshnessMs: Number(config.switchFreshnessSeconds ?? 3600) * 1000
+        switchWindowMs: numberSetting(config.switchWindowMs, "switch window", 500),
+        switchFreshnessMs: numberSetting(config.switchFreshnessSeconds, "switch freshness", 3600) * 1000
       };
       if (!Number.isFinite(policyConfig.switchWindowMs) || policyConfig.switchWindowMs < 0) {
         throw new Error("switch window must be a non-negative number");

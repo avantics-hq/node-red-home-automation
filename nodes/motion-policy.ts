@@ -9,6 +9,7 @@ import {
   type MotionState
 } from "../lib/motion-policy";
 import {guarded, invalidConfig, onInput, runReducer, type Send} from "./adapter";
+import {numberSetting} from "../lib/settings";
 
 interface MotionPolicyConfig extends NodeDef {
   area?: string;
@@ -68,10 +69,10 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
         area: config.area || "room",
         onTargets,
         offTargets: parseArray(config.offTargets, onTargets),
-        defaultDelaySeconds: Number(config.defaultDelaySeconds ?? 120),
-        defaultIlluminanceCutoff: Number(config.defaultIlluminanceCutoff ?? 10),
-        switchWindowMs: Number(config.switchWindowMs ?? 500),
-        switchFreshnessMs: Number(config.switchFreshnessSeconds ?? 3600) * 1000
+        defaultDelaySeconds: numberSetting(config.defaultDelaySeconds, "vacancy delay", 120),
+        defaultIlluminanceCutoff: numberSetting(config.defaultIlluminanceCutoff, "illuminance cutoff", 10),
+        switchWindowMs: numberSetting(config.switchWindowMs, "switch window", 500),
+        switchFreshnessMs: numberSetting(config.switchFreshnessSeconds, "switch freshness", 3600) * 1000
       };
       if (!Number.isFinite(policyConfig.switchFreshnessMs) || policyConfig.switchFreshnessMs <= 0) {
         throw new Error("switch freshness must be a positive number");

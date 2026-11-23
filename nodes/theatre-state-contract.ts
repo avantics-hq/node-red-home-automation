@@ -9,6 +9,7 @@ import {
   type TheatreStateContractState
 } from "../lib/theatre-state-contract";
 import {invalidConfig, objectField, onInput, runReducer, type Send} from "./adapter";
+import {numberSetting} from "../lib/settings";
 
 interface TheatreStateContractNodeConfig extends NodeDef {
   area?: string;
@@ -39,10 +40,10 @@ const registerTheatreStateContract: NodeInitializer = (RED) => {
         discoveryPrefix: config.discoveryPrefix || "homeassistant",
         activities: Array.isArray(activities) ? activities.map(String) : [],
         slo: {
-          windowSize: Number(config.sloWindowSize ?? 20),
-          minimumSamples: Number(config.sloMinimumSamples ?? 5),
-          latencyBudgetMs: Number(config.sloLatencyBudgetMs ?? 60000),
-          successObjectivePct: Number(config.sloSuccessObjectivePct ?? 95)
+          windowSize: numberSetting(config.sloWindowSize, "SLO window", 20),
+          minimumSamples: numberSetting(config.sloMinimumSamples, "minimum samples", 5),
+          latencyBudgetMs: numberSetting(config.sloLatencyBudgetMs, "latency budget", 60000),
+          successObjectivePct: numberSetting(config.sloSuccessObjectivePct, "success objective", 95)
         }
       });
     } catch (error) {

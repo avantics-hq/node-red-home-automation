@@ -14,7 +14,8 @@ import {
   type ActivityLightingMessage,
   type ActivityLightingState
 } from "../lib/activity-lighting-controller";
-import {guarded, invalidConfig, number, objectField, onInput, runReducer, type Send} from "./adapter";
+import {guarded, invalidConfig, objectField, onInput, runReducer, type Send} from "./adapter";
+import {numberSetting} from "../lib/settings";
 
 interface ActivityLightingNodeConfig extends NodeDef {
   area?: string;
@@ -34,19 +35,18 @@ const registerActivityLightingController: NodeInitializer = (RED) => {
     const context = node.context();
     let timer: ReturnType<typeof setTimeout> | undefined;
 
-    let profiles: ActivityLightingConfig["profiles"];
+    let controllerConfig: ActivityLightingConfig;
     try {
-      profiles = normaliseLightingProfiles(JSON.parse(config.profiles || "{}") as unknown);
+      controllerConfig = {
+        profiles: normaliseLightingProfiles(JSON.parse(config.profiles || "{}") as unknown),
+        owner: config.owner || "activity",
+        confirmationTimeoutMs: numberSetting(config.confirmationTimeoutMs, "confirmation timeout", 15000),
+        maxAttempts: numberSetting(config.maxAttempts, "max attempts", 2)
+      };
     } catch (error) {
       invalidConfig(node, error);
       return;
     }
-    const controllerConfig: ActivityLightingConfig = {
-      profiles,
-      owner: config.owner || "activity",
-      confirmationTimeoutMs: number(config.confirmationTimeoutMs, 15000),
-      maxAttempts: number(config.maxAttempts, 2)
-    };
 
     function updateStatus(status: ActivityLightingStatus) {
       const appearances: Record<string, {fill: NodeStatusFill; shape: NodeStatusShape}> = {

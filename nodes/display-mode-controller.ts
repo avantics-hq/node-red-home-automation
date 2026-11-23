@@ -16,7 +16,8 @@ import {
   type DisplayState
 } from "../lib/display-mode-controller";
 import {DisplayTransport} from "../lib/display-transport";
-import {guarded, invalidConfig, number, objectField, onInput, runReducer, type Send} from "./adapter";
+import {guarded, invalidConfig, objectField, onInput, runReducer, type Send} from "./adapter";
+import {numberSetting} from "../lib/settings";
 
 interface DisplayControllerConfig extends NodeDef {
   area?: string;
@@ -56,16 +57,17 @@ const registerDisplayModeController: NodeInitializer = (RED) => {
     let closed = false;
 
     // Defaults and limits come from the reducer's own normalisation.
-    const controllerConfig: DisplayConfig = normaliseConfig(config);
+    let controllerConfig: DisplayConfig;
 
     let transport: DisplayTransport;
     try {
+      controllerConfig = normaliseConfig(config);
       transport = new DisplayTransport({
         tvHost: String(config.tvHost ?? ""),
         tvPsk: String(node.credentials?.tvPsk ?? ""),
         screenHost: String(config.screenHost ?? ""),
         projectorMeterHost: String(config.projectorMeterHost ?? ""),
-        timeoutMs: number(config.transportTimeoutMs, 5000)
+        timeoutMs: numberSetting(config.transportTimeoutMs, "transport timeout", 5000)
       });
     } catch (error) {
       invalidConfig(node, error);
