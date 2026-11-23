@@ -90,7 +90,8 @@
       <code>…/enabled/set</code> and a delay of 0 to 86400 seconds sent to <code>…/delay/set</code>, as the
       <code>area-enabled</code> and <code>delay</code> inputs do; wire an MQTT in node on
       <code>home/&lt;area&gt;/motion/+/set</code> into this node. The shared <code>global-enabled</code> is not
-      published.</dd>
+      published, and the switch shows this node's enable only, so motion can still be off everywhere while it
+      shows on.</dd>
     <dt>Home Assistant discovery</dt><dd>a motion lighting switch and a vacancy delay number (in the device's
       configuration). It needs <b>Publish state</b>.</dd>
   </dl>

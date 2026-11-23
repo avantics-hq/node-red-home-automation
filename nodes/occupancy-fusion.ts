@@ -103,8 +103,7 @@ const registerOccupancyFusion: NodeInitializer = (RED) => {
         (saved: Partial<OccupancyState> | undefined) => transitionOccupancy(saved, input, fusionConfig));
       for (const output of result.outputs) {
         send([{...output, payload: output.payload}, null]);
-        const state = occupancyStateOutputs(publishing, output.payload.occupied);
-        if (state.length) send([null, state.map((entry) => ({...entry}))]);
+        lifecycle.publish(send, occupancyStateOutputs(publishing, output.payload.occupied));
       }
       updateStatus(result.status);
     });

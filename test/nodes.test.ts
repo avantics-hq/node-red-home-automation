@@ -1645,3 +1645,28 @@ test("motion publishing: an enable switch and a vacancy delay, set from MQTT; of
   });
   assert.deepEqual(((cleared[0] as SendEnvelope)[1] ?? []).map(({payload}) => payload), ["", "", "", "", ""]);
 });
+
+test("motion publishing: after a redeploy with a new vacancy setting, the delay in use is published", async (t) => {
+  const motionRuntime = runtime(registerMotion);
+  const base = {id: "m5", area: "hall", onTargets: "[\"main\"]", publishState: true, discovery: true};
+  const delays = (sent: unknown[]) => JSON.stringify(sent).match(/"topic":"home\/hall\/motion\/delay\/state","payload":"(\d+)"/g)?.map((m) => m.match(/"(\d+)"$/)![1]) ?? [];
+  const first = new motionRuntime.Constructor({...base, defaultDelaySeconds: 120});
+  motionRuntime.events.emit("flows:started");
+  assert.deepEqual(delays(first.sent), ["120"]);
+  assert.deepEqual(delays(await receive(first, {topic: "home/hall/motion/delay/set", payload: "300"})), ["300"]);
+  await close(first);
+
+  // Same setting: Home Assistant's 300 still stands.
+  const same = new motionRuntime.Constructor({...base, defaultDelaySeconds: 120});
+  motionRuntime.events.emit("flows:started");
+  assert.deepEqual(delays(same.sent), ["300"]);
+  await close(same);
+
+  // A new setting replaces it, and that is what is published.
+  const changed = new motionRuntime.Constructor({...base, defaultDelaySeconds: 600});
+  t.after(() => close(changed));
+  motionRuntime.events.emit("flows:started");
+  assert.deepEqual(delays(changed.sent), ["600"]);
+  // Nothing more to publish when nothing changes.
+  assert.deepEqual(await receive(changed, {source: "illuminance", payload: 5}), []);
+});

@@ -2,6 +2,7 @@
 
 import type {Node, NodeDef, NodeInitializer} from "node-red";
 import {
+  createMotionState,
   normaliseMotionConfig,
   transitionMotion,
   type MotionConfig,
@@ -14,7 +15,6 @@ import {
   motionStartingOutputs,
   motionStateOutputs,
   motionStoppingOutputs,
-  type MotionPublication,
   type MotionPublishingConfig
 } from "../lib/motion-publishing";
 import {ID_SCHEMES, discoveryPrefixSetting} from "../lib/ha-discovery";
@@ -89,19 +89,16 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
       }), delayMs);
     }
 
+    // The enable state and delay in use, by the reducer's own rule: a saved
+    // delay stands only while the setting it was based on is unchanged.
+    function savedPolicyState(): MotionState {
+      return createMotionState(policyConfig, context.get("state") as Partial<MotionState> | undefined);
+    }
+
     // MQTT publications go on the second output, away from the lighting
-    // intents the room controller reads on the first.
-    function publish(send: Send, publications: MotionPublication[]) {
-      if (publications.length) send([null, publications.map((entry) => ({...entry}))]);
-    }
-
-    function savedPolicyState() {
-      const saved = context.get("state") as Partial<MotionState> | undefined;
-      return {areaEnabled: saved?.areaEnabled !== false, delaySeconds: saved?.delaySeconds ?? policyConfig.defaultDelaySeconds};
-    }
-
-    // Available, and clear of what it no longer publishes, as soon as it
-    // runs; offline as it stops; nothing left behind when deleted.
+    // intents the room controller reads on the first. Available, and clear
+    // of what it no longer publishes, as soon as it runs; offline as it
+    // stops; nothing left behind when deleted.
     const lifecycle = publishingLifecycle(RED, node, {
       retainedTopics: () => motionRetainedTopics(publishing),
       starting: () => motionStartingOutputs(publishing, savedPolicyState()),
@@ -112,6 +109,7 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
 
     function process(input: MotionInput, send: Send, inboundTraces: ReturnType<typeof motionInbound> = null) {
       const globalEnabled = globalContext.get("MOTION_ENABLED_STATE") !== false;
+      const before = savedPolicyState();
       const result = runReducer(node, {area: policyConfig.area, component: "motion-policy"},
         (saved: Partial<MotionState> | undefined, now) => {
           const decided = transitionMotion(saved, input, policyConfig, globalEnabled, now.getTime());
@@ -131,7 +129,12 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
           send([{payload: undefined, ...effect.message}, null]);
         }
       }
-      if (input.source === "area-enabled" || input.source === "delay") publish(send, motionStateOutputs(publishing, result.state));
+      // Published whenever either changes, and in answer to a set, so Home
+      // Assistant shows what is in use.
+      if (before.areaEnabled !== result.state.areaEnabled || before.delaySeconds !== result.state.delaySeconds ||
+        input.source === "area-enabled" || input.source === "delay") {
+        lifecycle.publish(send, motionStateOutputs(publishing, result.state));
+      }
       updateStatus(result.status);
       return result;
     }
