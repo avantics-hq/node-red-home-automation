@@ -225,6 +225,10 @@ changes, the controller sends a retained message on its command output:
 ```
 
 Flows that filter that output by topic must pass the `/control` topics through.
+It also publishes the circadian state on `home/<area>/circadian/state`, and
+acts on ON or OFF sent to `home/<area>/circadian/set`, which is where the Home
+Assistant circadian switch sends them: wire an MQTT in node subscribed to that
+topic into the room controller.
 
 ## Receiver volume ownership
 

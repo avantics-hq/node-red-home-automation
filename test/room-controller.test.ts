@@ -702,3 +702,29 @@ test("publish settings: state and discovery each switch on and off, and unset me
   assert.deepEqual(circadian({publishState: true}), ["home/kitchen/circadian/state"]);
   assert.deepEqual(circadian({publishState: false}), []);
 });
+
+test("the circadian set topic switches circadian lighting on and off", () => {
+  const set = (state: RoomState | undefined, payload: unknown, extra: Record<string, unknown> = {}, settings: Partial<RoomConfig> = {}) =>
+    transitionRoom(state, {topic: "home/kitchen/circadian/set", payload, ...extra}, {...config, ...settings}, now);
+  const lit = transitionRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, now).state as RoomState;
+
+  const off = set(lit, "OFF");
+  assert.equal(off.state.circadianEnabled, false);
+  assert.deepEqual(off.outputs.map(({topic, payload}) => [topic, payload]), [["home/kitchen/circadian/state", "OFF"]]);
+  const on = set(off.state as RoomState, " on ");
+  assert.equal(on.state.circadianEnabled, true, "case and spaces don't matter");
+  // A flow may tag MQTT messages as observed; the set topic still counts.
+  assert.equal(set(lit, "off", {lighting: {kind: "command-observed"}}).state.circadianEnabled, false);
+
+  for (const [label, result] of [
+    ["junk", set(lit, "maybe")],
+    ["a retained message", set(lit, "OFF", {retain: true})],
+    ["no area", set(lit, "OFF", {}, {area: ""})],
+    ["publishing off", set(lit, "OFF", {}, {publishState: false})]
+  ] as const) {
+    assert.equal(result.state.circadianEnabled, true, label);
+    assert.deepEqual(result.outputs, [], label);
+  }
+  assert.deepEqual(set(lit, "maybe").traces.map(({event, outcome, reason}) => [event, outcome, reason]), [["circadian-set", "ignored", "not-on-or-off"]]);
+  assert.deepEqual(set(lit, "OFF", {retain: true}).traces.map(({reason}) => reason), ["retained-message"]);
+});

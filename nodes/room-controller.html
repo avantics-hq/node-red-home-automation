@@ -88,7 +88,8 @@
       <code>home/&lt;area&gt;/lighting/&lt;target&gt;/control</code> and the circadian state on
       <code>home/&lt;area&gt;/circadian/state</code>.</dd>
     <dt>Home Assistant discovery</dt><dd>a circadian switch in Home Assistant, which reads that state and sends
-      ON/OFF to <code>home/&lt;area&gt;/circadian/set</code>. It needs <b>Publish state</b>. Switching it off
+      ON/OFF to <code>home/&lt;area&gt;/circadian/set</code>. To act on it, wire an MQTT in node subscribed to that
+      topic into this node. It needs <b>Publish state</b>. Switching it off
       removes the switch from Home Assistant at the next start.</dd>
   </dl>
   <p>New nodes start with both off. A node saved before these settings existed keeps publishing both.</p>
@@ -116,6 +117,10 @@
     Switching a light off by its owner or a person returns it to in-control.</p>
   <h3>Inputs</h3>
   <dl class="message-properties">
+    <dt>topic = home/&lt;area&gt;/circadian/set</dt>
+    <dd>payload <code>ON</code> or <code>OFF</code> (any case) switches circadian lighting on or off, as
+      <code>lighting.kind = "circadian"</code> does. Read only while <b>Publish state</b> is on and the area is set.
+      Retained messages and other payloads are ignored.</dd>
     <dt>lighting.owner <span class="property-type">string</span></dt>
     <dd>on an <code>intent</code> that switches targets on, marks them overridden by this owner. With
       <code>preserveManual: true</code>, manual lights are skipped.</dd>
