@@ -7,7 +7,7 @@
       area: {value: ""},
       freshnessMs: {value: 30000, required: true, validate: RED.validators.number()},
       recoveryOffActivity: {value: "off", required: true},
-      activityProfiles: {value: "{}", required: true}
+      activityProfiles: {value: "{}", required: true, validate: function (v) { try { JSON.parse(v); return true; } catch (e) { return false; } }}
     },
     inputs: 1,
     outputs: 2,

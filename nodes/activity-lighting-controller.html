@@ -5,8 +5,8 @@
     defaults: {
       name: {value: ""},
       area: {value: ""},
-      profiles: {value: "{}", required: true},
-      owner: {value: "activity"},
+      profiles: {value: "{}", required: true, validate: function (v) { try { JSON.parse(v); return true; } catch (e) { return false; } }},
+      owner: {value: "activity", required: true},
       confirmationTimeoutMs: {value: 15000, required: true, validate: RED.validators.number()},
       maxAttempts: {value: 2, required: true, validate: RED.validators.number()}
     },

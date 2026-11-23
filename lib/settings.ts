@@ -12,3 +12,45 @@ export function numberSetting(value: unknown, label: string, fallback: number): 
   if (!Number.isFinite(parsed)) throw new Error(`${label} must be a number`);
   return parsed;
 }
+
+// An on/off setting. A setting absent from an older saved flow takes its
+// default; true/"true" and false/"false" are read as such; anything else is
+// an error naming the setting.
+export function booleanSetting(value: unknown, label: string, fallback: boolean): boolean {
+  if (value === undefined) return fallback;
+  const read = optionalBooleanSetting(value, label);
+  return read ?? fallback;
+}
+
+// An on/off setting that can be "not set": null (what the editor stores for
+// it) or absent. Returns null for "not set"; the caller applies its documented
+// meaning. An empty string is not "not set" and is an error.
+export function optionalBooleanSetting(value: unknown, label: string): boolean | null {
+  if (value === undefined || value === null) return null;
+  if (value === true || value === "true") return true;
+  if (value === false || value === "false") return false;
+  throw new Error(`${label} must be on or off`);
+}
+
+// A text setting. Absent from an older saved flow: its default (or, with no
+// default, an error). Otherwise it must not be empty.
+export function textSetting(value: unknown, label: string, fallback?: string): string {
+  if (value === undefined && fallback !== undefined) return fallback;
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text) throw new Error(`${label} is required`);
+  return text;
+}
+
+// A JSON setting, parsed. Absent from an older saved flow: its default.
+// Otherwise it must be JSON text that parses; the caller checks its shape.
+export function jsonSetting(value: unknown, label: string, fallback: unknown): unknown {
+  if (value === undefined) return fallback;
+  if (typeof value === "string" && value.trim() !== "") {
+    try {
+      return JSON.parse(value) as unknown;
+    } catch {
+      // Reported below.
+    }
+  }
+  throw new Error(`${label} must be valid JSON`);
+}

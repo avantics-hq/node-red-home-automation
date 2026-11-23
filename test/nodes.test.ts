@@ -21,7 +21,7 @@ import type {TraceRecord} from "../lib/bounded-trace";
 import {transitionActivityLighting} from "../lib/activity-lighting-controller";
 import {transitionAvr} from "../lib/avr-controller";
 import {transitionBacklighting} from "../lib/backlighting-controller";
-import {transitionDisplay} from "../lib/display-mode-controller";
+import {normaliseConfig as normaliseDisplayConfig, transitionDisplay} from "../lib/display-mode-controller";
 import {transitionSource} from "../lib/source-capability-controller";
 
 interface RuntimeContext {
@@ -870,7 +870,7 @@ test("AVR adapter rejects a configuration the reducer would reject, at deploy", 
 test("room adapter rejects an unusable wake and bed schedule at deploy", () => {
   for (const [label, times, reason] of [
     ["not a time", {wakeTime: "7am", bedTime: "23:00"}, /HH:MM/],
-    ["a blank wake time defaults to 07:00, the same as bed", {wakeTime: "", bedTime: "07:00"}, /differ/],
+    ["a blank wake time is an error", {wakeTime: "", bedTime: "07:00"}, /wake time is required/],
     ["the same time", {wakeTime: "07:00", bedTime: "07:00"}, /differ/]
   ] as const) {
     const {Constructor} = runtime(registerRoom);
@@ -1070,7 +1070,7 @@ test("every adapter shows the same badge for a configuration it cannot use, and 
     ["source capability", registerSource, {area: "room", sources: "{not json"}, /JSON/],
     ["theatre activity", registerTheatreActivity, {area: "room", activityProfiles: "{not json"}, /JSON/],
     ["theatre state contract", registerTheatreStateContract, {area: "room", activities: "{not json"}, /./],
-    ["display", registerDisplay, {area: "room", tvHost: "", screenHost: "", projectorMeterHost: ""}, /tvHost/],
+    ["display", registerDisplay, {area: "room", tvHost: "", screenHost: "", projectorMeterHost: ""}, /TV host is required/],
     ["motion", registerMotion, {area: "room", onTargets: "[1]"}, /targets/],
     ["switch", registerSwitch, {area: "room", targets: "{not json"}, /JSON|targets/]
   ];
@@ -1223,5 +1223,39 @@ test("publish settings: null and a missing field mean on; only false means off",
   assert.equal(await discoveryOf({}), "published", "an old flow without the fields is on");
   assert.equal(await discoveryOf({publishState: true, discovery: false}), "cleared", "false (what onadd sets) is off");
   assert.equal(await discoveryOf({publishState: true, discovery: "false"}), "cleared");
-  assert.equal(await discoveryOf({publishState: "", discovery: ""}), "published", "an unexpected empty string counts as on");
+  // An empty string is not "not set": it's an invalid configuration.
+  const emptied = new room({targets, area: "hall", publishState: "", discovery: ""});
+  assert.deepEqual(emptied.errors.map(String), ["invalid configuration: publish state must be on or off"]);
+});
+
+test("an emptied JSON or text setting is an invalid configuration that names the setting", () => {
+  const theatreProfiles = JSON.stringify({
+    off: {display: {mode: "off"}, avr: {power: "standby"}, source: {action: "deactivate", readiness: "optional"}, lighting: {profile: "off"}, backlighting: {power: "off"}}
+  });
+  const cases: Array<[string, NodeInitializer, Record<string, unknown>, string]> = [
+    ["receiver", registerAvr, {sources: ""}, "sources must be valid JSON"],
+    ["display", registerDisplay, {tvHost: "tv", screenHost: " ", projectorMeterHost: "m"}, "screen host is required"],
+    ["source", registerSource, {sources: "{broken"}, "sources must be valid JSON"],
+    ["activity lighting", registerActivityLighting, {profiles: "{\"off\":{\"targets\":[],\"values\":{}}}", owner: ""}, "owner is required"],
+    ["room", registerRoom, {targets: "", publishState: false, discovery: false}, "targets must be valid JSON"],
+    ["motion", registerMotion, {onTargets: "[\"main\"]", offTargets: ""}, "off targets must be valid JSON"],
+    ["switch", registerSwitch, {targets: ""}, "targets must be valid JSON"],
+    ["occupancy", registerOccupancy, {presenceMode: "always"}, "presence sensor must be none or hold"],
+    ["theatre activity", registerTheatreActivity, {activityProfiles: theatreProfiles, recoveryOffActivity: ""}, "recovery off activity is required"],
+    ["theatre state contract", registerTheatreStateContract, {area: "a", activities: "[\"off\"]", discoveryPrefix: ""}, "discovery prefix is required"]
+  ];
+  for (const [name, register, config, reason] of cases) {
+    const node = new (runtime(register, {tvPsk: "key"}).Constructor)(config);
+    assert.deepEqual(node.statuses.at(-1), {fill: "red", shape: "ring", text: "invalid configuration"}, name);
+    assert.deepEqual(node.errors.map(String), [`invalid configuration: ${reason}`], name);
+  }
+});
+
+test("the display's projector fallback reads \"true\" as on", async (t) => {
+  const node = new (runtime(registerDisplay, {tvPsk: "key"}).Constructor)({tvHost: "tv", screenHost: "s", projectorMeterHost: "m", projectorPowerFallback: "true"});
+  t.after(() => close(node));
+  assert.deepEqual(node.errors, []);
+  assert.equal(normaliseDisplayConfig({projectorPowerFallback: "true"}).projectorPowerFallback, true);
+  assert.equal(normaliseDisplayConfig({projectorPowerFallback: "false"}).projectorPowerFallback, false);
+  assert.throws(() => normaliseDisplayConfig({projectorPowerFallback: "maybe"}), /projector power fallback must be on or off/);
 });

@@ -15,6 +15,7 @@ import {
   type SourceState
 } from "../lib/source-capability-controller";
 import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
+import {jsonSetting} from "../lib/settings";
 
 interface SourceControllerConfig extends NodeDef {
   area?: string;
@@ -38,7 +39,7 @@ const registerSourceCapabilityController: NodeInitializer = (RED) => {
     let controllerConfig: SourceConfig;
     try {
       // Defaults and limits come from the reducer's own normalisation.
-      controllerConfig = normaliseConfig({...config, sources: JSON.parse(config.sources || "{}") as unknown});
+      controllerConfig = normaliseConfig({...config, sources: jsonSetting(config.sources, "sources", {})});
     } catch (error) {
       invalidConfig(node, error);
       return;

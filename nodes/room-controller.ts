@@ -11,8 +11,8 @@ import {
 import {scheduledLighting} from "../lib/circadian";
 import {resolveSchedule} from "../lib/circadian-schedule";
 import type {LightLevels} from "../lib/light-styling";
-import {guarded, invalidConfig, objectField, onInput, onUnlessOff, optionalArea, runReducer, type Send} from "./adapter";
-import {numberSetting} from "../lib/settings";
+import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
+import {booleanSetting, jsonSetting, numberSetting, optionalBooleanSetting, textSetting} from "../lib/settings";
 
 interface RoomControllerConfig extends NodeDef {
   area?: string;
@@ -36,8 +36,8 @@ interface RoomControllerNode extends Node {}
 
 type RoomStatus = ReturnType<typeof transitionRoom>["status"];
 
-function parseTargets(value: string | undefined): RoomTarget[] {
-  const targets: unknown = JSON.parse(value || "[]");
+function parseTargets(value: unknown): RoomTarget[] {
+  const targets = jsonSetting(value, "targets", []);
   if (!Array.isArray(targets) || targets.some((target) => {
     if (!target || typeof target !== "object") return true;
     const candidate = target as Record<string, unknown>;
@@ -59,19 +59,17 @@ const registerRoomController: NodeInitializer = (RED) => {
     RED.nodes.createNode(this, config);
     const node = this;
     const area = optionalArea(config);
-    // A saved flow without these settings keeps publishing as before.
-    const publishState = onUnlessOff(config.publishState);
-    const discovery = onUnlessOff(config.discovery);
-    // Both publish under topics and IDs named after the area.
-    if ((publishState || discovery) && !area) {
-      invalidConfig(node, new Error("area is required"));
-      return;
-    }
     let refreshTimer: ReturnType<typeof setInterval> | undefined;
 
     let controllerConfig: RoomConfig;
     let refreshSeconds: number;
     try {
+      // Not set (null, or absent from a flow saved before these settings)
+      // means on, so an older flow keeps publishing as before.
+      const publishState = optionalBooleanSetting(config.publishState, "publish state") ?? true;
+      const discovery = optionalBooleanSetting(config.discovery, "Home Assistant discovery") ?? true;
+      // Both publish under topics and IDs named after the area.
+      if ((publishState || discovery) && !area) throw new Error("area is required");
       refreshSeconds = Math.max(10, numberSetting(config.refreshSeconds, "refresh interval", 60));
       // Saved latitude, longitude and minimum settings from earlier versions
       // are ignored.
@@ -81,7 +79,7 @@ const registerRoomController: NodeInitializer = (RED) => {
         sleepBrightnessPct: numberSetting(config.sleepBrightnessPct, "sleep brightness", 1),
         sleepColorTempKelvin: numberSetting(config.sleepColorTempKelvin, "sleep colour temperature", 2200)
       };
-      const schedule = resolveSchedule(config.wakeTime, config.bedTime);
+      const schedule = resolveSchedule(textSetting(config.wakeTime, "wake time", "07:00"), textSetting(config.bedTime, "bed time", "23:00"));
       controllerConfig = {
         area,
         displayName: config.displayName || area,
@@ -90,7 +88,7 @@ const registerRoomController: NodeInitializer = (RED) => {
         targets: parseTargets(config.targets),
         initialTransitionSeconds: numberSetting(config.initialTransitionSeconds, "initial transition", 1),
         refreshTransitionSeconds: numberSetting(config.refreshTransitionSeconds, "refresh transition", 60),
-        initialSleep: config.initialSleep === true || config.initialSleep === "true",
+        initialSleep: booleanSetting(config.initialSleep, "initial sleep", false),
         // The adapter picks the circadian lighting; the controller only asks
         // it how a light should look.
         lighting: scheduledLighting(schedule, levels)

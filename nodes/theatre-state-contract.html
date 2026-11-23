@@ -22,7 +22,7 @@
         displayName: {value: ""},
         baseTopic: {value: ""},
         discoveryPrefix: {value: "homeassistant", required: true},
-        activities: {value: "[]", required: true},
+        activities: {value: "[]", required: true, validate: function (v) { try { JSON.parse(v); return true; } catch (e) { return false; } }},
         sloWindowSize: {value: 20, required: true, validate: RED.validators.number()},
         sloMinimumSamples: {value: 5, required: true, validate: RED.validators.number()},
         sloLatencyBudgetMs: {value: 60000, required: true, validate: RED.validators.number()},

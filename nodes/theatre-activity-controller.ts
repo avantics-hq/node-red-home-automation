@@ -15,7 +15,7 @@ import {
   type TheatreState
 } from "../lib/theatre-activity-controller";
 import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
-import {numberSetting} from "../lib/settings";
+import {jsonSetting, numberSetting, textSetting} from "../lib/settings";
 
 interface TheatreActivityNodeConfig extends NodeDef {
   area?: string;
@@ -39,8 +39,8 @@ const registerTheatreActivityController: NodeInitializer = (RED) => {
       controllerConfig = {
         area: optionalArea(config),
         freshnessMs: Math.max(1000, numberSetting(config.freshnessMs, "freshness", 30000)),
-        activityProfiles: normaliseActivityProfiles(JSON.parse(config.activityProfiles || "{}") as unknown),
-        recoveryOffActivity: config.recoveryOffActivity || "off"
+        activityProfiles: normaliseActivityProfiles(jsonSetting(config.activityProfiles, "activity profiles", {})),
+        recoveryOffActivity: textSetting(config.recoveryOffActivity, "recovery off activity", "off")
       };
     } catch (error) {
       invalidConfig(node, error);

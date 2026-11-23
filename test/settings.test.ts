@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {normaliseAvrConfig} from "../lib/avr-controller";
 import {normaliseConfig as normaliseDisplayConfig} from "../lib/display-mode-controller";
-import {numberSetting} from "../lib/settings";
+import {booleanSetting, jsonSetting, numberSetting, optionalBooleanSetting, textSetting} from "../lib/settings";
 import {normaliseConfig as normaliseSourceConfig} from "../lib/source-capability-controller";
 
 test("a number setting is a number, or its default only when absent from an older saved flow", () => {
@@ -42,4 +42,37 @@ test("display and source settings are read from editor strings", () => {
   assert.deepEqual([source.pollMs, source.confirmationTimeoutMs, source.maxAttempts], [500, 15000, 2]);
   assert.throws(() => normaliseSourceConfig({sources, confirmationTimeoutMs: ""}), /confirmation timeout must be a number/);
   assert.throws(() => normaliseDisplayConfig({tvTimeoutMs: "soon"}), /TV timeout must be a number/);
+});
+
+test("on/off settings: absent takes the default, true and false in either form, anything else is an error", () => {
+  assert.equal(booleanSetting(undefined, "initial sleep", false), false);
+  assert.equal(booleanSetting(undefined, "initial sleep", true), true);
+  assert.equal(booleanSetting(null, "initial sleep", true), true, "null is not set, so the default");
+  assert.equal(booleanSetting(true, "initial sleep", false), true);
+  assert.equal(booleanSetting("true", "initial sleep", false), true);
+  assert.equal(booleanSetting("false", "initial sleep", true), false);
+  for (const value of ["", "yes", 1, {}]) {
+    assert.throws(() => booleanSetting(value, "initial sleep", false), /^Error: initial sleep must be on or off$/, JSON.stringify(value));
+  }
+  assert.equal(optionalBooleanSetting(undefined, "discovery"), null);
+  assert.equal(optionalBooleanSetting(null, "discovery"), null);
+  assert.equal(optionalBooleanSetting("false", "discovery"), false);
+  assert.throws(() => optionalBooleanSetting("", "discovery"), /discovery must be on or off/, "an empty string is not \"not set\"");
+});
+
+test("text settings: absent takes the default; empty is an error, with or without one", () => {
+  assert.equal(textSetting(undefined, "owner", "activity"), "activity");
+  assert.equal(textSetting(" den ", "owner", "activity"), "den");
+  for (const value of ["", "  ", null, 5]) {
+    assert.throws(() => textSetting(value, "owner", "activity"), /^Error: owner is required$/, JSON.stringify(value));
+  }
+  assert.throws(() => textSetting(undefined, "TV host"), /TV host is required/, "no default: absent is an error too");
+});
+
+test("JSON settings: absent takes the default; empty or unparsable is an error", () => {
+  assert.deepEqual(jsonSetting(undefined, "targets", ["main"]), ["main"]);
+  assert.deepEqual(jsonSetting("[\"lamp\"]", "targets", ["main"]), ["lamp"]);
+  for (const value of ["", "  ", null, "[lamp", 7]) {
+    assert.throws(() => jsonSetting(value, "targets", ["main"]), /^Error: targets must be valid JSON$/, JSON.stringify(value));
+  }
 });

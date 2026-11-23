@@ -1,7 +1,7 @@
 "use strict";
 
 import type {TraceEntry} from "./bounded-trace";
-import {numberSetting} from "./settings";
+import {numberSetting, textSetting} from "./settings";
 
 import {boundObservedAt, isOutOfOrder, parseObservedAt} from "./observation-time";
 import type {LightingEvent} from "./room-controller";
@@ -168,10 +168,9 @@ export function normaliseLightingProfiles(value: unknown): ActivityLightingProfi
 export function normaliseActivityLightingConfig(
   config: Partial<ActivityLightingConfig> & {profiles?: unknown} = {}
 ): ActivityLightingConfig {
-  const owner = typeof config.owner === "string" ? config.owner.trim() : "";
   return {
     profiles: normaliseLightingProfiles(config.profiles),
-    owner: owner || "activity",
+    owner: textSetting(config.owner, "owner", "activity"),
     confirmationTimeoutMs: Math.max(1000, numberSetting(config.confirmationTimeoutMs, "confirmation timeout", 15000)),
     maxAttempts: Math.max(1, Math.floor(numberSetting(config.maxAttempts, "max attempts", 2)))
   };

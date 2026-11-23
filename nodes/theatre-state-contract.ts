@@ -8,8 +8,8 @@ import {
   type TheatreStateContractMessage,
   type TheatreStateContractState
 } from "../lib/theatre-state-contract";
-import {invalidConfig, objectField, onInput, onUnlessOff, optionalArea, runReducer, type Send} from "./adapter";
-import {numberSetting} from "../lib/settings";
+import {invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
+import {jsonSetting, numberSetting, optionalBooleanSetting, textSetting} from "../lib/settings";
 
 interface TheatreStateContractNodeConfig extends NodeDef {
   area?: string;
@@ -36,15 +36,18 @@ const registerTheatreStateContract: NodeInitializer = (RED) => {
 
     let controllerConfig: TheatreStateContractConfig;
     try {
-      const activities: unknown = JSON.parse(config.activities || "[]");
+      const activities = jsonSetting(config.activities, "activities", []);
       controllerConfig = normaliseStateContractConfig({
         area,
+        // Optional, with documented meanings: an empty display name is the
+        // area, and an empty base topic is home/<area>/theatre.
         displayName: config.displayName || area,
         baseTopic: config.baseTopic || "",
-        // A saved flow without the setting keeps publishing discovery.
-        discovery: onUnlessOff(config.discovery),
-        discoveryPrefix: config.discoveryPrefix || "homeassistant",
-        activities: Array.isArray(activities) ? activities.map(String) : [],
+        // Not set (null, or absent from a flow saved before the setting)
+        // means on, so an older flow keeps publishing discovery.
+        discovery: optionalBooleanSetting(config.discovery, "Home Assistant discovery") ?? true,
+        discoveryPrefix: textSetting(config.discoveryPrefix, "discovery prefix", "homeassistant"),
+        activities: (Array.isArray(activities) ? activities.map(String) : activities) as string[],
         slo: {
           windowSize: numberSetting(config.sloWindowSize, "SLO window", 20),
           minimumSamples: numberSetting(config.sloMinimumSamples, "minimum samples", 5),
