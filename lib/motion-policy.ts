@@ -1,4 +1,6 @@
 "use strict";
+
+import type {TraceEntry} from "./bounded-trace";
 import {
   createWallInputState,
   transitionWallInput,
@@ -50,13 +52,6 @@ export type MotionEffect =
   | {kind: "cancel-switch-timer"}
   | {kind: "schedule-switch-timer"; delayMs: number; generation: number; switchAt: number}
   | {kind: "send"; message: LightingIntent};
-
-export interface MotionTrace {
-  event: string;
-  outcome: string;
-  reason: string | null;
-  details: Record<string, unknown>;
-}
 
 export function booleanOn(value: unknown): boolean {
   return value === true || (typeof value === "string" && value.toLowerCase() === "on");
@@ -121,7 +116,7 @@ export function transitionMotion(
 ) {
   const state = createMotionState(config, saved);
   const effects: MotionEffect[] = [];
-  const traces: MotionTrace[] = [];
+  const traces: TraceEntry[] = [];
   let nextGlobalEnabled = globalEnabled !== false;
 
   function enabled() {

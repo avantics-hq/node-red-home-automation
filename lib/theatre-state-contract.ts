@@ -10,6 +10,7 @@ import {
   type TheatreSloConfig,
   type TheatreSloState
 } from "./theatre-slo";
+import type {TraceEntry} from "./bounded-trace";
 
 const NAME = /^[a-z][a-z0-9_-]*$/;
 const REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
@@ -242,7 +243,7 @@ export function transitionTheatreStateContract(
   if (!Number.isFinite(now.getTime())) throw new Error("now must be a valid date");
   const requests: ContractRequestOutput[] = [];
   const publications: ContractPublication[] = [];
-  const traces: Array<{event: string; outcome: string; reason: string | null; details: Record<string, unknown>}> = [];
+  const traces: TraceEntry[] = [];
 
   function trace(event: string, outcome: string, reason: string | null = null, details: Record<string, unknown> = {}) {
     traces.push({event, outcome, reason, details});

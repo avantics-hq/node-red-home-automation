@@ -1,5 +1,7 @@
 "use strict";
 
+import type {TraceEntry} from "./bounded-trace";
+
 export type OccupancySource = "motion" | "presence";
 
 export interface OccupancyState {
@@ -30,16 +32,11 @@ export interface OccupancyOutput {
   };
 }
 
-export interface OccupancyTrace {
-  event: string;
-  outcome: string;
-  reason: string | null;
-  details: {
-    active: boolean | null;
-    occupied: boolean;
-    sources: {motion: boolean | null; presence: boolean | null};
-  };
-}
+export type OccupancyTrace = TraceEntry<{
+  active: boolean | null;
+  occupied: boolean;
+  sources: {motion: boolean | null; presence: boolean | null};
+}>;
 
 export function booleanState(value: unknown, source: OccupancySource): boolean | null {
   if (value && typeof value === "object") {

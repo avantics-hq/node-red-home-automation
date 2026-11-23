@@ -14,6 +14,14 @@ export interface TraceMetadata {
   limit?: number;
 }
 
+// One trace entry as a reducer produces it; appendTrace stores it.
+export interface TraceEntry<Details = Record<string, unknown>> {
+  event: string;
+  outcome: string;
+  reason: string | null;
+  details: Details;
+}
+
 export interface TraceInput {
   at?: string;
   event: string;

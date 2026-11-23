@@ -1,5 +1,6 @@
 "use strict";
 
+import type {TraceEntry} from "./bounded-trace";
 import {numberSetting} from "./settings";
 import {asTargetStatus, targetStateEvent, type TargetStateEvent} from "./target-state";
 import {
@@ -263,7 +264,7 @@ export function transitionAvr(
   const commands: AvrCommand[] = [];
   const events: AvrOutputEvent[] = [];
   const targetStates: Array<{theatre: AvrTargetState}> = [];
-  const traces: Array<{event: string; outcome: string; reason: string | null; details: Record<string, unknown>}> = [];
+  const traces: TraceEntry[] = [];
   const event: AvrInputEvent | {kind: "unknown"} = msg.avr || {kind: "unknown"};
   const previousPhase = state.phase;
   // Fields the receiver reported in this event.

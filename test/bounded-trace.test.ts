@@ -6,8 +6,10 @@ import {
   appendTrace,
   TRACE_SCHEMA,
   type TraceContext,
+  type TraceEntry,
   type TraceRecord
 } from "../lib/bounded-trace";
+import {transitionOccupancy} from "../lib/occupancy-fusion";
 
 function memoryContext(): TraceContext {
   const values = new Map<string, unknown>();
@@ -40,4 +42,20 @@ test("trace records use one schema and remain count bounded", () => {
   ]);
   assert.equal(last.schema, TRACE_SCHEMA);
   assert.equal(last.reason, null);
+});
+
+test("reducers' trace entries are the shared TraceEntry shape that appendTrace stores", () => {
+  const entries: TraceEntry[] = transitionOccupancy(undefined, {source: "motion", payload: {motion: true}}, {}).traces;
+  assert.ok(entries.length > 0);
+  for (const entry of entries) {
+    assert.equal(typeof entry.event, "string");
+    assert.equal(typeof entry.outcome, "string");
+    assert.ok(entry.reason === null || typeof entry.reason === "string");
+    assert.equal(typeof entry.details, "object");
+  }
+  const values = new Map<string, unknown>();
+  const stored = appendTrace({get: (key) => values.get(key), set: (key, value) => values.set(key, value)},
+    {area: "hall", component: "occupancy-fusion"}, entries, "2026-11-23T18:00:00.000Z");
+  assert.equal(stored.length, entries.length);
+  assert.equal(stored[0]!.event, entries[0]!.event);
 });

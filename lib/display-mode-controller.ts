@@ -1,5 +1,6 @@
 "use strict";
 
+import type {TraceEntry} from "./bounded-trace";
 import {numberSetting} from "./settings";
 
 import {boundObservedAt, isOutOfOrder, parseObservedAt} from "./observation-time";
@@ -307,7 +308,7 @@ export function transitionDisplay(
   const commands: DisplayCommand[] = [];
   const events: DisplayOutputEvent[] = [];
   const targetStates: Array<{theatre: DisplayTargetState}> = [];
-  const traces: Array<{event: string; outcome: string; reason: string | null; details: Record<string, unknown>}> = [];
+  const traces: TraceEntry[] = [];
 
   function trace(name: string, outcome: string, reason: string | null = null, details: Record<string, unknown> = {}) {
     traces.push({event: name, outcome, reason, details});
