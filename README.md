@@ -282,9 +282,7 @@ Contributions are welcome: see [CONTRIBUTING.md](https://github.com/avantics-hq/
 - [Zigbee2MQTT](https://www.zigbee2mqtt.io): the light transport the room
   controller and the examples are designed around.
 - [Adaptive Lighting](https://github.com/basnijholt/adaptive-lighting) by
-  basnijholt: the inspiration for circadian lighting in Node-RED. Versions up to
-  2.2.1 adapted its curve and default values (Apache-2.0); from 2.3.0 the
-  circadian lighting is our own.
+  basnijholt: the inspiration for circadian lighting in Node-RED.
 
 BRAVIA is a trademark of Sony Group Corporation. Node-RED, Home Assistant,
 Zigbee2MQTT and the other names here are trademarks of their respective owners.
