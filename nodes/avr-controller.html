@@ -87,7 +87,8 @@
       <code>offline</code> on <code>…/availability</code>.</dd>
     <dt>Home Assistant discovery</dt><dd>power and source sensors, and a volume number between <b>Minimum volume</b>
       and <b>Maximum volume</b>. It needs <b>Publish state</b>. A volume set there arrives on
-      <code>…/volume/set</code>; wire an MQTT in node on that topic into this node. It becomes an ordinary absolute
+      <code>…/volume/set</code>; wire an MQTT in node on that topic into this node. Sets arriving within 0.3 seconds
+      of each other (a slider, repeated taps) are settled to the last one, which becomes an ordinary absolute
       volume request, bounded and confirmed like any other: it waits for a power or source change in progress (such
       as a theatre activity's), and is rejected with <code>receiver-not-ready</code> while the receiver is off.</dd>
   </dl>

@@ -316,7 +316,8 @@ adjustment becomes the new baseline instead of being corrected. A request still 
 `volume_failed` with reason `restart`, not replayed.
 
 With publishing and discovery on, Home Assistant gets a volume number. A
-value set there arrives on `home/<area>/receiver/volume/set` and becomes an
+value set there arrives on `home/<area>/receiver/volume/set`; values arriving
+within 0.3 seconds of each other are settled to the last, which becomes an
 ordinary absolute request (`msg.avr = {kind: "volume", mode: "absolute", ...}`),
 so it is bounded, sent and confirmed in the same way, and never sent to the
 receiver directly. The number shows the confirmed volume. A theatre activity

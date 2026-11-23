@@ -18,6 +18,7 @@ import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, 
 import {jsonSetting, optionalBooleanSetting, optionalChoiceSetting} from "../lib/settings";
 import {
   avrRetainedTopics,
+  VOLUME_SET_SETTLE_MS,
   avrVolumeRequest,
   avrStartingOutputs,
   avrStateOutputs,
@@ -161,8 +162,15 @@ const registerAvrController: NodeInitializer = (RED) => {
     }
 
     // Each request from the volume number gets its own ID, as the receiver
-    // answers a repeated ID only once.
+    // answers a repeated ID only once. Sets arriving in a burst are settled
+    // to the last one first.
     let volumeRequests = 0;
+    let volumeSetTimer: ReturnType<typeof setTimeout> | undefined;
+
+    function requestVolume(value: number) {
+      volumeRequests += 1;
+      process({avr: {kind: "volume", requestId: `mqtt-volume-${Date.now()}-${volumeRequests}`, mode: "absolute", value}}, node.send.bind(node));
+    }
 
     onInput(node, (msg, send) => {
       const volume = avrVolumeRequest(msg, publishing);
@@ -172,8 +180,11 @@ const registerAvrController: NodeInitializer = (RED) => {
         return;
       }
       if (volume) {
-        volumeRequests += 1;
-        process({avr: {kind: "volume", requestId: `mqtt-volume-${Date.now()}-${volumeRequests}`, mode: "absolute", value: volume.value}}, send);
+        clearTimeout(volumeSetTimer);
+        volumeSetTimer = setTimeout(guarded(node, () => {
+          volumeSetTimer = undefined;
+          requestVolume(volume.value);
+        }), VOLUME_SET_SETTLE_MS);
         return;
       }
       if (objectField<AvrMessage["avr"]>(msg, "avr")?.kind === "startup") {
@@ -187,6 +198,7 @@ const registerAvrController: NodeInitializer = (RED) => {
 
     node.on("close", (_removed: boolean, done: () => void) => {
       clearTimeout(retryTimer);
+      clearTimeout(volumeSetTimer);
       done();
     });
   }

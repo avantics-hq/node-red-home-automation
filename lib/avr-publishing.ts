@@ -74,6 +74,11 @@ export function avrDiscovery(config: AvrPublishingConfig): AvrPublication[] {
   ];
 }
 
+// How long a volume from Home Assistant waits for a newer one. A slider,
+// repeated taps or an automation can send several in a row; only the last
+// becomes a request, so the receiver never chases steps already replaced.
+export const VOLUME_SET_SETTLE_MS = 300;
+
 // A volume from the volume number's set topic, as the receiver's own
 // absolute volume request, so it takes the same bounded, confirmed path as
 // any other request. Read only while the node publishes; retained messages
