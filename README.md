@@ -114,8 +114,13 @@ activity controller plans each target and sends `msg.theatreCommand` messages.
 Your flow routes each command by its `target` (`avr`, `display`, `source`,
 `lighting`, `backlighting`) to the matching controller's input
 (`msg.avr`, `msg.display`, `msg.sourceCapability`, `msg.activityLighting`,
-`msg.backlighting`), and wires each controller's output 2 back to the activity
-controller. Activity lighting feeds the room lighting controller.
+`msg.backlighting`); the example does this with one switch node and a change
+node per target. Every controller reports its progress on output 2 as
+`msg.theatre = {kind: "target_state", target, requestId, generation, status,
+observedAt}`, alongside its own events: wire each controller's output 2 straight
+back to the activity controller. The activity controller refreshes settled
+targets, and each controller answers a refresh from fresh readings. Activity
+lighting feeds the room lighting controller.
 Example: [`Home theatre activity.json`](examples/Home%20theatre%20activity.json).
 
 | Node | Purpose |

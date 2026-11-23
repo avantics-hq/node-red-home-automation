@@ -111,11 +111,12 @@ const registerAvrController: NodeInitializer = (RED) => {
         payload: Buffer.from(command.payload, "utf8"),
         avr_command: command.avrCommand
       }));
-      if (commands.length || result.events.length) {
+      const outputs = [...result.events, ...result.targetStates];
+      if (commands.length || outputs.length) {
         send([
           commands.length ? commands : null,
-          result.events.length
-            ? result.events.map((event) => ({payload: undefined, ...event}))
+          outputs.length
+            ? outputs.map((event) => ({payload: undefined, ...event}))
             : null
         ]);
       }

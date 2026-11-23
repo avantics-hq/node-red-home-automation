@@ -93,6 +93,13 @@ const registerTheatreActivityController: NodeInitializer = (RED) => {
     }
 
     node.on("input", (msg, send, done) => {
+      // Target controllers' output 2 also carries their own events (such as
+      // msg.avr and msg.display) beside target state; only msg.theatre is
+      // for this controller.
+      if (!msg.theatre || typeof msg.theatre !== "object") {
+        done();
+        return;
+      }
       try {
         process({
           theatre: msg.theatre && typeof msg.theatre === "object"

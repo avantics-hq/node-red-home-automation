@@ -268,3 +268,36 @@ test("a restart mid-activation ends ready or failed, not waiting for good", () =
   const idle = apply(result.state, {kind: "tick", generation: 1}, 60);
   assert.equal(idle.traces.at(-1)?.reason, "nothing-pending");
 });
+
+test("a refresh keeps a settled source ready and stamps it with when the answer arrived", () => {
+  let result = intent(undefined, "streamer");
+  result = observed(result.state, "streamer", "active", 1, 2);
+  assert.equal(theatreState(result).status, "ready");
+
+  // A quiet source: its adapter reports the same reading, still dated 2 s.
+  const refresh = apply(result.state, {kind: "refresh"}, 60);
+  assert.equal(refresh.commands.length, 1);
+  assert.equal(refresh.state.phase, "ready");
+  assert.equal(refresh.state.pending, null);
+  // Nothing is confirmed until the source answers.
+  assert.deepEqual(refresh.events, []);
+
+  const answer = apply(refresh.state, {
+    kind: "observed", sourceId: "streamer", status: "active", generation: 1, observedAt: at(2).toISOString()
+  }, 61);
+  assert.equal(theatreState(answer).status, "ready");
+  assert.equal(theatreState(answer).observedAt, at(61).toISOString());
+
+  // An unasked-for report keeps its own date.
+  const later = apply(answer.state, {
+    kind: "observed", sourceId: "streamer", status: "active", generation: 1, observedAt: at(62).toISOString()
+  }, 90);
+  assert.equal(theatreState(later).observedAt, at(62).toISOString());
+
+  // A refresh that is never answered neither fails nor leaves ready.
+  let quiet = apply(later.state, {kind: "refresh"}, 120);
+  for (let seconds = 121; seconds < 140; seconds += 1) {
+    quiet = apply(quiet.state, {kind: "tick", generation: 1}, seconds);
+  }
+  assert.equal(quiet.state.phase, "ready");
+});

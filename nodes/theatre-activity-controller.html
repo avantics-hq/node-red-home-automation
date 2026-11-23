@@ -27,6 +27,6 @@
 
 <script type="text/html" data-help-name="home-theatre-activity-controller">
   <p>Owns latest-request-wins whole-theatre activity state and aggregates generation-scoped target evidence.</p>
-  <p>Input <code>msg.theatre</code> accepts activity intent, target-state, startup, refresh, recovery and tick events. Output 1 emits semantic <code>msg.theatreCommand</code> messages for target owners. Output 2 emits activity events and a complete state snapshot. Device transports remain separate.</p>
+  <p>Input <code>msg.theatre</code> accepts activity intent, target-state, startup, refresh, recovery and tick events. Messages without <code>msg.theatre</code>, such as a target controller's own events on the same wire, are ignored. Output 1 emits semantic <code>msg.theatreCommand</code> messages for target owners. Output 2 emits activity events and a complete state snapshot. Device transports remain separate.</p>
   <p>Startup without persisted intent probes physical state. One fresh profile match is adopted without commands; zero or multiple matches invoke the configured coordinated Off activity. Manual overrides are held without corrective commands and adopted only when the physical state uniquely matches a profile.</p>
 </script>

@@ -316,3 +316,62 @@ test("unusable timing settings fall back to their defaults, keeping valid zeros"
   assert.equal(config.screenTolerance, 0);
   assert.equal(config.projectorMinimumWarmupMs, 0);
 });
+
+const targetStatus = (result: ReturnType<typeof transitionDisplay>) =>
+  result.targetStates.map(({theatre}) => theatre.status);
+
+test("the display reports target state for the theatre activity controller", () => {
+  let result = apply(undefined, {kind: "intent", requestId: "tv-1", generation: 1, mode: "tv"}, 0);
+  assert.deepEqual(result.targetStates.map(({theatre}) => [theatre.kind, theatre.target, theatre.requestId, theatre.generation, theatre.status]), [
+    ["target_state", "display", "tv-1", 1, "discovering"]
+  ]);
+  result = discover("tv", 1, [
+    [0.1, "tv", {power: "on"}],
+    [0.2, "screen", {position: 0, state: "closed"}],
+    [0.3, "projector", {watts: 2.1}]
+  ]);
+  assert.equal(result.state.phase, "ready");
+  assert.deepEqual(targetStatus(result), ["ready"]);
+  // Stamped with the oldest of the readings that confirm it.
+  assert.equal(result.targetStates[0]?.theatre.observedAt, at(0.1).toISOString());
+
+  // A tick while settled claims nothing new.
+  assert.deepEqual(targetStatus(apply(result.state, {kind: "tick", generation: 1}, 30)), []);
+
+  // An unsolicited change is reported as manual override, not ready.
+  const manual = observe(result.state, "tv", {power: "standby"}, 31);
+  assert.equal(manual.targetStates[0]?.theatre.status, "transitioning");
+  assert.equal(manual.targetStates[0]?.theatre.classification, "manual_override");
+});
+
+test("a display refresh is answered from fresh readings", () => {
+  let result = discover("tv", 1, [
+    [0.1, "tv", {power: "on"}],
+    [0.2, "screen", {position: 0, state: "closed"}],
+    [0.3, "projector", {watts: 2.1}]
+  ]);
+  result = apply(result.state, {kind: "refresh"}, 40);
+  assert.deepEqual(result.commands.map(({device, operation}) => [device, operation]), [
+    ["tv", "query_power"], ["screen", "query_position"], ["projector", "query_power"]
+  ]);
+  // No ready claim until a reading arrives.
+  assert.deepEqual(targetStatus(result), []);
+  assert.equal(result.state.phase, "ready");
+  // Each reading re-sends ready, stamped with the oldest device reading the
+  // mode relies on: one answered device does not make the display fresh.
+  result = observe(result.state, "tv", {power: "on"}, 40.2);
+  assert.deepEqual(targetStatus(result), ["ready"]);
+  assert.equal(result.targetStates[0]?.theatre.observedAt, at(0.2).toISOString());
+  result = observe(result.state, "screen", {position: 0, state: "closed"}, 40.3);
+  assert.equal(result.targetStates[0]?.theatre.observedAt, at(0.3).toISOString());
+  result = observe(result.state, "projector", {watts: 2.1}, 40.4);
+  assert.equal(result.targetStates[0]?.theatre.observedAt, at(40.2).toISOString());
+
+  // A failed refresh query does not fail a settled display.
+  const failed = apply(result.state, {kind: "transport_failed", device: "screen", operation: "query_position", generation: 1, reason: "timeout"}, 41);
+  assert.equal(failed.state.phase, "ready");
+
+  // Before it is settled, a refresh reports where it is.
+  const early = apply(undefined, {kind: "intent", requestId: "tv-2", generation: 2, mode: "tv"}, 50);
+  assert.deepEqual(targetStatus(apply(early.state, {kind: "refresh"}, 51)), ["discovering"]);
+});

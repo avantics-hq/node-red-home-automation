@@ -2,6 +2,8 @@
 
 import assert from "node:assert/strict";
 import {EventEmitter} from "node:events";
+import {readFileSync} from "node:fs";
+import {resolve} from "node:path";
 import test from "node:test";
 import type {NodeInitializer} from "node-red";
 import registerActivityLighting from "../nodes/activity-lighting-controller";
@@ -879,4 +881,179 @@ test("room adapter rejects an unusable wake and bed schedule at deploy", () => {
     assert.match(String(node.errors[0]), /^invalid configuration: /, label);
     assert.match(String(node.errors[0]), reason, label);
   }
+});
+
+test("the example theatre flow reaches ready with no translation and stays ready through refreshes", async (t) => {
+  t.mock.timers.enable({apis: ["setTimeout", "setInterval", "Date"], now: Date.parse("2026-11-23T20:00:00Z")});
+  const flow = JSON.parse(readFileSync(resolve(__dirname, "../../examples/Home theatre activity.json"), "utf8")) as
+    Array<Record<string, unknown> & {id: string; type: string; name?: string; wires?: string[][]}>;
+  const registers: Record<string, NodeInitializer> = {
+    "home-theatre-state-contract": registerTheatreStateContract,
+    "home-theatre-activity-controller": registerTheatreActivity,
+    "home-display-mode-controller": registerDisplay,
+    "home-avr-controller": registerAvr,
+    "home-source-capability-controller": registerSource,
+    "home-activity-lighting-controller": registerActivityLighting,
+    "home-backlighting-controller": registerBacklighting
+  };
+
+  // The devices behind the controllers. The display controller reaches its
+  // devices itself, so they answer its HTTP calls.
+  const devices = {tv: "standby", screen: 0, projectorWatts: 0, avr: {PW: "STANDBY", ZM: "OFF", SI: "GAME", MV: "30"},
+    source: {status: "inactive", changedAt: ""}, backlighting: "off"};
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: string | URL, init?: RequestInit) => {
+    const href = String(url);
+    const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
+    let answer: unknown = {};
+    if (href.endsWith("/sony/system")) {
+      if (body.method === "getPowerStatus") answer = {result: [{status: devices.tv === "on" ? "active" : "standby"}]};
+      else {
+        devices.tv = (body.params as Array<{status: boolean}>)[0]!.status ? "on" : "standby";
+        answer = {result: []};
+      }
+    } else if (href.includes("Cover.GetStatus")) answer = {current_pos: devices.screen, state: "stopped"};
+    else if (href.includes("Cover.GoToPosition")) devices.screen = Number(body.pos);
+    else if (href.includes("Switch.GetStatus")) answer = {apower: devices.projectorWatts};
+    return new Response(JSON.stringify(answer), {status: 200, headers: {"content-type": "application/json"}});
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  const nodes = new Map<string, RuntimeNode>();
+  for (const entry of flow) {
+    const register = registers[entry.type];
+    if (!register) continue;
+    const config = entry.type === "home-display-mode-controller"
+      ? {...entry, tvHost: "tv.example", screenHost: "screen.example", projectorMeterHost: "meter.example"}
+      : entry;
+    const node = new (runtime(register, {tvPsk: "example"}).Constructor)(config);
+    assert.deepEqual(node.errors, [], entry.type);
+    nodes.set(entry.id, node);
+    t.after(() => close(node));
+  }
+  const byId = new Map(flow.map((entry) => [entry.id, entry]));
+  const property = (msg: Record<string, unknown>, path: string) =>
+    path.split(".").reduce<unknown>((value, key) => (value as Record<string, unknown> | undefined)?.[key], msg);
+  const queue: Array<[string, Record<string, unknown>]> = [];
+  const refreshes: string[] = [];
+
+  function route(id: string, envelope: unknown) {
+    const outputs = Array.isArray(envelope) ? envelope : [envelope];
+    outputs.forEach((output, index) => {
+      for (const msg of output === null || output === undefined ? [] : Array.isArray(output) ? output : [output]) {
+        for (const target of byId.get(id)!.wires?.[index] ?? []) queue.push([target, structuredClone(msg)]);
+      }
+    });
+  }
+
+  // The devices answer the commands that reach the example's debug nodes.
+  function device(name: string, msg: Record<string, unknown>) {
+    const now = new Date().toISOString();
+    if (name === "avr commands") {
+      for (const query of Buffer.from(msg.payload as Uint8Array).toString("utf8").split("\r").filter(Boolean)) {
+        const code = query.slice(0, 2) as keyof typeof devices.avr;
+        if (!query.endsWith("?")) devices.avr[code] = query.slice(2);
+        queue.push([avrId, {avr: {kind: "observed", line: code + devices.avr[code]}}]);
+      }
+    } else if (name === "source commands") {
+      const command = msg.sourceCommand as {operation: string; generation: number; sourceId: string};
+      if (command.operation !== "observe") {
+        devices.source = {status: command.operation === "activate" ? "active" : "inactive", changedAt: now};
+      }
+      // A quiet source: its reading keeps the time it last changed.
+      queue.push([sourceId, {sourceCapability: {kind: "observed", generation: command.generation, sourceId: command.sourceId,
+        status: devices.source.status, observedAt: devices.source.changedAt || now}}]);
+    } else if (name === "backlighting commands") {
+      const command = msg.backlightingCommand as {operation: string; generation: number; power: string};
+      if (command.operation === "set_power") devices.backlighting = command.power;
+      queue.push([backlightingId, {backlighting: {kind: "observed", generation: command.generation,
+        power: devices.backlighting, observedAt: now}}]);
+    }
+  }
+  const idOf = (type: string) => flow.find((entry) => entry.type === type)!.id;
+  const avrId = idOf("home-avr-controller");
+  const sourceId = idOf("home-source-capability-controller");
+  const backlightingId = idOf("home-backlighting-controller");
+  const activityId = idOf("home-theatre-activity-controller");
+
+  async function settle() {
+    for (let round = 0; round < 200; round += 1) {
+      for (let flush = 0; flush < 5; flush += 1) await new Promise((done) => setImmediate(done));
+      for (const [id, node] of nodes) for (const envelope of node.sent.splice(0)) route(id, envelope);
+      if (!queue.length) return;
+      while (queue.length) {
+        const [id, msg] = queue.shift()!;
+        const entry = byId.get(id)!;
+        const node = nodes.get(id);
+        if (node) {
+          for (const envelope of await receive<unknown>(node, msg)) route(id, envelope);
+        } else if (entry.type === "switch") {
+          const rules = entry.rules as Array<{t: string; v: string}>;
+          const value = property(msg, String(entry.property));
+          const envelope = rules.map((rule) => {
+            assert.equal(rule.t, "eq");
+            return rule.v === value ? msg : null;
+          });
+          if (property(msg, "theatreCommand.kind") === "refresh") refreshes.push(String(value));
+          route(id, envelope);
+        } else if (entry.type === "change") {
+          for (const rule of entry.rules as Array<{t: string; p: string; to: string}>) {
+            assert.equal(rule.t, "move");
+            msg[rule.to] = msg[rule.p];
+            delete msg[rule.p];
+          }
+          route(id, msg);
+        } else if (entry.type === "debug") {
+          device(String(entry.name), msg);
+        } else {
+          assert.fail(`unexpected node type ${entry.type}`);
+        }
+      }
+    }
+    assert.fail("the flow did not settle");
+  }
+  const activity = () => nodes.get(activityId)!.context().get("state") as
+    {phase: string; currentActivity: string; degraded: Array<{target: string; reason: string}>};
+
+  // The example's injects: start the contract, then ask for the tv activity.
+  for (const entry of flow.filter((candidate) => candidate.type === "inject")) {
+    const msg: Record<string, unknown> = {};
+    for (const prop of entry.props as Array<{p: string; v: string; vt: string}>) {
+      msg[prop.p] = prop.vt === "json" ? JSON.parse(prop.v) : prop.v;
+    }
+    queue.push([entry.wires![0]![0]!, msg]);
+    await settle();
+  }
+  for (let second = 0; second < 180 && activity().phase !== "ready"; second += 1) {
+    t.mock.timers.tick(1000);
+    await settle();
+  }
+  assert.equal(activity().phase, "ready", JSON.stringify((nodes.get(activityId)!.context().get("state") as Record<string, unknown>).failure) +
+    JSON.stringify((nodes.get(activityId)!.context().get("state") as Record<string, unknown>).targets));
+  assert.equal(activity().currentActivity, "tv");
+
+  // Five minutes of refreshes: every required target and the source keep
+  // re-confirming, so none of them is reported stale or unanswered.
+  for (let second = 0; second < 300; second += 1) {
+    t.mock.timers.tick(1000);
+    await settle();
+    assert.equal(activity().phase, "ready", `at ${second} s: ${JSON.stringify(activity().degraded)}`);
+  }
+  for (const target of ["display", "avr", "source", "backlighting"]) assert.ok(refreshes.includes(target), target);
+  assert.deepEqual(activity().degraded.filter((entry) => entry.target !== "lighting"), []);
+
+  // The example's off activity confirms too: the receiver goes to standby.
+  const contractId = idOf("home-theatre-state-contract");
+  queue.push([contractId, {topic: "home/room/theatre/request", payload: {requestId: "example-request-2", activity: "off"}}]);
+  await settle();
+  for (let second = 0; second < 180 && activity().currentActivity !== "off"; second += 1) {
+    t.mock.timers.tick(1000);
+    await settle();
+  }
+  const offState = nodes.get(activityId)!.context().get("state") as Record<string, unknown>;
+  assert.equal(activity().phase, "ready", JSON.stringify(offState.targets));
+  assert.equal(activity().currentActivity, "off");
+  assert.equal(devices.avr.PW, "STANDBY");
 });

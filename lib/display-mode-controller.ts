@@ -119,10 +119,23 @@ export type DisplayInputEvent =
     generation?: number;
     reason?: string;
   }
-  | {kind: "tick"; generation?: number};
+  | {kind: "tick"; generation?: number}
+  | {kind: "refresh"};
 
 export interface DisplayMessage {
   display?: DisplayInputEvent;
+}
+
+export interface DisplayTargetState {
+  kind: "target_state";
+  target: "display";
+  requestId: string;
+  generation: number;
+  status: string;
+  observedAt: string;
+  details: Record<string, unknown>;
+  classification?: "manual_override";
+  failure?: DisplayFailure;
 }
 
 export interface DisplayOutputEvent {
@@ -298,9 +311,14 @@ export function transitionDisplay(
 ) {
   const config = normaliseConfig(suppliedConfig);
   const state = initialState(saved);
+  const previousPhase = state.phase;
+  // Set when a device reading is stored: only then may a settled display
+  // report itself ready again.
+  let observationAccepted = false;
   const event = msg?.display;
   const commands: DisplayCommand[] = [];
   const events: DisplayOutputEvent[] = [];
+  const targetStates: Array<{theatre: DisplayTargetState}> = [];
   const traces: Array<{event: string; outcome: string; reason: string | null; details: Record<string, unknown>}> = [];
 
   function trace(name: string, outcome: string, reason: string | null = null, details: Record<string, unknown> = {}) {
@@ -504,6 +522,7 @@ export function transitionDisplay(
       };
     }
     state.seen[device] = true;
+    observationAccepted = true;
     state.querying[device] = false;
     trace("observation", "accepted", null, {device});
 
@@ -667,8 +686,57 @@ export function transitionDisplay(
     }
   } else if (event.kind === "tick") {
     handleTick(event);
+  } else if (event.kind === "refresh") {
+    // Re-confirm a settled display from fresh readings; its target state
+    // follows them. These queries are not discovery, so a failed one is
+    // ignored rather than failing the request.
+    if (state.desired && state.phase === "ready" && !state.pending) {
+      for (const device of DEVICES) commands.push(queryFor(state, device));
+      trace("refresh", "querying");
+    } else {
+      trace("refresh", "reported", null, {phase: state.phase});
+    }
   } else {
     throw new Error("unknown display event kind");
+  }
+
+  // The theatre activity controller's view of this target. A settled display
+  // reports ready only with a reading taken in this event, stamped with the
+  // oldest of the device readings every mode relies on, so it is only as
+  // fresh as its least recent confirmation.
+  if (state.desired) {
+    const readings = DEVICES.map((device) => parseObservedAt(state.observed[device]?.observedAt));
+    const confirmedMs = readings.every((ms): ms is number => ms !== null) ? Math.min(...readings) : null;
+    const status = state.phase === "manual_override"
+      ? "transitioning"
+      : state.phase === "idle" ? "confirming" : state.phase;
+    if (!(status === "ready" && previousPhase === "ready" && !observationAccepted)) {
+      const theatre: DisplayTargetState = {
+        kind: "target_state",
+        target: "display",
+        requestId: state.desired.requestId,
+        generation: state.desired.generation,
+        status,
+        observedAt: status === "ready" && confirmedMs !== null ? new Date(confirmedMs).toISOString() : now.toISOString(),
+        details: {
+          mode: state.desired.mode,
+          observed: {
+            tv: state.observed.tv?.power ?? null,
+            screen: state.observed.screen?.position ?? null,
+            projector: state.observed.projector?.power ?? null
+          },
+          recovery: {mode: state.phase === "ready" ? state.desired.mode : null},
+          metrics: {
+            attempts: state.lastAttempt,
+            retries: Math.max(0, state.lastAttempt - 1),
+            fallbackUsed: state.fallbackUsed
+          }
+        }
+      };
+      if (state.classification) theatre.classification = state.classification;
+      if (state.failure) theatre.failure = {...state.failure};
+      targetStates.push({theatre});
+    }
   }
 
   events.unshift(displayEvent("state", state, {
@@ -682,5 +750,5 @@ export function transitionDisplay(
       fallbackUsed: state.fallbackUsed
     }
   }));
-  return {state, commands, events, traces, status: statusFor(state)};
+  return {state, commands, events, targetStates, traces, status: statusFor(state)};
 }

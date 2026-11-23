@@ -66,6 +66,8 @@ export interface AvrFailure {
 export interface AvrState {
   observed: AvrObserved;
   seen: Record<AvrField, boolean>;
+  // When the receiver last reported each field.
+  fieldObservedAt: Record<AvrField, string | null>;
   desired: AvrDesired | null;
   generation: number;
   pending: AvrPending | null;
@@ -114,6 +116,19 @@ export interface AvrCommand {
   };
 }
 
+// The theatre activity controller's view of the receiver.
+export interface AvrTargetState {
+  kind: "target_state";
+  target: "avr";
+  requestId: string;
+  generation: number;
+  status: string;
+  observedAt: string;
+  details: Record<string, unknown>;
+  classification?: "manual_override";
+  failure?: {operation: string; reason: string; attempts: number; occurredAt: string};
+}
+
 export interface AvrOutputEvent {
   payload?: unknown;
   avr: {
@@ -148,6 +163,10 @@ function parseSources(value: unknown): Record<string, string> {
   return Object.fromEntries(typedEntries);
 }
 
+function observedTime(value: unknown): string | null {
+  return typeof value === "string" && Number.isFinite(Date.parse(value)) ? value : null;
+}
+
 export function createAvrState(
   _config: AvrConfig,
   saved: Partial<AvrState> = {}
@@ -166,6 +185,12 @@ export function createAvrState(
       sourceCode: typeof observed.sourceCode === "string" ? observed.sourceCode : null,
       volume: Number.isFinite(observed.volume) ? observed.volume! : null,
       at: typeof observed.at === "string" ? observed.at : null
+    },
+    fieldObservedAt: {
+      power: observedTime(saved.fieldObservedAt?.power),
+      mainZone: observedTime(saved.fieldObservedAt?.mainZone),
+      source: observedTime(saved.fieldObservedAt?.source),
+      volume: observedTime(saved.fieldObservedAt?.volume)
     },
     seen: {
       power: seen.power === true,
@@ -288,11 +313,16 @@ export function transitionAvr(
   const state = createAvrState(config, saved);
   const commands: AvrCommand[] = [];
   const events: AvrOutputEvent[] = [];
+  const targetStates: Array<{theatre: AvrTargetState}> = [];
   const traces: Array<{event: string; outcome: string; reason: string | null; details: Record<string, unknown>}> = [];
   const event: AvrInputEvent | {kind: "unknown"} = msg.avr || {kind: "unknown"};
+  const previousPhase = state.phase;
+  // Fields the receiver reported in this event.
+  const reportedFields = new Set<AvrField>();
   const before = JSON.stringify({
     observed: state.observed,
     seen: state.seen,
+    fieldObservedAt: state.fieldObservedAt,
     desired: state.desired,
     generation: state.generation,
     pending: state.pending,
@@ -665,6 +695,8 @@ export function transitionAvr(
       let current: string | number | null;
       const wasFresh = state.seen[parsed.field];
       state.seen[parsed.field] = true;
+      state.fieldObservedAt[parsed.field] = now.toISOString();
+      reportedFields.add(parsed.field);
       if (parsed.field === "source") {
         previous = state.observed.sourceCode;
         state.observed.source = parsed.value;
@@ -778,6 +810,9 @@ export function transitionAvr(
       state.blockedGeneration = null;
       state.classification = null;
       state.lastAttempt = 0;
+      // Ready belonged to the previous request; left as it was, the drift
+      // check would read this request's unmet target as a manual change.
+      if (state.phase === "ready" || state.phase === "manual_override") state.phase = "idle";
       trace("intent", "accepted", null, {
         requestId: event.requestId,
         generation: event.generation,
@@ -910,6 +945,7 @@ export function transitionAvr(
   const after = JSON.stringify({
     observed: state.observed,
     seen: state.seen,
+    fieldObservedAt: state.fieldObservedAt,
     desired: state.desired,
     generation: state.generation,
     pending: state.pending,
@@ -969,5 +1005,57 @@ export function transitionAvr(
             ? {phase: "ready", text: (state.observed.power || "unknown") + " · " + source}
             : {phase: "idle", text: (state.observed.power || "unknown") + " · " + source};
 
-  return {state, commands, events, traces, status};
+  // The theatre activity controller's view of this target. Ready is stamped
+  // with the oldest report among the fields the request needs, so it is only
+  // as fresh as its least recent confirmation, and is re-sent only when the
+  // receiver reports one of those fields.
+  if (state.desired) {
+    const fields = requiredFields();
+    const status = state.phase === "manual_override"
+      ? "transitioning"
+      : state.phase === "idle" || state.phase === "unknown" ? "confirming" : state.phase;
+    const confirmedAt = fields
+      .map((field) => state.fieldObservedAt[field])
+      .reduce<string | null>((oldest, at) =>
+        at === null || oldest === null ? null : Date.parse(at) < Date.parse(oldest) ? at : oldest,
+      now.toISOString());
+    const reported = fields.some((field) => reportedFields.has(field));
+    if (status !== "ready" || ((previousPhase !== "ready" || reported) && confirmedAt !== null)) {
+      const theatre: AvrTargetState = {
+        kind: "target_state",
+        target: "avr",
+        requestId: state.desired.requestId,
+        generation: state.desired.generation,
+        status,
+        observedAt: status === "ready" && confirmedAt !== null ? confirmedAt : now.toISOString(),
+        details: {
+          power: state.desired.power,
+          source: state.desired.source,
+          observed: {
+            power: state.observed.power,
+            mainZone: state.observed.mainZone,
+            source: state.observed.source
+          },
+          recovery: {power: state.observed.power, source: state.observed.source},
+          metrics: {
+            attempts: state.lastAttempt,
+            retries: Math.max(0, state.lastAttempt - 1),
+            fallbackUsed: false
+          }
+        }
+      };
+      if (state.classification) theatre.classification = state.classification;
+      if (state.failure) {
+        theatre.failure = {
+          operation: state.failure.operation,
+          reason: "attempts-exhausted",
+          attempts: state.failure.attempts,
+          occurredAt: state.failure.at
+        };
+      }
+      targetStates.push({theatre});
+    }
+  }
+
+  return {state, commands, events, targetStates, traces, status};
 }
