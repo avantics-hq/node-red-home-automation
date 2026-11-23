@@ -15,7 +15,7 @@ import {
   type DisplayState
 } from "../lib/display-mode-controller";
 import {DisplayTransport} from "../lib/display-transport";
-import {guarded, number, objectField, onInput, runReducer, type Send} from "./adapter";
+import {guarded, invalidConfig, number, objectField, onInput, runReducer, type Send} from "./adapter";
 
 interface DisplayControllerConfig extends NodeDef {
   area?: string;
@@ -81,8 +81,7 @@ const registerDisplayModeController: NodeInitializer = (RED) => {
         timeoutMs: number(config.transportTimeoutMs, 5000)
       });
     } catch (error) {
-      node.status({fill: "red", shape: "ring", text: "invalid configuration"});
-      node.error(error);
+      invalidConfig(node, error);
       return;
     }
 

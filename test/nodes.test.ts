@@ -1058,14 +1058,17 @@ test("the example theatre flow reaches ready with no translation and stays ready
   assert.equal(devices.avr.PW, "STANDBY");
 });
 
-test("every adapter shows the same badge for a configuration it cannot use", () => {
+test("every adapter shows the same badge for a configuration it cannot use, and logs why", () => {
   // One badge text lets people, and the Node-RED smoke, spot any broken node;
   // the reason goes to node.error.
   const broken: Array<[string, NodeInitializer, Record<string, unknown>, RegExp]> = [
     ["activity lighting", registerActivityLighting, {area: "room", profiles: "{not json"}, /JSON/],
     ["source capability", registerSource, {area: "room", sources: "{not json"}, /JSON/],
     ["theatre activity", registerTheatreActivity, {area: "room", activityProfiles: "{not json"}, /JSON/],
-    ["theatre state contract", registerTheatreStateContract, {area: "room", activities: "{not json"}, /./]
+    ["theatre state contract", registerTheatreStateContract, {area: "room", activities: "{not json"}, /./],
+    ["display", registerDisplay, {area: "room", tvHost: "", screenHost: "", projectorMeterHost: ""}, /tvHost/],
+    ["motion", registerMotion, {area: "room", onTargets: "[1]"}, /targets/],
+    ["switch", registerSwitch, {area: "room", targets: "{not json"}, /JSON|targets/]
   ];
   for (const [name, register, config, reason] of broken) {
     const node = new (runtime(register).Constructor)(config);
