@@ -8,7 +8,7 @@ import {
   type SwitchPolicyInput,
   type SwitchPolicyState
 } from "../lib/switch-policy";
-import {guarded, onInput, runReducer, type Send} from "./adapter";
+import {guarded, invalidConfig, onInput, runReducer, type Send} from "./adapter";
 
 interface SwitchLightingPolicyConfig extends NodeDef {
   area?: string;
@@ -57,8 +57,7 @@ const registerSwitchPolicy: NodeInitializer = (RED) => {
         throw new Error("switch freshness must be a positive number");
       }
     } catch (error) {
-      node.status({fill: "red", shape: "ring", text: "invalid configuration"});
-      node.error(error);
+      invalidConfig(node, error);
       return;
     }
 
