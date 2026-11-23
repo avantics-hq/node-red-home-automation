@@ -1,7 +1,6 @@
 "use strict";
 
-import type {Node, NodeDef, NodeInitializer, NodeMessage} from "node-red";
-import {appendTrace} from "../lib/bounded-trace";
+import type {Node, NodeDef, NodeInitializer} from "node-red";
 import {wallInputStatus, type WallInputStatus} from "../lib/wall-input";
 import {
   transitionSwitchPolicy,
@@ -9,6 +8,7 @@ import {
   type SwitchPolicyInput,
   type SwitchPolicyState
 } from "../lib/switch-policy";
+import {guarded, onInput, runReducer, type Send} from "./adapter";
 
 interface SwitchLightingPolicyConfig extends NodeDef {
   area?: string;
@@ -18,7 +18,6 @@ interface SwitchLightingPolicyConfig extends NodeDef {
 }
 
 interface SwitchLightingPolicyNode extends Node {}
-type Send = (msg: NodeMessage | Array<NodeMessage | NodeMessage[] | null>) => void;
 
 function ageText(ageMs: number | null): string {
   if (ageMs === null) return "age ?";
@@ -76,14 +75,9 @@ const registerSwitchPolicy: NodeInitializer = (RED) => {
     }
 
     function process(input: SwitchPolicyInput, send: Send) {
-      const now = new Date();
-      const saved = context.get("state") as Partial<SwitchPolicyState> | undefined;
-      const result = transitionSwitchPolicy(saved, input, policyConfig, now.getTime());
-      context.set("state", result.state);
-      appendTrace(context, {
-        area: policyConfig.area,
-        component: "switch-policy"
-      }, result.traces, now);
+      const result = runReducer(node, {area: policyConfig.area, component: "switch-policy"},
+        (saved: Partial<SwitchPolicyState> | undefined, now) =>
+          transitionSwitchPolicy(saved, input, policyConfig, now.getTime()));
 
       for (const effect of result.effects) {
         if (effect.kind === "cancel-switch-timer") {
@@ -91,18 +85,14 @@ const registerSwitchPolicy: NodeInitializer = (RED) => {
           timer = undefined;
         } else if (effect.kind === "schedule-switch-timer") {
           clearTimeout(timer);
-          timer = setTimeout(() => {
+          timer = setTimeout(guarded(node, () => {
             timer = undefined;
-            try {
-              process({
-                source: "switch-timer",
-                generation: effect.generation,
-                switchAt: effect.switchAt
-              }, node.send.bind(node));
-            } catch (error) {
-              node.error(error);
-            }
-          }, effect.delayMs);
+            process({
+              source: "switch-timer",
+              generation: effect.generation,
+              switchAt: effect.switchAt
+            }, node.send.bind(node));
+          }), effect.delayMs);
         } else {
           send({payload: undefined, ...effect.message});
         }
@@ -120,20 +110,14 @@ const registerSwitchPolicy: NodeInitializer = (RED) => {
       ));
     }, Math.max(1000, Math.min(60_000, policyConfig.switchFreshnessMs)));
 
-    node.on("input", (msg, send, done) => {
-      try {
-        process({
-          source: String(msg.source ?? ""),
-          payload: msg.payload,
-          retain: msg.retain === true,
-          baseline: msg.baseline === true,
-          observedAt: msg.observedAt
-        }, send);
-        done();
-      } catch (error) {
-        node.error(error, msg);
-        done(error instanceof Error ? error : new Error(String(error)));
-      }
+    onInput(node, (msg, send) => {
+      process({
+        source: String(msg.source ?? ""),
+        payload: msg.payload,
+        retain: msg.retain === true,
+        baseline: msg.baseline === true,
+        observedAt: msg.observedAt
+      }, send);
     });
 
     node.on("close", (_removed: boolean, done: () => void) => {

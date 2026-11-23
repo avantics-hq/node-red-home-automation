@@ -4,11 +4,9 @@ import type {
   Node,
   NodeDef,
   NodeInitializer,
-  NodeMessage,
   NodeStatusFill,
   NodeStatusShape
 } from "node-red";
-import {appendTrace} from "../lib/bounded-trace";
 import {
   normaliseAvrConfig,
   transitionAvr,
@@ -16,6 +14,7 @@ import {
   type AvrMessage,
   type AvrState
 } from "../lib/avr-controller";
+import {guarded, invalidConfig, number, objectField, onInput, runReducer, type Send} from "./adapter";
 
 interface AvrControllerConfig extends NodeDef {
   area?: string;
@@ -28,13 +27,7 @@ interface AvrControllerConfig extends NodeDef {
 
 interface AvrControllerNode extends Node {}
 
-type Send = (msg: NodeMessage | Array<NodeMessage | NodeMessage[] | null>) => void;
 type AvrStatus = ReturnType<typeof transitionAvr>["status"];
-
-function number(value: unknown, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
 
 function parseSources(value: string | undefined): unknown {
   const sources: unknown = JSON.parse(value || "{}");
@@ -64,10 +57,7 @@ const registerAvrController: NodeInitializer = (RED) => {
         maxVolume: number(config.maxVolume, 60)
       });
     } catch (error) {
-      // A short badge; the full reason goes to the log and debug sidebar.
-      const reason = error instanceof Error ? error.message : String(error);
-      node.status({fill: "red", shape: "ring", text: "invalid configuration"});
-      node.error("invalid configuration: " + reason);
+      invalidConfig(node, error);
       return;
     }
 
@@ -89,24 +79,14 @@ const registerAvrController: NodeInitializer = (RED) => {
       retryTimer = undefined;
       if (!state.pending?.deadlineAt) return;
       const delay = Math.max(0, state.pending.deadlineAt - Date.now());
-      retryTimer = setTimeout(() => {
-        try {
-          process({avr: {kind: "tick"}}, node.send.bind(node));
-        } catch (error) {
-          node.error(error);
-        }
-      }, delay);
+      retryTimer = setTimeout(guarded(node, () => {
+        process({avr: {kind: "tick"}}, node.send.bind(node));
+      }), delay);
     }
 
     function process(msg: AvrMessage, send: Send) {
-      const now = new Date();
-      const saved = context.get("state") as Partial<AvrState> | undefined;
-      const result = transitionAvr(saved, msg, controllerConfig, now);
-      context.set("state", result.state);
-      appendTrace(context, {
-        area: controllerConfig.area,
-        component: "avr-controller"
-      }, result.traces, now);
+      const result = runReducer(node, {area: controllerConfig.area, component: "avr-controller"},
+        (saved: Partial<AvrState> | undefined, now) => transitionAvr(saved, msg, controllerConfig, now));
       const commands = result.commands.map((command) => ({
         payload: Buffer.from(command.payload, "utf8"),
         avr_command: command.avrCommand
@@ -129,28 +109,16 @@ const registerAvrController: NodeInitializer = (RED) => {
     // transition with the reducer's own startup (re-observe, never replay)
     // rather than ticking old state; a later startup from the flow repeats it.
     if ((context.get("state") as Partial<AvrState> | undefined)?.pending) {
-      retryTimer = setTimeout(() => {
-        try {
-          process({avr: {kind: "startup"}}, node.send.bind(node));
-        } catch (error) {
-          node.error(error);
-        }
-      }, 0);
+      retryTimer = setTimeout(guarded(node, () => {
+        process({avr: {kind: "startup"}}, node.send.bind(node));
+      }), 0);
     }
 
-    node.on("input", (msg, send, done) => {
-      try {
-        process({
-          avr: msg.avr && typeof msg.avr === "object"
-            ? msg.avr as AvrMessage["avr"]
-            : undefined,
-          payload: msg.payload
-        }, send);
-        done();
-      } catch (error) {
-        node.error(error, msg);
-        done(error instanceof Error ? error : new Error(String(error)));
-      }
+    onInput(node, (msg, send) => {
+      process({
+        avr: objectField<AvrMessage["avr"]>(msg, "avr"),
+        payload: msg.payload
+      }, send);
     });
 
     node.on("close", (_removed: boolean, done: () => void) => {

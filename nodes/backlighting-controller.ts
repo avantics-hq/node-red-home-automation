@@ -4,17 +4,16 @@ import type {
   Node,
   NodeDef,
   NodeInitializer,
-  NodeMessage,
   NodeStatusFill,
   NodeStatusShape
 } from "node-red";
-import {appendTrace} from "../lib/bounded-trace";
 import {
   transitionBacklighting,
   type BacklightingConfig,
   type BacklightingMessage,
   type BacklightingState
 } from "../lib/backlighting-controller";
+import {guarded, number, objectField, onInput, runReducer, type Send} from "./adapter";
 
 interface BacklightingNodeConfig extends NodeDef {
   area?: string;
@@ -24,13 +23,7 @@ interface BacklightingNodeConfig extends NodeDef {
 }
 
 interface BacklightingNode extends Node {}
-type Send = (msg: NodeMessage | Array<NodeMessage | NodeMessage[] | null>) => void;
 type BacklightingStatus = ReturnType<typeof transitionBacklighting>["status"];
-
-function number(value: unknown, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
 
 const registerBacklightingController: NodeInitializer = (RED) => {
   function HomeBacklightingController(this: BacklightingNode, config: BacklightingNodeConfig) {
@@ -62,24 +55,15 @@ const registerBacklightingController: NodeInitializer = (RED) => {
       if (!state.pending) return;
       const dueAt = Math.min(state.pending.nextAt, state.pending.deadlineAt);
       const delay = Math.max(0, dueAt - Date.now());
-      timer = setTimeout(() => {
-        try {
-          process({backlighting: {kind: "tick", generation: state.generation}}, node.send.bind(node));
-        } catch (error) {
-          node.error(error);
-        }
-      }, delay);
+      timer = setTimeout(guarded(node, () => {
+        process({backlighting: {kind: "tick", generation: state.generation}}, node.send.bind(node));
+      }), delay);
     }
 
     function process(msg: BacklightingMessage, send: Send) {
-      const now = new Date();
-      const saved = context.get("state") as Partial<BacklightingState> | undefined;
-      const result = transitionBacklighting(saved, msg, controllerConfig, now);
-      context.set("state", result.state);
-      appendTrace(context, {
-        area: config.area || "lounge",
-        component: "backlighting-controller"
-      }, result.traces, now);
+      const result = runReducer(node, {area: config.area || "lounge", component: "backlighting-controller"},
+        (saved: Partial<BacklightingState> | undefined, now) =>
+          transitionBacklighting(saved, msg, controllerConfig, now));
       if (result.commands.length) {
         send([
           result.commands.map((backlightingCommand) => ({payload: undefined, backlightingCommand})),
@@ -98,27 +82,15 @@ const registerBacklightingController: NodeInitializer = (RED) => {
     // transition with the reducer's own startup (re-observe, never replay)
     // rather than ticking old state; a later startup from the flow repeats it.
     if ((context.get("state") as Partial<BacklightingState> | undefined)?.pending) {
-      timer = setTimeout(() => {
-        try {
-          process({backlighting: {kind: "startup"}}, node.send.bind(node));
-        } catch (error) {
-          node.error(error);
-        }
-      }, 0);
+      timer = setTimeout(guarded(node, () => {
+        process({backlighting: {kind: "startup"}}, node.send.bind(node));
+      }), 0);
     }
 
-    node.on("input", (msg, send, done) => {
-      try {
-        process({
-          backlighting: msg.backlighting && typeof msg.backlighting === "object"
-            ? msg.backlighting as BacklightingMessage["backlighting"]
-            : undefined
-        }, send);
-        done();
-      } catch (error) {
-        node.error(error, msg);
-        done(error instanceof Error ? error : new Error(String(error)));
-      }
+    onInput(node, (msg, send) => {
+      process({
+        backlighting: objectField<BacklightingMessage["backlighting"]>(msg, "backlighting")
+      }, send);
     });
 
     node.on("close", (_removed: boolean, done: () => void) => {

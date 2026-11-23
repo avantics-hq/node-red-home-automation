@@ -4,11 +4,9 @@ import type {
   Node,
   NodeDef,
   NodeInitializer,
-  NodeMessage,
   NodeStatusFill,
   NodeStatusShape
 } from "node-red";
-import {appendTrace} from "../lib/bounded-trace";
 import {
   normaliseLightingProfiles,
   transitionActivityLighting,
@@ -16,6 +14,7 @@ import {
   type ActivityLightingMessage,
   type ActivityLightingState
 } from "../lib/activity-lighting-controller";
+import {guarded, invalidConfig, number, objectField, onInput, runReducer, type Send} from "./adapter";
 
 interface ActivityLightingNodeConfig extends NodeDef {
   area?: string;
@@ -26,13 +25,7 @@ interface ActivityLightingNodeConfig extends NodeDef {
 }
 
 interface ActivityLightingNode extends Node {}
-type Send = (msg: NodeMessage | Array<NodeMessage | NodeMessage[] | null>) => void;
 type ActivityLightingStatus = ReturnType<typeof transitionActivityLighting>["status"];
-
-function number(value: unknown, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
 
 const registerActivityLightingController: NodeInitializer = (RED) => {
   function HomeActivityLightingController(this: ActivityLightingNode, config: ActivityLightingNodeConfig) {
@@ -45,8 +38,7 @@ const registerActivityLightingController: NodeInitializer = (RED) => {
     try {
       profiles = normaliseLightingProfiles(JSON.parse(config.profiles || "{}") as unknown);
     } catch (error) {
-      node.status({fill: "red", shape: "ring", text: "invalid configuration"});
-      node.error("invalid configuration: " + (error instanceof Error ? error.message : String(error)));
+      invalidConfig(node, error);
       return;
     }
     const controllerConfig: ActivityLightingConfig = {
@@ -73,24 +65,15 @@ const registerActivityLightingController: NodeInitializer = (RED) => {
       timer = undefined;
       if (!state.pending?.deadlineAt) return;
       const delay = Math.max(0, state.pending.deadlineAt - Date.now());
-      timer = setTimeout(() => {
-        try {
-          process({activityLighting: {kind: "tick", generation: state.generation}}, node.send.bind(node));
-        } catch (error) {
-          node.error(error);
-        }
-      }, delay);
+      timer = setTimeout(guarded(node, () => {
+        process({activityLighting: {kind: "tick", generation: state.generation}}, node.send.bind(node));
+      }), delay);
     }
 
     function process(msg: ActivityLightingMessage, send: Send) {
-      const now = new Date();
-      const saved = context.get("state") as Partial<ActivityLightingState> | undefined;
-      const result = transitionActivityLighting(saved, msg, controllerConfig, now);
-      context.set("state", result.state);
-      appendTrace(context, {
-        area: config.area || "lounge",
-        component: "activity-lighting-controller"
-      }, result.traces, now);
+      const result = runReducer(node, {area: config.area || "lounge", component: "activity-lighting-controller"},
+        (saved: Partial<ActivityLightingState> | undefined, now) =>
+          transitionActivityLighting(saved, msg, controllerConfig, now));
       if (result.commands.length) {
         send([
           result.commands.map((activityLightingCommand) => ({
@@ -113,27 +96,15 @@ const registerActivityLightingController: NodeInitializer = (RED) => {
     // transition with the reducer's own startup (re-observe, never replay)
     // rather than ticking old state; a later startup from the flow repeats it.
     if ((context.get("state") as Partial<ActivityLightingState> | undefined)?.pending) {
-      timer = setTimeout(() => {
-        try {
-          process({activityLighting: {kind: "startup"}}, node.send.bind(node));
-        } catch (error) {
-          node.error(error);
-        }
-      }, 0);
+      timer = setTimeout(guarded(node, () => {
+        process({activityLighting: {kind: "startup"}}, node.send.bind(node));
+      }), 0);
     }
 
-    node.on("input", (msg, send, done) => {
-      try {
-        process({
-          activityLighting: msg.activityLighting && typeof msg.activityLighting === "object"
-            ? msg.activityLighting as ActivityLightingMessage["activityLighting"]
-            : undefined
-        }, send);
-        done();
-      } catch (error) {
-        node.error(error, msg);
-        done(error instanceof Error ? error : new Error(String(error)));
-      }
+    onInput(node, (msg, send) => {
+      process({
+        activityLighting: objectField<ActivityLightingMessage["activityLighting"]>(msg, "activityLighting")
+      }, send);
     });
 
     node.on("close", (_removed: boolean, done: () => void) => {

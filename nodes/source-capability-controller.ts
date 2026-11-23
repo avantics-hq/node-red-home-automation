@@ -4,11 +4,9 @@ import type {
   Node,
   NodeDef,
   NodeInitializer,
-  NodeMessage,
   NodeStatusFill,
   NodeStatusShape
 } from "node-red";
-import {appendTrace} from "../lib/bounded-trace";
 import {
   normaliseCapabilities,
   transitionSource,
@@ -16,6 +14,7 @@ import {
   type SourceMessage,
   type SourceState
 } from "../lib/source-capability-controller";
+import {guarded, invalidConfig, number, objectField, onInput, runReducer, type Send} from "./adapter";
 
 interface SourceControllerConfig extends NodeDef {
   area?: string;
@@ -27,13 +26,7 @@ interface SourceControllerConfig extends NodeDef {
 
 interface SourceControllerNode extends Node {}
 
-type Send = (msg: NodeMessage | Array<NodeMessage | NodeMessage[] | null>) => void;
 type SourceStatus = ReturnType<typeof transitionSource>["status"];
-
-function number(value: unknown, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
 
 const registerSourceCapabilityController: NodeInitializer = (RED) => {
   function HomeSourceCapabilityController(this: SourceControllerNode, config: SourceControllerConfig) {
@@ -46,8 +39,7 @@ const registerSourceCapabilityController: NodeInitializer = (RED) => {
     try {
       sources = normaliseCapabilities(JSON.parse(config.sources || "{}") as unknown);
     } catch (error) {
-      node.status({fill: "red", shape: "ring", text: "invalid configuration"});
-      node.error("invalid configuration: " + (error instanceof Error ? error.message : String(error)));
+      invalidConfig(node, error);
       return;
     }
     const controllerConfig: SourceConfig = {
@@ -76,24 +68,14 @@ const registerSourceCapabilityController: NodeInitializer = (RED) => {
       timer = undefined;
       if (!state.pending?.nextAt) return;
       const delay = Math.max(0, state.pending.nextAt - Date.now());
-      timer = setTimeout(() => {
-        try {
-          process({sourceCapability: {kind: "tick", generation: state.generation}}, node.send.bind(node));
-        } catch (error) {
-          node.error(error);
-        }
-      }, delay);
+      timer = setTimeout(guarded(node, () => {
+        process({sourceCapability: {kind: "tick", generation: state.generation}}, node.send.bind(node));
+      }), delay);
     }
 
     function process(msg: SourceMessage, send: Send) {
-      const now = new Date();
-      const saved = context.get("state") as Partial<SourceState> | undefined;
-      const result = transitionSource(saved, msg, controllerConfig, now);
-      context.set("state", result.state);
-      appendTrace(context, {
-        area: config.area || "lounge",
-        component: "source-capability-controller"
-      }, result.traces, now);
+      const result = runReducer(node, {area: config.area || "lounge", component: "source-capability-controller"},
+        (saved: Partial<SourceState> | undefined, now) => transitionSource(saved, msg, controllerConfig, now));
       if (result.commands.length) {
         send([
           result.commands.map((sourceCommand) => ({payload: undefined, sourceCommand})),
@@ -112,27 +94,15 @@ const registerSourceCapabilityController: NodeInitializer = (RED) => {
     // transition with the reducer's own startup (re-observe, never replay)
     // rather than ticking old state; a later startup from the flow repeats it.
     if ((context.get("state") as Partial<SourceState> | undefined)?.pending) {
-      timer = setTimeout(() => {
-        try {
-          process({sourceCapability: {kind: "startup"}}, node.send.bind(node));
-        } catch (error) {
-          node.error(error);
-        }
-      }, 0);
+      timer = setTimeout(guarded(node, () => {
+        process({sourceCapability: {kind: "startup"}}, node.send.bind(node));
+      }), 0);
     }
 
-    node.on("input", (msg, send, done) => {
-      try {
-        process({
-          sourceCapability: msg.sourceCapability && typeof msg.sourceCapability === "object"
-            ? msg.sourceCapability as SourceMessage["sourceCapability"]
-            : undefined
-        }, send);
-        done();
-      } catch (error) {
-        node.error(error, msg);
-        done(error instanceof Error ? error : new Error(String(error)));
-      }
+    onInput(node, (msg, send) => {
+      process({
+        sourceCapability: objectField<SourceMessage["sourceCapability"]>(msg, "sourceCapability")
+      }, send);
     });
 
     node.on("close", (_removed: boolean, done: () => void) => {

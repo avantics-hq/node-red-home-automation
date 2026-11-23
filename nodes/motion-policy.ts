@@ -1,7 +1,6 @@
 "use strict";
 
-import type {Node, NodeDef, NodeInitializer, NodeMessage} from "node-red";
-import {appendTrace} from "../lib/bounded-trace";
+import type {Node, NodeDef, NodeInitializer} from "node-red";
 import {wallInputStatus, type WallInputStatus} from "../lib/wall-input";
 import {
   transitionMotion,
@@ -9,6 +8,7 @@ import {
   type MotionInput,
   type MotionState
 } from "../lib/motion-policy";
+import {guarded, onInput, runReducer, type Send} from "./adapter";
 
 interface MotionPolicyConfig extends NodeDef {
   area?: string;
@@ -22,7 +22,6 @@ interface MotionPolicyConfig extends NodeDef {
 
 interface MotionPolicyNode extends Node {}
 
-type Send = (msg: NodeMessage | Array<NodeMessage | NodeMessage[] | null>) => void;
 type MotionStatus = ReturnType<typeof transitionMotion>["status"];
 
 
@@ -112,32 +111,23 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
 
     function armOffTimer(delayMs: number, generation: number) {
       clearTimeout(offTimer);
-      offTimer = setTimeout(() => {
+      offTimer = setTimeout(guarded(node, () => {
         offTimer = undefined;
-        try {
-          process({source: "off-timer", generation}, node.send.bind(node));
-        } catch (error) {
-          node.error(error);
-        }
-      }, delayMs);
+        process({source: "off-timer", generation}, node.send.bind(node));
+      }), delayMs);
     }
 
     function process(input: MotionInput, send: Send) {
       if (input.source === "switch" || input.source === "switch-availability") {
         wallInputRelevant = true;
       }
-      const now = new Date();
       const globalEnabled = globalContext.get("MOTION_ENABLED_STATE") !== false;
-      const saved = context.get("state") as Partial<MotionState> | undefined;
-      const result = transitionMotion(saved, input, policyConfig, globalEnabled, now.getTime());
-      context.set("state", result.state);
+      const result = runReducer(node, {area: policyConfig.area, component: "motion-policy"},
+        (saved: Partial<MotionState> | undefined, now) =>
+          transitionMotion(saved, input, policyConfig, globalEnabled, now.getTime()));
       if (input.source === "global-enabled") {
         globalContext.set("MOTION_ENABLED_STATE", result.globalEnabled);
       }
-      appendTrace(context, {
-        area: policyConfig.area,
-        component: "motion-policy"
-      }, result.traces, now);
 
       for (const effect of result.effects) {
         if (effect.kind === "cancel-off-timer") {
@@ -150,18 +140,14 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
           switchTimer = undefined;
         } else if (effect.kind === "schedule-switch-timer") {
           clearTimeout(switchTimer);
-          switchTimer = setTimeout(() => {
+          switchTimer = setTimeout(guarded(node, () => {
             switchTimer = undefined;
-            try {
-              process({
-                source: "switch-timer",
-                generation: effect.generation,
-                switchAt: effect.switchAt
-              }, node.send.bind(node));
-            } catch (error) {
-              node.error(error);
-            }
-          }, effect.delayMs);
+            process({
+              source: "switch-timer",
+              generation: effect.generation,
+              switchAt: effect.switchAt
+            }, node.send.bind(node));
+          }), effect.delayMs);
         } else if (effect.kind === "send") {
           send({payload: undefined, ...effect.message});
         }
@@ -187,20 +173,14 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
       });
     }, Math.max(1000, Math.min(60_000, policyConfig.switchFreshnessMs)));
 
-    node.on("input", (msg, send, done) => {
-      try {
-        process({
-          source: String(msg.source ?? ""),
-          payload: msg.payload,
-          retain: msg.retain === true,
-          baseline: msg.baseline === true,
-          observedAt: msg.observedAt
-        }, send);
-        done();
-      } catch (error) {
-        node.error(error, msg);
-        done(error instanceof Error ? error : new Error(String(error)));
-      }
+    onInput(node, (msg, send) => {
+      process({
+        source: String(msg.source ?? ""),
+        payload: msg.payload,
+        retain: msg.retain === true,
+        baseline: msg.baseline === true,
+        observedAt: msg.observedAt
+      }, send);
     });
 
     node.on("close", (_removed: boolean, done: () => void) => {

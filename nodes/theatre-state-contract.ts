@@ -1,7 +1,6 @@
 "use strict";
 
-import type {Node, NodeDef, NodeInitializer, NodeMessage} from "node-red";
-import {appendTrace} from "../lib/bounded-trace";
+import type {Node, NodeDef, NodeInitializer} from "node-red";
 import {
   normaliseStateContractConfig,
   transitionTheatreStateContract,
@@ -9,6 +8,7 @@ import {
   type TheatreStateContractMessage,
   type TheatreStateContractState
 } from "../lib/theatre-state-contract";
+import {invalidConfig, objectField, onInput, runReducer, type Send} from "./adapter";
 
 interface TheatreStateContractNodeConfig extends NodeDef {
   area?: string;
@@ -23,13 +23,11 @@ interface TheatreStateContractNodeConfig extends NodeDef {
 }
 
 interface TheatreStateContractNode extends Node {}
-type Send = (msg: NodeMessage | Array<NodeMessage | NodeMessage[] | null>) => void;
 
 const registerTheatreStateContract: NodeInitializer = (RED) => {
   function HomeTheatreStateContract(this: TheatreStateContractNode, config: TheatreStateContractNodeConfig) {
     RED.nodes.createNode(this, config);
     const node = this;
-    const context = node.context();
 
     let controllerConfig: TheatreStateContractConfig;
     try {
@@ -48,20 +46,14 @@ const registerTheatreStateContract: NodeInitializer = (RED) => {
         }
       });
     } catch (error) {
-      node.status({fill: "red", shape: "ring", text: "invalid configuration"});
-      node.error("invalid configuration: " + (error instanceof Error ? error.message : String(error)));
+      invalidConfig(node, error);
       return;
     }
 
     function process(msg: TheatreStateContractMessage, send: Send) {
-      const now = new Date();
-      const saved = context.get("state") as Partial<TheatreStateContractState> | undefined;
-      const result = transitionTheatreStateContract(saved, msg, controllerConfig, now);
-      context.set("state", result.state);
-      appendTrace(context, {
-        area: controllerConfig.area,
-        component: "theatre-state-contract"
-      }, result.traces, now);
+      const result = runReducer(node, {area: controllerConfig.area, component: "theatre-state-contract"},
+        (saved: Partial<TheatreStateContractState> | undefined, now) =>
+          transitionTheatreStateContract(saved, msg, controllerConfig, now));
       if (result.requests.length) {
         send([
           result.requests.map((request) => ({payload: undefined, ...request})),
@@ -79,24 +71,14 @@ const registerTheatreStateContract: NodeInitializer = (RED) => {
       return result;
     }
 
-    node.on("input", (msg, send, done) => {
-      try {
-        process({
-          topic: typeof msg.topic === "string" ? msg.topic : undefined,
-          payload: msg.payload,
-          retain: msg.retain === true,
-          theatre: msg.theatre && typeof msg.theatre === "object"
-            ? msg.theatre as TheatreStateContractMessage["theatre"]
-            : undefined,
-          theatreStateContract: msg.theatreStateContract && typeof msg.theatreStateContract === "object"
-            ? msg.theatreStateContract as TheatreStateContractMessage["theatreStateContract"]
-            : undefined
-        }, send);
-        done();
-      } catch (error) {
-        node.error(error, msg);
-        done(error instanceof Error ? error : new Error(String(error)));
-      }
+    onInput(node, (msg, send) => {
+      process({
+        topic: typeof msg.topic === "string" ? msg.topic : undefined,
+        payload: msg.payload,
+        retain: msg.retain === true,
+        theatre: objectField<TheatreStateContractMessage["theatre"]>(msg, "theatre"),
+        theatreStateContract: objectField<TheatreStateContractMessage["theatreStateContract"]>(msg, "theatreStateContract")
+      }, send);
     });
 
     node.on("close", (_removed: boolean, done: () => void) => {

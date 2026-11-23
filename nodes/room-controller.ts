@@ -1,7 +1,6 @@
 "use strict";
 
-import type {Node, NodeDef, NodeInitializer, NodeMessage} from "node-red";
-import {appendTrace} from "../lib/bounded-trace";
+import type {Node, NodeDef, NodeInitializer} from "node-red";
 import {
   transitionRoom,
   type RoomConfig,
@@ -12,6 +11,7 @@ import {
 import {scheduledLighting} from "../lib/circadian";
 import {resolveSchedule} from "../lib/circadian-schedule";
 import type {LightLevels} from "../lib/light-styling";
+import {guarded, invalidConfig, number, objectField, onInput, runReducer, type Send} from "./adapter";
 
 interface RoomControllerConfig extends NodeDef {
   area?: string;
@@ -31,13 +31,7 @@ interface RoomControllerConfig extends NodeDef {
 
 interface RoomControllerNode extends Node {}
 
-type Send = (msg: NodeMessage | Array<NodeMessage | NodeMessage[] | null>) => void;
 type RoomStatus = ReturnType<typeof transitionRoom>["status"];
-
-function number(value: unknown, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
 
 function parseTargets(value: string | undefined): RoomTarget[] {
   const targets: unknown = JSON.parse(value || "[]");
@@ -61,7 +55,6 @@ const registerRoomController: NodeInitializer = (RED) => {
   function HomeRoomLightingController(this: RoomControllerNode, config: RoomControllerConfig) {
     RED.nodes.createNode(this, config);
     const node = this;
-    const context = node.context();
     let refreshTimer: ReturnType<typeof setInterval> | undefined;
 
     let controllerConfig: RoomConfig;
@@ -89,8 +82,7 @@ const registerRoomController: NodeInitializer = (RED) => {
         lighting: scheduledLighting(schedule, levels)
       };
     } catch (error) {
-      node.status({fill: "red", shape: "ring", text: "invalid configuration"});
-      node.error("invalid configuration: " + (error instanceof Error ? error.message : String(error)));
+      invalidConfig(node, error);
       return;
     }
 
@@ -106,14 +98,8 @@ const registerRoomController: NodeInitializer = (RED) => {
     }
 
     function process(msg: RoomMessage, send: Send) {
-      const now = new Date();
-      const saved = context.get("state") as Partial<RoomState> | undefined;
-      const result = transitionRoom(saved, msg, controllerConfig, now);
-      context.set("state", result.state);
-      appendTrace(context, {
-        area: controllerConfig.area,
-        component: "room-controller"
-      }, result.traces, now);
+      const result = runReducer(node, {area: controllerConfig.area, component: "room-controller"},
+        (saved: Partial<RoomState> | undefined, now) => transitionRoom(saved, msg, controllerConfig, now));
       if (result.outputs.length) {
         send([result.outputs.map((output) => ({...output, payload: output.payload}))]);
       }
@@ -121,31 +107,19 @@ const registerRoomController: NodeInitializer = (RED) => {
       return result;
     }
 
-    node.on("input", (msg, send, done) => {
-      try {
-        process({
-          lighting: msg.lighting && typeof msg.lighting === "object"
-            ? msg.lighting as RoomMessage["lighting"]
-            : undefined,
-          topic: typeof msg.topic === "string" ? msg.topic : undefined,
-          payload: msg.payload,
-          retain: msg.retain === true
-        }, send);
-        done();
-      } catch (error) {
-        node.error(error, msg);
-        done(error instanceof Error ? error : new Error(String(error)));
-      }
+    onInput(node, (msg, send) => {
+      process({
+        lighting: objectField<RoomMessage["lighting"]>(msg, "lighting"),
+        topic: typeof msg.topic === "string" ? msg.topic : undefined,
+        payload: msg.payload,
+        retain: msg.retain === true
+      }, send);
     });
 
     const refreshSeconds = Math.max(10, number(config.refreshSeconds, 60));
-    refreshTimer = setInterval(() => {
-      try {
-        process({lighting: {kind: "refresh"}}, node.send.bind(node));
-      } catch (error) {
-        node.error(error);
-      }
-    }, refreshSeconds * 1000);
+    refreshTimer = setInterval(guarded(node, () => {
+      process({lighting: {kind: "refresh"}}, node.send.bind(node));
+    }), refreshSeconds * 1000);
 
     node.on("close", (_removed: boolean, done: () => void) => {
       clearInterval(refreshTimer);
