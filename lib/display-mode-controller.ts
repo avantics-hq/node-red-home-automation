@@ -322,6 +322,21 @@ export function transitionDisplay(
     trace("transition", "failed", reason, {device, operation});
   }
 
+  // Re-send a retryable command with a full deadline of its own, whether its
+  // deadline passed or its transport failed.
+  function retry(pending: NonNullable<DisplayState["pending"]>, reason: string | null) {
+    const attempt = pending.attempt + 1;
+    const retried = {...pending.command, attempt};
+    commands.push(retried);
+    pending.command = retried;
+    pending.attempt = attempt;
+    const timeout = pending.device === "tv" ? config.tvTimeoutMs : config.screenTimeoutMs;
+    pending.deadlineAt = now.getTime() + timeout;
+    pending.nextAt = now.getTime() + config.pollMs;
+    trace("command", "retried", reason, {device: pending.device, operation: pending.operation, attempt});
+    state.lastAttempt = Math.max(state.lastAttempt, attempt);
+  }
+
   function issue(device: DisplayDevice, operation: string, command: DisplayCommand, timeoutMs: number, retryable = true) {
     const attempt = command.attempt || 1;
     state.pending = {
@@ -574,16 +589,7 @@ export function transitionDisplay(
 
     if (now.getTime() >= pending.deadlineAt) {
       if (pending.retryable && pending.attempt < config.maxAttempts) {
-        const attempt = pending.attempt + 1;
-        const retried = {...pending.command, attempt};
-        commands.push(retried);
-        pending.command = retried;
-        pending.attempt = attempt;
-        const timeout = pending.device === "tv" ? config.tvTimeoutMs : config.screenTimeoutMs;
-        pending.deadlineAt = now.getTime() + timeout;
-        pending.nextAt = now.getTime() + config.pollMs;
-        trace("command", "retried", null, {device: pending.device, operation: pending.operation, attempt});
-        state.lastAttempt = Math.max(state.lastAttempt, attempt);
+        retry(pending, null);
         return;
       }
       return fail(
@@ -657,15 +663,7 @@ export function transitionDisplay(
     } else if (state.pending && state.pending.device === event.device &&
       state.pending.command.operation === event.operation) {
       if (state.pending.retryable && state.pending.attempt < config.maxAttempts) {
-        const attempt = state.pending.attempt + 1;
-        const retried = {...state.pending.command, attempt};
-        state.pending.command = retried;
-        state.pending.attempt = attempt;
-        commands.push(retried);
-        trace("command", "retried", event.reason || "transport-failed", {
-          device: event.device, operation: state.pending.operation, attempt
-        });
-        state.lastAttempt = Math.max(state.lastAttempt, attempt);
+        retry(state.pending, event.reason || "transport-failed");
       } else {
         fail(event.device, state.pending.operation, event.reason || "transport-failed");
       }
