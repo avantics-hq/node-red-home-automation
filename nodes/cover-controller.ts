@@ -2,11 +2,22 @@
 
 import type {Node, NodeDef, NodeInitializer} from "node-red";
 import {COVER_TYPES, openCloseCover, positionCover, type CoverModel} from "../lib/cover-models";
+import {
+  coverInbound,
+  coverRetainedTopics,
+  coverStartingOutputs,
+  coverStateOutputs,
+  coverStoppingOutputs,
+  type CoverPublishingConfig
+} from "../lib/cover-publishing";
 import {coverPresets, coverRequest, type CoverPresets} from "../lib/cover-requests";
-import {optionalChoiceSetting} from "../lib/settings";
+import {ID_SCHEMES, discoveryPrefixSetting} from "../lib/ha-discovery";
+import {publishesState} from "../lib/publishing-node";
+import {optionalBooleanSetting, optionalChoiceSetting, textSetting} from "../lib/settings";
 import {targetStateEvent} from "../lib/target-state";
-import {REQUEST_ID} from "../lib/topic-names";
-import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
+import {REQUEST_ID, areaId, publishingArea} from "../lib/topic-names";
+import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type InputMessage, type Send} from "./adapter";
+import {publishingLifecycle} from "./publishing-lifecycle";
 
 interface CoverControllerConfig extends NodeDef {
   area?: string;
@@ -20,9 +31,21 @@ interface CoverControllerConfig extends NodeDef {
   maxAttempts?: number | string;
   pollMs?: number | string;
   settleMs?: number | string;
+  topicName?: string;
+  publishState?: boolean | string | null;
+  discovery?: boolean | string | null;
+  discoveryPrefix?: string;
+  idScheme?: string | null;
 }
 
 interface CoverControllerNode extends Node {}
+
+// The cover's name in its topics, which it needs while it publishes.
+function coverTopicName(value: unknown): string {
+  const name = textSetting(value, "name in topics");
+  if (!areaId(name)) throw new Error("name in topics must contain a letter or digit");
+  return name;
+}
 
 const registerCoverController: NodeInitializer = (RED) => {
   function HomeCoverController(this: CoverControllerNode, config: CoverControllerConfig) {
@@ -35,12 +58,29 @@ const registerCoverController: NodeInitializer = (RED) => {
     let model: CoverModel;
     let presets: CoverPresets;
     let area: string;
+    let publishing: CoverPublishingConfig;
     try {
       area = optionalArea(config);
       // Not set: a position cover, as every cover node was before the type.
       const type = optionalChoiceSetting(config.coverType, "cover type", COVER_TYPES) ?? "position";
       model = type === "open-close" ? openCloseCover(config as unknown as Record<string, unknown>) : positionCover(config as unknown as Record<string, unknown>);
       presets = coverPresets(config.presets);
+      // Off unless switched on, as the cover published nothing before; not
+      // set names its entity after the node.
+      const publishState = optionalBooleanSetting(config.publishState, "publish state") ?? false;
+      const discovery = optionalBooleanSetting(config.discovery, "Home Assistant discovery") ?? false;
+      if (publishState || discovery) publishingArea(area, true);
+      publishing = {
+        area,
+        // No default: two covers in a room must not share topics.
+        name: publishState || discovery ? coverTopicName(config.topicName) : "",
+        positions: model.positions,
+        publishState,
+        discovery,
+        discoveryPrefix: discoveryPrefixSetting(config.discoveryPrefix),
+        nodeId: node.id,
+        idScheme: optionalChoiceSetting(config.idScheme, "ID scheme", ID_SCHEMES) ?? "node"
+      };
     } catch (error) {
       invalidConfig(node, error);
       return;
@@ -61,8 +101,21 @@ const registerCoverController: NodeInitializer = (RED) => {
       }), Math.max(0, next.at - Date.now()));
     }
 
+    // MQTT publications on output 4, apart from the cover's own outputs:
+    // available and clear of what it no longer publishes as soon as it runs,
+    // offline as it stops, nothing left behind when deleted.
+    const lifecycle = publishingLifecycle(RED, node, {
+      retainedTopics: () => coverRetainedTopics(publishing),
+      possible: {owner: publishing, topics: () => publishesState(publishing) ? coverRetainedTopics({...publishing, discovery: true}) : []},
+      starting: () => coverStartingOutputs(publishing, model.view(saved())),
+      stopping: () => coverStoppingOutputs(publishing),
+      output: 3,
+      outputs: 4
+    });
+
     function process(event: unknown, send: Send) {
       const wasMoving = model.moving(saved());
+      const viewBefore = JSON.stringify(model.view(saved()));
       const result = runReducer(node, trace, (state: unknown, now) => model.transition(state, event, now));
       const moving = result.status.moving;
       // Device commands in a neutral shape on output 1, state and results
@@ -74,6 +127,9 @@ const registerCoverController: NodeInitializer = (RED) => {
         moving !== wasMoving ? {topic: "moving", payload: moving} : null
       ];
       if (outputs.some((output) => output !== null)) send(outputs);
+      // What Home Assistant shows, whenever it changes.
+      const view = model.view(result.state);
+      if (JSON.stringify(view) !== viewBefore) lifecycle.publish(send, coverStateOutputs(publishing, view));
       const {phase, battery} = result.status;
       node.status({
         fill: phase === "failed" ? "red" : phase === "unavailable" || phase === "unconfirmed" ? "grey"
@@ -96,9 +152,21 @@ const registerCoverController: NodeInitializer = (RED) => {
     onInput(node, (msg, send) => {
       const cover = objectField<Record<string, unknown>>(msg, "cover");
       if (cover) {
+        if (cover.kind === "startup") lifecycle.startup(send, coverStartingOutputs(publishing, model.view(saved())));
         process(cover, send);
         return;
       }
+      // Home Assistant's open, close, stop and set position, on the cover's
+      // own set topics, are requests like any other.
+      const inbound = coverInbound(msg, publishing);
+      if (inbound && inbound.request === null) {
+        runReducer(node, trace, (state: unknown) => ({state, traces: inbound.traces}));
+        return;
+      }
+      handleRequest(inbound ? {payload: inbound.request, source: "home-assistant"} as InputMessage : msg, send);
+    });
+
+    function handleRequest(msg: InputMessage, send: Send) {
       requests += 1;
       // A cover group's own ID for its request, so it can match the answer.
       // Only msg.coverRequestId is read, in the request ID format.
@@ -131,7 +199,7 @@ const registerCoverController: NodeInitializer = (RED) => {
         return;
       }
       if ("intent" in request) process(request.intent, send);
-    });
+    }
 
     node.on("close", (_removed: boolean, done: () => void) => {
       clearTimeout(timer);

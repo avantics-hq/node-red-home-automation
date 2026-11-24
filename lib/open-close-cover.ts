@@ -8,6 +8,7 @@
 // judged from travel time. Nothing else is assumed: a cover that reports
 // nothing is "unconfirmed", not ready.
 
+import {applyCoverAvailability} from "./cover-availability";
 import type {CoverMotion} from "./cover-controller";
 import {boundObservedAt, isOutOfOrder, parseObservedAt} from "./observation-time";
 import {numberSetting} from "./settings";
@@ -254,21 +255,10 @@ export function transitionOpenCloseCover(
       }
     }
   } else if (event.kind === "availability") {
-    if (event.online !== true && event.online !== false) throw new Error("cover availability online must be true or false");
-    if (!event.online && state.available) {
-      state.available = false;
-      state.phaseBeforeUnavailable = state.phase;
-      state.pending = null;
-      state.motion = null;
-      state.phase = "unavailable";
-      trace("availability", "offline");
-    } else if (event.online && !state.available) {
-      state.available = true;
-      state.phase = state.phaseBeforeUnavailable ?? "idle";
-      state.phaseBeforeUnavailable = null;
-      trace("availability", "online");
-      reobserve("online");
-    }
+    const change = applyCoverAvailability(state, event.online);
+    if (change === "offline") state.motion = null;
+    if (change) trace("availability", change);
+    if (change === "online") reobserve("online");
   } else if (!state.available) {
     trace(event.kind, "ignored", "unavailable");
   } else if (event.kind === "startup" || event.kind === "refresh") {

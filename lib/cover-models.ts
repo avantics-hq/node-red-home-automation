@@ -19,6 +19,13 @@ export interface CoverTransition {
   status: {phase: string; moving: boolean; text: string; battery: number | null; observed: boolean};
 }
 
+// What the cover is doing, as a cover entity shows it, and its position
+// (100 open) when it has one; null until it has reported.
+export interface CoverView {
+  state: "open" | "closed" | "opening" | "closing" | "stopped";
+  position: number | null;
+}
+
 export interface CoverModel {
   // Whether it takes positions and presets, not only open, close and stop.
   positions: boolean;
@@ -27,6 +34,7 @@ export interface CoverModel {
   generation(saved: unknown): number;
   // When to check on a move in progress, and for which request.
   tickAt(state: unknown): {at: number; generation: number} | null;
+  view(saved: unknown): CoverView | null;
 }
 
 export function positionCover(settings: Record<string, unknown>): CoverModel {
@@ -51,6 +59,12 @@ export function positionCover(settings: Record<string, unknown>): CoverModel {
     tickAt(state) {
       const cover = state as CoverState;
       return cover.pending ? {at: Math.min(cover.pending.nextAt, cover.pending.deadlineAt), generation: cover.generation} : null;
+    },
+    view(saved) {
+      const observed = (saved as Partial<CoverState> | undefined)?.observed;
+      if (!observed) return null;
+      const motion = observed.motion === "opening" || observed.motion === "closing" ? observed.motion : null;
+      return {state: motion ?? (observed.position <= 0 ? "closed" : "open"), position: observed.position};
     }
   };
 }
@@ -77,6 +91,16 @@ export function openCloseCover(settings: Record<string, unknown>): CoverModel {
     tickAt(state) {
       const cover = state as OpenCloseState;
       return cover.pending ? {at: cover.pending.deadlineAt, generation: cover.generation} : null;
+    },
+    view(saved) {
+      const state = saved as Partial<OpenCloseState> | undefined;
+      if (!state) return null;
+      if (state.motion === "opening" || state.motion === "closing") return {state: state.motion, position: null};
+      // Stopped partway is open, as a cover entity counts anything not fully
+      // closed: with no position, Home Assistant would otherwise keep showing
+      // the last move (closed after closing) and refuse to close it.
+      if (state.position === "stopped") return {state: "open", position: null};
+      return state.position && state.position !== "unknown" ? {state: state.position, position: null} : null;
     }
   };
 }

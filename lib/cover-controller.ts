@@ -1,5 +1,6 @@
 "use strict";
 
+import {applyCoverAvailability} from "./cover-availability";
 import type {TraceEntry} from "./bounded-trace";
 import {boundObservedAt, isOutOfOrder, parseObservedAt} from "./observation-time";
 import {booleanSetting, numberSetting} from "./settings";
@@ -482,21 +483,10 @@ export function transitionCover(
       state.pending.nextAt = nowMs + config.pollMs;
     }
   } else if (event.kind === "availability") {
-    if (event.online !== true && event.online !== false) throw new Error("cover availability online must be true or false");
-    if (!event.online && state.available) {
-      state.available = false;
-      state.phaseBeforeUnavailable = state.phase;
-      state.pending = null;
-      state.observed = null;
-      state.phase = "unavailable";
-      trace("availability", "offline");
-    } else if (event.online && !state.available) {
-      state.available = true;
-      state.phase = state.phaseBeforeUnavailable ?? "idle";
-      state.phaseBeforeUnavailable = null;
-      trace("availability", "online");
-      reobserve("online");
-    }
+    const change = applyCoverAvailability(state, event.online);
+    if (change === "offline") state.observed = null;
+    if (change) trace("availability", change);
+    if (change === "online") reobserve("online");
   } else if (!state.available) {
     // Offline: nothing to observe or retry until it is back.
     trace(event.kind, "ignored", "unavailable");

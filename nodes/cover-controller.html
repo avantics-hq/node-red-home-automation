@@ -1,46 +1,83 @@
 <script type="text/javascript">
-  RED.nodes.registerType("home-cover-controller", {
-    category: "home automation",
-    color: "#e2d96e",
-    defaults: {
-      name: {value: ""},
-      area: {value: ""},
-      // Not set: a position cover, as every cover node was before this setting.
-      coverType: {value: "position"},
-      presets: {value: "{\"partial\":60}", required: true, validate: function (v) {
-        try {
-          var parsed = JSON.parse(v);
-          return Boolean(parsed) && typeof parsed === "object" && !Array.isArray(parsed) && Object.keys(parsed).every(function (name) {
-            var position = parsed[name];
-            return /^[a-z][a-z0-9_-]*$/.test(name) && ["open", "close", "stop"].indexOf(name) === -1 &&
-              typeof position === "number" && position >= 0 && position <= 100;
-          });
-        } catch (e) { return false; }
-      }},
-      positionTolerance: {value: 2, required: true, validate: RED.validators.number()},
-      invert: {value: false},
-      travelTimeoutMs: {value: 90000, required: true, validate: RED.validators.number()},
-      maxAttempts: {value: 2, required: true, validate: RED.validators.number()},
-      pollMs: {value: 5000, required: true, validate: RED.validators.number()},
-      settleMs: {value: 5000, required: true, validate: RED.validators.number()},
-      travelMs: {value: 30000, required: true, validate: RED.validators.number()},
-      marginMs: {value: 10000, required: true, validate: RED.validators.number()}
-    },
-    oneditprepare: function () {
-      function follow() {
-        var position = $("#node-input-coverType").val() !== "open-close";
-        $(".cover-position").toggle(position);
-        $(".cover-open-close").toggle(!position);
-      }
-      $("#node-input-coverType").on("change", follow);
-      follow();
-    },
-    inputs: 1,
-    outputs: 3,
-    outputLabels: ["device commands", "state and results", "moving"],
-    icon: "font-awesome/fa-columns",
-    label: function () { return this.name || (this.area ? this.area + " " : "") + "cover"; }
-  });
+  (function () {
+    // Whether the node publishes, from the open dialog or its saved settings.
+    function publishes(node) {
+      function on(value) { return value === true || value === "true"; }
+      var state = $("#node-input-publishState");
+      var discovery = $("#node-input-discovery");
+      return state.length ? state.prop("checked") || discovery.prop("checked") : on(node.publishState) || on(node.discovery);
+    }
+    RED.nodes.registerType("home-cover-controller", {
+      category: "home automation",
+      color: "#e2d96e",
+      defaults: {
+        // A marker only a node new from the palette has, as core nodes do: import
+        // and paste keep the saved name, so onadd leaves a saved node's settings.
+        name: {value: "_DEFAULT_"},
+        area: {value: "", validate: function (v) { return !publishes(this) || /[a-z0-9]/i.test(String(v || "")); }},
+        // Not set: a position cover, as every cover node was before this setting.
+        coverType: {value: "position"},
+        presets: {value: "{\"partial\":60}", required: true, validate: function (v) {
+          try {
+            var parsed = JSON.parse(v);
+            return Boolean(parsed) && typeof parsed === "object" && !Array.isArray(parsed) && Object.keys(parsed).every(function (name) {
+              var position = parsed[name];
+              return /^[a-z][a-z0-9_-]*$/.test(name) && ["open", "close", "stop"].indexOf(name) === -1 &&
+                typeof position === "number" && position >= 0 && position <= 100;
+            });
+          } catch (e) { return false; }
+        }},
+        positionTolerance: {value: 2, required: true, validate: RED.validators.number()},
+        invert: {value: false},
+        travelTimeoutMs: {value: 90000, required: true, validate: RED.validators.number()},
+        maxAttempts: {value: 2, required: true, validate: RED.validators.number()},
+        pollMs: {value: 5000, required: true, validate: RED.validators.number()},
+        settleMs: {value: 5000, required: true, validate: RED.validators.number()},
+        travelMs: {value: 30000, required: true, validate: RED.validators.number()},
+        marginMs: {value: 10000, required: true, validate: RED.validators.number()},
+        // Its name in its topics, home/<area>/cover/<name>/..., as a room
+        // usually has more than one cover: no default, so two covers can't
+        // share topics by leaving it alone. Needed only while it publishes.
+        topicName: {value: "", validate: function (v) { return !publishes(this) || /[a-z0-9]/i.test(String(v || "")); }},
+        // Off until switched on.
+        publishState: {value: false},
+        discovery: {value: false},
+        discoveryPrefix: {value: "homeassistant", required: true, validate: function (v) { var prefix = String(v || "").trim().replace(/^\/+|\/+$/g, ""); return Boolean(prefix) && !/[+#]/.test(prefix); }},
+        // How Home Assistant IDs are named; not set also means "node".
+        idScheme: {value: null}
+      },
+      onadd: function () {
+        if (this.name !== "_DEFAULT_") return;
+        this.name = "";
+        this.idScheme = "node";
+      },
+      oneditprepare: function () {
+        function on(value) { return value === true || value === "true"; }
+        function follow() {
+          var position = $("#node-input-coverType").val() !== "open-close";
+          $(".cover-position").toggle(position);
+          $(".cover-open-close").toggle(!position);
+        }
+        $("#node-input-coverType").on("change", follow);
+        follow();
+        $("#node-input-publishState").prop("checked", on(this.publishState));
+        $("#node-input-discovery").prop("checked", on(this.discovery));
+        // Discovery describes the published state, so it needs it.
+        function publishing() {
+          var state = $("#node-input-publishState").prop("checked");
+          if (!state) $("#node-input-discovery").prop("checked", false);
+          $("#node-input-discovery").prop("disabled", !state);
+        }
+        $("#node-input-publishState, #node-input-discovery").on("change", publishing);
+        publishing();
+      },
+      inputs: 1,
+      outputs: 4,
+      outputLabels: ["device commands", "state and results", "moving", "MQTT publications"],
+      icon: "font-awesome/fa-columns",
+      label: function () { return this.name || (this.area ? this.area + " " : "") + "cover"; }
+    });
+  })();
 </script>
 
 <script type="text/html" data-template-name="home-cover-controller">
@@ -62,6 +99,10 @@
   <div class="form-row cover-open-close"><label for="node-input-travelMs">Full travel time (ms)</label><input type="number" id="node-input-travelMs"></div>
   <div class="form-row cover-open-close"><label for="node-input-marginMs">Travel margin (ms)</label><input type="number" id="node-input-marginMs"></div>
   <div class="form-row"><label for="node-input-maxAttempts">Maximum attempts</label><input type="number" id="node-input-maxAttempts"></div>
+  <div class="form-row"><label for="node-input-topicName">Name in topics</label><input type="text" id="node-input-topicName" placeholder="left, for example"></div>
+  <div class="form-row"><label for="node-input-publishState">Publish state over MQTT</label><input type="checkbox" id="node-input-publishState" style="display:inline-block; width:auto;"></div>
+  <div class="form-row"><label for="node-input-discovery">Home Assistant discovery</label><input type="checkbox" id="node-input-discovery" style="display:inline-block; width:auto;"> <span>(needs Publish state)</span></div>
+  <div class="form-row"><label for="node-input-discoveryPrefix">Discovery prefix</label><input type="text" id="node-input-discoveryPrefix"></div>
 </script>
 
 <script type="text/html" data-help-name="home-cover-controller">
@@ -102,7 +143,19 @@
       motion lighting while a blind moves, send it to the motion policy's <code>pause</code> input (with
       <code>msg.owner</code>), as the example does, not its enable (<code>area-enabled</code>): that is the
       user's own switch, and a cover move must not change it.</li>
+    <li>MQTT publications, when <b>Publish state</b> is on: wire it to an MQTT out node.</li>
   </ol>
+  <h3>Publishing</h3>
+  <p>Off unless switched on, and then named after the <b>Area</b> and the <b>Name in topics</b>, both needed then.
+    The name tells this cover from others in the room and has no default, so give each cover its own. With <b>Publish state</b> it publishes, retained, the cover's
+    state (<code>open</code>, <code>closed</code>, <code>opening</code>, <code>closing</code> or
+    <code>stopped</code>) on <code>home/&lt;area&gt;/cover/&lt;name&gt;/state</code> and, for a position cover,
+    its position on <code>…/position</code>, once it has reported, with <code>online</code> or <code>offline</code>
+    on <code>…/availability</code>. It takes <code>OPEN</code>, <code>CLOSE</code> or <code>STOP</code> on
+    <code>…/set</code>, and a position on <code>…/position/set</code>, as requests like any other, carried out and
+    confirmed as above; wire an MQTT in node on <code>home/&lt;area&gt;/cover/&lt;name&gt;/+</code> (and
+    <code>…/position/set</code>) into this node. Nothing commands the device through Home Assistant. With
+    <b>Home Assistant discovery</b>, a cover entity, named after this node.</p>
   <h3>Open, close and stop only</h3>
   <p>For a motor with no reliable position, set <b>Cover</b> to <i>Open, close and stop only</i>. It takes
     <code>"open"</code>, <code>"close"</code> and <code>"stop"</code> (positions and presets are ignored), and sends

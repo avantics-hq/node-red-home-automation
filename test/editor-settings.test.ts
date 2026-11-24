@@ -36,7 +36,7 @@ function newNode(definition: Definition): Record<string, unknown> {
 }
 
 const ONADD_NODES = ["room-controller.html", "theatre-state-contract.html", "occupancy-fusion.html", "motion-policy.html",
-  "avr-controller.html", "house-schedule-mqtt.html"];
+  "avr-controller.html", "house-schedule-mqtt.html", "cover-controller.html"];
 
 test("importing, pasting or restoring a saved node keeps its settings; only a new node gets the new-node ones", () => {
   for (const file of ONADD_NODES) {
@@ -204,4 +204,16 @@ test("editing a cover group's members moves each member's wire with its name", (
     {count: 5, wires: wired}, "add at the end keeps them");
   assert.deepEqual(editCoverGroup(["left", "right"], {0: "result", 1: "left cover", 2: "right cover"}, ["left", "extra", "right"]),
     {count: 4, wires: {0: "result", 1: "left cover", 3: "right cover"}}, "add in the middle moves right along");
+});
+
+test("a cover starts with publishing off, named after the node, and has a fourth output", () => {
+  const cover = editorDefinition("cover-controller.html");
+  assert.deepEqual([cover.defaults.publishState?.value, cover.defaults.discovery?.value, cover.defaults.topicName?.value, cover.defaults.idScheme?.value],
+    [false, false, "", null]);
+  // No default name: flagged while it publishes, not otherwise.
+  const name = (value: string, node: Record<string, unknown>) => cover.defaults.topicName!.validate!.call(node, value);
+  assert.deepEqual([name("", {publishState: true}), name("", {discovery: true}), name("left", {publishState: true}), name("", {publishState: false})],
+    [false, false, true, true]);
+  assert.equal(newNode(cover).idScheme, "node");
+  assert.deepEqual(cover.outputLabels, ["device commands", "state and results", "moving", "MQTT publications"]);
 });

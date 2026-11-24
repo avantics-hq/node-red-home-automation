@@ -156,6 +156,14 @@ shape (`set_position`, `stop` or `observe`); the example flow maps them to and
 from a Zigbee2MQTT cover. Battery and charging status are kept as reported
 facts and never acted on.
 
+Switched on, a cover node publishes its state (and position) under
+`home/<area>/cover/<name>/`, named by its **Name in topics** (no default: give
+each cover in a room its own), and announces a Home Assistant cover entity. Its open,
+close, stop and set position come back to the cover node on its own set topics
+as requests like any other, carried out and confirmed as above; nothing
+commands the device through Home Assistant. A cover group has no entity of its
+own: Home Assistant can group the covers' entities itself.
+
 A cover group moves several covers as one, such as the left and right of a
 curtain: it sends each member the request on that member's own output, labelled
 from its Members setting, and reports ready only when every member confirms,
