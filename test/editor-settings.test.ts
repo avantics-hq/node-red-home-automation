@@ -26,11 +26,39 @@ function editorDefinition(file: string): Definition {
   return definition;
 }
 
+// A node as the editor creates one from the palette: every default, then onadd.
+function newNode(definition: Definition): Record<string, unknown> {
+  const node: Record<string, unknown> = Object.fromEntries(Object.entries(definition.defaults).map(([key, {value}]) => [key, value]));
+  definition.onadd!.call(node);
+  return node;
+}
+
+const ONADD_NODES = ["room-controller.html", "theatre-state-contract.html", "occupancy-fusion.html", "motion-policy.html",
+  "avr-controller.html", "house-schedule.html"];
+
+test("importing, pasting or restoring a saved node keeps its settings; only a new node gets the new-node ones", () => {
+  for (const file of ONADD_NODES) {
+    const definition = editorDefinition(file);
+    // As the editor imports: the saved values only (no defaults filled in), then onadd.
+    for (const saved of [
+      {name: "", publishState: true, discovery: true, idScheme: null},
+      {name: "Hall lights", publishState: true, discovery: true, idScheme: "area"},
+      {publishState: true, discovery: true}
+    ]) {
+      const node: Record<string, unknown> = {...saved};
+      definition.onadd!.call(node);
+      assert.deepEqual(node, saved, `${file}: ${JSON.stringify(saved)}`);
+    }
+    const fresh = newNode(definition);
+    assert.equal(fresh.name, "", `${file}: the marker doesn't stay`);
+    assert.equal(fresh.idScheme, "node", file);
+  }
+});
+
 test("new nodes start with publishing off; saved flows keep their behaviour", () => {
   for (const [file, settings] of [["room-controller.html", ["publishState", "discovery"]], ["theatre-state-contract.html", ["discovery"]]] as const) {
     const definition = editorDefinition(file);
-    const node: Record<string, unknown> = {};
-    definition.onadd!.call(node);
+    const node = newNode(definition);
     for (const setting of settings) {
       assert.equal(node[setting], false, `${file} ${setting} for a new node`);
       // null means "not set", so the editor never fills in "off" for an older node.
@@ -89,9 +117,7 @@ test("new nodes name their Home Assistant entities after the node; saved nodes k
   for (const file of ["room-controller.html", "theatre-state-contract.html"]) {
     const definition = editorDefinition(file);
     assert.equal(definition.defaults.idScheme?.value, null, `${file}: a saved node without the setting is not set`);
-    const node: Record<string, unknown> = {};
-    definition.onadd!.call(node);
-    assert.equal(node.idScheme, "node", file);
+    assert.equal(newNode(definition).idScheme, "node", file);
   }
 });
 
@@ -100,9 +126,7 @@ test("occupancy and motion publishing start off, and a new node is named after i
     const definition = editorDefinition(file);
     assert.equal(definition.defaults.publishState?.value, false, file);
     assert.equal(definition.defaults.discovery?.value, false, file);
-    const node: Record<string, unknown> = {};
-    definition.onadd!.call(node);
-    assert.equal(node.idScheme, "node", file);
+    assert.equal(newNode(definition).idScheme, "node", file);
   }
 });
 
@@ -119,8 +143,6 @@ test("the contract editor asks for an area only where the runtime needs one", ()
 test("a house schedule starts with publishing off and names itself after the node; rooms default to their own times", () => {
   const house = editorDefinition("house-schedule.html");
   assert.deepEqual([house.defaults.publishState?.value, house.defaults.discovery?.value, house.defaults.houseName?.value], [false, false, "house"]);
-  const node: Record<string, unknown> = {};
-  house.onadd!.call(node);
-  assert.equal(node.idScheme, "node");
+  assert.equal(newNode(house).idScheme, "node");
   assert.equal(editorDefinition("room-controller.html").defaults.timesFrom?.value, null, "not set: the room's own times");
 });

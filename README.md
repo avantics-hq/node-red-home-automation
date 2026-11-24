@@ -162,10 +162,9 @@ Version 3.0 changes some behaviour. Check these after upgrading:
   area or display name updates the same entities. Nodes in flows saved before this keep naming them after the area,
   exactly as before, so nothing changes for them in Home Assistant. Either way, the entity ID Home Assistant first
   gives an entity comes from the area, with `-` as `_`.
-  Importing a node in the editor, including Import > Replace (which keeps the node's ID), sets it up as a new node,
-  so an older node brought in that way switches to node-based IDs at its next start: its area-named entities are
-  removed and new ones created with the same entity IDs, keeping their history but not changes made to them in Home
-  Assistant (name, area, icon).
+  Importing or pasting a node in the editor keeps its saved settings, including its ID scheme and publishing, so
+  an older node restored from a backup keeps its area-named entities. Only a node added from the palette starts as
+  new.
 - **Occupancy fusion can publish too**, off unless you switch it on: its occupancy as retained `ON`/`OFF` on
   `home/<area>/occupancy/state`, with availability, and an occupancy binary sensor in Home Assistant. These go on its
   new second output, so wire that to an MQTT out node; the first output still feeds the motion policy.

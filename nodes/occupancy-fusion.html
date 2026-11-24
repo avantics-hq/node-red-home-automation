@@ -5,7 +5,9 @@
       category: "home automation",
       color: "#c7e9c0",
       defaults: {
-        name: {value: ""},
+        // A marker only a node new from the palette has, as core nodes do: import
+        // and paste keep the saved name, so onadd leaves a saved node's settings.
+        name: {value: "_DEFAULT_"},
         // Required only when the node publishes, and then with a letter or
         // digit, from which its topics and IDs are made.
         area: {value: "", validate: function (v) {
@@ -22,6 +24,8 @@
         idScheme: {value: null}
       },
       onadd: function () {
+        if (this.name !== "_DEFAULT_") return;
+        this.name = "";
         this.idScheme = "node";
       },
       oneditprepare: function () {
