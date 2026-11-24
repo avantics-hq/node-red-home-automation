@@ -150,6 +150,13 @@ Version 3.0 changes some behaviour. Check these after upgrading:
   clears any retained topic it published before and no longer does, for example after an area, base topic,
   discovery prefix or target change. It remembers what it published in its node context, which lasts across deploys;
   it lasts across a Node-RED restart only if your default context store is persistent.
+- **Removing entities:** deleting a node clears its Home Assistant entities and retained state, but only when you
+  deploy with "Modified nodes" or "Modified flows". On a full deploy (the deploy button's default), Node-RED stops the
+  MQTT out node at the same moment, so the clearing never reaches the broker. Disabling a node or its flow keeps its
+  entities, so they come back unchanged when you enable it again. To remove a node's entities after a full deploy,
+  or to remove the entities of a flow you copied to another Node-RED (the copy's nodes have new IDs, so new
+  entities), delete the device in Home Assistant: Settings → Devices & services → Devices, open the device, then
+  Delete. Home Assistant then clears its retained discovery entry itself.
 - **Availability:** each publishing node sends a retained `online` once the flows have started (and again at its
   startup message) and `offline` when it stops, on `home/<area>/lighting/availability` (room) or
   `<base>/availability` (theatre), and its Home Assistant entities follow it. These get through when the node is

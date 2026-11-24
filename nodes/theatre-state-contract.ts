@@ -11,7 +11,8 @@ import {
   type TheatreStateContractMessage,
   type TheatreStateContractState
 } from "../lib/theatre-state-contract";
-import {clearStaleRetained, invalidConfig, whenFlowsStarted, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
+import {retainedClears} from "../lib/retained-topics";
+import {allRetainedTopics, clearStaleRetained, wasDeleted, invalidConfig, whenFlowsStarted, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
 import {jsonSetting, numberSetting, optionalBooleanSetting, optionalChoiceSetting} from "../lib/settings";
 import {ID_SCHEMES, discoveryPrefixSetting} from "../lib/ha-discovery";
 
@@ -111,11 +112,15 @@ const registerTheatreStateContract: NodeInitializer = (RED) => {
       node.send([null, [...clears, ...theatreStartingPublications(controllerConfig)].map((entry) => ({...entry}))]);
     });
 
-    node.on("close", (_removed: boolean, done: () => void) => {
+    node.on("close", (removed: boolean, done: () => void) => {
       // Reaches the broker only if the MQTT out node is still running, as in a
-      // deploy of this node alone; the broker's own Close and Will messages
-      // cover a full deploy, a restart and a crash (see the README).
-      node.send([null, theatreStoppingPublications(controllerConfig).map((entry) => ({...entry}))]);
+      // deploy of modified nodes or flows; the broker's own Close and Will
+      // messages cover a full deploy, a restart and a crash (see the README).
+      // A deleted node removes its entities and retained state instead.
+      const stopping = wasDeleted(RED, node, removed)
+        ? retainedClears(allRetainedTopics(node, theatreRetainedTopics(controllerConfig)))
+        : theatreStoppingPublications(controllerConfig);
+      node.send([null, stopping.map((entry) => ({...entry}))]);
       done();
     });
   }

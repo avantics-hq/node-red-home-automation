@@ -12,7 +12,8 @@ import {scheduledLighting} from "../lib/circadian";
 import {resolveSchedule} from "../lib/circadian-schedule";
 import type {LightLevels} from "../lib/light-styling";
 import {publishRoom, roomRetainedTopics, roomStartingOutputs, roomStoppingOutputs, type RoomPublishingConfig} from "../lib/room-publishing";
-import {clearStaleRetained, guarded, invalidConfig, whenFlowsStarted, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
+import {retainedClears} from "../lib/retained-topics";
+import {allRetainedTopics, clearStaleRetained, wasDeleted, guarded, invalidConfig, whenFlowsStarted, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
 import {booleanSetting, jsonSetting, numberSetting, optionalBooleanSetting, optionalChoiceSetting, textSetting} from "../lib/settings";
 import {ID_SCHEMES, discoveryPrefixSetting} from "../lib/ha-discovery";
 import {publishingArea} from "../lib/topic-names";
@@ -155,12 +156,15 @@ const registerRoomController: NodeInitializer = (RED) => {
       if (starting.length) node.send([starting.map((output) => ({...output}))]);
     });
 
-    node.on("close", (_removed: boolean, done: () => void) => {
+    node.on("close", (removed: boolean, done: () => void) => {
       clearInterval(refreshTimer);
       // Reaches the broker only if the MQTT out node is still running, as in a
-      // deploy of this node alone; the broker's own Close and Will messages
-      // cover a full deploy, a restart and a crash (see the README).
-      const stopping = roomStoppingOutputs(controllerConfig);
+      // deploy of modified nodes or flows; the broker's own Close and Will
+      // messages cover a full deploy, a restart and a crash (see the README).
+      // A deleted node removes its entities and retained state instead.
+      const stopping = wasDeleted(RED, node, removed)
+        ? retainedClears(allRetainedTopics(node, roomRetainedTopics(controllerConfig)))
+        : roomStoppingOutputs(controllerConfig);
       if (stopping.length) node.send([stopping.map((output) => ({...output}))]);
       done();
     });
