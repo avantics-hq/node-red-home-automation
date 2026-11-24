@@ -3,7 +3,7 @@
     "id": "example-cover-pair-cover-pair-example",
     "type": "comment",
     "name": "Cover pair example",
-    "info": "Two covers moved as one, such as the left and right of a curtain. The group sends each member the request with its own request ID; a switch node routes them by msg.topic; each member's second output comes back to the group, which reports ready only when both confirm, and otherwise which did what. Map each member's commands and reports to its device as in the Cover control example.",
+    "info": "Two covers moved as one, such as the left and right of a curtain. The group sends each member the request, with its own request ID, on that member's own output (after the group's result on output 1); each member's second output comes back to the group, which reports ready only when both confirm, and otherwise which did what. Map each member's commands and reports to its device as in the Cover control example.",
     "x": 160,
     "y": 40,
     "wires": []
@@ -66,44 +66,16 @@
     "y": 120,
     "wires": [
       [
-        "example-cover-pair-route"
-      ],
-      [
         "example-cover-pair-pair-result"
-      ]
-    ]
-  },
-  {
-    "id": "example-cover-pair-route",
-    "type": "switch",
-    "name": "to each member",
-    "property": "topic",
-    "propertyType": "msg",
-    "rules": [
-      {
-        "t": "eq",
-        "v": "left",
-        "vt": "str"
-      },
-      {
-        "t": "eq",
-        "v": "right",
-        "vt": "str"
-      }
-    ],
-    "checkall": "true",
-    "repair": false,
-    "outputs": 2,
-    "x": 560,
-    "y": 100,
-    "wires": [
+      ],
       [
         "example-cover-pair-left"
       ],
       [
         "example-cover-pair-right"
       ]
-    ]
+    ],
+    "outputs": 3
   },
   {
     "id": "example-cover-pair-pair-result",

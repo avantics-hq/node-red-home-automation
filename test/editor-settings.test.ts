@@ -7,6 +7,8 @@ import test from "node:test";
 
 interface Definition {
   defaults: Record<string, {value: unknown; validate?: (this: Record<string, unknown>, value: unknown) => boolean}>;
+  outputs?: number;
+  outputLabels?: string[] | ((this: Record<string, unknown>, index: number) => string);
   onadd?: (this: Record<string, unknown>) => void;
 }
 
@@ -145,4 +147,12 @@ test("a house schedule starts with publishing off and names itself after the nod
   assert.deepEqual([house.defaults.publishState?.value, house.defaults.discovery?.value, house.defaults.houseName?.value], [false, false, "house"]);
   assert.equal(newNode(house).idScheme, "node");
   assert.equal(editorDefinition("room-controller.html").defaults.timesFrom?.value, null, "not set: the room's own times");
+});
+
+test("a cover group has the group's result, then one output per member labelled from Members", () => {
+  const group = editorDefinition("cover-group.html");
+  assert.equal(group.defaults.outputs?.value, 3, "two members by default, and the result");
+  const labels = group.outputLabels as (this: Record<string, unknown>, index: number) => string;
+  const node = {members: "[\"left\",\"middle\",\"right\"]"};
+  assert.deepEqual([0, 1, 2, 3].map((index) => labels.call(node, index)), ["group result", "left", "middle", "right"]);
 });

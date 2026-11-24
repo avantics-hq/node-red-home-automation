@@ -13,11 +13,27 @@
           }) && parsed.filter(function (name, index) { return parsed.indexOf(name) === index; }).length === parsed.length;
         } catch (e) { return false; }
       }},
-      deadlineSeconds: {value: 120, required: true, validate: function (v) { return RED.validators.number()(v) && Number(v) >= 1; }}
+      deadlineSeconds: {value: 120, required: true, validate: function (v) { return RED.validators.number()(v) && Number(v) >= 1; }},
+      // The group's result, then one output per member (as the core switch
+      // node sets its outputs from its rules).
+      outputs: {value: 3}
     },
     inputs: 1,
-    outputs: 2,
-    outputLabels: ["member requests", "group result"],
+    outputs: 3,
+    outputLabels: function (index) {
+      if (index === 0) return "group result";
+      try { return JSON.parse(this.members)[index - 1] || ""; } catch (e) { return ""; }
+    },
+    oneditprepare: function () {
+      function count() {
+        try {
+          var parsed = JSON.parse($("#node-input-members").val());
+          if (Array.isArray(parsed)) $("#node-input-outputs").val(parsed.length + 1);
+        } catch (e) { /* left as it was until Members is valid */ }
+      }
+      $("#node-input-members").on("change keyup", count);
+      count();
+    },
     icon: "font-awesome/fa-columns",
     label: function () { return this.name || (this.area ? this.area + " " : "") + "cover group"; }
   });
@@ -27,6 +43,7 @@
   <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
   <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area"></div>
   <div class="form-row"><label for="node-input-members">Members</label><input type="text" id="node-input-members"></div>
+  <input type="hidden" id="node-input-outputs">
   <div class="form-row"><label for="node-input-deadlineSeconds">Answer deadline (s)</label><input type="number" id="node-input-deadlineSeconds"></div>
 </script>
 
@@ -43,14 +60,15 @@
   </dl>
   <h3>Outputs</h3>
   <ol class="node-ports">
-    <li>One request per member, with <code>msg.topic</code> naming it (from <b>Members</b>) and its own
-      <code>coverRequestId</code>: route them to the member cover nodes with a switch node on the topic. A cover
-      node answers that request even when it doesn't carry it out, with the reason.</li>
     <li>The group's result, <code>msg.theatre = {kind: "target_state", target: "cover", status, details}</code>:
       <code>ready</code> only when every member confirms; once every member has settled with any not ready,
       <code>failed</code> with reason <code>partial</code> (some confirmed) or <code>none-confirmed</code>, and
       <code>details.members</code> saying what each did. A member silent at the <b>Answer deadline</b> counts as
       <code>no-answer</code>, and a new request first answers the open one <code>failed</code> with reason
       <code>superseded</code>.</li>
+    <li>Then one output per member, in the order of <b>Members</b> and labelled with its name: that member's
+      request, with its own <code>coverRequestId</code> (and <code>msg.topic</code> naming it). Wire each to its
+      cover node; no switch node is needed. A cover node answers the request even when it doesn't carry it out,
+      with the reason. Changing <b>Members</b> changes the number of outputs.</li>
   </ol>
 </script>

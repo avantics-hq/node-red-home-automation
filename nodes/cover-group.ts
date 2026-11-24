@@ -33,11 +33,15 @@ const registerCoverGroup: NodeInitializer = (RED) => {
     function process(event: CoverGroupEvent, send: Send) {
       const result = runReducer(node, trace, (saved: Partial<CoverGroupState> | undefined, now) =>
         transitionCoverGroup(saved, event, members, now, deadlineSeconds));
-      // One request per member on output 1, with msg.topic naming the member
-      // for a switch node; the group's result on output 2.
+      // The group's result on output 1, then one output per member, in the
+      // order of Members, each with that member's request (msg.topic still
+      // names it).
       const outputs = [
-        result.commands.length ? result.commands.map((command) => ({...command})) : null,
-        result.events.length ? result.events.map((entry) => ({payload: undefined, ...entry})) : null
+        result.events.length ? result.events.map((entry) => ({payload: undefined, ...entry})) : null,
+        ...members.map((member) => {
+          const request = result.commands.filter((command) => command.topic === member);
+          return request.length ? request.map((command) => ({...command})) : null;
+        })
       ];
       if (outputs.some((output) => output !== null)) send(outputs);
       node.status({
