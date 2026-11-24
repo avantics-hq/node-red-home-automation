@@ -72,6 +72,21 @@ way; other rewrites can still be misread.
 | `home-switch-lighting-policy` | Converts raw edges or pre-classified button actions into lighting intent while exposing input freshness and availability. |
 | `home-room-lighting-controller` | Owns the room's light commands, adaptive styling, manual and held lights, and lighting state. |
 
+One house schedule can set the wake and bed times for many rooms. It is a
+configuration node, like an MQTT broker: choose it as a room controller's
+**Schedule** and the room follows it, hearing of every change without wires.
+Those rooms then have no wake and bed time entities of their own in Home
+Assistant. Rooms that need their own times (a child's room, say) choose none.
+Deleting the house schedule in the editor returns its rooms to their own times.
+The optional house schedule MQTT node publishes the schedule's times and Home
+Assistant time entities, and takes changes from them.
+Example: [`House schedule.json`](https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/House%20schedule.json).
+
+| Node | Purpose |
+|---|---|
+| `home-house-schedule` | A configuration node: one wake and bed time for every room that uses it. |
+| `home-house-schedule-mqtt` | Publishes a house schedule for Home Assistant and changes it from Home Assistant. |
+
 ### Home theatre equipment
 
 Each controller owns one kind of device. It accepts a generation-scoped intent,
@@ -84,17 +99,6 @@ on output 2. Example: [`Home theatre equipment.json`](https://github.com/avantic
 | `home-display-mode-controller` | Coordinates TV, projector, and screen transitions. |
 | `home-source-capability-controller` | Gates source readiness on fresh availability, active-device, application or playback evidence. |
 | `home-backlighting-controller` | Owns TV-backlight power with observation-gated confirmation. |
-
-One house schedule node can set the wake and bed times for many rooms: wire
-it to each room that should follow it and set that room's **Times from** to
-*house schedule*. Those rooms then have no wake and bed time entities of their
-own in Home Assistant; the house has them instead, when its publishing is on.
-It tells its rooms the times whenever the flows start and whenever they change.
-Rooms that need their own times (a child's room, say) just aren't wired to it.
-
-| Node | Purpose |
-|---|---|
-| `home-house-schedule` | One wake and bed time for every room that follows the house. |
 
 ### Theatre activities
 
@@ -235,7 +239,7 @@ Version 3.0 changes some behaviour. Check these after upgrading:
   clears any retained topic it published before and no longer does, for example after an area, base topic,
   discovery prefix or target change. It remembers what it published in its node context, which lasts across
   deploys and restarts only with a context store configured (see "Recommended setup"). Without that record, an occupancy, motion, receiver or
-  house schedule node named after itself (node-based IDs) that publishes state still clears its own Home Assistant
+  house schedule MQTT node named after itself (node-based IDs) that publishes state still clears its own Home Assistant
   entities it no longer publishes, such as after you switch discovery off; it never clears topics another node could
   publish. Other old topics, after an area, base topic, discovery prefix or target change, or after you switch
   publishing off entirely, are cleared only from the record. A node that never gets a startup message

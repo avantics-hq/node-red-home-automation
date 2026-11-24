@@ -80,8 +80,8 @@ export function circadianStateMessage(area: string, enabled: boolean): Discovery
 
 export interface RoomDiscoveryConfig extends DiscoveryOwner {
   displayName: string;
-  // "house": the room's times come from a house schedule node, so it has no
-  // time entities of its own.
+  // "house": the room follows a house schedule, so it has no time entities
+  // of its own.
   timesFrom?: "room" | "house";
 }
 

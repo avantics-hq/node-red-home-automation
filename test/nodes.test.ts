@@ -19,6 +19,8 @@ import registerSwitch from "../nodes/switch-policy";
 import registerOccupancy from "../nodes/occupancy-fusion";
 import registerRoom from "../nodes/room-controller";
 import registerHouse from "../nodes/house-schedule";
+import registerHouseMqtt from "../nodes/house-schedule-mqtt";
+import type {SharedSchedule} from "../lib/house-schedule";
 import registerSource from "../nodes/source-capability-controller";
 import type {TraceRecord} from "../lib/bounded-trace";
 import {transitionActivityLighting} from "../lib/activity-lighting-controller";
@@ -74,6 +76,9 @@ type RuntimeConstructor = new (config: Record<string, unknown>) => RuntimeNode;
 // configured context store, the setup the README recommends.
 const STORE = {contextStore: true};
 
+// Every node the tests have built, from any runtime, by ID.
+const builtNodes = new Map<string, unknown>();
+
 function runtime(
   register: NodeInitializer,
   credentials: Record<string, string> = {},
@@ -97,6 +102,7 @@ function runtime(
         // As Node-RED does, the node takes its ID from its saved config.
         (node as RuntimeNode & {id?: string}).id = config?.id;
         flowNodeIds.add(config?.id ?? "");
+        if (config?.id) builtNodes.set(config.id, node);
         const emitter = new EventEmitter();
         node.on = emitter.on.bind(emitter);
         node.emit = emitter.emit.bind(emitter);
@@ -131,6 +137,10 @@ function runtime(
             }
           }
         });
+      },
+      // Any node built so far, by ID, as a node finds its config node.
+      getNode(id: string) {
+        return builtNodes.get(id) ?? null;
       },
       // The deployed flows: every node built here, until a test deletes one.
       eachNode(callback: (node: {id: string}) => void) {
@@ -1852,29 +1862,105 @@ test("receiver volume number: a burst of sets becomes one request for the last v
   assert.ok(!results.includes("volume_manual_override"));
 });
 
-test("house schedule node: tells the rooms when the flows start and when a time changes", async (t) => {
-  const houseRuntime = runtime(registerHouse);
-  const node = new houseRuntime.Constructor({id: "house1", wakeTime: "07:00", bedTime: "23:00", houseName: "house", publishState: true, discovery: true});
+test("house schedule: a redeploy without a context store goes back to its settings; with one, keeps a runtime change", () => {
+  for (const [store, wakeTime] of [[{}, "07:00"], [STORE, "06:15"]] as const) {
+    const houseRuntime = runtime(registerHouse, {}, store);
+    const config = {id: "house-redeploy", name: "house", wakeTime: "07:00", bedTime: "23:00"};
+    const before = new houseRuntime.Constructor(config) as RuntimeNode & SharedSchedule;
+    before.change({kind: "schedule", wakeTime: "06:15"});
+    assert.equal(before.schedule().wakeTime, "06:15");
+    // Redeployed: closed (Node-RED then deletes its context unless a store
+    // is configured) and built again with the same settings.
+    before.emit("close", false, () => {});
+    before.closeContext?.();
+    const after = new houseRuntime.Constructor(config) as RuntimeNode & SharedSchedule;
+    assert.equal(after.schedule().wakeTime, wakeTime, store === STORE ? "with a store" : "without a store");
+  }
+});
+
+test("house schedule: rooms using it follow it, at the flow start and at every change, and stop when they close", async (t) => {
+  const house = new (runtime(registerHouse).Constructor)({id: "house1", name: "house", wakeTime: "07:00", bedTime: "23:00"}) as RuntimeNode & SharedSchedule;
+  assert.deepEqual(house.errors, []);
+  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
+  // With a context store, as reading a closed room's state and redeploying
+  // it with its saved state need one.
+  const rooms = runtime(registerRoom, {}, STORE);
+  const room = (id: string) => {
+    const node = new rooms.Constructor({id, targets, area: id, publishState: true, discovery: true, idScheme: "node", wakeTime: "08:00", bedTime: "22:00", houseSchedule: "house1"});
+    t.after(() => close(node));
+    return node;
+  };
+  const [hall, study] = [room("hall"), room("study")];
+  const schedule = (node: RuntimeNode) => (node.context().get("state") as {schedule?: unknown} | undefined)?.schedule;
+  rooms.events.emit("flows:started");
+  assert.deepEqual([schedule(hall), schedule(study)], [{wakeTime: "07:00", bedTime: "23:00"}, {wakeTime: "07:00", bedTime: "23:00"}],
+    "the house's times, not the rooms' own");
+
+  house.change({kind: "schedule", bedTime: "22:30"});
+  assert.deepEqual([schedule(hall), schedule(study)], [{wakeTime: "07:00", bedTime: "22:30"}, {wakeTime: "07:00", bedTime: "22:30"}]);
+  // Following the house, a room has no time entities and reads no time set topics of its own.
+  const startup = await receive<SendEnvelope>(hall, {lighting: {kind: "startup"}});
+  const published = startup.flat(2).filter((message) => message?.payload !== "").map((message) => String(message?.topic));
+  assert.ok(!published.some((topic) => /wake|bed/.test(topic)), published.join());
+  await receive(hall, {topic: "home/hall/wake-time/set", payload: "05:00:00"});
+  assert.deepEqual(schedule(hall), {wakeTime: "07:00", bedTime: "22:30"});
+
+  await close(study);
+  house.change({kind: "schedule", wakeTime: "06:00"});
+  assert.deepEqual([schedule(hall), schedule(study)], [{wakeTime: "06:00", bedTime: "22:30"}, {wakeTime: "07:00", bedTime: "22:30"}],
+    "a closed room no longer listens");
+
+  // Redeployed with no schedule (or its schedule deleted): its own times, not the house's last ones.
+  const own = new rooms.Constructor({id: "study", targets, area: "study", publishState: true, discovery: true, idScheme: "node", wakeTime: "08:00", bedTime: "22:00", houseSchedule: ""});
+  t.after(() => close(own));
+  const startup2 = await receive<SendEnvelope>(own, {lighting: {kind: "startup"}});
+  assert.deepEqual(schedule(own), {wakeTime: "08:00", bedTime: "22:00"});
+  assert.ok(startup2.flat(2).some((message) => message?.topic === "home/study/wake-time/state" && message.payload === "08:00:00"));
+  assert.equal(traces(own).at(-1)?.reason, "own-times");
+});
+
+test("house schedule: a room whose schedule is missing keeps its own times and says so", async (t) => {
+  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
+  const rooms = runtime(registerRoom);
+  const node = new rooms.Constructor({id: "orphan", targets, area: "orphan", publishState: true, discovery: true, idScheme: "node", wakeTime: "08:00", bedTime: "22:00", houseSchedule: "deleted-schedule"});
   t.after(() => close(node));
   assert.deepEqual(node.errors, []);
-  houseRuntime.events.emit("flows:started");
-  const started = node.sent as SendEnvelope[];
-  const toRooms = started.flatMap((envelope) => envelope[0] ?? []).map((message) => (message as {lighting?: unknown}).lighting);
-  assert.deepEqual(toRooms, [{kind: "schedule", wakeTime: "07:00", bedTime: "23:00"}], "rooms realign at every start");
-  const announced = started.flatMap((envelope) => envelope[1] ?? []).map(({topic}) => topic);
-  assert.ok(announced.includes("homeassistant/time/nrha_house1_wake_time/config"), announced.join());
-  assert.ok(announced.includes("home/house/schedule/wake-time/state"), announced.join());
+  assert.deepEqual(node.statuses.at(-1), {fill: "yellow", shape: "ring", text: "schedule missing: own times"});
+  assert.deepEqual(traces(node).map(({reason}) => reason), ["schedule-missing"], "traced once");
+  // Its own time entities and set topics again, as it publishes.
+  const startup = await receive<SendEnvelope>(node, {lighting: {kind: "startup"}});
+  const topics = startup.flat(2).filter((message) => message?.payload !== "").map((message) => String(message?.topic));
+  assert.ok(topics.includes("home/orphan/wake-time/state"), topics.join());
+  assert.ok(topics.some((topic) => topic.endsWith("_wake_time/config")), topics.join());
+  await receive(node, {topic: "home/orphan/wake-time/set", payload: "05:00:00"});
+  assert.equal((node.context().get("state") as {schedule: {wakeTime: string}}).schedule.wakeTime, "05:00");
+  assert.match(String((node.statuses.at(-1) as {text: string}).text), /^schedule missing: own times · /);
+});
 
-  const changed = await receive<SendEnvelope>(node, {lighting: {kind: "schedule", bedTime: "22:30"}});
-  assert.deepEqual(changed.flatMap((envelope) => envelope[0] ?? []).map((message) => (message as {lighting?: unknown}).lighting),
-    [{kind: "schedule", wakeTime: "07:00", bedTime: "22:30"}]);
-  assert.deepEqual(changed.flatMap((envelope) => envelope[1] ?? []).map(({topic, payload}) => [topic, payload]),
-    [["home/house/schedule/wake-time/state", "07:00:00"], ["home/house/schedule/bed-time/state", "22:30:00"]]);
-  // From Home Assistant, on its own set topic.
-  const fromHa = await receive<SendEnvelope>(node, {topic: "home/house/schedule/wake-time/set", payload: "06:15:00"});
-  assert.deepEqual(fromHa.flatMap((envelope) => envelope[0] ?? []).map((message) => (message as {lighting?: {wakeTime: string}}).lighting?.wakeTime), ["06:15"]);
-  assert.deepEqual(await receive(node, {topic: "home/house/schedule/wake-time/set", payload: "soon"}), []);
+test("house schedule MQTT node: publishes the schedule for Home Assistant and changes it from its set topics", async (t) => {
+  const house = new (runtime(registerHouse).Constructor)({id: "house2", name: "hall", wakeTime: "07:00", bedTime: "23:00"}) as RuntimeNode & SharedSchedule;
+  const mqttRuntime = runtime(registerHouseMqtt);
+  const node = new mqttRuntime.Constructor({id: "house-mqtt", schedule: "house2", discovery: true, idScheme: "node"});
+  t.after(() => close(node));
+  assert.deepEqual(node.errors, []);
+  mqttRuntime.events.emit("flows:started");
+  const announced = (node.sent as SendEnvelope[]).flatMap((envelope) => envelope[0] ?? []).map(({topic}) => topic);
+  assert.ok(announced.includes("homeassistant/time/nrha_house2_wake_time/config"), "named after the schedule: " + announced.join());
+  assert.ok(announced.includes("home/hall/schedule/wake-time/state"), announced.join());
+
+  node.sent.length = 0;
+  house.change({kind: "schedule", bedTime: "22:30"});
+  assert.deepEqual((node.sent as SendEnvelope[]).flatMap((envelope) => envelope[0] ?? []).map(({topic, payload}) => [topic, payload]),
+    [["home/hall/schedule/wake-time/state", "07:00:00"], ["home/hall/schedule/bed-time/state", "22:30:00"]]);
+  await receive(node, {topic: "home/hall/schedule/wake-time/set", payload: "06:15:00"});
+  assert.equal(house.schedule().wakeTime, "06:15");
+  await receive(node, {lighting: {kind: "schedule", wakeTime: "06:45"}});
+  assert.equal(house.schedule().wakeTime, "06:45");
+  await receive(node, {topic: "home/hall/schedule/wake-time/set", payload: "soon"});
   assert.equal(traces(node).at(-1)?.reason, "not-a-time");
+
+  const orphan = new mqttRuntime.Constructor({id: "house-mqtt2", schedule: "deleted-schedule"});
+  assert.deepEqual(orphan.errors.map(String), ["invalid configuration: the house schedule is missing"]);
 });
 
 test("one flows:started listener however many nodes wait: no MaxListenersExceededWarning past ten", async () => {
@@ -1907,20 +1993,6 @@ test("one flows:started listener however many nodes wait: no MaxListenersExceede
   } finally {
     process.off("warning", onWarning);
   }
-});
-
-test("house schedule node: announces on every flows:started, not only its own, until it closes", async () => {
-  const houseRuntime = runtime(registerHouse);
-  const node = new houseRuntime.Constructor({id: "house2"});
-  const toRooms = () => (node.sent as SendEnvelope[]).flatMap((envelope) => envelope[0] ?? []).length;
-  houseRuntime.events.emit("flows:started");
-  // A deploy of other nodes (a room added) starts the flows again.
-  houseRuntime.events.emit("flows:started");
-  assert.equal(toRooms(), 2);
-  await close(node);
-  houseRuntime.events.emit("flows:started");
-  assert.equal(toRooms(), 2, "closed: no longer listening");
-  assert.equal(houseRuntime.events.listenerCount("flows:started"), 1, "one listener for the runtime, not one per node");
 });
 
 test("cover node: simple requests, presets, and a moving signal on output 3", async (t) => {

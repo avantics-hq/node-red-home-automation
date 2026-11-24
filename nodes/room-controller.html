@@ -28,7 +28,9 @@
         // name them after the node (onadd), so renaming the area keeps them.
         idScheme: {value: null},
         // Where wake and bed times come from: null (not set) is this room.
-        timesFrom: {value: null},
+        // The house schedule it follows; none: its own times. Node-RED's
+        // editor offers an existing schedule first for a new room.
+        houseSchedule: {value: "", type: "home-house-schedule", required: false},
         displayName: {value: ""},
         discoveryPrefix: {value: "homeassistant", required: true, validate: function (v) { var prefix = String(v || "").trim().replace(/^\/+|\/+$/g, ""); return Boolean(prefix) && !/[+#]/.test(prefix); }},
         targets: {value: "[]", required: true, validate: function (v) { try { JSON.parse(v); return true; } catch (e) { return false; } }},
@@ -52,7 +54,6 @@
       },
       oneditprepare: function () {
         var node = this;
-        $("#node-input-timesFrom").val(node.timesFrom || "room");
         $("#node-input-publishState").prop("checked", on(node.publishState));
         $("#node-input-discovery").prop("checked", on(node.discovery));
         // Discovery describes the published state, so it needs it.
@@ -88,13 +89,7 @@
   <div class="form-row"><label for="node-input-initialTransitionSeconds">Initial transition seconds</label><input type="number" id="node-input-initialTransitionSeconds"></div>
   <div class="form-row"><label for="node-input-refreshTransitionSeconds">Refresh transition seconds</label><input type="number" id="node-input-refreshTransitionSeconds"></div>
   <div class="form-row"><label for="node-input-refreshSeconds">Refresh interval seconds</label><input type="number" id="node-input-refreshSeconds"></div>
-  <div class="form-row">
-    <label for="node-input-timesFrom">Times from</label>
-    <select id="node-input-timesFrom">
-      <option value="room">this room</option>
-      <option value="house">house schedule</option>
-    </select>
-  </div>
+  <div class="form-row"><label for="node-input-houseSchedule">Schedule</label><input type="text" id="node-input-houseSchedule"></div>
   <div class="form-row"><label for="node-input-wakeTime">Wake time</label><input type="text" id="node-input-wakeTime" placeholder="07:00"></div>
   <div class="form-row"><label for="node-input-bedTime">Bed time</label><input type="text" id="node-input-bedTime" placeholder="23:00"></div>
   <div class="form-row"><label for="node-input-initialSleep">Initial sleep mode</label><input type="checkbox" id="node-input-initialSleep" style="display:inline-block; width:auto;"></div>
@@ -128,10 +123,12 @@
   </dl>
   <p>New nodes start with both off. A node saved before these settings existed keeps publishing both.</p>
   <h3>Circadian schedule</h3>
-  <p><b>Times from</b> <i>house schedule</i>: the room takes its wake and bed times from a house schedule node wired
-    to it, has no wake and bed time entities of its own in Home Assistant (they are cleared), and ignores its own
-    wake-time and bed-time set topics. Its <b>Wake time</b> and <b>Bed time</b> apply only until the house first
-    sends.</p>
+  <p><b>Schedule</b>: a house schedule the room follows, shared with other rooms. Following it, the room takes its
+    wake and bed times from it whenever they change, has no wake and bed time entities of its own in Home Assistant
+    (they are cleared), and ignores its own wake-time and bed-time set topics. With none, the room keeps its own
+    <b>Wake time</b> and <b>Bed time</b>. If the schedule is missing when the room starts, as when it was deleted
+    from the flows file, the room keeps its own times and its status says <i>schedule missing: own times</i>; deleting
+    a schedule in the editor sets its rooms to none.</p>
   <p>Circadian levels follow <b>Wake time</b> and <b>Bed time</b> (24-hour <code>HH:MM</code>, default 07:00 and
     23:00): they rise to the daytime level over the hour after waking, stay at the daytime brightness and colour
     through the day, wind down to the sleep settings over the three hours before bed, and stay at the sleep
