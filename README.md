@@ -200,10 +200,20 @@ also attaches the package tarball and its SHA-256 checksum. Install a downloaded
 tarball through **Manage palette → Install → Upload module**, or with:
 
 ```sh
-npm install /path/to/avantics-node-red-home-automation-4.0.0.tgz
+npm install /path/to/avantics-node-red-home-automation-4.0.1.tgz
 ```
 
 Add the installed nodes from the **home automation** section of the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.
+
+### 4.0.1
+
+Fixes the cover controller ending a move too early when a transport echoes the
+requested position as soon as the command is sent, before the motor moves: the
+cover showed as stopped while it was still travelling, and the travel after it
+was taken for a person's move. A move now confirms only once the cover has
+stopped at the target, from a `stopped` motion report or the same position for
+the settle time. Set the settle time to at least how often the motor reports
+while it travels (see Covers).
 
 ### 4.0.0
 
