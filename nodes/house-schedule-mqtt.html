@@ -44,7 +44,8 @@
   <p>It publishes the schedule's times, retained, on <code>home/&lt;name&gt;/schedule/wake-time/state</code> and
     <code>bed-time/state</code>, with availability on <code>home/&lt;name&gt;/schedule/availability</code>; with
     <b>Home Assistant discovery</b>, wake and bed time entities, named after the schedule so a replacement node keeps
-    them. Wire its output to an MQTT out node, and an MQTT in node on the set topics to its input.</p>
+    them. Use one per schedule: two would share the same topics and entities, and deleting one clears them for both
+    until the other next starts. Wire its output to an MQTT out node, and an MQTT in node on the set topics to its input.</p>
   <h3>Inputs</h3>
   <dl class="message-properties">
     <dt>topic = home/&lt;name&gt;/schedule/wake-time/set or bed-time/set</dt><dd>a time from Home Assistant.

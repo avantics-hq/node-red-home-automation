@@ -77,6 +77,7 @@ configuration node, like an MQTT broker: choose it as a room controller's
 **Schedule** and the room follows it, hearing of every change without wires.
 Those rooms then have no wake and bed time entities of their own in Home
 Assistant. Rooms that need their own times (a child's room, say) choose none.
+Deleting the house schedule in the editor returns its rooms to their own times.
 The optional house schedule MQTT node publishes the schedule's times and Home
 Assistant time entities, and takes changes from them.
 Example: [`House schedule.json`](https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/House%20schedule.json).
