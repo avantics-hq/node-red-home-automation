@@ -103,6 +103,11 @@
 <script type="text/html" data-help-name="home-room-lighting-controller">
   <p>Owns room MQTT commands, adaptive colour and brightness, manual overrides, discovery and bounded tracing.</p>
   <h3>Publishing</h3>
+  <p>Wire its commands to MQTT out unchanged. It watches each light's command topic to tell its own commands from
+    other people's, so a function that rewrites them on the way makes them look like someone else's. A bare ON or OFF
+    that arrives within 5 seconds of one of its own commands with that power, before that command has come back on the
+    topic, is taken as that command (traced as <code>mutated-own-command</code>), and it restyles a light after someone else's bare ON at most once every 5
+    seconds, so it never answers itself in a loop.</p>
   <p>The room always commands its lights on each target's own command topic. Two settings add what it publishes
     for other systems to see; both are named after the <b>Area</b>, which is needed only when one of them is on. Topics
     and IDs use it in lowercase, with spaces and other characters (anything but letters, digits, <code>_</code> and

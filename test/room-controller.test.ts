@@ -259,7 +259,7 @@ test("a stale state report does not undo the controller's own command in flight"
   assert.equal(result.state.desired.cooking, false);
 });
 
-test("an own command echo still marks only one matching external command as own", () => {
+test("an own command echo seen twice in the echo window is ours; after it, someone else's", () => {
   let result = publishRoom(undefined, {
     lighting: {kind: "intent", targets: ["cooking"], state: "OFF", source: "wall"}
   }, config, now);
@@ -267,6 +267,8 @@ test("an own command echo still marks only one matching external command as own"
   result = publishRoom(result.state, echo, config, later(100));
   assert.equal(result.traces.length, 0);
   result = publishRoom(result.state, echo, config, later(200));
+  assert.equal(result.traces.length, 0, "a repeat of our own echo");
+  result = publishRoom(result.state, echo, config, later(6000));
   assert.equal(result.traces.at(-1)?.event, "external-command");
 });
 
@@ -882,4 +884,89 @@ test("a room with saved state restyles as before", () => {
   assert.deepEqual(saved.state.untold, []);
   const refresh = publishRoom(saved.state, {lighting: {kind: "refresh"}}, config, new Date(now.getTime() + 90000));
   assert.deepEqual(refresh.outputs.filter((output) => output.lighting_command).map((output) => output.lighting_command!.target), ["cooking"]);
+});
+
+// The real-install loop: a function between the controller and MQTT out
+// cuts every command to {"state":"ON"}, and the command observer feeds that
+// back. Each command the room sends comes back changed, up to `rounds` times.
+function loopThroughRewriter(start: ReturnType<typeof publishRoom>, rounds: number, copies = 1) {
+  let result = start;
+  let commands = 0;
+  let pending = result.outputs.filter((output) => output.lighting_command);
+  let at = now.getTime() + 100;
+  for (let round = 0; round < rounds && pending.length; round += 1) {
+    commands += pending.length;
+    const next: RoomOutput[] = [];
+    for (const output of pending) {
+      for (let copy = 0; copy < copies; copy += 1) {
+        at += 10;
+        result = publishRoom(result.state, {
+          topic: output.topic,
+          payload: JSON.stringify({state: "ON"}),
+          lighting: {kind: "command-observed", target: output.lighting_command!.target}
+        }, config, new Date(at));
+        next.push(...result.outputs.filter((entry) => entry.lighting_command));
+      }
+    }
+    pending = next;
+  }
+  return {result, commands, correctives: commands - start.outputs.filter((output) => output.lighting_command).length};
+}
+
+test("a command rewritten on its way to MQTT never makes the room answer itself", () => {
+  const styled = publishRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, now);
+  assert.equal(styled.outputs.filter((output) => output.lighting_command).length, 1);
+  const looped = loopThroughRewriter(styled, 50);
+  assert.equal(looped.correctives, 0, "the rewritten echo is ours, so nothing more is sent");
+  assert.equal(looped.result.traces.find(({reason}) => reason === "mutated-own-command")?.outcome, "ignored");
+
+  // Each rewritten command delivered twice (two subscriptions, or a QoS
+  // redelivery): the second copy looks like someone else's, but the room
+  // restyles each light at most once per echo window.
+  const doubled = loopThroughRewriter(styled, 50, 2);
+  assert.ok(doubled.correctives <= 1, `${doubled.correctives} restyles`);
+});
+
+test("someone else's bare ON is still restyled, once per echo window", () => {
+  const external = (at: number) => publishRoom(undefined, {topic: "home/kitchen/light/group/cooking/set", payload: {state: "ON"},
+    lighting: {kind: "command-observed", target: "cooking"}}, config, new Date(now.getTime() + at));
+  const first = external(0);
+  assert.deepEqual(first.outputs.filter((output) => output.lighting_command).map((output) => output.lighting_command!.source), ["external-bare-on"]);
+  // Another bare ON in the window, not ours: the room has just restyled it.
+  const again = publishRoom(first.state, {topic: "home/kitchen/light/group/cooking/set", payload: {state: "ON"}, retain: false,
+    lighting: {kind: "command-observed", target: "cooking"}}, config, new Date(now.getTime() + 6000));
+  assert.deepEqual(again.outputs.filter((output) => output.lighting_command).map((output) => output.lighting_command!.source), ["external-bare-on"],
+    "after the window, restyled again");
+});
+
+test("echo orderings never turn our own command into a manual light", () => {
+  const send = () => publishRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, now);
+  const seen = (state: RoomState, payload: unknown, ms: number) => publishRoom(state, {
+    topic: "home/kitchen/light/group/cooking/set", payload, lighting: {kind: "command-observed", target: "cooking"}
+  }, config, later(ms));
+  const ours = (result: ReturnType<typeof publishRoom>) => result.outputs.find((output) => output.lighting_command)!.payload;
+  const control = (result: ReturnType<typeof publishRoom>) => result.status.control.cooking;
+
+  // A person's bare ON between our styled ON and its echo, then our echo.
+  let result = send();
+  const styled = ours(result);
+  result = seen(result.state, {state: "ON"}, 50);
+  result = seen(result.state, styled, 100);
+  assert.equal(control(result), "in-control", "a race with a person's bare ON");
+  assert.deepEqual(result.outputs.filter((output) => output.lighting_command), []);
+
+  // Our exact echo delivered twice.
+  result = send();
+  result = seen(result.state, styled, 50);
+  result = seen(result.state, styled, 100);
+  assert.equal(control(result), "in-control", "our echo twice");
+
+  // The light confirms first, then a bare ON, then our echo.
+  result = send();
+  result = publishRoom(result.state, {topic: "home/kitchen/light/group/cooking", payload: {state: "ON", brightness: 200},
+    lighting: {kind: "observed"}}, config, later(30));
+  assert.equal(result.state.expected.cooking?.[0]?.on, undefined, "confirmed");
+  result = seen(result.state, {state: "ON"}, 50);
+  result = seen(result.state, styled, 100);
+  assert.equal(control(result), "in-control", "echo after its state report, with a bare ON between");
 });
