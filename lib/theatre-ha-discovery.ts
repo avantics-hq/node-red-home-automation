@@ -36,9 +36,18 @@ export interface TheatreDiscoveryConfig extends DiscoveryOwner {
   activities: string[];
 }
 
+// Under the node scheme the area is optional: entity IDs then come from the
+// display name.
+function namedArea(config: TheatreDiscoveryConfig): string {
+  return config.area || config.displayName;
+}
+
 function device(config: TheatreDiscoveryConfig) {
   return {
     ...discoveryDevice(config, "theatre"),
+    // Only an area the user typed: Home Assistant creates an area of that name
+    // if none exists, so a display name such as "Home Cinema" would make one.
+    ...(config.idScheme === "node" && config.area ? {suggested_area: config.area} : {}),
     name: `${config.displayName} Theatre Controller`,
     manufacturer: "Node-RED",
     model: "Deterministic theatre activity controller"
@@ -172,7 +181,7 @@ function theatreEntries(config: TheatreDiscoveryConfig) {
 
 export function theatreDiscovery(config: TheatreDiscoveryConfig): Array<{topic: string; payload: Record<string, unknown>}> {
   return theatreEntries(config).map(({component, entity, payload}) => {
-    const ids = discoveryEntity(config, component, entity);
+    const ids = discoveryEntity(config.idScheme === "node" ? {...config, area: namedArea(config)} : config, component, entity);
     // The IDs follow the name, as they always have, so an area-scheme entry
     // is the same, byte for byte, as before the schemes existed.
     const {name, ...rest} = payload;

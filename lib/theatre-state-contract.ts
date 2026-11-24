@@ -85,9 +85,12 @@ export function normaliseStateContractConfig(
   config: Partial<TheatreStateContractConfig> = {}
 ): TheatreStateContractConfig {
   const discovery = config.discovery !== false;
-  // The area names the discovery entities and the default base topic, so it
-  // is needed for either; otherwise it is optional.
-  const area = publishingArea(String(config.area || "").trim(), discovery || !config.baseTopic);
+  // The area names the default base topic, so it is needed without one. It
+  // also names an area-scheme contract's entities; a node-scheme contract's
+  // are named after the node, and its entity IDs fall back to the display
+  // name. Otherwise it is optional.
+  const area = publishingArea(String(config.area || "").trim(),
+    !config.baseTopic || (discovery && config.idScheme !== "node"));
   const displayName = String(config.displayName || area).trim();
   if (discovery && !displayName) throw new Error("displayName is required");
   const baseTopic = String(config.baseTopic || `home/${areaId(area)}/theatre`).replace(/^\/+|\/+$/g, "");

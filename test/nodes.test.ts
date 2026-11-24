@@ -1670,3 +1670,12 @@ test("motion publishing: after a redeploy with a new vacancy setting, the delay 
   // Nothing more to publish when nothing changes.
   assert.deepEqual(await receive(changed, {source: "illuminance", payload: 5}), []);
 });
+
+test("a new theatre contract with discovery needs only a base topic and a display name", async (t) => {
+  const contract = runtime(registerTheatreStateContract).Constructor;
+  const node = new contract({id: "c8", idScheme: "node", displayName: "Media Room", baseTopic: "media/theatre", activities: "[\"off\"]", discovery: true});
+  t.after(() => close(node));
+  assert.deepEqual(node.errors, []);
+  const saved = new contract({id: "c9", displayName: "Media Room", baseTopic: "media/theatre", activities: "[\"off\"]", discovery: true});
+  assert.deepEqual(saved.errors.map(String), ["invalid configuration: area is required"], "a contract saved before node IDs still needs one");
+});
