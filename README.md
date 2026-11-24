@@ -132,36 +132,6 @@ npm install /path/to/avantics-node-red-home-automation-3.0.0.tgz
 
 Add the installed nodes from the **home automation** section of the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.
 
-## Recommended setup: a file context store
-
-The nodes keep what they are doing in Node-RED's node context. By default
-Node-RED keeps context in memory and deletes a node's context whenever the
-node stops: on every deploy that includes it (a full deploy, or a modified
-deploy after you change it) and on every restart. Configure the file context
-store so it survives. In `settings.js` in your Node-RED user directory, set:
-
-```js
-contextStorage: {
-    default: { module: "localfilesystem" }
-},
-```
-
-then restart Node-RED. The file store writes changes to disk every 30 seconds
-by default, so a change made just before Node-RED stops can still be lost.
-
-Without a context store, after a node is redeployed or Node-RED restarts:
-
-- **Changes made at runtime go back to the node's settings:** for example motion
-  lighting's enable, vacancy delay and lux cutoff, and a room's circadian
-  lighting, sleep, and wake and bed times set from Home Assistant or a message.
-- **Work in progress is not recovered:** a motion off-timer that was running,
-  or a theatre device change still being confirmed. The node starts afresh
-  and goes by what it next observes.
-- **Old retained topics are not cleared:** a node can't remember what it
-  published before, so after you change an area, base topic, discovery prefix
-  or targets, the old retained topics and Home Assistant entities stay until
-  you remove them yourself.
-
 ### Upgrading from 2.x
 
 Version 3.0 changes some behaviour. Check these after upgrading:
@@ -267,6 +237,46 @@ request resumes automation. Recovery adopts physical state only when fresh
 display, AVR, source, and backlighting evidence matches exactly one configured
 profile; missing or ambiguous startup evidence invokes the configured Off
 activity.
+
+## Recommended setup: a file context store
+
+The nodes keep what they are doing in Node-RED's node context. By default
+Node-RED keeps context in memory and deletes a node's context whenever the
+node stops: on a full deploy, on a "Modified flows" deploy of its flow (which
+restarts every node in that flow, changed or not), on a "Modified nodes"
+deploy of the node itself, and on every restart. Configure the file context
+store so it survives. In `settings.js` in your Node-RED user directory, set:
+
+```js
+contextStorage: {
+    default: { module: "localfilesystem" }
+},
+```
+
+then restart Node-RED. The file store writes changes to disk every 30 seconds
+by default, so a change made just before Node-RED stops can still be lost.
+
+Without a context store, after a node is redeployed or Node-RED restarts:
+
+- **A room forgets which lights are held or manual:** every light an activity
+  held, or a person set by hand, is back under the room's control, so the next
+  refresh restyles an activity's lights and lights a person set.
+- **Changes made at runtime go back to the node's settings:** for example motion
+  lighting's enable, vacancy delay and lux cutoff, a room's circadian lighting,
+  sleep, and wake and bed times, and the house schedule's times, set from Home
+  Assistant or a message.
+- **The theatre starts its counts again:** its counters and operational SLO
+  samples restart, and the activity controller no longer knows the current
+  activity. At its next startup recovery it works it out from what the devices
+  report, and if no single activity matches, it switches to the recovery off
+  activity.
+- **Work in progress is not recovered:** a motion off-timer that was running,
+  or a theatre device change still being confirmed. The node starts afresh
+  and goes by what it next observes.
+- **Old retained topics are not cleared:** a node can't remember what it
+  published before, so after you change an area, base topic, discovery prefix
+  or targets, the old retained topics and Home Assistant entities stay until
+  you remove them yourself.
 
 ## Room light control
 
