@@ -34,6 +34,7 @@ interface MotionPolicyConfig extends NodeDef {
   discovery?: boolean | string | null;
   discoveryPrefix?: string;
   idScheme?: string | null;
+  maxPauseSeconds?: number | string;
 }
 
 interface MotionPolicyNode extends Node {}
@@ -76,7 +77,7 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
       node.status({
         fill: status.enabled ? "green" : "grey",
         shape: "dot",
-        text: (status.enabled ? "enabled" : "disabled") + " · " +
+        text: (status.enabled ? "enabled" : status.paused ? "paused" : "disabled") + " · " +
           (status.illuminance === null ? "lux ?" : status.illuminance + " lux") + " · " +
           status.delaySeconds + "s"
       });
@@ -156,8 +157,10 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
         lifecycle.startup(send, motionStartingOutputs(publishing, savedPolicyState()));
         return;
       }
+      // Home Assistant's set topics become the node's own inputs; anything
+      // else is an input as sent, with a pause's owner.
       const inbound = motionInbound(msg, publishing);
-      process(inbound?.input ?? {source: String(msg.source ?? ""), payload: msg.payload}, send, inbound);
+      process(inbound?.input ?? {source: String(msg.source ?? ""), payload: msg.payload, owner: typeof msg.owner === "string" ? msg.owner : undefined}, send, inbound);
     });
 
     node.on("close", (_removed: boolean, done: () => void) => {

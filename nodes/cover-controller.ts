@@ -118,6 +118,10 @@ const registerCoverController: NodeInitializer = (RED) => {
 
     node.on("close", (_removed: boolean, done: () => void) => {
       clearTimeout(timer);
+      // Whatever it paused shouldn't wait for a move this node no longer
+      // follows. Best effort: it reaches nodes still running, as in a deploy
+      // of this node alone.
+      if (model.moving(saved())) node.send([null, null, {topic: "moving", payload: false}]);
       done();
     });
   }

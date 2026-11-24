@@ -99,8 +99,9 @@
     <li>Whether the cover is moving, <code>msg.payload</code> <code>true</code> or <code>false</code> with
       <code>topic</code> <code>moving</code>, sent when it changes: from the cover's own motion reports, or, for a
       device without them, while a move is unconfirmed. Wire it to other policies that should react. To pause
-      motion lighting while a blind moves, use a pause input on the motion policy, not its enable
-      (<code>area-enabled</code>): that is the user's own switch, and a cover move must not change it.</li>
+      motion lighting while a blind moves, send it to the motion policy's <code>pause</code> input (with
+      <code>msg.owner</code>), as the example does, not its enable (<code>area-enabled</code>): that is the
+      user's own switch, and a cover move must not change it.</li>
   </ol>
   <h3>Open, close and stop only</h3>
   <p>For a motor with no reliable position, set <b>Cover</b> to <i>Open, close and stop only</i>. It takes
