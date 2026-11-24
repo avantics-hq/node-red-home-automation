@@ -177,7 +177,7 @@ test("manual movement latches ownership without a corrective command; a newer in
   result = setPosition(result.state, 20, 2, 60);
   assert.equal(result.state.classification, null);
   assert.equal(result.commands[0]?.position, 20);
-  result = observe(result.state, 20, 80);
+  result = observe(result.state, 20, 80, "stopped");
   assert.equal(result.state.phase, "ready");
 });
 
@@ -299,6 +299,9 @@ test("a duplicate report mid-travel without motion does not latch manual ownersh
   assert.equal(result.state.phase, "moving");
   result = observe(result.state, 70, 10);
   result = observe(result.state, 100, 15);
+  // At the target, but with no motion field it must hold there for settleMs.
+  assert.equal(result.state.phase, "moving");
+  result = observe(result.state, 100, 20);
   assert.equal(result.state.phase, "ready");
 });
 
@@ -328,6 +331,7 @@ test("a fresh observation at the target returns a manual cover to ready", () => 
 test("a hand move passing through the target does not report ready", () => {
   // dev-review repro: no motion reports, settleMs 5000.
   let result = setPosition(undefined, 50);
+  result = observe(result.state, 50, 15);
   result = observe(result.state, 50, 20);
   assert.equal(result.state.phase, "ready");
   result = observe(result.state, 80, 30);
@@ -425,4 +429,55 @@ test("an offline cover is sent nothing and answers requests as unavailable; back
   assert.deepEqual(online.commands.map(({operation}) => operation), ["observe"]);
   assert.equal(online.state.phase, "confirming");
   assert.equal(observe(online.state, 40, 31, "stopped").state.phase, "ready");
+});
+
+test("an optimistic echo of the target doesn't end the move or latch manual ownership", () => {
+  let result = observe(undefined, 0, 0, "stopped");
+  result = setPosition(result.state, 100, 1, 1);
+  // The transport echoes the requested position at once, before the motor moves.
+  result = observe(result.state, 100, 1.1);
+  assert.equal(result.state.phase, "moving");
+  assert.equal(result.status.moving, true, "output 3 stays moving");
+  assert.equal(result.traces.at(-1)?.reason, "awaiting-settle");
+  // Then the real travel, off target.
+  for (const [position, seconds] of [[20, 3], [55, 6], [90, 9]] as const) {
+    result = observe(result.state, position, seconds);
+    assert.equal(result.state.phase, "moving", `at ${position}`);
+    assert.equal(result.state.classification, null, "never manual: the cover is doing what it was told");
+  }
+  // At the target, and still there after settleMs: done.
+  result = observe(result.state, 100, 12);
+  assert.equal(result.state.phase, "moving");
+  result = observe(result.state, 100, 17);
+  assert.equal(result.state.phase, "ready");
+  assert.equal(result.state.classification, null);
+  assert.equal(result.commands.length, 0);
+  // A reliable "stopped" at the target confirms at once.
+  let stopped = setPosition(observe(undefined, 0, 0, "stopped").state, 100, 1, 1);
+  stopped = observe(stopped.state, 100, 1.1);
+  stopped = observe(stopped.state, 100, 20, "stopped");
+  assert.equal(stopped.state.phase, "ready");
+});
+
+test("still: a request for where the cover already is, a cover that never moves, and a restart at the target", () => {
+  // Already there and still: confirmed at once, with nothing sent.
+  let there = observe(undefined, 40, 0, "stopped");
+  there = setPosition(there.state, 40, 1, 1);
+  assert.deepEqual([there.state.phase, there.commands], ["ready", []]);
+
+  // Never moves and never reports: retried, then failed, as before.
+  let stuck = setPosition(undefined, 80, 1, 0);
+  const operations: string[] = [];
+  for (const seconds of [5, 10, 15, 20, 25, 31, 36, 41, 46, 51, 56, 62]) {
+    stuck = apply(stuck.state, {kind: "tick", generation: 1}, seconds);
+    operations.push(...stuck.commands.map(({operation}) => operation));
+  }
+  assert.equal(stuck.state.phase, "failed");
+  assert.ok(operations.filter((operation) => operation === "set_position").length >= 1, "retried");
+
+  // Restarted mid-move: re-reading finds it at the target and confirms at once.
+  let restarted = setPosition(observe(undefined, 0, 0, "stopped").state, 100, 1, 1);
+  restarted = apply(restarted.state, {kind: "startup"}, 3);
+  restarted = observe(restarted.state, 100, 4);
+  assert.equal(restarted.state.phase, "ready");
 });
