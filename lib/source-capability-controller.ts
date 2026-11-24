@@ -127,7 +127,9 @@ export type SourceEvent =
     reason?: string;
   }
   | {kind: "tick"; generation: number}
-  | {kind: "startup" | "refresh"};
+  | {kind: "startup"}
+  // From the theatre activity controller, with the activity's wanted values.
+  | {kind: "refresh"; requestId?: string | null; generation?: number; sourceId?: string | null; action?: string};
 
 export interface SourceMessage {
   sourceCapability?: SourceEvent;
@@ -581,6 +583,20 @@ export function transitionSource(
       state.phase = "confirming";
       trace("command", "emitted", null, {sourceId: state.desired.sourceId, operation: "observe"});
     }
+  }
+
+  // A refresh with the activity's wanted values, reaching a node with
+  // nothing desired (it started with nothing saved): adopt them as a saved
+  // state would hold them, and observe below as at startup, never commanding
+  // the change itself.
+  if (event.kind === "refresh" && !state.desired && typeof event.requestId === "string" && event.requestId &&
+    Number.isInteger(event.generation) && event.generation! >= Math.max(1, state.generation) &&
+    typeof event.action === "string" && Object.hasOwn(ACTIONS, event.action) &&
+    ((typeof event.sourceId === "string" && Object.hasOwn(config.sources, event.sourceId)) ||
+      (!event.sourceId && event.action === "deactivate"))) {
+    state.desired = {requestId: event.requestId, generation: event.generation!, sourceId: event.sourceId || null, action: event.action as SourceAction};
+    state.generation = event.generation!;
+    trace("refresh", "adopted", "nothing-desired", {sourceId: event.sourceId || null, action: event.action, generation: event.generation});
   }
 
   if (event.kind === "intent") {

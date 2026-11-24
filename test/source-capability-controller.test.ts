@@ -357,3 +357,24 @@ test("each kind of confirmation needs its own evidence", () => {
     required: "application", available: true, active: true, application: "player", playback: "unknown", satisfied: true
   });
 });
+
+test("a source node with nothing saved adopts a refresh's wanted source and observes, never activating it", () => {
+  let result = apply(undefined, {kind: "refresh", requestId: "activity-3", generation: 3, sourceId: "streamer", action: "activate"});
+  assert.equal(result.state.desired?.sourceId, "streamer");
+  assert.deepEqual(result.commands.map(({operation}) => operation), ["observe"]);
+  result = observed(result.state, "streamer", "active", 3, 0.5);
+  assert.deepEqual(result.commands, []);
+  assert.equal(theatreState(result).status, "ready");
+  assert.equal(theatreState(result).requestId, "activity-3");
+  // Not running: it is never activated, and doesn't report ready.
+  let other = apply(undefined, {kind: "refresh", requestId: "activity-4", generation: 4, sourceId: "streamer", action: "activate"});
+  const sent = [...other.commands];
+  other = observed(other.state, "streamer", "inactive", 4, 0.5);
+  sent.push(...other.commands);
+  for (const seconds of [2, 4, 6]) {
+    other = apply(other.state, {kind: "tick", generation: 4}, seconds);
+    sent.push(...other.commands);
+  }
+  assert.ok(!sent.some(({operation}) => operation === "activate"), JSON.stringify(sent));
+  assert.notEqual(theatreState(other).status, "ready");
+});

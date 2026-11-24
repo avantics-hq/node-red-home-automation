@@ -274,3 +274,22 @@ test("a restart's observe has a deadline and ends as a live request would", () =
   assert.equal(result.state.phase, "failed");
   assert.equal(result.state.failure?.reason, "confirmation-timeout");
 });
+
+test("a node with nothing saved adopts a refresh's wanted profile and observes, sending no apply when the lights match", () => {
+  let result = apply(undefined, {kind: "refresh", requestId: "activity-2", generation: 2, profile: "tv"});
+  assert.equal(result.state.desired?.profile, "tv");
+  assert.deepEqual(result.commands.map(({operation}) => operation), ["observe"]);
+  assert.equal(result.state.applied?.targets, null, "which lights it held is unknown");
+  for (const [target, seconds] of [["wall", 1], ["lamp", 1.1]] as const) {
+    result = apply(result.state, {kind: "observed", generation: 2, target, on: true, values: {brightness: 64, color_temp: 400},
+      observedAt: at(seconds).toISOString()}, seconds);
+    assert.ok(!result.commands.some(({operation}) => operation === "apply"));
+  }
+  assert.equal(result.state.phase, "ready");
+  assert.equal(result.events[0]?.theatre.requestId, "activity-2");
+
+  // The next activity releases every light held under this owner, as it can't know which.
+  const next = apply(result.state, {kind: "intent", requestId: "projector-3", generation: 3, profile: "projector"}, 2);
+  const release = next.commands.find(({operation}) => operation === "release");
+  assert.ok(release, JSON.stringify(next.commands));
+});

@@ -92,7 +92,9 @@ export type ActivityLightingEvent =
   }
   | {kind: "command_result"; generation: number; ok: boolean; reason?: string}
   | {kind: "tick"; generation: number}
-  | {kind: "startup" | "refresh"};
+  | {kind: "startup"}
+  // From the theatre activity controller, with the activity's wanted values.
+  | {kind: "refresh"; requestId?: string | null; generation?: number; profile?: string};
 
 export interface ActivityLightingMessage {
   activityLighting?: ActivityLightingEvent;
@@ -425,6 +427,20 @@ export function transitionActivityLighting(
     reconcile();
   }
 
+  // A refresh with the activity's wanted values, reaching a node with
+  // nothing desired (it started with nothing saved): adopt them as a saved
+  // state would hold them, and observe below as at startup. Which lights it
+  // held is unknown, so the next activity releases every light it holds.
+  const adopted = event.kind === "refresh" && !state.desired && typeof event.requestId === "string" && event.requestId !== "" &&
+    Number.isInteger(event.generation) && event.generation! >= Math.max(1, state.generation) &&
+    typeof event.profile === "string" && Object.hasOwn(config.profiles, event.profile);
+  if (adopted) {
+    state.desired = {requestId: event.requestId as string, generation: event.generation!, profile: event.profile as string, requestedAt: now.toISOString()};
+    state.generation = event.generation!;
+    state.applied = {profile: event.profile as string, targets: null};
+    trace("refresh", "adopted", "nothing-desired", {profile: event.profile, generation: event.generation});
+  }
+
   if (event.kind === "intent") {
     acceptIntent(event);
   } else if (event.kind === "observed") {
@@ -457,7 +473,7 @@ export function transitionActivityLighting(
         state.phase = "confirming";
         // After a restart nothing else would end an unanswered observe: give
         // it a deadline, so it re-applies and then fails as a live request.
-        if (event.kind === "startup" && state.blockedGeneration !== state.generation) {
+        if ((event.kind === "startup" || adopted) && state.blockedGeneration !== state.generation) {
           state.pending = {attempt: 0, deadlineAt: nowMs + config.confirmationTimeoutMs};
         }
         trace(event.kind, "observing", null, {profile: state.desired.profile});

@@ -104,7 +104,9 @@ export interface AvrState {
 }
 
 export type AvrInputEvent =
-  | {kind: "startup" | "refresh"}
+  | {kind: "startup"}
+  // From the theatre activity controller, with the activity's wanted values.
+  | {kind: "refresh"; requestId?: string | null; generation?: number; power?: string; source?: string | null}
   | {kind: "observed"; line?: unknown}
   | {
     kind: "intent";
@@ -585,7 +587,21 @@ export function transitionAvr(
     return null;
   }
 
-  if (event.kind === "refresh") {
+  // A refresh with the activity's wanted values, reaching a node with
+  // nothing desired (it started with nothing saved): adopt them as a saved
+  // state would hold them, and rediscover below as at startup, never
+  // commanding the change itself.
+  const adopted = event.kind === "refresh" && !state.desired && typeof event.requestId === "string" && event.requestId !== "" &&
+    Number.isInteger(event.generation) && event.generation! >= Math.max(1, state.generation) &&
+    validateIntent({kind: "intent", requestId: event.requestId, generation: event.generation!,
+      power: event.power as AvrPower, source: event.source ?? null}) === null;
+  if (adopted) {
+    state.desired = {requestId: event.requestId as string, generation: event.generation!, power: event.power as AvrPower, source: event.source || null};
+    state.generation = event.generation!;
+    trace("refresh", "adopted", "nothing-desired", {power: event.power, source: event.source || null, generation: event.generation});
+  }
+
+  if (event.kind === "refresh" && !adopted) {
     // Re-read the receiver without touching work in flight: desired state,
     // pending commands, the volume request and the phase all carry on.
     commands.push({
@@ -600,7 +616,7 @@ export function transitionAvr(
     });
     trace("refresh", "querying", null, {pending: state.pending?.operation ?? null});
     forceStateEvent = true;
-  } else if (event.kind === "startup") {
+  } else if (event.kind === "startup" || adopted) {
     const requestBlocked = state.desired &&
       state.blockedGeneration === state.desired.generation;
     const abandonedVolumeRequest = state.volumeRequest?.requestId || null;

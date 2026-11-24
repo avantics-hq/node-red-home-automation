@@ -392,3 +392,18 @@ test("a retry after a transport failure gets its own full deadline", () => {
   result = apply(result.state, {kind: "tick", generation: 1}, 4.5);
   assert.notEqual(result.state.phase, "failed");
 });
+
+test("a display with nothing saved adopts a refresh's wanted mode and rediscovers, sending nothing when it matches", () => {
+  let result = apply(undefined, {kind: "refresh", requestId: "activity-4", generation: 4, mode: "projector"}, 0);
+  assert.equal(result.state.desired?.mode, "projector");
+  assert.deepEqual(result.commands.map(({operation}) => operation).sort(), ["query_position", "query_power", "query_power"],
+    "discovery queries only");
+  // The projector is already running, the screen down and the TV in standby.
+  result = observe(result.state, "tv", {power: "standby"}, 0.1, 4);
+  result = observe(result.state, "screen", {position: 82, state: "stopped"}, 0.2, 4);
+  result = observe(result.state, "projector", {watts: 155}, 0.3, 4);
+  assert.ok(!result.commands.some(({operation}) => operation === "set_power" || operation === "toggle_power" || operation.startsWith("move")),
+    JSON.stringify(result.commands));
+  assert.equal(result.state.phase, "ready");
+  assert.equal(result.targetStates.at(-1)?.theatre.requestId, "activity-4");
+});

@@ -124,7 +124,8 @@ export type DisplayInputEvent =
     reason?: string;
   }
   | {kind: "tick"; generation?: number}
-  | {kind: "refresh"};
+  // From the theatre activity controller, with the activity's wanted values.
+  | {kind: "refresh"; requestId?: string | null; generation?: number; mode?: string};
 
 export interface DisplayMessage {
   display?: DisplayInputEvent;
@@ -607,7 +608,20 @@ export function transitionDisplay(
 
   if (!event || typeof event.kind !== "string") throw new Error("msg.display.kind is required");
 
-  if (event.kind === "startup") {
+  // A refresh with the activity's wanted values, reaching a node with
+  // nothing desired (it started with nothing saved): adopt them as a saved
+  // state would hold them, and rediscover below as at startup. Discovery
+  // never toggles the projector on a warming or cooling reading.
+  const adopted = event.kind === "refresh" && !state.desired && typeof event.requestId === "string" && event.requestId !== "" &&
+    Number.isInteger(event.generation) && event.generation! >= Math.max(1, state.generation) &&
+    typeof event.mode === "string" && Object.hasOwn(MODES, event.mode);
+  if (adopted) {
+    state.desired = {requestId: event.requestId as string, generation: event.generation!, mode: event.mode as DisplayMode};
+    state.generation = event.generation!;
+    trace("refresh", "adopted", "nothing-desired", {mode: event.mode, generation: event.generation});
+  }
+
+  if (event.kind === "startup" || adopted) {
     // A projector power operation in flight cannot be repeated safely (a
     // second toggle can switch a warming lamp off), so it survives startup
     // and is only re-observed; everything else is rediscovered.

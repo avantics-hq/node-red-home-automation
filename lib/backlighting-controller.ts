@@ -69,7 +69,9 @@ export type BacklightingEvent =
   }
   | {kind: "command_result"; generation: number; ok: boolean; reason?: string}
   | {kind: "tick"; generation: number}
-  | {kind: "startup" | "refresh"};
+  | {kind: "startup"}
+  // From the theatre activity controller, with the activity's wanted values.
+  | {kind: "refresh"; requestId?: string | null; generation?: number; power?: string};
 
 export interface BacklightingMessage {
   backlighting?: BacklightingEvent;
@@ -268,6 +270,18 @@ export function transitionBacklighting(
         observed: observation.power
       });
     }
+  }
+
+  // A refresh with the activity's wanted values, reaching a node with
+  // nothing desired (it started with nothing saved): adopt them as a saved
+  // state would hold them, and observe below as at startup, never commanding
+  // the change itself.
+  if (event.kind === "refresh" && !state.desired && typeof event.requestId === "string" && event.requestId &&
+    Number.isInteger(event.generation) && event.generation! >= Math.max(1, state.generation) &&
+    typeof event.power === "string" && Object.hasOwn(POWERS, event.power)) {
+    state.desired = {requestId: event.requestId, generation: event.generation!, power: event.power as BacklightingPower, requestedAt: now.toISOString()};
+    state.generation = event.generation!;
+    trace("refresh", "adopted", "nothing-desired", {power: event.power, generation: event.generation});
   }
 
   if (event.kind === "intent") {
