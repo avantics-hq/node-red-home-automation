@@ -64,6 +64,12 @@ export interface RoomState {
   // When a person last set each light: a person or manual intent, or someone
   // else's command seen on the light's command topic (epoch ms).
   personAt: Record<string, number>;
+  // Lights the room hasn't been told about since it started with nothing
+  // saved (a first deploy, or a redeploy or restart without a context
+  // store), when it can't know which were held or set by a person. It leaves
+  // them as they are, with no periodic restyle, until an intent or release
+  // names them or circadian lighting is switched on.
+  untold: string[];
 }
 
 export interface LightingEvent {
@@ -129,7 +135,10 @@ export function createRoomState(
     sleeping: saved.sleeping === undefined ? config.initialSleep : saved.sleeping === true,
     ...savedSchedule(config, saved),
     personAt: Object.fromEntries(Object.entries(saved.personAt || {})
-      .filter(([, at]) => Number.isFinite(at)))
+      .filter(([, at]) => Number.isFinite(at))),
+    untold: Array.isArray(saved.untold)
+      ? saved.untold.filter((id) => config.targets.some((target) => target.id === id))
+      : []
   };
 }
 
@@ -155,6 +164,7 @@ export function transitionRoom(
   const now = nowValue instanceof Date ? nowValue : new Date(nowValue);
   const nowMs = now.getTime();
   const state = createRoomState(config, saved);
+  if (saved === undefined) state.untold = config.targets.map((target) => target.id);
   // The settings with lighting on the times in use; a schedule change
   // below replaces it.
   let active = withActiveSchedule(config, state);
@@ -190,6 +200,10 @@ export function transitionRoom(
     });
   }
 
+  function told(targetId: string) {
+    state.untold = state.untold.filter((id) => id !== targetId);
+  }
+
   function intendedOn(targetId: string): boolean {
     if (Object.hasOwn(state.desired, targetId)) return state.desired[targetId] === true;
     return state.observed[targetId]?.on === true;
@@ -212,6 +226,10 @@ export function transitionRoom(
     const commands: Array<RoomOutput | null> = [];
     for (const target of config.targets) {
       if (!intendedOn(target.id) || controlOf(target.id) !== "in-control") continue;
+      if (state.untold.includes(target.id)) {
+        trace("refresh", "skipped", "not-told-since-start", {target: target.id});
+        continue;
+      }
       // Nothing to change when the light last reported exactly this style.
       if (alreadyStyled(active.lighting.styleAt(now, state.sleeping), state.observed[target.id])) {
         trace("refresh", "skipped", "already-at-level", {target: target.id});
@@ -280,6 +298,7 @@ export function transitionRoom(
         payload = {state: "ON"};
       }
       state.desired[targetId] = resolvedState === "ON";
+      told(targetId);
       commands.push(command(targetId, payload, event.source || "intent"));
     }
     return commands.filter((entry): entry is RoomOutput => entry !== null);
@@ -342,6 +361,8 @@ export function transitionRoom(
               "external-bare-on"
             );
             if (corrective) outputs.push(corrective);
+            // Styled now, so the refresh keeps it in step from here.
+            told(target.id);
           }
         } else if (requestedState === "TOGGLE") {
           state.desired[target.id] = !intendedOn(target.id);
@@ -361,6 +382,9 @@ export function transitionRoom(
       trace("circadian", "changed", null, {enabled: state.circadianEnabled});
     }
     if (state.circadianEnabled) {
+      // Switching circadian lighting on takes the lights back, so the room
+      // has been told about every light.
+      for (const target of config.targets) told(target.id);
       // Enabling circadian takes back manual lights; other owners keep theirs.
       for (const target of config.targets) {
         if (controlOf(target.id) === "manual") setControl(target.id, null, "circadian-enabled");
@@ -392,6 +416,7 @@ export function transitionRoom(
       const entry = state.control[targetId];
       if (!targetById[targetId] || entry?.state !== "overridden" || (owner && entry.owner !== owner)) continue;
       setControl(targetId, null, "released");
+      told(targetId);
       if (state.circadianEnabled && intendedOn(targetId)) {
         const restyle = command(targetId, adaptivePayload("ON", true, state.sleeping, now, active), event.source || "release");
         if (restyle) outputs.push(restyle);

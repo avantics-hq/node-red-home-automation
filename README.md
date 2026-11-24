@@ -292,6 +292,16 @@ The room lighting controller gives each target one control state:
   refresh and circadian changes leave it alone until it is released.
 - `manual`: a person changed the light.
 
+The control states live in the node's context. A room controller that starts
+with nothing saved (its first deploy, or a redeploy or restart without a
+context store) can't know which lights an activity held or a person set, so it
+leaves every light as it is: the periodic refresh restyles a light again only
+once an intent or release names it, someone switches it on with a bare ON, or
+circadian lighting is switched on. A light that is on at that start and that
+nothing names can keep its start-time style all day; to bring it back into step,
+switch circadian lighting on (for example with the Home Assistant circadian
+switch), or let motion or a wall switch name it.
+
 Add `owner` to an intent to override the targets it switches on. With
 `preserveManual: true`, manual lights are skipped:
 
