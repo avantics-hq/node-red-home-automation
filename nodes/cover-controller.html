@@ -5,6 +5,8 @@
     defaults: {
       name: {value: ""},
       area: {value: ""},
+      // Not set: a position cover, as every cover node was before this setting.
+      coverType: {value: "position"},
       presets: {value: "{\"partial\":60}", required: true, validate: function (v) {
         try {
           var parsed = JSON.parse(v);
@@ -20,7 +22,18 @@
       travelTimeoutMs: {value: 90000, required: true, validate: RED.validators.number()},
       maxAttempts: {value: 2, required: true, validate: RED.validators.number()},
       pollMs: {value: 5000, required: true, validate: RED.validators.number()},
-      settleMs: {value: 5000, required: true, validate: RED.validators.number()}
+      settleMs: {value: 5000, required: true, validate: RED.validators.number()},
+      travelMs: {value: 30000, required: true, validate: RED.validators.number()},
+      marginMs: {value: 10000, required: true, validate: RED.validators.number()}
+    },
+    oneditprepare: function () {
+      function follow() {
+        var position = $("#node-input-coverType").val() !== "open-close";
+        $(".cover-position").toggle(position);
+        $(".cover-open-close").toggle(!position);
+      }
+      $("#node-input-coverType").on("change", follow);
+      follow();
     },
     inputs: 1,
     outputs: 3,
@@ -33,13 +46,22 @@
 <script type="text/html" data-template-name="home-cover-controller">
   <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
   <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area"></div>
-  <div class="form-row"><label for="node-input-presets">Presets</label><input type="text" id="node-input-presets"></div>
-  <div class="form-row"><label for="node-input-positionTolerance">Position tolerance</label><input type="number" id="node-input-positionTolerance"></div>
-  <div class="form-row"><label for="node-input-invert">Invert positions</label><input type="checkbox" id="node-input-invert" style="display:inline-block; width:auto;"> <span>(the device reports 0 as open)</span></div>
-  <div class="form-row"><label for="node-input-travelTimeoutMs">Travel timeout (ms)</label><input type="number" id="node-input-travelTimeoutMs"></div>
+  <div class="form-row">
+    <label for="node-input-coverType">Cover</label>
+    <select id="node-input-coverType">
+      <option value="position">Takes a position (0 to 100)</option>
+      <option value="open-close">Open, close and stop only</option>
+    </select>
+  </div>
+  <div class="form-row cover-position"><label for="node-input-presets">Presets</label><input type="text" id="node-input-presets"></div>
+  <div class="form-row cover-position"><label for="node-input-positionTolerance">Position tolerance</label><input type="number" id="node-input-positionTolerance"></div>
+  <div class="form-row cover-position"><label for="node-input-invert">Invert positions</label><input type="checkbox" id="node-input-invert" style="display:inline-block; width:auto;"> <span>(the device reports 0 as open)</span></div>
+  <div class="form-row cover-position"><label for="node-input-travelTimeoutMs">Travel timeout (ms)</label><input type="number" id="node-input-travelTimeoutMs"></div>
+  <div class="form-row cover-position"><label for="node-input-pollMs">Poll interval (ms)</label><input type="number" id="node-input-pollMs"></div>
+  <div class="form-row cover-position"><label for="node-input-settleMs">Settle time (ms)</label><input type="number" id="node-input-settleMs"></div>
+  <div class="form-row cover-open-close"><label for="node-input-travelMs">Full travel time (ms)</label><input type="number" id="node-input-travelMs"></div>
+  <div class="form-row cover-open-close"><label for="node-input-marginMs">Travel margin (ms)</label><input type="number" id="node-input-marginMs"></div>
   <div class="form-row"><label for="node-input-maxAttempts">Maximum attempts</label><input type="number" id="node-input-maxAttempts"></div>
-  <div class="form-row"><label for="node-input-pollMs">Poll interval (ms)</label><input type="number" id="node-input-pollMs"></div>
-  <div class="form-row"><label for="node-input-settleMs">Settle time (ms)</label><input type="number" id="node-input-settleMs"></div>
 </script>
 
 <script type="text/html" data-help-name="home-cover-controller">
@@ -80,6 +102,22 @@
       motion lighting while a blind moves, use a pause input on the motion policy, not its enable
       (<code>area-enabled</code>): that is the user's own switch, and a cover move must not change it.</li>
   </ol>
+  <h3>Open, close and stop only</h3>
+  <p>For a motor with no reliable position, set <b>Cover</b> to <i>Open, close and stop only</i>. It takes
+    <code>"open"</code>, <code>"close"</code> and <code>"stop"</code> (positions and presets are ignored), and sends
+    <code>open</code>, <code>close</code>, <code>stop</code> or <code>observe</code>. Its state is open, closed,
+    stopped (partway) or unknown, from what it reports in
+    <code>msg.cover = {kind: "observed", motion, state, observedAt}</code>, where <code>state</code> is an end state
+    (<code>open</code> or <code>closed</code>) if the device reports one:</p>
+  <ul>
+    <li>A reported end state confirms a move.</li>
+    <li>Without one, a move it reported making the right way, that stopped after at least the <b>Full travel
+      time</b>, counts as done, shown as judged <i>by travel time</i>.</li>
+    <li>Stopping sooner, or moving the other way, is a person's move: the cover is left alone until a newer
+      request.</li>
+    <li>A cover that reports nothing is <i>unconfirmed</i> after its retries (failed, with reason
+      <code>no-reports</code>, for the theatre): nothing is assumed.</li>
+  </ul>
   <p>Battery and charging status, when the cover reports them, are kept as facts and shown in the status; the node
     never acts on them.</p>
 </script>

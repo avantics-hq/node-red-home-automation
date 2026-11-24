@@ -1,19 +1,16 @@
 "use strict";
 
 import type {Node, NodeDef, NodeInitializer} from "node-red";
-import {
-  coverMoving,
-  normaliseCoverConfig,
-  transitionCover,
-  type CoverConfig,
-  type CoverEvent,
-  type CoverState
-} from "../lib/cover-controller";
+import {COVER_TYPES, openCloseCover, positionCover, type CoverModel} from "../lib/cover-models";
 import {coverPresets, coverRequest, type CoverPresets} from "../lib/cover-requests";
+import {optionalChoiceSetting} from "../lib/settings";
 import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
 
 interface CoverControllerConfig extends NodeDef {
   area?: string;
+  coverType?: string | null;
+  travelMs?: number | string;
+  marginMs?: number | string;
   presets?: string;
   positionTolerance?: number | string;
   invert?: boolean | string;
@@ -33,12 +30,14 @@ const registerCoverController: NodeInitializer = (RED) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let requests = 0;
 
-    let coverConfig: CoverConfig;
+    let model: CoverModel;
     let presets: CoverPresets;
     let area: string;
     try {
       area = optionalArea(config);
-      coverConfig = normaliseCoverConfig(config);
+      // Not set: a position cover, as every cover node was before the type.
+      const type = optionalChoiceSetting(config.coverType, "cover type", COVER_TYPES) ?? "position";
+      model = type === "open-close" ? openCloseCover(config as unknown as Record<string, unknown>) : positionCover(config as unknown as Record<string, unknown>);
       presets = coverPresets(config.presets);
     } catch (error) {
       invalidConfig(node, error);
@@ -46,25 +45,23 @@ const registerCoverController: NodeInitializer = (RED) => {
     }
     const trace = {area, component: "cover-controller"};
 
-    function saved(): Partial<CoverState> | undefined {
-      return context.get("state") as Partial<CoverState> | undefined;
+    function saved(): {pending?: unknown} | undefined {
+      return context.get("state") as {pending?: unknown} | undefined;
     }
 
-    function schedule(state: CoverState) {
+    function schedule(state: unknown) {
       clearTimeout(timer);
       timer = undefined;
-      if (!state.pending) return;
-      const generation = state.generation;
-      const at = Math.min(state.pending.nextAt, state.pending.deadlineAt);
+      const next = model.tickAt(state);
+      if (!next) return;
       timer = setTimeout(guarded(node, () => {
-        process({kind: "tick", generation}, node.send.bind(node));
-      }), Math.max(0, at - Date.now()));
+        process({kind: "tick", generation: next.generation}, node.send.bind(node));
+      }), Math.max(0, next.at - Date.now()));
     }
 
-    function process(event: CoverEvent, send: Send) {
-      const before = saved();
-      const wasMoving = before ? coverMoving({observed: before.observed ?? null, phase: before.phase ?? "idle"}) : false;
-      const result = runReducer(node, trace, (state: Partial<CoverState> | undefined, now) => transitionCover(state, {cover: event}, coverConfig, now));
+    function process(event: unknown, send: Send) {
+      const wasMoving = model.moving(saved());
+      const result = runReducer(node, trace, (state: unknown, now) => model.transition(state, event, now));
       const moving = result.status.moving;
       // Device commands in a neutral shape on output 1, state and results
       // (including the theatre's target state) on output 2, and whether the
@@ -75,11 +72,11 @@ const registerCoverController: NodeInitializer = (RED) => {
         moving !== wasMoving ? {topic: "moving", payload: moving} : null
       ];
       if (outputs.some((output) => output !== null)) send(outputs);
-      const battery = result.state.observed?.battery;
+      const {phase, battery} = result.status;
       node.status({
-        fill: result.state.phase === "failed" ? "red" : result.state.phase === "unavailable" ? "grey"
-          : result.state.phase === "manual_override" ? "yellow" : moving ? "blue" : "green",
-        shape: result.state.observed ? "dot" : "ring",
+        fill: phase === "failed" ? "red" : phase === "unavailable" || phase === "unconfirmed" ? "grey"
+          : phase === "manual_override" ? "yellow" : moving ? "blue" : "green",
+        shape: result.status.observed ? "dot" : "ring",
         text: result.status.text + (typeof battery === "number" ? ` · battery ${battery}%` : "")
       });
       schedule(result.state);
@@ -95,7 +92,7 @@ const registerCoverController: NodeInitializer = (RED) => {
     }
 
     onInput(node, (msg, send) => {
-      const cover = objectField<CoverEvent>(msg, "cover");
+      const cover = objectField<Record<string, unknown>>(msg, "cover");
       if (cover) {
         process(cover, send);
         return;
@@ -105,15 +102,18 @@ const registerCoverController: NodeInitializer = (RED) => {
       const request = coverRequest(
         {payload: msg.payload, respectManual: msg.respectManual, stopIfMoving: msg.stopIfMoving, source: msg.source},
         presets,
-        {requestId: `cover-${Date.now()}-${requests}`, generation: (current?.generation ?? 0) + 1},
-        current ? coverMoving({observed: current.observed ?? null, phase: current.phase ?? "idle"}) : false
+        {requestId: `cover-${Date.now()}-${requests}`, generation: model.generation(current) + 1},
+        model.moving(current)
       );
-      if ("invalid" in request) {
-        runReducer(node, trace, (state: Partial<CoverState> | undefined) =>
-          ({state, traces: [{event: "request", outcome: "ignored", reason: request.invalid, details: {payload: msg.payload}}]}));
+      const invalid = "invalid" in request ? request.invalid
+        : request.intent.kind === "set_position" && !model.positions ? "position-not-supported"
+        : null;
+      if (invalid) {
+        runReducer(node, trace, (state: unknown) =>
+          ({state, traces: [{event: "request", outcome: "ignored", reason: invalid, details: {payload: msg.payload}}]}));
         return;
       }
-      process(request.intent, send);
+      if ("intent" in request) process(request.intent, send);
     });
 
     node.on("close", (_removed: boolean, done: () => void) => {
