@@ -6,6 +6,7 @@
 import type {Node, NodeAPI, NodeMessage} from "node-red";
 import {appendTrace, type TraceInput, type TraceMetadata} from "../lib/bounded-trace";
 import {staleRetainedTopics, type RetainedClear} from "../lib/retained-topics";
+import {onFlowsStarted} from "./flows-started";
 
 export type Send = (msg: NodeMessage | Array<NodeMessage | NodeMessage[] | null>) => void;
 export type InputMessage = NodeMessage & Record<string, unknown>;
@@ -75,10 +76,11 @@ export function invalidConfig(node: Node, reason: unknown): void {
 // the node closes first.
 export function whenFlowsStarted(RED: NodeAPI, node: Node, action: () => void): void {
   const run = guarded(node, action);
-  RED.events.once("flows:started", run);
-  node.on("close", () => {
-    RED.events.removeListener("flows:started", run);
-  });
+  const stop = onFlowsStarted(RED.events, () => {
+    stop();
+    run();
+  }, (error) => node.error(error));
+  node.on("close", stop);
 }
 
 // Every retained topic a node publishes now or recorded at its last start,
@@ -136,9 +138,5 @@ export function wasDeleted(RED: NodeAPI, node: Node, removed: boolean): boolean 
 // nodes (a room added, say) starts the flows again without restarting this
 // one. Stops when the node closes. The action must be safe to repeat.
 export function onEveryFlowsStarted(RED: NodeAPI, node: Node, action: () => void): void {
-  const run = guarded(node, action);
-  RED.events.on("flows:started", run);
-  node.on("close", () => {
-    RED.events.removeListener("flows:started", run);
-  });
+  node.on("close", onFlowsStarted(RED.events, guarded(node, action), (error) => node.error(error)));
 }
