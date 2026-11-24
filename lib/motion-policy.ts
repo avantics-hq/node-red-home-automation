@@ -277,6 +277,14 @@ export function transitionMotion(
       state.offTimerArmedAt = null;
       emitIntent(lightingIntent(config.offTargets, "OFF", "motion", {vacantSince}), "off-timer");
     }
+  } else if (source === "cold-start") {
+    // Started with nothing saved: a first deploy, or a redeploy or restart
+    // without a context store, when a running off-timer was lost. Whether the
+    // room is occupied is unknown, so vacancy starts now: the off-timer runs
+    // unless occupancy is reported first, so lights left on are never on for
+    // good.
+    if (enabled()) scheduleOffTimer();
+    trace("start", enabled() ? "schedule-off" : "suppressed", enabled() ? "no-saved-state" : "disabled", {targets: config.offTargets});
   } else if (source.startsWith("switch")) {
     trace("message", "ignored", "wall switches belong to the switch policy", {source});
   }

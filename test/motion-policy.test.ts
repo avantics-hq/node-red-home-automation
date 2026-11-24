@@ -212,3 +212,22 @@ test("a delay or cutoff message overrides the setting until it changes", () => {
   const vacancy = transitionMotion(state, {source: "occupancy", payload: {occupied: false}}, {...config, defaultDelaySeconds: 60}, true, 4000);
   assert.deepEqual(vacancy.effects.find((effect) => effect.kind === "schedule-off-timer"), {kind: "schedule-off-timer", delayMs: 60000, generation: vacancy.state.offTimerGeneration});
 });
+
+test("a start with nothing saved counts as vacancy from then, so lights left on go off", () => {
+  const started = transitionMotion(undefined, {source: "cold-start"}, config, true, 1000);
+  assert.deepEqual(started.effects.filter(({kind}) => kind === "schedule-off-timer"),
+    [{kind: "schedule-off-timer", delayMs: 30000, generation: 1}]);
+  assert.deepEqual(sendEffects(started), [], "nothing is sent at the start");
+  assert.equal(started.traces.at(-1)?.reason, "no-saved-state");
+  const due = transitionMotion(started.state, {source: "off-timer", generation: 1}, config, true, 31000);
+  assert.deepEqual(sendEffects(due).map(({lighting}) => [lighting.state, lighting.targets, lighting.vacantSince]),
+    [["OFF", config.offTargets, new Date(1000).toISOString()]]);
+
+  // Occupancy reported first cancels it, as after any vacancy.
+  const occupied = transitionMotion(started.state, {source: "occupancy", payload: {occupied: true, trigger: "motion"}}, config, true, 2000);
+  assert.deepEqual(sendEffects(transitionMotion(occupied.state, {source: "off-timer", generation: 1}, config, true, 31000)), []);
+
+  const disabled = transitionMotion({areaEnabled: false}, {source: "cold-start"}, config, true, 1000);
+  assert.deepEqual(disabled.effects, []);
+  assert.equal(transitionMotion(undefined, {source: "cold-start"}, config, false, 1000).effects.length, 0, "globally disabled");
+});
