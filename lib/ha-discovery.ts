@@ -69,7 +69,9 @@ export function discoveryDevice(owner: DiscoveryOwner, kind: string): {identifie
 
 // Of the given topics, the discovery topics named after this node itself:
 // under the "node" scheme, those whose object ID is nrha_<node ID>_<entity>
-// (Node-RED node IDs are of one length, so one can't prefix another). Under
+// (the key ends in "_", and the IDs Node-RED makes never contain one: hex
+// digits, joined with "-" for a node in a subflow, so one node's key can't
+// prefix another's; only an ID written by hand with "_" could). Under
 // "area" none are, since another node may share the area, so a node can
 // clear these without ever touching another node's topics.
 export function ownDiscoveryTopics(owner: DiscoveryOwner, topics: readonly string[]): string[] {
