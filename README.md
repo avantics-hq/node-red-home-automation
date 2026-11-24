@@ -194,14 +194,64 @@ also attaches the package tarball and its SHA-256 checksum. Install a downloaded
 tarball through **Manage palette → Install → Upload module**, or with:
 
 ```sh
-npm install /path/to/avantics-node-red-home-automation-3.0.0.tgz
+npm install /path/to/avantics-node-red-home-automation-4.0.0.tgz
 ```
 
 Add the installed nodes from the **home automation** section of the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.
 
+### 4.0.0
+
+Adds cover control, a house schedule, and Home Assistant entities for every
+publishing node. Check these after upgrading from 3.0:
+
+- **Breaking: theatre recovery never switches a running activity off.** After a
+  restart or redeploy with unclear evidence, the activity is reported as unknown
+  and the devices are left alone until the next request. The "Recovery Off
+  activity" setting is gone, and a saved value is ignored. The metric
+  `recoveriesSafeOff` is now `recoveriesUnknown` (in `<base>/metrics`, shown as
+  attributes of the "Transition latency" sensor), and the event
+  `recovery_safe_off` is now `recovery_unknown`. Update any dashboard, template
+  or flow that uses the old names.
+- **Breaking: the theatre's readiness moved topics.** It is now on
+  `<base>/readiness`, and its Home Assistant sensor is "Readiness".
+  `<base>/availability` now carries `online` or `offline` (see "Availability"
+  below).
+- **Breaking for areas that aren't identifiers:** a room or theatre contract whose
+  area has spaces or other characters now publishes under the lowercase form,
+  for example `home/living_room/…` instead of `home/Living Room/…` (see
+  "Discovery" below).
+- **Without a context store, a restart or redeploy is gentler:** a room leaves
+  its lights alone until something names them, motion lighting starts its
+  vacancy countdown, and a theatre device re-learns its activity from the
+  theatre instead of being marked unresponsive. A [file context store](#recommended-setup-a-file-context-store) keeps state
+  across restarts instead.
+- **A Catch node fires once per input error,** not twice.
+- **New nodes:** a cover controller for blinds, shutters and curtains, a cover
+  group, a house schedule that sets many rooms' wake and bed times, and a house
+  schedule MQTT node for Home Assistant (see "Covers" and "Room lighting").
+- **New outputs, off until you switch publishing on:** occupancy fusion and the
+  motion policy gain a second output, and the AVR controller a third, for their
+  MQTT state and Home Assistant entities. Saved nodes are unchanged.
+- **Home Assistant:** availability, entity names that survive area renames, the
+  room's sleep switch and wake and bed times, receiver volume, and cleanup of a
+  deleted node's entities, described under "Upgrading from 2.x" below.
+- **Other flows can pause motion lighting** without changing the user's enable.
+
+### 3.0.1
+
+Fixes the room lighting controller looping on its own commands when something
+between it and MQTT out rewrites them, for example a function that cuts a styled
+ON down to `{"state":"ON"}`: it took each rewritten command for someone else's
+and answered with another, without end. It now takes a bare ON or OFF that
+arrives within 5 seconds of one of its own commands with that power, before that
+command has come back on the topic, as that command, and restyles a light after
+someone else's bare ON at most once every 5 seconds.
+It also no longer marks a light manual when its own command is seen twice. Wire
+its commands to MQTT out unchanged (see Room lighting).
+
 ### Upgrading from 2.x
 
-Version 3.0 changes some behaviour. Check these after upgrading:
+Version 3.0 changed some behaviour, and later versions added to it. Check these after upgrading from 2.x, along with the notes above:
 
 - **Wall switches go through the switch lighting policy node.** The motion lighting policy no longer handles them,
   and ignores switch messages, so rewire any wall switch that feeds a motion node. The room lighting controller now
