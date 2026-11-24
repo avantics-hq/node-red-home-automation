@@ -12,6 +12,7 @@ import registerTheatreActivity from "../nodes/theatre-activity-controller";
 import registerTheatreStateContract from "../nodes/theatre-state-contract";
 import registerAvr from "../nodes/avr-controller";
 import registerCover from "../nodes/cover-controller";
+import registerCoverGroup from "../nodes/cover-group";
 import registerDisplay from "../nodes/display-mode-controller";
 import registerMotion from "../nodes/motion-policy";
 import registerSwitch from "../nodes/switch-policy";
@@ -2001,4 +2002,85 @@ test("cover node: closing while the cover moves says it is no longer moving", as
   const stillBefore = still.sent.length;
   await close(still);
   assert.deepEqual(still.sent.slice(stillBefore), [], "nothing to say when it was still");
+});
+
+test("cover group node: one request moves both members, and their results come back together", async (t) => {
+  const group = new (runtime(registerCoverGroup).Constructor)({members: "[\"left\",\"right\"]"});
+  const coverRuntime = runtime(registerCover);
+  const left = new coverRuntime.Constructor({id: "left"});
+  const right = new coverRuntime.Constructor({id: "right"});
+  t.after(() => close(left));
+  t.after(() => close(right));
+  // The result on output 1, then one output per member, in Members order.
+  const sent = (await receive<SendEnvelope>(group, {payload: 40}))[0] ?? [];
+  assert.equal(sent.length, 3);
+  assert.equal((sent[0]?.[0] as {theatre?: {target: string}} | undefined)?.theatre?.target, "cover", "the group's own state first");
+  const requests = [sent[1]?.[0], sent[2]?.[0]];
+  assert.deepEqual(requests.map((message) => message?.topic), ["left", "right"]);
+  const forward = async (member: RuntimeNode, request: unknown) => {
+    await receive(member, request as Record<string, unknown>);
+    const result = await receive<SendEnvelope>(member, {cover: {kind: "observed", position: 40, motion: "stopped", observedAt: new Date().toISOString()}});
+    return (result[0]?.[1] ?? [])[0];
+  };
+  const leftResult = await forward(left, requests[0]);
+  const rightResult = await forward(right, requests[1]);
+  await receive(group, leftResult as Record<string, unknown>);
+  const done = await receive<SendEnvelope>(group, rightResult as Record<string, unknown>);
+  assert.equal((done[0]?.[0]?.[0] as {theatre?: {status: string}} | undefined)?.theatre?.status, "ready");
+  assert.equal(String((group.statuses.at(-1) as {text: string}).text), "2/2 confirmed");
+});
+
+test("cover node: a group's request it declines is answered with why, and only coverRequestId is read", async (t) => {
+  const node = new (runtime(registerCover).Constructor)({id: "c-answer", coverType: "open-close"});
+  t.after(() => close(node));
+  const declined = await receive<SendEnvelope>(node, {payload: 40, coverRequestId: "group-1:left"});
+  const theatre = (declined[0]?.[1] as {theatre?: {requestId: string; status: string; failure: {reason: string}}} | undefined)?.theatre;
+  assert.deepEqual([theatre?.requestId, theatre?.status, theatre?.failure.reason], ["group-1:left", "failed", "position-not-supported"]);
+  // Not answered without a caller's ID.
+  assert.deepEqual(await receive(node, {payload: "half"}), []);
+  // msg.requestId from elsewhere is not taken as the caller's.
+  const opened = await receive<SendEnvelope>(node, {payload: "open", requestId: "someone-else"});
+  const answer = ((opened[0]?.[1] ?? []) as Array<{theatre?: {requestId: string}}>)[0]?.theatre?.requestId;
+  assert.notEqual(answer, "someone-else");
+  assert.match(String(answer), /^cover-/);
+  // A badly formed coverRequestId is not used either.
+  const bad = await receive<SendEnvelope>(node, {payload: "close", coverRequestId: "has spaces"});
+  assert.match(String(((bad[0]?.[1] ?? []) as Array<{theatre?: {requestId: string}}>)[0]?.theatre?.requestId), /^cover-/);
+});
+
+test("cover reducers answer a request a person's move holds back", async () => {
+  const position = new (runtime(registerCover).Constructor)({id: "c-hold"});
+  await receive(position, {payload: 40});
+  await receive(position, {cover: {kind: "observed", position: 40, motion: "stopped", observedAt: new Date().toISOString()}});
+  await receive(position, {cover: {kind: "observed", position: 80, motion: "stopped", observedAt: new Date(Date.now() + 1000).toISOString()}});
+  const held = await receive<SendEnvelope>(position, {payload: 20, respectManual: true, coverRequestId: "group-2:left"});
+  const answers = ((held[0]?.[1] ?? []) as Array<{theatre?: {requestId: string; status: string; failure?: {reason: string}}}>).map(({theatre}) => theatre);
+  assert.ok(answers.some((answer) => answer?.requestId === "group-2:left" && answer.status === "failed" && answer.failure?.reason === "manual-hold"), JSON.stringify(answers));
+  await close(position);
+});
+
+test("cover group node: a cover's other state and its moving signal are not requests", async (t) => {
+  const group = new (runtime(registerCoverGroup).Constructor)({members: "[\"left\",\"right\"]"});
+  t.after(() => close(group));
+  assert.deepEqual(await receive(group, {topic: "moving", payload: true}), []);
+  assert.deepEqual(await receive(group, {theatre: {kind: "state", requestId: "x"}}), []);
+  assert.equal(traces(group).at(-1)?.reason, "not-a-member-answer");
+  const sent = (await receive<SendEnvelope>(group, {payload: "open"}))[0] ?? [];
+  assert.deepEqual(sent.slice(1).map((output) => (output?.[0] as {coverRequestId?: string} | undefined)?.coverRequestId?.endsWith(":left")), [true, false]);
+});
+
+test("cover group node: a request still open after a redeploy settles at its deadline", async (t) => {
+  const groupRuntime = runtime(registerCoverGroup, {}, STORE);
+  const config = {id: "g-redeploy", members: "[\"left\",\"right\"]", deadlineSeconds: 1};
+  const before = new groupRuntime.Constructor(config);
+  await receive(before, {payload: "open"});
+  await close(before);
+  // Redeployed: no input at all, yet the deadline still comes.
+  const after = new groupRuntime.Constructor(config);
+  t.after(() => close(after));
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+  const answer = (after.sent as SendEnvelope[]).flatMap((envelope) => envelope[0] ?? [])
+    .map((message) => (message as {theatre?: {status: string; failure?: {reason: string}; details: {members: Record<string, {reason: string}>}}}).theatre);
+  assert.equal(answer.at(-1)?.status, "failed");
+  assert.deepEqual([answer.at(-1)?.failure?.reason, answer.at(-1)?.details.members.left?.reason], ["none-confirmed", "no-answer"]);
 });

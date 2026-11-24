@@ -141,9 +141,15 @@ shape (`set_position`, `stop` or `observe`); the example flow maps them to and
 from a Zigbee2MQTT cover. Battery and charging status are kept as reported
 facts and never acted on.
 
+A cover group moves several covers as one, such as the left and right of a
+curtain: it sends each member the request on that member's own output, labelled
+from its Members setting, and reports ready only when every member confirms,
+or, if only some do, which did what.
+
 | Node | Purpose |
 |---|---|
-| `home-cover-controller` | Owns one position cover's moves, confirmed from observed position, with presets, manual ownership and a moving signal. |
+| `home-cover-controller` | Owns one cover's moves (a position cover, or open, close and stop only), confirmed from what it reports, with presets, manual ownership and a moving signal. |
+| `home-cover-group` | Moves several covers as one, with an honest result when only some confirm. |
 
 ## Requirements
 

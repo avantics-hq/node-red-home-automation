@@ -7,12 +7,14 @@ import test from "node:test";
 
 interface Definition {
   defaults: Record<string, {value: unknown; validate?: (this: Record<string, unknown>, value: unknown) => boolean}>;
+  outputs?: number;
+  outputLabels?: string[] | ((this: Record<string, unknown>, index: number) => string);
   onadd?: (this: Record<string, unknown>) => void;
 }
 
 // Runs a node's editor script against a stand-in RED and returns its
 // definition. Outside an open edit dialog, jQuery finds no inputs.
-function editorDefinition(file: string): Definition {
+function editorDefinition(file: string, $: unknown = () => ({length: 0})): Definition {
   const html = readFileSync(resolve(__dirname, "../../nodes", file), "utf8");
   const script = /<script type="text\/javascript">([\s\S]*?)<\/script>/.exec(html)![1]!;
   let definition: Definition | undefined;
@@ -20,7 +22,6 @@ function editorDefinition(file: string): Definition {
     nodes: {registerType: (_name: string, value: Definition) => { definition = value; }},
     validators: {number: () => () => true}
   };
-  const $ = () => ({length: 0});
   new Function("RED", "$", script)(RED, $);
   assert.ok(definition);
   return definition;
@@ -145,4 +146,57 @@ test("a house schedule starts with publishing off and names itself after the nod
   assert.deepEqual([house.defaults.publishState?.value, house.defaults.discovery?.value, house.defaults.houseName?.value], [false, false, "house"]);
   assert.equal(newNode(house).idScheme, "node");
   assert.equal(editorDefinition("room-controller.html").defaults.timesFrom?.value, null, "not set: the room's own times");
+});
+
+test("a cover group has the group's result, then one output per member labelled from Members", () => {
+  const group = editorDefinition("cover-group.html");
+  assert.equal(group.defaults.outputs?.value, 3, "two members by default, and the result");
+  const labels = group.outputLabels as (this: Record<string, unknown>, index: number) => string;
+  const node = {members: "[\"left\",\"middle\",\"right\"]"};
+  assert.deepEqual([0, 1, 2, 3].map((index) => labels.call(node, index)), ["group result", "left", "middle", "right"]);
+});
+
+// An edit dialog for the cover group: its Members input and the hidden
+// outputs field, then what the Node-RED 5.0.10 editor does on Done: count the
+// outputs from the port map (red.js 43889-43925) and move or drop each wire
+// (updateNodeProperties, red.js 40927-40946). Wires are {port: cover}.
+function editCoverGroup(members: string[], wires: Record<number, string>, edit: string[]) {
+  const fields: Record<string, string> = {"#node-input-members": JSON.stringify(members), "#node-input-outputs": ""};
+  const handlers: Array<() => void> = [];
+  const $ = (selector: string) => ({
+    val(value?: string) {
+      if (value === undefined) return fields[selector];
+      fields[selector] = value;
+      return this;
+    },
+    on(_events: string, handler: () => void) { handlers.push(handler); }
+  });
+  const group = editorDefinition("cover-group.html", $) as Definition & {oneditprepare: (this: Record<string, unknown>) => void};
+  group.oneditprepare.call({members: JSON.stringify(members)});
+  fields["#node-input-members"] = JSON.stringify(edit);
+  for (const handler of handlers) handler();
+  // A plain number sets the count and moves nothing; a map moves wires.
+  const value = JSON.parse(fields["#node-input-outputs"]!) as number | Record<string, string>;
+  const map = typeof value === "number" ? {} : value;
+  const count = typeof value === "number" ? value
+    : Object.entries(map).filter(([key, port]) => Number.isNaN(Number(key)) || port !== "-1").length;
+  const moved: Record<number, string> = {};
+  for (const [port, cover] of Object.entries(wires)) {
+    const to = Object.hasOwn(map, port) ? map[port]! : port;
+    if (to !== "-1" && Number(to) < count) moved[Number(to)] = cover;
+  }
+  return {count, wires: moved};
+}
+
+test("editing a cover group's members moves each member's wire with its name", () => {
+  const wired = {0: "result", 1: "left cover", 2: "mid cover", 3: "right cover"};
+  assert.deepEqual(editCoverGroup(["left", "mid", "right"], wired, ["left", "mid", "right"]), {count: 4, wires: wired}, "untouched");
+  assert.deepEqual(editCoverGroup(["left", "mid", "right"], wired, ["left", "right"]),
+    {count: 3, wires: {0: "result", 1: "left cover", 2: "right cover"}}, "remove the middle: right's wire moves to port 2, mid's goes");
+  assert.deepEqual(editCoverGroup(["left", "mid", "right"], wired, ["right", "mid", "left"]),
+    {count: 4, wires: {0: "result", 1: "right cover", 2: "mid cover", 3: "left cover"}}, "reorder swaps the wires");
+  assert.deepEqual(editCoverGroup(["left", "mid", "right"], wired, ["left", "mid", "right", "extra"]),
+    {count: 5, wires: wired}, "add at the end keeps them");
+  assert.deepEqual(editCoverGroup(["left", "right"], {0: "result", 1: "left cover", 2: "right cover"}, ["left", "extra", "right"]),
+    {count: 4, wires: {0: "result", 1: "left cover", 3: "right cover"}}, "add in the middle moves right along");
 });

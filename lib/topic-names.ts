@@ -23,3 +23,7 @@ export function publishingArea(area: string, needed: boolean): string {
   if (area && !areaId(area)) throw new Error("area must contain a letter or digit");
   return area;
 }
+
+// A request ID a caller gives: a letter or digit, then up to 127 more of
+// letters, digits and . _ : -. Safe in topics and logs.
+export const REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;

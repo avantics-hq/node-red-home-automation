@@ -1,0 +1,89 @@
+<script type="text/javascript">
+  RED.nodes.registerType("home-cover-group", {
+    category: "home automation",
+    color: "#e2d96e",
+    defaults: {
+      name: {value: ""},
+      area: {value: ""},
+      members: {value: "[\"left\",\"right\"]", required: true, validate: function (v) {
+        try {
+          var parsed = JSON.parse(v);
+          return Array.isArray(parsed) && parsed.length >= 2 && parsed.every(function (name) {
+            return typeof name === "string" && /^[a-z][a-z0-9_-]*$/.test(name);
+          }) && parsed.filter(function (name, index) { return parsed.indexOf(name) === index; }).length === parsed.length;
+        } catch (e) { return false; }
+      }},
+      deadlineSeconds: {value: 120, required: true, validate: function (v) { return RED.validators.number()(v) && Number(v) >= 1; }},
+      // The group's result, then one output per member (as the core switch
+      // node sets its outputs from its rules).
+      outputs: {value: 3}
+    },
+    inputs: 1,
+    outputs: 3,
+    outputLabels: function (index) {
+      if (index === 0) return "group result";
+      try { return JSON.parse(this.members)[index - 1] || ""; } catch (e) { return ""; }
+    },
+    oneditprepare: function () {
+      // As the core switch node does, the hidden outputs field holds a port
+      // map, {old port: new port, or "-1" when removed}, plus a key per new
+      // port, so the editor moves each member's wire with its name. Every
+      // kept port is listed, as the editor counts the outputs from the map.
+      var opened = [];
+      try { opened = JSON.parse(this.members); } catch (e) { opened = []; }
+      if (!Array.isArray(opened)) opened = [];
+      function portMap() {
+        var members;
+        try { members = JSON.parse($("#node-input-members").val()); } catch (e) { return; }
+        if (!Array.isArray(members)) return;
+        var map = {"0": "0"};
+        opened.forEach(function (name, index) {
+          var now = members.indexOf(name);
+          map[String(index + 1)] = now < 0 ? "-1" : String(now + 1);
+        });
+        members.forEach(function (name, index) {
+          if (opened.indexOf(name) < 0) map["new-" + name] = String(index + 1);
+        });
+        $("#node-input-outputs").val(JSON.stringify(map));
+      }
+      $("#node-input-members").on("change keyup", portMap);
+      portMap();
+    },
+    icon: "font-awesome/fa-columns",
+    label: function () { return this.name || (this.area ? this.area + " " : "") + "cover group"; }
+  });
+</script>
+
+<script type="text/html" data-template-name="home-cover-group">
+  <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
+  <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area"></div>
+  <div class="form-row"><label for="node-input-members">Members</label><input type="text" id="node-input-members"></div>
+  <input type="hidden" id="node-input-outputs">
+  <div class="form-row"><label for="node-input-deadlineSeconds">Answer deadline (s)</label><input type="number" id="node-input-deadlineSeconds"></div>
+</script>
+
+<script type="text/html" data-help-name="home-cover-group">
+  <p>Moves several covers as one, such as the left and right of a curtain: one request goes to every member, and
+    the group says honestly how far it got.</p>
+  <h3>Inputs</h3>
+  <dl class="message-properties">
+    <dt>payload</dt><dd>a cover request (<code>"open"</code>, <code>"close"</code>, <code>"stop"</code>, a position or a
+      preset name), with <code>stopIfMoving</code> or <code>respectManual</code> if wanted. Each member gets the same
+      request.</dd>
+    <dt>theatre</dt><dd>a member's result: wire each member cover node's second output back into the group. Other
+      state from a cover node, and its <code>moving</code> signal, are ignored.</dd>
+  </dl>
+  <h3>Outputs</h3>
+  <ol class="node-ports">
+    <li>The group's result, <code>msg.theatre = {kind: "target_state", target: "cover", status, details}</code>:
+      <code>ready</code> only when every member confirms; once every member has settled with any not ready,
+      <code>failed</code> with reason <code>partial</code> (some confirmed) or <code>none-confirmed</code>, and
+      <code>details.members</code> saying what each did. A member silent at the <b>Answer deadline</b> counts as
+      <code>no-answer</code>, and a new request first answers the open one <code>failed</code> with reason
+      <code>superseded</code>.</li>
+    <li>Then one output per member, in the order of <b>Members</b> and labelled with its name: that member's
+      request, with its own <code>coverRequestId</code> (and <code>msg.topic</code> naming it). Wire each to its
+      cover node; no switch node is needed. A cover node answers the request even when it doesn't carry it out,
+      with the reason. Changing <b>Members</b> changes the number of outputs.</li>
+  </ol>
+</script>
