@@ -231,3 +231,32 @@ test("a start with nothing saved counts as vacancy from then, so lights left on 
   assert.deepEqual(disabled.effects, []);
   assert.equal(transitionMotion(undefined, {source: "cold-start"}, config, false, 1000).effects.length, 0, "globally disabled");
 });
+
+test("a pause holds motion lighting for its owner, apart from the user's enable", () => {
+  const run = (state: Parameters<typeof transitionMotion>[0], input: Parameters<typeof transitionMotion>[1], at: number) =>
+    transitionMotion(state, input, config, true, at);
+  let result = run(undefined, {source: "illuminance", payload: 10}, 1000);
+  result = run(result.state, {source: "pause", payload: true, owner: "blind"}, 2000);
+  assert.deepEqual(result.state.pausedBy, ["blind"]);
+  assert.equal(result.state.areaEnabled, true, "the user's enable is untouched");
+  assert.deepEqual([result.status.enabled, result.status.paused], [false, true]);
+  assert.deepEqual(sendEffects(run(result.state, {source: "occupancy", payload: {occupied: true}}, 3000)), [], "no intent while paused");
+
+  // Two owners: motion resumes only when both have released.
+  result = run(result.state, {source: "pause", payload: "ON", owner: "curtain"}, 4000);
+  result = run(result.state, {source: "pause", payload: false, owner: "blind"}, 5000);
+  assert.deepEqual([result.state.pausedBy, result.status.enabled], [["curtain"], false]);
+  result = run(result.state, {source: "pause", payload: false, owner: "curtain"}, 6000);
+  assert.deepEqual([result.state.pausedBy, result.status.enabled], [[], true]);
+  assert.equal(sendEffects(run(result.state, {source: "occupancy", payload: {occupied: true}}, 7000))[0]?.lighting.state, "ON");
+});
+
+test("a pause cancels a pending vacancy timer, as switching motion off does", () => {
+  let result = transitionMotion(undefined, {source: "illuminance", payload: 10}, config, true, 1000);
+  result = transitionMotion(result.state, {source: "occupancy", payload: {occupied: true}}, config, true, 2000);
+  result = transitionMotion(result.state, {source: "occupancy", payload: {occupied: false}}, config, true, 3000);
+  assert.ok(result.state.offTimerDueAt !== null);
+  result = transitionMotion(result.state, {source: "pause", payload: true, owner: "blind"}, config, true, 4000);
+  assert.equal(result.state.offTimerDueAt, null);
+  assert.ok(result.effects.some((effect) => effect.kind === "cancel-off-timer"));
+});

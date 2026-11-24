@@ -1979,3 +1979,13 @@ test("cover node: an open/close-only cover takes open, close and stop, not posit
   const bad = new (runtime(registerCover).Constructor)({coverType: "curtain"});
   assert.deepEqual(bad.errors.map(String), ["invalid configuration: cover type must be position or open-close"]);
 });
+
+test("motion node: a pause names its owner and shows as paused", async (t) => {
+  const node = new (runtime(registerMotion).Constructor)({onTargets: "[\"main\"]"});
+  t.after(() => close(node));
+  await receive(node, {source: "pause", payload: true, owner: "blind"});
+  assert.deepEqual((node.context().get("state") as {pausedBy: string[]}).pausedBy, ["blind"]);
+  assert.match(String((node.statuses.at(-1) as {text: string}).text), /^paused/);
+  await receive(node, {source: "pause", payload: false, owner: "blind"});
+  assert.match(String((node.statuses.at(-1) as {text: string}).text), /^enabled/);
+});

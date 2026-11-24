@@ -27,11 +27,17 @@ export interface MotionState {
   offTimerDueAt: number | null;
   // When the room went vacant and the pending off-timer started.
   offTimerArmedAt: number | null;
+  // Who is pausing motion lighting now, such as a moving cover. Motion acts
+  // only while nobody is; this is apart from the enables, which are the
+  // user's own and are never changed by a pause.
+  pausedBy: string[];
 }
 
 export interface MotionInput {
   source: string;
   payload?: unknown;
+  // Who sends a "pause", so several pausers each hold their own.
+  owner?: string;
   generation?: number;
 }
 
@@ -96,6 +102,7 @@ export function createMotionState(
 ): MotionState {
   return {
     areaEnabled: saved.areaEnabled !== false,
+    pausedBy: Array.isArray(saved.pausedBy) ? saved.pausedBy.filter((owner) => typeof owner === "string") : [],
     illuminance: saved.illuminance ?? null,
     illuminanceCutoff: keptOverride(saved.illuminanceCutoff, saved.illuminanceCutoffSetting, config.defaultIlluminanceCutoff),
     delaySeconds: keptOverride(saved.delaySeconds, saved.delaySecondsSetting, config.defaultDelaySeconds),
@@ -137,7 +144,7 @@ export function transitionMotion(
   let nextGlobalEnabled = globalEnabled !== false;
 
   function enabled() {
-    return state.areaEnabled && nextGlobalEnabled;
+    return state.areaEnabled && nextGlobalEnabled && state.pausedBy.length === 0;
   }
 
   function trace(event: string, outcome: string, reason: string | null, details: Record<string, unknown> = {}) {
@@ -190,6 +197,16 @@ export function transitionMotion(
       trace("enabled", "changed", null, {scope: "global", enabled: nextGlobalEnabled});
     }
     if (!enabled()) cancelOffTimer("motion-disabled");
+  } else if (source === "pause") {
+    // true pauses for this owner, false releases its pause; motion resumes
+    // once every owner has released.
+    const owner = typeof input.owner === "string" && input.owner ? input.owner : "pause";
+    const pause = payload === true || booleanOn(payload);
+    const held = state.pausedBy.includes(owner);
+    if (pause && !held) state.pausedBy = [...state.pausedBy, owner];
+    if (!pause && held) state.pausedBy = state.pausedBy.filter((name) => name !== owner);
+    if (pause !== held) trace("pause", pause ? "paused" : "released", null, {owner, pausedBy: state.pausedBy});
+    if (!enabled()) cancelOffTimer("motion-paused");
   } else if (source === "area-enabled") {
     const previous = state.areaEnabled;
     state.areaEnabled = booleanOn(payload);
@@ -296,6 +313,7 @@ export function transitionMotion(
     traces,
     status: {
       enabled: enabled(),
+      paused: state.pausedBy.length > 0,
       illuminance: state.illuminance,
       delaySeconds: state.delaySeconds
     }

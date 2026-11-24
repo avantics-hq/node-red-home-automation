@@ -132,8 +132,10 @@ stop only*: it confirms a move from a reported end state, or from a move that
 ran for its full travel time, and says when it could only judge by travel time
 or could not confirm at all. Its third output says whether the cover is
 moving, so other policies can react. To pause motion lighting while a blind
-moves, use a pause input on the motion policy, not its enable
-(`area-enabled`), which is the user's own switch. Device commands come out in a neutral
+moves, send it to the motion policy's pause input
+(`msg.source = "pause"`, `msg.payload` true or false, `msg.owner` naming the
+cover), as the example does; never its enable (`area-enabled`), which is the
+user's own switch. Device commands come out in a neutral
 shape (`set_position`, `stop` or `observe`); the example flow maps them to and
 from a Zigbee2MQTT cover. Battery and charging status are kept as reported
 facts and never acted on.
