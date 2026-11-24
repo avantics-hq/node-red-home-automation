@@ -76,8 +76,9 @@
       the confirmed and observed positions and any failure or manual override.</li>
     <li>Whether the cover is moving, <code>msg.payload</code> <code>true</code> or <code>false</code> with
       <code>topic</code> <code>moving</code>, sent when it changes: from the cover's own motion reports, or, for a
-      device without them, while a move is unconfirmed. Wire it to switch other policies, for example to pause
-      motion lighting while a blind moves.</li>
+      device without them, while a move is unconfirmed. Wire it to other policies that should react. To pause
+      motion lighting while a blind moves, use a pause input on the motion policy, not its enable
+      (<code>area-enabled</code>): that is the user's own switch, and a cover move must not change it.</li>
   </ol>
   <p>Battery and charging status, when the cover reports them, are kept as facts and shown in the status; the node
     never acts on them.</p>

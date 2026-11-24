@@ -3,7 +3,7 @@
     "id": "example-cover-control-cover-control-example",
     "type": "comment",
     "name": "Cover control example",
-    "info": "A position cover (blind, shutter or curtain motor) owned by the cover controller. Requests go in as \"open\", \"close\", \"stop\", a position from 0 to 100, or a preset name; an automatic target sets respectManual so a person's move holds. The function nodes show the mapping to and from a Zigbee2MQTT cover: wire them to MQTT out and in nodes on your cover's topic. A button can stop the cover if it is moving and open it otherwise, and the cover's availability report keeps requests from going to an offline device. Output 3 says whether the cover is moving; here it pauses motion lighting while the cover moves.",
+    "info": "A position cover (blind, shutter or curtain motor) owned by the cover controller. Requests go in as \"open\", \"close\", \"stop\", a position from 0 to 100, or a preset name; an automatic target sets respectManual so a person's move holds. The function nodes show the mapping to and from a Zigbee2MQTT cover: wire them to MQTT out and in nodes on your cover's topic. A button can stop the cover if it is moving and open it otherwise, and the cover's availability report keeps requests from going to an offline device. Output 3 says whether the cover is moving, for other policies to react to. To pause motion lighting while a cover moves, use a pause input on the motion policy, never its enable (area-enabled), which is the user's own switch.",
     "x": 170,
     "y": 40,
     "wires": []
@@ -198,7 +198,7 @@
         "example-cover-control-state"
       ],
       [
-        "example-cover-control-pause-motion"
+        "example-cover-control-moving"
       ]
     ]
   },
@@ -251,41 +251,6 @@
     "statusType": "auto",
     "x": 870,
     "y": 200,
-    "wires": []
-  },
-  {
-    "id": "example-cover-control-pause-motion",
-    "type": "function",
-    "name": "pause motion while moving",
-    "func": "// While the cover moves, switch this room's motion lighting off, and back\n// on when it stops: wire to the motion lighting policy.\nreturn {source: \"area-enabled\", payload: msg.payload ? \"OFF\" : \"ON\"};",
-    "outputs": 1,
-    "timeout": 0,
-    "noerr": 0,
-    "initialize": "",
-    "finalize": "",
-    "libs": [],
-    "x": 900,
-    "y": 260,
-    "wires": [
-      [
-        "example-cover-control-motion-enable"
-      ]
-    ]
-  },
-  {
-    "id": "example-cover-control-motion-enable",
-    "type": "debug",
-    "name": "to the motion lighting policy",
-    "active": true,
-    "tosidebar": true,
-    "console": false,
-    "tostatus": false,
-    "complete": "true",
-    "targetType": "full",
-    "statusVal": "",
-    "statusType": "auto",
-    "x": 1150,
-    "y": 260,
     "wires": []
   },
   {
@@ -359,5 +324,21 @@
         "example-cover-control-cover"
       ]
     ]
+  },
+  {
+    "id": "example-cover-control-moving",
+    "type": "debug",
+    "name": "moving",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 870,
+    "y": 260,
+    "wires": []
   }
 ]
