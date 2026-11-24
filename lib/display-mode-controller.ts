@@ -6,6 +6,19 @@ import {booleanSetting, numberSetting} from "./settings";
 
 import {boundObservedAt, isOutOfOrder, parseObservedAt} from "./observation-time";
 import {classifyPower, type PowerReading} from "./power-reading";
+import {
+  TOGGLE_SETTLE,
+  TOGGLE_SHUTDOWN_OBSERVE,
+  TOGGLE_START,
+  beginShutdownConfirm,
+  cooldownPending,
+  holdForWarmup,
+  needsShutdownConfirm,
+  shutdownRequestPending,
+  startReadyAt,
+  togglePowerSatisfied,
+  type TogglePowerTiming
+} from "./toggle-power";
 import {asTargetStatus, targetStateEvent, type TargetStateEvent} from "./target-state";
 
 export type DisplayMode = "off" | "tv" | "projector";
@@ -247,12 +260,7 @@ function operationSatisfied(
     case "tv_standby": return observed.tv?.power === "standby";
     case "screen_open": return screenAtPosition(observed.screen, config.screenOpenPosition, config.screenTolerance);
     case "screen_close": return screenAtPosition(observed.screen, 0, config.screenTolerance);
-    case "projector_start": return observed.projector?.power === "on";
-    case "projector_settle": return observed.projector?.power === "on" || observed.projector?.power === "standby";
-    case "projector_shutdown_observe":
-    case "projector_shutdown_confirm":
-    case "projector_cooldown": return observed.projector?.power === "standby";
-    default: return false;
+    default: return togglePowerSatisfied(operation, observed.projector?.power) ?? false;
   }
 }
 
@@ -304,6 +312,15 @@ export function transitionDisplay(
   now = new Date()
 ) {
   const config = normaliseConfig(suppliedConfig);
+  // The projector's toggle-only power, with the display's own timings.
+  const toggleTiming: TogglePowerTiming = {
+    pollMs: config.pollMs,
+    queryTimeoutMs: config.queryTimeoutMs,
+    warmupMs: config.projectorWarmupMs,
+    minimumWarmupMs: config.projectorMinimumWarmupMs,
+    shutdownConfirmMs: config.projectorShutdownConfirmMs,
+    cooldownMs: config.projectorCooldownMs
+  };
   const state = initialState(saved);
   const previousPhase = state.phase;
   // Set when a device reading is stored: only then may a settled display
@@ -377,26 +394,18 @@ export function transitionDisplay(
   function issueProjectorStart() {
     issue(
       "projector",
-      "projector_start",
+      TOGGLE_START,
       commandFor(state, "projector", "power_toggle", {reason: "start"}),
-      config.projectorWarmupMs,
+      toggleTiming.warmupMs,
       false
     );
     if (!state.pending) throw new Error("projector start did not create pending state");
-    state.pending.readyAt = now.getTime() + config.projectorMinimumWarmupMs;
+    state.pending.readyAt = startReadyAt(now.getTime(), toggleTiming);
   }
 
   function issueProjectorShutdown() {
     const command = commandFor(state, "projector", "power_toggle", {reason: "shutdown-request"});
-    state.pending = {
-      device: "projector",
-      operation: "projector_shutdown_observe",
-      command,
-      attempt: 1,
-      retryable: false,
-      deadlineAt: now.getTime() + config.projectorShutdownConfirmMs + config.queryTimeoutMs,
-      nextAt: now.getTime() + config.projectorShutdownConfirmMs
-    };
+    state.pending = shutdownRequestPending("projector", command, now.getTime(), toggleTiming);
     state.phase = "transitioning";
     commands.push(command);
     trace("command", "emitted", null, {device: "projector", operation: "shutdown-request", attempt: 1});
@@ -420,7 +429,7 @@ export function transitionDisplay(
   function awaitProjectorPower() {
     state.pending = {
       device: "projector",
-      operation: "projector_settle",
+      operation: TOGGLE_SETTLE,
       command: queryFor(state, "projector"),
       attempt: 1,
       retryable: false,
@@ -548,33 +557,22 @@ export function transitionDisplay(
     }
 
     if (!state.pending || state.pending.device !== device) return reconcile();
-    if (state.pending.operation === "projector_start" &&
-      state.pending.readyAt !== undefined &&
-      state.observed.projector?.power === "on" && now.getTime() < state.pending.readyAt) {
-      state.pending.nextAt = Math.min(state.pending.deadlineAt, state.pending.readyAt);
+    const warming = holdForWarmup(state.pending, state.observed.projector?.power, now.getTime());
+    if (warming !== null) {
+      state.pending.nextAt = warming;
       return;
     }
     if (operationSatisfied(state.pending.operation, state.observed, config)) {
       state.pending = null;
       return reconcile();
     }
-    if (state.pending.operation === "projector_shutdown_confirm" && device === "projector") {
-      if (state.observed.projector?.power === "on") {
-        const command = commandFor(state, "projector", "power_toggle", {reason: "shutdown-confirm"});
-        commands.push(command);
-        state.pending = {
-          device: "projector",
-          operation: "projector_cooldown",
-          command,
-          attempt: 1,
-          retryable: false,
-          deadlineAt: now.getTime() + config.projectorCooldownMs,
-          nextAt: now.getTime() + config.pollMs
-        };
-        trace("command", "emitted", null, {device: "projector", operation: "shutdown-confirm", attempt: 1});
-        state.lastAttempt = Math.max(state.lastAttempt, 1);
-        if (config.projectorPowerFallback) state.fallbackUsed = true;
-      }
+    if (device === "projector" && needsShutdownConfirm(state.pending, state.observed.projector?.power)) {
+      const command = commandFor(state, "projector", "power_toggle", {reason: "shutdown-confirm"});
+      commands.push(command);
+      state.pending = cooldownPending("projector", command, now.getTime(), toggleTiming);
+      trace("command", "emitted", null, {device: "projector", operation: "shutdown-confirm", attempt: 1});
+      state.lastAttempt = Math.max(state.lastAttempt, 1);
+      if (config.projectorPowerFallback) state.fallbackUsed = true;
     }
   }
 
@@ -587,11 +585,9 @@ export function transitionDisplay(
     }
     if (now.getTime() < pending.nextAt) return;
 
-    if (pending.operation === "projector_shutdown_observe") {
+    if (pending.operation === TOGGLE_SHUTDOWN_OBSERVE) {
       commands.push(queryFor(state, "projector"));
-      pending.operation = "projector_shutdown_confirm";
-      pending.nextAt = now.getTime() + config.queryTimeoutMs;
-      pending.deadlineAt = pending.nextAt;
+      beginShutdownConfirm(pending, now.getTime(), toggleTiming);
       trace("command", "emitted", null, {device: "projector", operation: "query-before-confirm", attempt: 1});
       return;
     }
@@ -621,7 +617,7 @@ export function transitionDisplay(
       return fail(
         pending.device,
         pending.operation,
-        pending.operation === "projector_settle" ? "projector-power-unsettled" : "confirmation-timeout"
+        pending.operation === TOGGLE_SETTLE ? "projector-power-unsettled" : "confirmation-timeout"
       );
     }
 
