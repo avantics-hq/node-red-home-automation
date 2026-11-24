@@ -260,9 +260,10 @@ export function transitionCover(
     trace("observation", "ready", null, {position});
   }
 
-  // A request while the device is offline: nothing is sent, and the request
-  // is answered as unavailable; what the cover was doing before is kept.
-  function rejectUnavailable(intent: Extract<CoverEvent, IntentBase>) {
+  // A request not carried out: nothing is sent, the request is answered
+  // with why (unavailable while offline, failed otherwise), and what the
+  // cover was doing before is kept.
+  function rejectRequest(intent: Extract<CoverEvent, IntentBase>, reason: string) {
     const position = intent.kind === "set_position" ? intent.position : intent.kind === "open" ? 100 : intent.kind === "close" ? 0 : null;
     const operation = position === null ? "stop" : "set_position";
     events.push({theatre: {
@@ -270,7 +271,7 @@ export function transitionCover(
       target: "cover",
       requestId: intent.requestId,
       generation: intent.generation,
-      status: "unavailable",
+      status: reason === "unavailable" ? "unavailable" : "failed",
       observedAt: now.toISOString(),
       details: {
         operation,
@@ -281,9 +282,9 @@ export function transitionCover(
         recovery: {},
         metrics: {attempts: 0, retries: 0, fallbackUsed: false}
       },
-      failure: {operation, reason: "unavailable", occurredAt: now.toISOString()}
+      failure: {operation, reason, occurredAt: now.toISOString()}
     }});
-    trace("intent", "rejected", "unavailable", {kind: intent.kind});
+    trace("intent", "rejected", reason, {kind: intent.kind});
   }
 
   // Read the cover again rather than trust what it reported before: after a
@@ -309,11 +310,11 @@ export function transitionCover(
 
   function acceptIntent(intent: Extract<CoverEvent, IntentBase>) {
     if (!state.available) {
-      rejectUnavailable(intent);
+      rejectRequest(intent, "unavailable");
       return;
     }
     if (intent.respectManual === true && state.classification === "manual_override") {
-      trace("intent", "ignored", "manual-hold", {kind: intent.kind});
+      rejectRequest(intent, "manual-hold");
       return;
     }
     if (typeof intent.requestId !== "string" || !intent.requestId) throw new Error("cover requestId is required");

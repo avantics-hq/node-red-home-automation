@@ -1,12 +1,14 @@
 "use strict";
 
 import type {Node, NodeDef, NodeInitializer} from "node-red";
-import {coverGroupMembers, transitionCoverGroup, type CoverGroupEvent, type CoverGroupState} from "../lib/cover-group";
-import {invalidConfig, objectField, onInput, optionalArea, runReducer} from "./adapter";
+import {DEFAULT_GROUP_DEADLINE_SECONDS, coverGroupMembers, transitionCoverGroup, type CoverGroupEvent, type CoverGroupState} from "../lib/cover-group";
+import {numberSetting} from "../lib/settings";
+import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
 
 interface CoverGroupConfig extends NodeDef {
   area?: string;
   members?: string;
+  deadlineSeconds?: number | string;
 }
 
 const registerCoverGroup: NodeInitializer = (RED) => {
@@ -15,29 +17,22 @@ const registerCoverGroup: NodeInitializer = (RED) => {
     const node = this;
     let members: string[];
     let area: string;
+    let deadlineSeconds: number;
     try {
       area = optionalArea(config);
       members = coverGroupMembers(config.members);
+      deadlineSeconds = Math.max(1, numberSetting(config.deadlineSeconds, "answer deadline", DEFAULT_GROUP_DEADLINE_SECONDS));
     } catch (error) {
       invalidConfig(node, error);
       return;
     }
 
-    onInput(node, (msg, send) => {
-      // A member's result, from its cover node's second output; anything
-      // else is a request for the whole group.
-      const theatre = objectField<{kind?: string; requestId?: string; status?: string; classification?: string; failure?: {reason?: string}}>(msg, "theatre");
-      const event: CoverGroupEvent = theatre?.kind === "target_state" && typeof theatre.requestId === "string"
-        ? {kind: "member", requestId: theatre.requestId, status: String(theatre.status), classification: theatre.classification, reason: theatre.failure?.reason ?? null}
-        : {
-          kind: "request",
-          payload: msg.payload,
-          stopIfMoving: msg.stopIfMoving === true,
-          respectManual: msg.respectManual === true,
-          source: typeof msg.source === "string" ? msg.source : undefined
-        };
-      const result = runReducer(node, {area, component: "cover-group"}, (saved: Partial<CoverGroupState> | undefined, now) =>
-        transitionCoverGroup(saved, event, members, now));
+    const trace = {area, component: "cover-group"};
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    function process(event: CoverGroupEvent, send: Send) {
+      const result = runReducer(node, trace, (saved: Partial<CoverGroupState> | undefined, now) =>
+        transitionCoverGroup(saved, event, members, now, deadlineSeconds));
       // One request per member on output 1, with msg.topic naming the member
       // for a switch node; the group's result on output 2.
       const outputs = [
@@ -50,6 +45,40 @@ const registerCoverGroup: NodeInitializer = (RED) => {
         shape: "dot",
         text: result.status.text
       });
+      // At the deadline, members that never answered count as not answering.
+      clearTimeout(timer);
+      timer = undefined;
+      const request = result.state.request;
+      if (request && !request.settled) {
+        timer = setTimeout(guarded(node, () => process({kind: "tick"}, node.send.bind(node))), Math.max(0, request.deadlineAt - Date.now()));
+      }
+    }
+
+    onInput(node, (msg, send) => {
+      const theatre = objectField<{kind?: string; requestId?: string; status?: string; classification?: string; failure?: {reason?: string}}>(msg, "theatre");
+      // A member's answer, from its cover node's second output. Anything else
+      // a cover node sends (other state, its moving signal) is not a request.
+      if (theatre?.kind === "target_state" && typeof theatre.requestId === "string") {
+        process({kind: "member", requestId: theatre.requestId, status: String(theatre.status), classification: theatre.classification, reason: theatre.failure?.reason ?? null}, send);
+        return;
+      }
+      if (theatre || msg.topic === "moving") {
+        runReducer(node, trace, (state: Partial<CoverGroupState> | undefined) =>
+          ({state, traces: [{event: "input", outcome: "ignored", reason: theatre ? "not-a-member-answer" : "moving-signal", details: {}}]}));
+        return;
+      }
+      process({
+        kind: "request",
+        payload: msg.payload,
+        stopIfMoving: msg.stopIfMoving === true,
+        respectManual: msg.respectManual === true,
+        source: typeof msg.source === "string" ? msg.source : undefined
+      }, send);
+    });
+
+    node.on("close", (_removed: boolean, done: () => void) => {
+      clearTimeout(timer);
+      done();
     });
   }
 

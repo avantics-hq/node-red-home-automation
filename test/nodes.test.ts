@@ -2025,3 +2025,42 @@ test("cover group node: one request moves both members, and their results come b
   assert.equal((done[0]?.[1]?.[0] as {theatre?: {status: string}} | undefined)?.theatre?.status, "ready");
   assert.equal(String((group.statuses.at(-1) as {text: string}).text), "2/2 confirmed");
 });
+
+test("cover node: a group's request it declines is answered with why, and only coverRequestId is read", async (t) => {
+  const node = new (runtime(registerCover).Constructor)({id: "c-answer", coverType: "open-close"});
+  t.after(() => close(node));
+  const declined = await receive<SendEnvelope>(node, {payload: 40, coverRequestId: "group-1:left"});
+  const theatre = (declined[0]?.[1] as {theatre?: {requestId: string; status: string; failure: {reason: string}}} | undefined)?.theatre;
+  assert.deepEqual([theatre?.requestId, theatre?.status, theatre?.failure.reason], ["group-1:left", "failed", "position-not-supported"]);
+  // Not answered without a caller's ID.
+  assert.deepEqual(await receive(node, {payload: "half"}), []);
+  // msg.requestId from elsewhere is not taken as the caller's.
+  const opened = await receive<SendEnvelope>(node, {payload: "open", requestId: "someone-else"});
+  const answer = ((opened[0]?.[1] ?? []) as Array<{theatre?: {requestId: string}}>)[0]?.theatre?.requestId;
+  assert.notEqual(answer, "someone-else");
+  assert.match(String(answer), /^cover-/);
+  // A badly formed coverRequestId is not used either.
+  const bad = await receive<SendEnvelope>(node, {payload: "close", coverRequestId: "has spaces"});
+  assert.match(String(((bad[0]?.[1] ?? []) as Array<{theatre?: {requestId: string}}>)[0]?.theatre?.requestId), /^cover-/);
+});
+
+test("cover reducers answer a request a person's move holds back", async () => {
+  const position = new (runtime(registerCover).Constructor)({id: "c-hold"});
+  await receive(position, {payload: 40});
+  await receive(position, {cover: {kind: "observed", position: 40, motion: "stopped", observedAt: new Date().toISOString()}});
+  await receive(position, {cover: {kind: "observed", position: 80, motion: "stopped", observedAt: new Date(Date.now() + 1000).toISOString()}});
+  const held = await receive<SendEnvelope>(position, {payload: 20, respectManual: true, coverRequestId: "group-2:left"});
+  const answers = ((held[0]?.[1] ?? []) as Array<{theatre?: {requestId: string; status: string; failure?: {reason: string}}}>).map(({theatre}) => theatre);
+  assert.ok(answers.some((answer) => answer?.requestId === "group-2:left" && answer.status === "failed" && answer.failure?.reason === "manual-hold"), JSON.stringify(answers));
+  await close(position);
+});
+
+test("cover group node: a cover's other state and its moving signal are not requests", async (t) => {
+  const group = new (runtime(registerCoverGroup).Constructor)({members: "[\"left\",\"right\"]"});
+  t.after(() => close(group));
+  assert.deepEqual(await receive(group, {topic: "moving", payload: true}), []);
+  assert.deepEqual(await receive(group, {theatre: {kind: "state", requestId: "x"}}), []);
+  assert.equal(traces(group).at(-1)?.reason, "not-a-member-answer");
+  const requests = (await receive<SendEnvelope>(group, {payload: "open"}))[0]?.[0] ?? [];
+  assert.deepEqual(requests.map((message) => (message as {coverRequestId?: string}).coverRequestId?.endsWith(":left")), [true, false]);
+});

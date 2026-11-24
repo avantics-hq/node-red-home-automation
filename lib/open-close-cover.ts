@@ -159,8 +159,9 @@ export function transitionOpenCloseCover(
     trace(reason, "observing");
   }
 
-  // Answers to requests made while offline, which are not carried out.
-  const unavailable: Array<{requestId: string; generation: number; operation: "open" | "close" | "stop"}> = [];
+  // Answers to requests not carried out: unavailable while offline, or held
+  // by a person's move.
+  const rejected: Array<{requestId: string; generation: number; operation: "open" | "close" | "stop"; reason: string}> = [];
 
   const target = (operation: "open" | "close"): OpenClosePosition => (operation === "open" ? "open" : "closed");
   const towards = (operation: "open" | "close"): CoverMotion => (operation === "open" ? "opening" : "closing");
@@ -169,10 +170,11 @@ export function transitionOpenCloseCover(
     if (typeof event.requestId !== "string" || !event.requestId) throw new Error("cover requestId is required");
     if (!Number.isInteger(event.generation) || event.generation < 1) throw new Error("cover generation must be a positive integer");
     if (!state.available) {
-      unavailable.push({requestId: event.requestId, generation: event.generation, operation: event.kind});
+      rejected.push({requestId: event.requestId, generation: event.generation, operation: event.kind, reason: "unavailable"});
       trace("intent", "rejected", "unavailable", {kind: event.kind});
     } else if (event.respectManual === true && state.classification === "manual_override") {
-      trace("intent", "ignored", "manual-hold", {kind: event.kind});
+      rejected.push({requestId: event.requestId, generation: event.generation, operation: event.kind, reason: "manual-hold"});
+      trace("intent", "rejected", "manual-hold", {kind: event.kind});
     } else if (event.generation <= state.generation && state.desired) {
       trace("intent", "ignored", event.generation === state.generation ? "duplicate" : "stale-generation");
     } else {
@@ -280,7 +282,7 @@ export function transitionOpenCloseCover(
   return {
     state,
     commands,
-    unavailable,
+    rejected,
     traces,
     status: {phase: state.phase, moving, text: `${state.position}${evidenceNote}: ${state.phase}`}
   };
@@ -304,14 +306,14 @@ export function openCloseTargetStates(
     evidence: state.evidence,
     motion: state.motion
   });
-  const events = result.unavailable.map((request) => ({theatre: targetStateEvent({
+  const events = result.rejected.map((request) => ({theatre: targetStateEvent({
     target: "cover" as const,
     requestId: request.requestId,
     generation: request.generation,
-    status: "unavailable" as const,
+    status: request.reason === "unavailable" ? "unavailable" as const : "failed" as const,
     observedAt: now.toISOString(),
     details: details(request.operation),
-    failure: {operation: request.operation, reason: "unavailable", occurredAt: now.toISOString()}
+    failure: {operation: request.operation, reason: request.reason, occurredAt: now.toISOString()}
   })}));
   if (state.desired) {
     events.push({theatre: targetStateEvent({

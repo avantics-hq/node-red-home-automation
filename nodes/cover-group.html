@@ -12,7 +12,8 @@
             return typeof name === "string" && /^[a-z][a-z0-9_-]*$/.test(name);
           }) && parsed.filter(function (name, index) { return parsed.indexOf(name) === index; }).length === parsed.length;
         } catch (e) { return false; }
-      }}
+      }},
+      deadlineSeconds: {value: 120, required: true, validate: function (v) { return RED.validators.number()(v) && Number(v) >= 1; }}
     },
     inputs: 1,
     outputs: 2,
@@ -26,6 +27,7 @@
   <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
   <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area"></div>
   <div class="form-row"><label for="node-input-members">Members</label><input type="text" id="node-input-members"></div>
+  <div class="form-row"><label for="node-input-deadlineSeconds">Answer deadline (s)</label><input type="number" id="node-input-deadlineSeconds"></div>
 </script>
 
 <script type="text/html" data-help-name="home-cover-group">
@@ -36,15 +38,19 @@
     <dt>payload</dt><dd>a cover request (<code>"open"</code>, <code>"close"</code>, <code>"stop"</code>, a position or a
       preset name), with <code>stopIfMoving</code> or <code>respectManual</code> if wanted. Each member gets the same
       request.</dd>
-    <dt>theatre</dt><dd>a member's result: wire each member cover node's second output back into the group.</dd>
+    <dt>theatre</dt><dd>a member's result: wire each member cover node's second output back into the group. Other
+      state from a cover node, and its <code>moving</code> signal, are ignored.</dd>
   </dl>
   <h3>Outputs</h3>
   <ol class="node-ports">
     <li>One request per member, with <code>msg.topic</code> naming it (from <b>Members</b>) and its own
-      <code>requestId</code>: route them to the member cover nodes with a switch node on the topic.</li>
+      <code>coverRequestId</code>: route them to the member cover nodes with a switch node on the topic. A cover
+      node answers that request even when it doesn't carry it out, with the reason.</li>
     <li>The group's result, <code>msg.theatre = {kind: "target_state", target: "cover", status, details}</code>:
       <code>ready</code> only when every member confirms; once every member has settled with any not ready,
       <code>failed</code> with reason <code>partial</code> (some confirmed) or <code>none-confirmed</code>, and
-      <code>details.members</code> saying what each did.</li>
+      <code>details.members</code> saying what each did. A member silent at the <b>Answer deadline</b> counts as
+      <code>no-answer</code>, and a new request first answers the open one <code>failed</code> with reason
+      <code>superseded</code>.</li>
   </ol>
 </script>

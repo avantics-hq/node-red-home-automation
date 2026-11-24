@@ -4,7 +4,10 @@ import type {Node, NodeDef, NodeInitializer} from "node-red";
 import {COVER_TYPES, openCloseCover, positionCover, type CoverModel} from "../lib/cover-models";
 import {coverPresets, coverRequest, type CoverPresets} from "../lib/cover-requests";
 import {optionalChoiceSetting} from "../lib/settings";
+import {targetStateEvent} from "../lib/target-state";
 import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
+
+const REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 
 interface CoverControllerConfig extends NodeDef {
   area?: string;
@@ -98,13 +101,14 @@ const registerCoverController: NodeInitializer = (RED) => {
         return;
       }
       requests += 1;
+      // A cover group's own ID for its request, so it can match the answer.
+      // Only msg.coverRequestId is read, in the request ID format.
+      const callerId = typeof msg.coverRequestId === "string" && REQUEST_ID.test(msg.coverRequestId) ? msg.coverRequestId : null;
       const current = saved();
       const request = coverRequest(
         {payload: msg.payload, respectManual: msg.respectManual, stopIfMoving: msg.stopIfMoving, source: msg.source},
         presets,
-        // A caller's own request ID (a cover group's, say) lets it match the
-        // result to its request.
-        {requestId: typeof msg.requestId === "string" && msg.requestId ? msg.requestId : `cover-${Date.now()}-${requests}`, generation: model.generation(current) + 1},
+        {requestId: callerId ?? `cover-${Date.now()}-${requests}`, generation: model.generation(current) + 1},
         model.moving(current)
       );
       const invalid = "invalid" in request ? request.invalid
@@ -113,6 +117,18 @@ const registerCoverController: NodeInitializer = (RED) => {
       if (invalid) {
         runReducer(node, trace, (state: unknown) =>
           ({state, traces: [{event: "request", outcome: "ignored", reason: invalid, details: {payload: msg.payload}}]}));
+        // A caller waiting on this request hears why nothing happened.
+        if (callerId) {
+          send([null, {payload: undefined, theatre: targetStateEvent({
+            target: "cover",
+            requestId: callerId,
+            generation: model.generation(current),
+            status: "failed",
+            observedAt: new Date().toISOString(),
+            details: {request: msg.payload},
+            failure: {reason: invalid}
+          })}, null]);
+        }
         return;
       }
       if ("intent" in request) process(request.intent, send);
