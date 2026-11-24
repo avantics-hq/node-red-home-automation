@@ -31,6 +31,8 @@ export interface PublishingNode {
 export interface PublishingLifecycle {
   // At a startup message: the clears, then anything else to announce.
   startup(send: Send, announce?: RetainedPublication[]): void;
+  // Any other publications, such as a state change, on the publishing output.
+  publish(send: Send, publications: RetainedPublication[]): void;
 }
 
 export function publishingLifecycle(RED: NodeAPI, node: Node, publishing: PublishingNode): PublishingLifecycle {
@@ -61,6 +63,7 @@ export function publishingLifecycle(RED: NodeAPI, node: Node, publishing: Publis
   return {
     startup(send, announce = []) {
       publish(send, [...clearStaleRetained(node, publishing.retainedTopics()), ...announce]);
-    }
+    },
+    publish
   };
 }

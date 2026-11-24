@@ -171,7 +171,8 @@ test("motion adapter emits intents and persists standard traces", async (t) => {
     {source: "occupancy", payload: {occupied: true, trigger: "motion"}}
   );
   assert.equal(sent.length, 1);
-  assert.equal(sent[0]?.lighting?.state, "ON");
+  // Lighting intents on output 1.
+  assert.equal((sent[0] as unknown as [WireMessage, null])[0]?.lighting?.state, "ON");
   const trace = traces(node);
   assert.equal(trace.at(-1)?.component, "motion-policy");
   assert.equal(trace.at(-1)?.area, "kitchen");
@@ -586,7 +587,7 @@ test("motion adapter re-arms a pending off-timer after a redeploy", async (t) =>
   t.after(() => close(after));
   assert.equal(after.sent.length, 0);
   await wait(400);
-  assert.deepEqual((after.sent as WireMessage[]).map((message) => message.lighting?.state), ["OFF"]);
+  assert.deepEqual((after.sent as Array<[WireMessage, null]>).map(([message]) => message.lighting?.state), ["OFF"]);
   assert.equal(savedState(after).offTimerDueAt, null);
 });
 
@@ -600,7 +601,7 @@ test("motion adapter fires an off-timer that fell due during the restart straigh
   const after = new Constructor({...motionConfig, defaultDelaySeconds: 30});
   t.after(() => close(after));
   await wait(50);
-  assert.deepEqual((after.sent as WireMessage[]).map((message) => message.lighting?.state), ["OFF"]);
+  assert.deepEqual((after.sent as Array<[WireMessage, null]>).map(([message]) => message.lighting?.state), ["OFF"]);
 });
 
 test("motion adapter arms nothing at startup without a pending off-timer", async (t) => {
@@ -1597,4 +1598,75 @@ test("occupancy publishing: deleting the node clears its entity; disabling it on
     {topic: "home/den/occupancy/availability", payload: "", retain: true},
     {topic: "home/den/occupancy/state", payload: "", retain: true}
   ]]]);
+});
+
+test("motion publishing: an enable switch and a vacancy delay, set from MQTT; off unless switched on", async (t) => {
+  const motionRuntime = runtime(registerMotion);
+  const quiet = new motionRuntime.Constructor({id: "m0", area: "den", onTargets: "[\"main\"]"});
+  t.after(() => close(quiet));
+  motionRuntime.events.emit("flows:started");
+  assert.deepEqual(quiet.sent, [], "nothing published");
+
+  const node = new motionRuntime.Constructor({id: "m1", area: "den", onTargets: "[\"main\"]", defaultDelaySeconds: 120, publishState: true, discovery: true});
+  t.after(() => close(node));
+  motionRuntime.events.emit("flows:started");
+  const started = (node.sent[0] as SendEnvelope)[1] ?? [];
+  assert.deepEqual(started.map(({topic, payload}) => [topic, String(payload).startsWith("{") ? "entry" : payload]), [
+    ["homeassistant/switch/nrha_m1_motion_lighting/config", "entry"],
+    ["homeassistant/number/nrha_m1_vacancy_delay/config", "entry"],
+    ["home/den/motion/availability", "online"],
+    ["home/den/motion/enabled/state", "ON"],
+    ["home/den/motion/delay/state", "120"]
+  ]);
+  const number = JSON.parse(String(started[1]?.payload)) as Record<string, unknown>;
+  assert.deepEqual(started.slice(0, 2).map(({payload}) => (JSON.parse(String(payload)) as {name: string}).name), ["Motion lighting", "Vacancy delay"]);
+  assert.deepEqual([number.min, number.max, number.step, number.unit_of_measurement, number.device_class, number.entity_category, number.command_topic],
+    [0, 86400, 1, "s", "duration", "config", "home/den/motion/delay/set"]);
+
+  const disabled = await receive<SendEnvelope>(node, {topic: "home/den/motion/enabled/set", payload: "off"});
+  assert.deepEqual(disabled.at(-1)?.[1]?.map(({topic, payload}) => [topic, payload]),
+    [["home/den/motion/enabled/state", "OFF"], ["home/den/motion/delay/state", "120"]]);
+  const delayed = await receive<SendEnvelope>(node, {topic: "home/den/motion/delay/set", payload: "300.0"});
+  assert.deepEqual(delayed.at(-1)?.[1]?.map(({payload}) => payload), ["OFF", "300"]);
+  for (const [payload, extra, reason] of [["-5", {}, "not-a-delay"], ["99999", {}, "not-a-delay"], ["60", {retain: true}, "retained-message"]] as const) {
+    const ignored = await receive<SendEnvelope>(node, {topic: "home/den/motion/delay/set", payload, ...extra});
+    assert.deepEqual(ignored, [], reason);
+    assert.equal(traces(node).at(-1)?.reason, reason);
+  }
+  await receive<SendEnvelope>(node, {topic: "home/den/motion/enabled/set", payload: "maybe"});
+  assert.equal(traces(node).at(-1)?.reason, "not-on-or-off");
+  assert.equal((node.context().get("state") as {areaEnabled: boolean}).areaEnabled, false, "junk doesn't change it");
+
+  // Deleted: everything it published is cleared.
+  const deleted = new motionRuntime.Constructor({id: "m2", area: "den", onTargets: "[\"main\"]", publishState: true, discovery: true});
+  motionRuntime.flowNodeIds.delete("m2");
+  const cleared = await new Promise<unknown[]>((resolve) => {
+    deleted.emit("close", true, () => resolve(deleted.sent));
+  });
+  assert.deepEqual(((cleared[0] as SendEnvelope)[1] ?? []).map(({payload}) => payload), ["", "", "", "", ""]);
+});
+
+test("motion publishing: after a redeploy with a new vacancy setting, the delay in use is published", async (t) => {
+  const motionRuntime = runtime(registerMotion);
+  const base = {id: "m5", area: "hall", onTargets: "[\"main\"]", publishState: true, discovery: true};
+  const delays = (sent: unknown[]) => JSON.stringify(sent).match(/"topic":"home\/hall\/motion\/delay\/state","payload":"(\d+)"/g)?.map((m) => m.match(/"(\d+)"$/)![1]) ?? [];
+  const first = new motionRuntime.Constructor({...base, defaultDelaySeconds: 120});
+  motionRuntime.events.emit("flows:started");
+  assert.deepEqual(delays(first.sent), ["120"]);
+  assert.deepEqual(delays(await receive(first, {topic: "home/hall/motion/delay/set", payload: "300"})), ["300"]);
+  await close(first);
+
+  // Same setting: Home Assistant's 300 still stands.
+  const same = new motionRuntime.Constructor({...base, defaultDelaySeconds: 120});
+  motionRuntime.events.emit("flows:started");
+  assert.deepEqual(delays(same.sent), ["300"]);
+  await close(same);
+
+  // A new setting replaces it, and that is what is published.
+  const changed = new motionRuntime.Constructor({...base, defaultDelaySeconds: 600});
+  t.after(() => close(changed));
+  motionRuntime.events.emit("flows:started");
+  assert.deepEqual(delays(changed.sent), ["600"]);
+  // Nothing more to publish when nothing changes.
+  assert.deepEqual(await receive(changed, {source: "illuminance", payload: 5}), []);
 });
