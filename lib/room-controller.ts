@@ -5,7 +5,7 @@ import type {CircadianLighting} from "./circadian";
 import type {DaySchedule} from "./circadian-schedule";
 import {requestedSchedule, savedSchedule, withActiveSchedule} from "./room-schedule";
 import {alreadyStyled, lightCommand, readLightReport, setsLightValues, type LightCommand, type LightReport} from "./z2m-light";
-import {checkCommandEcho, checkStateReport, parsePayload, rememberCommand, type ExpectedCommand} from "./command-echo";
+import {ECHO_WINDOW_MS, checkCommandEcho, checkStateReport, parsePayload, rememberCommand, type ExpectedCommand} from "./command-echo";
 
 export {fingerprint, parsePayload, type ExpectedCommand} from "./command-echo";
 
@@ -70,6 +70,9 @@ export interface RoomState {
   // them as they are, with no periodic restyle, until an intent or release
   // names them or circadian lighting is switched on.
   untold: string[];
+  // When the room last restyled each light after someone else's bare ON
+  // (epoch ms): at most one such restyle per light per echo window.
+  restyledAt: Record<string, number>;
 }
 
 export interface LightingEvent {
@@ -138,7 +141,9 @@ export function createRoomState(
       .filter(([, at]) => Number.isFinite(at))),
     untold: Array.isArray(saved.untold)
       ? saved.untold.filter((id) => config.targets.some((target) => target.id === id))
-      : []
+      : [],
+    restyledAt: Object.fromEntries(Object.entries(saved.restyledAt || {})
+      .filter(([, at]) => Number.isFinite(at)))
   };
 }
 
@@ -345,6 +350,11 @@ export function transitionRoom(
     if (msg.retain !== true && event.retained !== true && target && payload) {
       const echo = checkCommandEcho(state.expected[target.id], payload, nowMs);
       state.expected[target.id] = echo.queue;
+      if (echo.changed) {
+        // Our own command, changed on the way to MQTT (the command path
+        // should pass it through as it is): never answered as someone else's.
+        trace("command-observed", "ignored", "mutated-own-command", {target: target.id, state: String(payload.state || "").toUpperCase()});
+      }
       if (!echo.own) {
         const requestedState = String(payload.state || "").toUpperCase();
         if (requestedState === "OFF") {
@@ -355,12 +365,23 @@ export function transitionRoom(
           if (setsLightValues(payload)) {
             setControl(target.id, {state: "manual"}, "external-values");
           } else if (state.circadianEnabled && controlOf(target.id) === "in-control") {
-            const corrective = command(
-              target.id,
-              adaptivePayload("ON", false, state.sleeping, now, active),
-              "external-bare-on"
-            );
-            if (corrective) outputs.push(corrective);
+            // At most one restyle per light per echo window, whatever comes
+            // back: a bare ON delivered twice (two subscriptions, or a QoS
+            // redelivery) can't make the room answer itself in a loop.
+            const last = state.restyledAt[target.id];
+            if (last !== undefined && nowMs - last >= 0 && nowMs - last < ECHO_WINDOW_MS) {
+              trace("external-command", "suppressed", "restyled-recently", {target: target.id});
+            } else {
+              const corrective = command(
+                target.id,
+                adaptivePayload("ON", false, state.sleeping, now, active),
+                "external-bare-on"
+              );
+              if (corrective) {
+                outputs.push(corrective);
+                state.restyledAt[target.id] = nowMs;
+              }
+            }
             // Styled now, so the refresh keeps it in step from here.
             told(target.id);
           }

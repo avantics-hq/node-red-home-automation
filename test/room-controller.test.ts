@@ -883,3 +883,56 @@ test("a room with saved state restyles as before", () => {
   const refresh = publishRoom(saved.state, {lighting: {kind: "refresh"}}, config, new Date(now.getTime() + 90000));
   assert.deepEqual(refresh.outputs.filter((output) => output.lighting_command).map((output) => output.lighting_command!.target), ["cooking"]);
 });
+
+// The real-install loop: a function between the controller and MQTT out
+// cuts every command to {"state":"ON"}, and the command observer feeds that
+// back. Each command the room sends comes back changed, up to `rounds` times.
+function loopThroughRewriter(start: ReturnType<typeof publishRoom>, rounds: number, copies = 1) {
+  let result = start;
+  let commands = 0;
+  let pending = result.outputs.filter((output) => output.lighting_command);
+  let at = now.getTime() + 100;
+  for (let round = 0; round < rounds && pending.length; round += 1) {
+    commands += pending.length;
+    const next: RoomOutput[] = [];
+    for (const output of pending) {
+      for (let copy = 0; copy < copies; copy += 1) {
+        at += 10;
+        result = publishRoom(result.state, {
+          topic: output.topic,
+          payload: JSON.stringify({state: "ON"}),
+          lighting: {kind: "command-observed", target: output.lighting_command!.target}
+        }, config, new Date(at));
+        next.push(...result.outputs.filter((entry) => entry.lighting_command));
+      }
+    }
+    pending = next;
+  }
+  return {result, commands, correctives: commands - start.outputs.filter((output) => output.lighting_command).length};
+}
+
+test("a command rewritten on its way to MQTT never makes the room answer itself", () => {
+  const styled = publishRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, now);
+  assert.equal(styled.outputs.filter((output) => output.lighting_command).length, 1);
+  const looped = loopThroughRewriter(styled, 50);
+  assert.equal(looped.correctives, 0, "the rewritten echo is ours, so nothing more is sent");
+  assert.equal(looped.result.traces.find(({reason}) => reason === "mutated-own-command")?.outcome, "ignored");
+
+  // Each rewritten command delivered twice (two subscriptions, or a QoS
+  // redelivery): the second copy looks like someone else's, but the room
+  // restyles each light at most once per echo window.
+  const doubled = loopThroughRewriter(styled, 50, 2);
+  assert.ok(doubled.correctives <= 1, `${doubled.correctives} restyles`);
+});
+
+test("someone else's bare ON is still restyled, once per echo window", () => {
+  const external = (at: number) => publishRoom(undefined, {topic: "home/kitchen/light/group/cooking/set", payload: {state: "ON"},
+    lighting: {kind: "command-observed", target: "cooking"}}, config, new Date(now.getTime() + at));
+  const first = external(0);
+  assert.deepEqual(first.outputs.filter((output) => output.lighting_command).map((output) => output.lighting_command!.source), ["external-bare-on"]);
+  // Another bare ON in the window, not ours: the room has just restyled it.
+  const again = publishRoom(first.state, {topic: "home/kitchen/light/group/cooking/set", payload: {state: "ON"}, retain: false,
+    lighting: {kind: "command-observed", target: "cooking"}}, config, new Date(now.getTime() + 6000));
+  assert.deepEqual(again.outputs.filter((output) => output.lighting_command).map((output) => output.lighting_command!.source), ["external-bare-on"],
+    "after the window, restyled again");
+});
