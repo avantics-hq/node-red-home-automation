@@ -201,7 +201,7 @@ const STATE_TOPICS: Array<[TheatreTopicName, (event: TheatreStateSnapshot, slo: 
     manualOverrides: 0,
     driftEvents: 0,
     recoveriesAdopted: 0,
-    recoveriesSafeOff: 0,
+    recoveriesUnknown: 0,
     lastTransitionMs: null,
     maxTransitionMs: null,
     lastOutcome: null,

@@ -72,7 +72,7 @@ export interface TheatreMetrics {
   manualOverrides: number;
   driftEvents: number;
   recoveriesAdopted: number;
-  recoveriesSafeOff: number;
+  recoveriesUnknown: number;
   lastTransitionMs: number | null;
   maxTransitionMs: number | null;
   lastOutcome: string | null;
@@ -182,7 +182,7 @@ function createMetrics(saved: Partial<TheatreMetrics> = {}): TheatreMetrics {
     manualOverrides: count(saved.manualOverrides),
     driftEvents: count(saved.driftEvents),
     recoveriesAdopted: count(saved.recoveriesAdopted),
-    recoveriesSafeOff: count(saved.recoveriesSafeOff),
+    recoveriesUnknown: count(saved.recoveriesUnknown),
     lastTransitionMs: nullableDuration(saved.lastTransitionMs),
     maxTransitionMs: nullableDuration(saved.maxTransitionMs),
     lastOutcome: typeof saved.lastOutcome === "string" ? saved.lastOutcome : null,

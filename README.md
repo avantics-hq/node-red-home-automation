@@ -24,7 +24,7 @@ Most home automations translate an event directly into a command. This package a
 - **Honest source readiness:** model controllable, externally controlled, and unavailable playback sources without claiming success from an input selection alone.
 - **Owned theatre atmosphere:** apply activity lighting only to active, non-manual room lights and confirm TV backlighting independently.
 - **Bounded receiver volume:** coordinate absolute and relative requests through one transport owner while preserving later physical adjustments.
-- **Recoverable automation:** adopt one fresh, uniquely matching physical activity after lost state; otherwise coordinate a safe Off request.
+- **Recoverable automation:** adopt one fresh, uniquely matching physical activity after lost state; otherwise report the activity as unknown and leave the devices alone until the next request.
 
 ![Architecture diagram. Inputs (wall switches, motion and presence sensors, illuminance, and theatre requests over MQTT) feed two groups of nodes. Room lighting: occupancy-fusion, motion-lighting-policy and switch-lighting-policy feed room-lighting-controller, which sends set commands to the lights (for example Zigbee2MQTT) and reads back their observed state. Theatre activities: theatre-state-contract passes activity intents to theatre-activity-controller and publishes retained theatre state and Home Assistant discovery; your flow routes each theatreCommand by target to the theatre equipment controllers (AVR, display mode, source capability, backlighting), which command the devices, or to activity-lighting-controller, which holds room lights; both report target state back to the activity controller.](https://avantics-hq.github.io/node-red-home-automation/images/architecture.svg)
 
@@ -240,8 +240,11 @@ Unsolicited display, AVR, source, and backlighting changes latch manual
 ownership instead of issuing corrective commands. A newer explicit activity
 request resumes automation. Recovery adopts physical state only when fresh
 display, AVR, source, and backlighting evidence matches exactly one configured
-profile; missing or ambiguous startup evidence invokes the configured Off
-activity.
+profile. With missing or ambiguous startup evidence the activity is unknown,
+and nothing is commanded until the next request: a redeploy or restart, which
+starts the controller with nothing saved unless a context store is configured,
+never switches a running activity off. (Earlier versions ran a configured Off
+activity here; that setting is gone, and a saved value is ignored.)
 
 ## Recommended setup: a file context store
 

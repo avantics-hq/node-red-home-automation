@@ -109,7 +109,6 @@
     "name": "",
     "area": "",
     "freshnessMs": 30000,
-    "recoveryOffActivity": "off",
     "activityProfiles": "{\"off\":{\"display\":{\"mode\":\"off\"},\"avr\":{\"power\":\"standby\"},\"source\":{\"action\":\"deactivate\",\"readiness\":\"optional\"},\"lighting\":{\"profile\":\"off\"},\"backlighting\":{\"power\":\"off\"}},\"tv\":{\"display\":{\"mode\":\"tv\"},\"avr\":{\"power\":\"on\",\"source\":\"shield\"},\"source\":{\"action\":\"activate\",\"sourceId\":\"streamer\",\"readiness\":\"required\"},\"lighting\":{\"profile\":\"tv\"},\"backlighting\":{\"power\":\"on\"}}}",
     "x": 680,
     "y": 140,
