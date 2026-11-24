@@ -141,10 +141,13 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
 
     // With a configured context store (see the README) the node's state
     // survives a redeploy or restart, but timers never do: a pending
-    // off-timer is re-armed.
+    // off-timer is re-armed. Without one, it starts with nothing saved, and
+    // vacancy starts now.
     const savedState = context.get("state") as Partial<MotionState> | undefined;
     if (typeof savedState?.offTimerDueAt === "number") {
       armOffTimer(Math.max(0, savedState.offTimerDueAt - Date.now()), Number(savedState.offTimerGeneration) || 0);
+    } else if (savedState === undefined) {
+      process({source: "cold-start"}, node.send.bind(node));
     }
     onInput(node, (msg, send) => {
       if (msg.source === "startup") {

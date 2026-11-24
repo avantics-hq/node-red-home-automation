@@ -611,6 +611,22 @@ test("motion adapter re-arms a pending off-timer after a redeploy", async (t) =>
   assert.equal(savedState(after).offTimerDueAt, null);
 });
 
+test("motion adapter started with nothing saved sends its off intent after the vacancy delay", async (t) => {
+  const {Constructor} = runtime(registerMotion);
+  const node = new Constructor({...motionConfig, id: "motion-cold"});
+  t.after(() => close(node));
+  assert.equal(node.sent.length, 0, "nothing sent at the start");
+  await wait(400);
+  assert.deepEqual((node.sent as Array<[WireMessage, null]>).map(([message]) => message.lighting?.state), ["OFF"]);
+
+  // Occupancy before the delay cancels it.
+  const occupied = new Constructor({...motionConfig, id: "motion-cold-occupied"});
+  t.after(() => close(occupied));
+  await receive(occupied, {source: "occupancy", payload: {occupied: true}});
+  await wait(400);
+  assert.ok(!(occupied.sent as Array<[WireMessage, null]>).some(([message]) => message.lighting?.state === "OFF"));
+});
+
 test("motion adapter fires an off-timer that fell due during the restart straight away", async (t) => {
   const {Constructor} = runtime(registerMotion);
   const before = new Constructor({...motionConfig, defaultDelaySeconds: 30});
@@ -625,7 +641,7 @@ test("motion adapter fires an off-timer that fell due during the restart straigh
 });
 
 test("motion adapter arms nothing at startup without a pending off-timer", async (t) => {
-  const {Constructor} = runtime(registerMotion);
+  const {Constructor} = runtime(registerMotion, {}, STORE);
   const before = new Constructor(motionConfig);
   await receive<WireMessage>(before, {source: "occupancy", payload: {occupied: false}});
   await receive<WireMessage>(before, {source: "occupancy", payload: {occupied: true}});
