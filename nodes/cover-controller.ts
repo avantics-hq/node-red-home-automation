@@ -15,7 +15,7 @@ import {ID_SCHEMES, discoveryPrefixSetting} from "../lib/ha-discovery";
 import {publishesState} from "../lib/publishing-node";
 import {optionalBooleanSetting, optionalChoiceSetting, textSetting} from "../lib/settings";
 import {targetStateEvent} from "../lib/target-state";
-import {REQUEST_ID, publishingArea} from "../lib/topic-names";
+import {REQUEST_ID, areaId, publishingArea} from "../lib/topic-names";
 import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type InputMessage, type Send} from "./adapter";
 import {publishingLifecycle} from "./publishing-lifecycle";
 
@@ -39,6 +39,13 @@ interface CoverControllerConfig extends NodeDef {
 }
 
 interface CoverControllerNode extends Node {}
+
+// The cover's name in its topics, which it needs while it publishes.
+function coverTopicName(value: unknown): string {
+  const name = textSetting(value, "name in topics");
+  if (!areaId(name)) throw new Error("name in topics must contain a letter or digit");
+  return name;
+}
 
 const registerCoverController: NodeInitializer = (RED) => {
   function HomeCoverController(this: CoverControllerNode, config: CoverControllerConfig) {
@@ -65,7 +72,8 @@ const registerCoverController: NodeInitializer = (RED) => {
       if (publishState || discovery) publishingArea(area, true);
       publishing = {
         area,
-        name: textSetting(config.topicName, "name in topics", "cover"),
+        // No default: two covers in a room must not share topics.
+        name: publishState || discovery ? coverTopicName(config.topicName) : "",
         positions: model.positions,
         publishState,
         discovery,

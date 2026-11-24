@@ -209,7 +209,11 @@ test("editing a cover group's members moves each member's wire with its name", (
 test("a cover starts with publishing off, named after the node, and has a fourth output", () => {
   const cover = editorDefinition("cover-controller.html");
   assert.deepEqual([cover.defaults.publishState?.value, cover.defaults.discovery?.value, cover.defaults.topicName?.value, cover.defaults.idScheme?.value],
-    [false, false, "cover", null]);
+    [false, false, "", null]);
+  // No default name: flagged while it publishes, not otherwise.
+  const name = (value: string, node: Record<string, unknown>) => cover.defaults.topicName!.validate!.call(node, value);
+  assert.deepEqual([name("", {publishState: true}), name("", {discovery: true}), name("left", {publishState: true}), name("", {publishState: false})],
+    [false, false, true, true]);
   assert.equal(newNode(cover).idScheme, "node");
   assert.deepEqual(cover.outputLabels, ["device commands", "state and results", "moving", "MQTT publications"]);
 });

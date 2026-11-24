@@ -157,8 +157,8 @@ from a Zigbee2MQTT cover. Battery and charging status are kept as reported
 facts and never acted on.
 
 Switched on, a cover node publishes its state (and position) under
-`home/<area>/cover/<name>/`, named by its **Name in topics** so several covers
-in a room stay apart, and announces a Home Assistant cover entity. Its open,
+`home/<area>/cover/<name>/`, named by its **Name in topics** (no default: give
+each cover in a room its own), and announces a Home Assistant cover entity. Its open,
 close, stop and set position come back to the cover node on its own set topics
 as requests like any other, carried out and confirmed as above; nothing
 commands the device through Home Assistant. A cover group has no entity of its

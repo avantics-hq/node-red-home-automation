@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import {openCloseCover, positionCover} from "../lib/cover-models";
 import {
   coverDiscovery,
   coverInbound,
@@ -62,4 +63,16 @@ test("Home Assistant's commands come back as the cover's own requests", () => {
   assert.equal(coverInbound({topic: "home/bedroom/cover/left/position/set", payload: "40"}, {...config, positions: false}), null,
     "no positions on an open/close cover");
   assert.equal(coverInbound({topic: "home/bedroom/cover/left/set", payload: "OPEN"}, {...config, publishState: false}), null);
+});
+
+test("an open/close cover stopped partway shows as open; a position cover keeps its own state", () => {
+  const openClose = openCloseCover({});
+  assert.deepEqual(openClose.view({position: "stopped", motion: null}), {state: "open", position: null},
+    "with no position, Home Assistant would show closed after closing and refuse to close");
+  assert.deepEqual(openClose.view({position: "closed", motion: null}), {state: "closed", position: null});
+  assert.deepEqual(openClose.view({position: "open", motion: "closing"}), {state: "closing", position: null});
+  assert.equal(openClose.view({position: "unknown", motion: null}), null);
+  const position = positionCover({});
+  assert.deepEqual(position.view({observed: {position: 30, motion: "stopped", observedAt: "x"}}), {state: "open", position: 30});
+  assert.deepEqual(position.view({observed: {position: 0, motion: "stopped", observedAt: "x"}}), {state: "closed", position: 0});
 });

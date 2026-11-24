@@ -2157,6 +2157,16 @@ test("cover group node: a request still open after a redeploy settles at its dea
   assert.deepEqual([answer.at(-1)?.failure?.reason, answer.at(-1)?.details.members.left?.reason], ["none-confirmed", "no-answer"]);
 });
 
+test("cover node: its name in topics has no default, and is needed only while it publishes", (t) => {
+  const coverRuntime = runtime(registerCover);
+  const unnamed = new coverRuntime.Constructor({id: "cover-unnamed", area: "bedroom", publishState: true});
+  assert.deepEqual(unnamed.errors.map(String), ["invalid configuration: name in topics is required"],
+    "two covers in a room can't share topics by leaving it alone");
+  const quiet = new coverRuntime.Constructor({id: "cover-not-publishing", area: "bedroom"});
+  t.after(() => close(quiet));
+  assert.deepEqual(quiet.errors, [], "a cover that doesn't publish has no topics to name");
+});
+
 test("cover node publishing: a Home Assistant cover entity, its state as it changes, and its commands as requests", async (t) => {
   const coverRuntime = runtime(registerCover);
   const quiet = new coverRuntime.Constructor({id: "cover-quiet"});

@@ -96,6 +96,10 @@ export function openCloseCover(settings: Record<string, unknown>): CoverModel {
       const state = saved as Partial<OpenCloseState> | undefined;
       if (!state) return null;
       if (state.motion === "opening" || state.motion === "closing") return {state: state.motion, position: null};
+      // Stopped partway is open, as a cover entity counts anything not fully
+      // closed: with no position, Home Assistant would otherwise keep showing
+      // the last move (closed after closing) and refuse to close it.
+      if (state.position === "stopped") return {state: "open", position: null};
       return state.position && state.position !== "unknown" ? {state: state.position, position: null} : null;
     }
   };
