@@ -7,7 +7,9 @@
       category: "home automation",
       color: "#ffd27f",
       defaults: {
-        name: {value: ""},
+        // A marker only a node new from the palette has, as core nodes do: import
+        // and paste keep the saved name, so onadd leaves a saved node's settings.
+        name: {value: "_DEFAULT_"},
         // Required only when the room publishes something named after it, and
         // then with a letter or digit, from which its topics and IDs are made.
         area: {value: "", validate: function (v) {
@@ -42,6 +44,8 @@
         bedTime: {value: "23:00", required: true, validate: function (v) { return /^([01]\d|2[0-3]):[0-5]\d$/.test(v); }}
       },
       onadd: function () {
+        if (this.name !== "_DEFAULT_") return;
+        this.name = "";
         this.idScheme = "node";
         this.publishState = false;
         this.discovery = false;

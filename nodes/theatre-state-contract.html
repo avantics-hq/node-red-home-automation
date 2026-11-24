@@ -7,7 +7,9 @@
       category: "home automation",
       color: "#d9c7f1",
       defaults: {
-        name: {value: ""},
+        // A marker only a node new from the palette has, as core nodes do: import
+        // and paste keep the saved name, so onadd leaves a saved node's settings.
+        name: {value: "_DEFAULT_"},
         // Required for the default base topic home/<area>/theatre, and for the
         // discovery of a contract saved before node IDs; when set, it needs a
         // letter or digit, from which topics and IDs are made.
@@ -41,6 +43,8 @@
         sloSuccessObjectivePct: {value: 95, required: true, validate: RED.validators.number()}
       },
       onadd: function () {
+        if (this.name !== "_DEFAULT_") return;
+        this.name = "";
         this.idScheme = "node";
         this.discovery = false;
       },
