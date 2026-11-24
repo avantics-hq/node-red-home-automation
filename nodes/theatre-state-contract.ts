@@ -74,6 +74,7 @@ const registerTheatreStateContract: NodeInitializer = (RED) => {
     // runs; offline as it stops; nothing left behind when deleted.
     const lifecycle = publishingLifecycle(RED, node, {
       retainedTopics: () => theatreRetainedTopics(controllerConfig),
+      possibleTopics: () => theatreRetainedTopics({...controllerConfig, discovery: true}),
       starting: () => theatreStartingPublications(controllerConfig),
       stopping: () => theatreStoppingPublications(controllerConfig),
       output: 1,

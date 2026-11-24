@@ -184,7 +184,10 @@ Version 3.0 changes some behaviour. Check these after upgrading:
 - **Topics no longer published are cleared.** Once the flows have started, and again at its startup message, a node
   clears any retained topic it published before and no longer does, for example after an area, base topic,
   discovery prefix or target change. It remembers what it published in its node context, which lasts across
-  deploys and restarts only with a context store configured (see "Recommended setup"). A node that never gets a startup message
+  deploys and restarts only with a context store configured (see "Recommended setup"). Without that record, a node that publishes state still
+  clears every topic it could publish under its current names and no longer does, such as its Home Assistant
+  entities after you switch discovery off. Old topics after an area, base topic, discovery prefix or target change,
+  or after you switch publishing off entirely, are cleared only from the record. A node that never gets a startup message
   keeps clearing its old topics at every start, so to move an area from one older room node to another, send the old
   node a startup message, or delete it.
 - **Send each publishing node a startup message once, a few seconds after deploy.** The example flows do this with an

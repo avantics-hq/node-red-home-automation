@@ -18,6 +18,7 @@ import {ID_SCHEMES, discoveryPrefixSetting} from "../lib/ha-discovery";
 import {optionalBooleanSetting, optionalChoiceSetting, textSetting} from "../lib/settings";
 import {publishingArea} from "../lib/topic-names";
 import {invalidConfig, onInput, optionalArea, runReducer} from "./adapter";
+import {publishesState} from "../lib/publishing-node";
 import {publishingLifecycle} from "./publishing-lifecycle";
 
 interface OccupancyFusionConfig extends NodeDef {
@@ -84,6 +85,7 @@ const registerOccupancyFusion: NodeInitializer = (RED) => {
     // nothing left behind when deleted.
     const lifecycle = publishingLifecycle(RED, node, {
       retainedTopics: () => occupancyRetainedTopics(publishing),
+      possibleTopics: () => publishesState(publishing) ? occupancyRetainedTopics({...publishing, publishState: true, discovery: true}) : [],
       starting: () => occupancyStartingOutputs(publishing, occupied()),
       stopping: () => occupancyStoppingOutputs(publishing),
       output: 1,

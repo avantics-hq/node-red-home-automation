@@ -91,8 +91,11 @@ export function allRetainedTopics(node: Node, current: string[]): string[] {
 // At a node's start: the empty retained messages that clear what it
 // published before and no longer does, recording what it publishes now. The
 // record is kept in the node's context, which Node-RED deletes when the node
-// stops unless a context store is configured (see the README): without one,
-// a node can't clear what it published before a change of its settings.
+// stops unless a context store is configured (see the README). `possible` is
+// every topic the node could publish with its current names (area, IDs,
+// prefix, targets) and its publishing switched on: those it doesn't publish
+// now are cleared too, so switching publishing off clears its topics even
+// with no record. Only a change of names needs the record.
 //
 // It runs twice: once the flows have started, so no startup message is
 // needed, and again at the startup message. The first may go out before the
@@ -100,10 +103,15 @@ export function allRetainedTopics(node: Node, current: string[]): string[] {
 // broker node drops it, so it keeps the cleared topics in the record and the
 // second clears them again and settles the record. Clearing a topic twice
 // does no harm.
-export function clearStaleRetained(node: Node, current: string[], when: "flows-started" | "startup" = "startup"): RetainedClear[] {
+export function clearStaleRetained(
+  node: Node,
+  current: string[],
+  when: "flows-started" | "startup" = "startup",
+  possible: string[] = []
+): RetainedClear[] {
   const context = node.context();
   const recorded = context.get("retainedTopics") as string[] | undefined;
-  const {clears, record} = staleRetainedTopics(recorded, current, when === "flows-started");
+  const {clears, record} = staleRetainedTopics([...(recorded ?? []), ...possible], current, when === "flows-started");
   context.set("retainedTopics", record);
   return clears;
 }

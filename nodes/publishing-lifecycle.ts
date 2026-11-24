@@ -20,6 +20,12 @@ interface RetainedPublication {
 export interface PublishingNode {
   // Every retained topic the node publishes with its current settings.
   retainedTopics(): string[];
+  // Every retained topic it would publish with its current names and its
+  // publishing switched on, to clear those it no longer publishes without
+  // needing a record of what it published before. Only while it publishes
+  // (it returns nothing otherwise): a node with publishing off sends nothing,
+  // so it never clears topics something else publishes under those names.
+  possibleTopics?(): string[];
   // What it publishes once the flows have started, and as it stops.
   starting(): RetainedPublication[];
   stopping(): RetainedPublication[];
@@ -45,7 +51,7 @@ export function publishingLifecycle(RED: NodeAPI, node: Node, publishing: Publis
 
   whenFlowsStarted(RED, node, () => {
     publish(node.send.bind(node), [
-      ...clearStaleRetained(node, publishing.retainedTopics(), "flows-started"),
+      ...clearStaleRetained(node, publishing.retainedTopics(), "flows-started", publishing.possibleTopics?.() ?? []),
       ...publishing.starting()
     ]);
   });
@@ -55,14 +61,14 @@ export function publishingLifecycle(RED: NodeAPI, node: Node, publishing: Publis
   // messages cover a full deploy, a restart and a crash (see the README).
   node.on("close", (removed: boolean, done: () => void) => {
     publish(node.send.bind(node), wasDeleted(RED, node, removed)
-      ? retainedClears(allRetainedTopics(node, publishing.retainedTopics()))
+      ? retainedClears(allRetainedTopics(node, [...publishing.retainedTopics(), ...(publishing.possibleTopics?.() ?? [])]))
       : publishing.stopping());
     done();
   });
 
   return {
     startup(send, announce = []) {
-      publish(send, [...clearStaleRetained(node, publishing.retainedTopics()), ...announce]);
+      publish(send, [...clearStaleRetained(node, publishing.retainedTopics(), "startup", publishing.possibleTopics?.() ?? []), ...announce]);
     },
     publish
   };
