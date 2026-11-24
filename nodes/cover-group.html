@@ -25,14 +25,29 @@
       try { return JSON.parse(this.members)[index - 1] || ""; } catch (e) { return ""; }
     },
     oneditprepare: function () {
-      function count() {
-        try {
-          var parsed = JSON.parse($("#node-input-members").val());
-          if (Array.isArray(parsed)) $("#node-input-outputs").val(parsed.length + 1);
-        } catch (e) { /* left as it was until Members is valid */ }
+      // As the core switch node does, the hidden outputs field holds a port
+      // map, {old port: new port, or "-1" when removed}, plus a key per new
+      // port, so the editor moves each member's wire with its name. Every
+      // kept port is listed, as the editor counts the outputs from the map.
+      var opened = [];
+      try { opened = JSON.parse(this.members); } catch (e) { opened = []; }
+      if (!Array.isArray(opened)) opened = [];
+      function portMap() {
+        var members;
+        try { members = JSON.parse($("#node-input-members").val()); } catch (e) { return; }
+        if (!Array.isArray(members)) return;
+        var map = {"0": "0"};
+        opened.forEach(function (name, index) {
+          var now = members.indexOf(name);
+          map[String(index + 1)] = now < 0 ? "-1" : String(now + 1);
+        });
+        members.forEach(function (name, index) {
+          if (opened.indexOf(name) < 0) map["new-" + name] = String(index + 1);
+        });
+        $("#node-input-outputs").val(JSON.stringify(map));
       }
-      $("#node-input-members").on("change keyup", count);
-      count();
+      $("#node-input-members").on("change keyup", portMap);
+      portMap();
     },
     icon: "font-awesome/fa-columns",
     label: function () { return this.name || (this.area ? this.area + " " : "") + "cover group"; }
