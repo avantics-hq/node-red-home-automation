@@ -18,6 +18,8 @@ import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, 
 import {jsonSetting, optionalBooleanSetting, optionalChoiceSetting} from "../lib/settings";
 import {
   avrRetainedTopics,
+  VOLUME_SET_SETTLE_MS,
+  avrVolumeRequest,
   avrStartingOutputs,
   avrStateOutputs,
   avrStoppingOutputs,
@@ -77,7 +79,9 @@ const registerAvrController: NodeInitializer = (RED) => {
         discovery,
         discoveryPrefix: discoveryPrefixSetting(config.discoveryPrefix),
         nodeId: node.id,
-        idScheme: optionalChoiceSetting(config.idScheme, "ID scheme", ID_SCHEMES) ?? "node"
+        idScheme: optionalChoiceSetting(config.idScheme, "ID scheme", ID_SCHEMES) ?? "node",
+        minVolume: controllerConfig.minVolume,
+        maxVolume: controllerConfig.maxVolume
       };
     } catch (error) {
       invalidConfig(node, error);
@@ -157,7 +161,32 @@ const registerAvrController: NodeInitializer = (RED) => {
       }), 0);
     }
 
+    // Each request from the volume number gets its own ID, as the receiver
+    // answers a repeated ID only once. Sets arriving in a burst are settled
+    // to the last one first.
+    let volumeRequests = 0;
+    let volumeSetTimer: ReturnType<typeof setTimeout> | undefined;
+
+    function requestVolume(value: number) {
+      volumeRequests += 1;
+      process({avr: {kind: "volume", requestId: `mqtt-volume-${Date.now()}-${volumeRequests}`, mode: "absolute", value}}, node.send.bind(node));
+    }
+
     onInput(node, (msg, send) => {
+      const volume = avrVolumeRequest(msg, publishing);
+      if (volume && "ignored" in volume) {
+        runReducer(node, {area: controllerConfig.area, component: "avr-controller"}, (saved: Partial<AvrState> | undefined) =>
+          ({state: saved, traces: [{event: "volume-set", outcome: "ignored", reason: volume.ignored, details: {payload: volume.payload}}]}));
+        return;
+      }
+      if (volume) {
+        clearTimeout(volumeSetTimer);
+        volumeSetTimer = setTimeout(guarded(node, () => {
+          volumeSetTimer = undefined;
+          requestVolume(volume.value);
+        }), VOLUME_SET_SETTLE_MS);
+        return;
+      }
       if (objectField<AvrMessage["avr"]>(msg, "avr")?.kind === "startup") {
         lifecycle.startup(send, avrStartingOutputs(publishing, observed()));
       }
@@ -169,6 +198,7 @@ const registerAvrController: NodeInitializer = (RED) => {
 
     node.on("close", (_removed: boolean, done: () => void) => {
       clearTimeout(retryTimer);
+      clearTimeout(volumeSetTimer);
       done();
     });
   }

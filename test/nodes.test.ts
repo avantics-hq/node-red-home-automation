@@ -1697,7 +1697,7 @@ test("receiver publishing: off unless switched on; then power, source and volume
   assert.deepEqual(started.map(({topic}) => topic), [
     "homeassistant/binary_sensor/nrha_a1_receiver_power/config",
     "homeassistant/sensor/nrha_a1_receiver_source/config",
-    "homeassistant/sensor/nrha_a1_receiver_volume/config",
+    "homeassistant/number/nrha_a1_receiver_volume/config",
     "home/den/receiver/availability"
   ], "nothing known yet, so no state");
   const first = await receive<SendEnvelope>(node, {avr: {kind: "observed", line: "PWON\rZMON\rSISAT/CBL\rMV31\r"}});
@@ -1713,4 +1713,66 @@ test("receiver publishing: off unless switched on; then power, source and volume
   assert.deepEqual(same.flatMap((envelope) => envelope[2] ?? []), []);
   const entry = JSON.parse(String(started[0]?.payload)) as Record<string, unknown>;
   assert.deepEqual([entry.name, entry.device_class, (entry.device as {name: string}).name], ["Power", "power", "den Receiver"]);
+});
+
+test("receiver volume number: a set from Home Assistant takes the receiver's own bounded, confirmed volume path", async (t) => {
+  const avrRuntime = runtime(registerAvr);
+  const sources = JSON.stringify({shield: "SAT/CBL"});
+  const node = new avrRuntime.Constructor({id: "a2", area: "den", sources, minVolume: 10, maxVolume: 50, publishState: true, discovery: true});
+  t.after(() => close(node));
+  avrRuntime.events.emit("flows:started");
+  const number = ((node.sent[0] as SendEnvelope)[2] ?? []).find(({topic}) => topic === "homeassistant/number/nrha_a2_receiver_volume/config");
+  const entry = JSON.parse(String(number?.payload)) as Record<string, unknown>;
+  assert.deepEqual([entry.command_topic, entry.state_topic, entry.min, entry.max, entry.step],
+    ["home/den/receiver/volume/set", "home/den/receiver/volume/state", 10, 50, 0.5]);
+
+  await receive(node, {avr: {kind: "observed", line: "PWON\rZMON\rSISAT/CBL\rMV31\r"}});
+  const settled = () => new Promise((resolve) => setTimeout(resolve, 350));
+  let sentBefore = node.sent.length;
+  assert.deepEqual(await receive(node, {topic: "home/den/receiver/volume/set", payload: "35.0"}), [], "held while newer sets may come");
+  await settled();
+  const commands = (node.sent.slice(sentBefore) as SendEnvelope[]).flatMap((envelope) => envelope[0] ?? []).map(({payload}) => String(payload));
+  assert.deepEqual(commands, ["MV35\r"], "sent to the receiver as any volume request is");
+  const confirmed = await receive<SendEnvelope>(node, {avr: {kind: "observed", line: "MV35\r"}});
+  const results = confirmed.flatMap((envelope) => envelope[1] ?? []).map((message) => (message as {avr?: {kind: string}}).avr?.kind);
+  assert.ok(results.includes("volume_ready"), JSON.stringify(results));
+  assert.deepEqual(confirmed.flatMap((envelope) => envelope[2] ?? []).map(({topic, payload}) => [topic, payload]),
+    [["home/den/receiver/volume/state", "35"]], "Home Assistant sees the confirmed volume");
+
+  for (const [msg, reason] of [
+    [{topic: "home/den/receiver/volume/set", payload: "loud"}, "not-a-number"],
+    [{topic: "home/den/receiver/volume/set", payload: "20", retain: true}, "retained-message"]
+  ] as const) {
+    assert.deepEqual(await receive(node, msg), [], reason);
+    assert.equal(traces(node).at(-1)?.reason, reason);
+  }
+
+  // With the receiver off, the request is rejected the usual way.
+  await receive(node, {avr: {kind: "observed", line: "PWSTANDBY\r"}});
+  sentBefore = node.sent.length;
+  await receive(node, {topic: "home/den/receiver/volume/set", payload: "20"});
+  await settled();
+  const rejected = (node.sent.slice(sentBefore) as SendEnvelope[]).flatMap((envelope) => envelope[1] ?? []).map((message) => (message as {avr?: {kind: string; reason?: string}}).avr);
+  assert.ok(rejected.some((avr) => avr?.kind === "volume_rejected" && avr.reason === "receiver-not-ready"), JSON.stringify(rejected));
+});
+
+test("receiver volume number: a burst of sets becomes one request for the last value", async (t) => {
+  const avrRuntime = runtime(registerAvr);
+  const node = new avrRuntime.Constructor({id: "a3", area: "den", sources: JSON.stringify({shield: "SAT/CBL"}), publishState: true, discovery: true});
+  t.after(() => close(node));
+  await receive(node, {avr: {kind: "observed", line: "PWON\rZMON\rSISAT/CBL\rMV31\r"}});
+  const before = node.sent.length;
+  for (let step = 0; step < 10; step += 1) {
+    await receive(node, {topic: "home/den/receiver/volume/set", payload: String(32 + step)});
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  await new Promise((resolve) => setTimeout(resolve, 350));
+  const sent = node.sent.slice(before) as SendEnvelope[];
+  assert.deepEqual(sent.flatMap((envelope) => envelope[0] ?? []).map(({payload}) => String(payload)), ["MV41\r"], "one command, for the last value");
+  // No superseded step was ever sent, so the receiver's reading of the last
+  // value confirms it.
+  const confirmed = await receive<SendEnvelope>(node, {avr: {kind: "observed", line: "MV41\r"}});
+  const results = confirmed.flatMap((envelope) => envelope[1] ?? []).map((message) => (message as {avr?: {kind: string}}).avr?.kind);
+  assert.ok(results.includes("volume_ready"), JSON.stringify(results));
+  assert.ok(!results.includes("volume_manual_override"));
 });
