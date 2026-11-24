@@ -44,6 +44,8 @@ interface RuntimeNode {
   error(error: unknown, msg?: unknown): void;
   status(status: unknown): void;
   context(): RuntimeContext;
+  // What Node-RED does to the node's context once it has closed.
+  closeContext?(): void;
 }
 
 interface WireMessage {
@@ -66,14 +68,21 @@ interface WireMessage {
 type SendEnvelope = Array<WireMessage[] | null>;
 type RuntimeConstructor = new (config: Record<string, unknown>) => RuntimeNode;
 
+// For tests of what a node keeps across a redeploy or restart: those need a
+// configured context store, the setup the README recommends.
+const STORE = {contextStore: true};
+
 function runtime(
   register: NodeInitializer,
-  credentials: Record<string, string> = {}
+  credentials: Record<string, string> = {},
+  {contextStore = false}: {contextStore?: boolean} = {}
 ): {Constructor: RuntimeConstructor; events: EventEmitter; flowNodeIds: Set<string>} {
   let Constructor: RuntimeConstructor | undefined;
   const globalValues = new Map<string, unknown>([["MOTION_ENABLED_STATE", true]]);
-  // Shared by every node built from this runtime, as Node-RED keeps a node's
-  // memory context across a redeploy.
+  // Every node's context, by node ID. As in Node-RED 5.0.10, a node's context
+  // is deleted when it closes (a redeploy of it, or a restart) unless a
+  // context store is configured (runtime/lib/nodes/Node.js:359-370,
+  // context/index.js:557-583); contextStore: true simulates one.
   const values = new Map<string, unknown>();
   // Node-RED's runtime events, such as "flows:started" after a deploy.
   const events = new EventEmitter();
@@ -104,6 +113,10 @@ function runtime(
         // Each node ID has its own context, as in Node-RED; nodes built
         // without one share it.
         const own = (key: string) => `${config?.id ?? ""}:${key}`;
+        node.closeContext = () => {
+          if (contextStore) return;
+          for (const key of [...values.keys()]) if (key.startsWith(`${config?.id ?? ""}:`)) values.delete(key);
+        };
         node.context = () => ({
           get: (key: string) => values.get(own(key)),
           set: (key: string, value: unknown) => {
@@ -149,10 +162,11 @@ function receive<T>(
   });
 }
 
+// Closes the node, then deals with its context as Node-RED does.
 function close(node: RuntimeNode): Promise<void> {
   return new Promise<void>((resolve) => {
     node.emit("close", false, resolve);
-  });
+  }).then(() => node.closeContext?.());
 }
 
 function traces(node: RuntimeNode): TraceRecord[] {
@@ -583,7 +597,7 @@ const motionConfig = {
 };
 
 test("motion adapter re-arms a pending off-timer after a redeploy", async (t) => {
-  const {Constructor} = runtime(registerMotion);
+  const {Constructor} = runtime(registerMotion, {}, STORE);
   const before = new Constructor(motionConfig);
   await receive<WireMessage>(before, {source: "occupancy", payload: {occupied: false}});
   assert.equal(typeof savedState(before).offTimerDueAt, "number");
@@ -625,7 +639,7 @@ test("motion adapter arms nothing at startup without a pending off-timer", async
 });
 
 test("activity lighting adapter re-observes a deadline that passed during a redeploy", async (t) => {
-  const {Constructor} = runtime(registerActivityLighting);
+  const {Constructor} = runtime(registerActivityLighting, {}, STORE);
   const lightingConfig = {
     area: "lounge",
     profiles: JSON.stringify({tv: {targets: ["wall"], values: {brightness: 64}}}),
@@ -652,7 +666,7 @@ test("activity lighting adapter re-observes a deadline that passed during a rede
 });
 
 test("backlighting adapter re-observes a pending command after a redeploy", async (t) => {
-  const {Constructor} = runtime(registerBacklighting);
+  const {Constructor} = runtime(registerBacklighting, {}, STORE);
   const backlightingConfig = {area: "lounge", pollMs: 2000, confirmationTimeoutMs: 15000, maxAttempts: 2};
   const before = new Constructor(backlightingConfig);
   await receive<SendEnvelope>(before, {
@@ -707,7 +721,7 @@ function powerToggles(node: RuntimeNode): number {
 
 async function displayStartingProjector(t: {after(fn: () => void): void}) {
   const devices = fakeDisplayDevices(t);
-  const {Constructor} = runtime(registerDisplay, {tvPsk: "synthetic"});
+  const {Constructor} = runtime(registerDisplay, {tvPsk: "synthetic"}, STORE);
   const before = new Constructor(displayConfig);
   await receive<SendEnvelope>(before, {display: {kind: "intent", requestId: "display-restart", generation: 1, mode: "projector"}});
   await wait(200);
@@ -759,7 +773,7 @@ test("display adapter redeploy during warm-up never toggles the projector again"
 });
 
 test("AVR adapter recovers a source change whose retries ran out during a restart", async (t) => {
-  const {Constructor} = runtime(registerAvr);
+  const {Constructor} = runtime(registerAvr, {}, STORE);
   const avrConfig = {area: "lounge", sources: "{\"shield\":\"SAT/CBL\",\"playstation\":\"GAME\"}", retryMs: 1000, maxAttempts: 3};
   const before = new Constructor(avrConfig);
   await receive<SendEnvelope>(before, {avr: {kind: "observed", line: "PWON\rZMON\rSISAT/CBL\rMV31\r"}});
@@ -1400,7 +1414,7 @@ test("ID schemes: a saved node keeps its area-named entities; a new node names t
 test("ID schemes: after an area change, a node clears the retained topics it no longer publishes", async (t) => {
   const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
   const topicsCleared = async (idScheme: string | null) => {
-    const room = runtime(registerRoom).Constructor;
+    const room = runtime(registerRoom, {}, STORE).Constructor;
     const settings = {id: "r1", targets, publishState: true, discovery: true, idScheme};
     const first = new room({...settings, area: "hall"});
     await receive(first, {lighting: {kind: "startup"}});
@@ -1441,7 +1455,7 @@ test("ID schemes: after an area change, a node clears the retained topics it no 
 
 test("ID schemes: after a redeploy that changes the area, the old topics are cleared once the flows start", async (t) => {
   const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
-  const roomRuntime = runtime(registerRoom);
+  const roomRuntime = runtime(registerRoom, {}, STORE);
   const settings = {id: "r5", idScheme: "node", targets, publishState: true, discovery: true};
   const first = new roomRuntime.Constructor({...settings, area: "hall"});
   roomRuntime.events.emit("flows:started");
@@ -1469,7 +1483,7 @@ test("ID schemes: after a redeploy that changes the area, the old topics are cle
   const again = await receive<SendEnvelope>(renamed, {lighting: {kind: "startup"}});
   assert.equal(again.length, 1, "settled: no clears");
 
-  const contractRuntime = runtime(registerTheatreStateContract);
+  const contractRuntime = runtime(registerTheatreStateContract, {}, STORE);
   const before = new contractRuntime.Constructor({id: "c5", area: "lounge", activities: "[\"off\"]"});
   contractRuntime.events.emit("flows:started");
   await close(before);
@@ -1528,7 +1542,7 @@ test("entity cleanup: a deleted node clears what it published; a disabled or red
 
 test("entity cleanup: switching Publish state off clears the room's state topics at its next start", async (t) => {
   const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
-  const room = runtime(registerRoom).Constructor;
+  const room = runtime(registerRoom, {}, STORE).Constructor;
   const publishing = new room({id: "r2", targets, area: "hall", publishState: true, discovery: false});
   await receive(publishing, {lighting: {kind: "startup"}});
   await close(publishing);
@@ -1546,7 +1560,7 @@ test("entity cleanup: switching Publish state off clears the room's state topics
 });
 
 test("occupancy publishing: off unless switched on; then its state, availability and binary sensor", async (t) => {
-  const occupancyRuntime = runtime(registerOccupancy);
+  const occupancyRuntime = runtime(registerOccupancy, {}, STORE);
   const quiet = new occupancyRuntime.Constructor({id: "o1", area: "Den"});
   t.after(() => close(quiet));
   occupancyRuntime.events.emit("flows:started");
@@ -1653,7 +1667,7 @@ test("motion publishing: an enable switch and a vacancy delay, set from MQTT; of
 });
 
 test("motion publishing: after a redeploy with a new vacancy setting, the delay in use is published", async (t) => {
-  const motionRuntime = runtime(registerMotion);
+  const motionRuntime = runtime(registerMotion, {}, STORE);
   const base = {id: "m5", area: "hall", onTargets: "[\"main\"]", publishState: true, discovery: true};
   const delays = (sent: unknown[]) => JSON.stringify(sent).match(/"topic":"home\/hall\/motion\/delay\/state","payload":"(\d+)"/g)?.map((m) => m.match(/"(\d+)"$/)![1]) ?? [];
   const first = new motionRuntime.Constructor({...base, defaultDelaySeconds: 120});

@@ -178,8 +178,8 @@ Version 3.0 changes some behaviour. Check these after upgrading:
   third output, apart from the receiver commands and the theatre's state.
 - **Topics no longer published are cleared.** Once the flows have started, and again at its startup message, a node
   clears any retained topic it published before and no longer does, for example after an area, base topic,
-  discovery prefix or target change. It remembers what it published in its node context, which lasts across deploys;
-  it lasts across a Node-RED restart only if your default context store is persistent. A node that never gets a startup message
+  discovery prefix or target change. It remembers what it published in its node context, which lasts across
+  deploys and restarts only with a context store configured (see "Recommended setup"). A node that never gets a startup message
   keeps clearing its old topics at every start, so to move an area from one older room node to another, send the old
   node a startup message, or delete it.
 - **Send each publishing node a startup message once, a few seconds after deploy.** The example flows do this with an
@@ -237,6 +237,46 @@ request resumes automation. Recovery adopts physical state only when fresh
 display, AVR, source, and backlighting evidence matches exactly one configured
 profile; missing or ambiguous startup evidence invokes the configured Off
 activity.
+
+## Recommended setup: a file context store
+
+The nodes keep what they are doing in Node-RED's node context. By default
+Node-RED keeps context in memory and deletes a node's context whenever the
+node stops: on a full deploy, on a "Modified flows" deploy of its flow (which
+restarts every node in that flow, changed or not), on a "Modified nodes"
+deploy of the node itself, and on every restart. Configure the file context
+store so it survives. In `settings.js` in your Node-RED user directory, set:
+
+```js
+contextStorage: {
+    default: { module: "localfilesystem" }
+},
+```
+
+then restart Node-RED. The file store writes changes to disk every 30 seconds
+by default, so a change made just before Node-RED stops can still be lost.
+
+Without a context store, after a node is redeployed or Node-RED restarts:
+
+- **A room forgets which lights are held or manual:** every light an activity
+  held, or a person set by hand, is back under the room's control, so the next
+  refresh restyles an activity's lights and lights a person set.
+- **Changes made at runtime go back to the node's settings:** for example motion
+  lighting's enable, vacancy delay and lux cutoff, a room's circadian lighting,
+  sleep, and wake and bed times, and the house schedule's times, set from Home
+  Assistant or a message.
+- **The theatre starts its counts again:** its counters and operational SLO
+  samples restart, and the activity controller no longer knows the current
+  activity. At its next startup recovery it works it out from what the devices
+  report, and if no single activity matches, it switches to the recovery off
+  activity.
+- **Work in progress is not recovered:** a motion off-timer that was running,
+  or a theatre device change still being confirmed. The node starts afresh
+  and goes by what it next observes.
+- **Old retained topics are not cleared:** a node can't remember what it
+  published before, so after you change an area, base topic, discovery prefix
+  or targets, the old retained topics and Home Assistant entities stay until
+  you remove them yourself.
 
 ## Room light control
 

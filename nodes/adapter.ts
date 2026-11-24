@@ -90,9 +90,9 @@ export function allRetainedTopics(node: Node, current: string[]): string[] {
 
 // At a node's start: the empty retained messages that clear what it
 // published before and no longer does, recording what it publishes now. The
-// record is kept in the node's context, so it survives redeploys, which is
-// when what a node publishes changes; it survives a restart only if the
-// default context store persists.
+// record is kept in the node's context, which Node-RED deletes when the node
+// stops unless a context store is configured (see the README): without one,
+// a node can't clear what it published before a change of its settings.
 //
 // It runs twice: once the flows have started, so no startup message is
 // needed, and again at the startup message. The first may go out before the
