@@ -421,8 +421,15 @@ export function transitionCover(
         || (pending.startPosition !== null && Math.abs(position - pending.startPosition) > config.positionTolerance)) {
         pending.moved = true;
       }
-      if (within && !moving) {
+      // A move confirms only once the cover has stopped at the target: some
+      // transports echo the requested position as soon as the command goes,
+      // before the motor moves, so a report at the target is not enough. A
+      // reliable "stopped", or the same position held for settleMs, is.
+      // Re-reading after a restart or an outage keeps confirming at once.
+      if (within && !moving && (pending.operation !== "set_position" || settled)) {
         ready(target);
+      } else if (within && !moving) {
+        trace("observation", "accepted", "awaiting-settle", {position, motion});
       } else if (pending.verifying && !moving) {
         latchManual("moved-while-offline", target, position);
       } else if (settled && pending.operation === "observe") {
