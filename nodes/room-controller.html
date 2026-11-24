@@ -151,8 +151,10 @@
   <p>The control states are kept in the node's context. When the node starts with nothing saved (its first deploy,
     or a redeploy or restart without a context store, see the README), it can't know which lights were held or set
     by a person, so it leaves every light as it is: no periodic refresh restyles a light until an intent or release
-    names it, or circadian lighting is switched on. Sleep and schedule changes restyle only lights it has been told
-    about since.</p>
+    names it, someone switches it on with a bare ON on its command topic, or circadian lighting is switched on. Sleep
+    and schedule changes restyle only lights it has been told about since. A light that is on at that start and that
+    nothing names can keep its start-time style all day; to bring it back into step, switch circadian lighting on
+    (for example with the Home Assistant circadian switch), or let motion or a wall switch name it.</p>
   <h3>Inputs</h3>
   <dl class="message-properties">
     <dt>topic = home/&lt;area&gt;/circadian/set</dt>

@@ -361,6 +361,8 @@ export function transitionRoom(
               "external-bare-on"
             );
             if (corrective) outputs.push(corrective);
+            // Styled now, so the refresh keeps it in step from here.
+            told(target.id);
           }
         } else if (requestedState === "TOGGLE") {
           state.desired[target.id] = !intendedOn(target.id);

@@ -866,6 +866,17 @@ test("a room that starts with nothing saved leaves its lights alone until it is 
   assert.ok(commandsFor(result.outputs).includes("dining"));
 });
 
+test("an external bare ON tells a room that started with nothing saved about that light", () => {
+  const later = (ms: number) => new Date(now.getTime() + ms);
+  let result = publishRoom(undefined, {topic: "home/kitchen/light/group/cooking", payload: {state: "ON", brightness: 30, color_temp: 400}, lighting: {kind: "observed"}}, config, now);
+  result = publishRoom(result.state, {topic: "home/kitchen/light/group/cooking/set", payload: {state: "ON"}, lighting: {kind: "command-observed", target: "cooking"}}, config, later(1000));
+  assert.deepEqual(result.outputs.filter((output) => output.lighting_command).map((output) => output.lighting_command!.source), ["external-bare-on"]);
+  assert.deepEqual(result.state.untold, ["dining"]);
+  result = publishRoom(result.state, {lighting: {kind: "refresh"}}, config, later(200000));
+  assert.deepEqual(result.outputs.filter((output) => output.lighting_command).map((output) => output.lighting_command!.target), ["cooking"],
+    "kept in step by the refresh from then on");
+});
+
 test("a room with saved state restyles as before", () => {
   const saved = publishRoom({}, {topic: "home/kitchen/light/group/cooking", payload: {state: "ON", brightness: 30, color_temp: 400}, lighting: {kind: "observed"}}, config, now);
   assert.deepEqual(saved.state.untold, []);
