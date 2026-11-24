@@ -219,10 +219,12 @@ test("occupancy adapter emits normalised occupancy and standard traces", async (
     await receive<WireMessage>(node, {source: "presence", payload: {presence: true}}),
     []
   );
-  const sent = await receive<WireMessage>(node, {source: "motion", payload: {motion: true}});
+  // Occupancy events on output 1; nothing on output 2 with publishing off.
+  const sent = await receive<[WireMessage, null]>(node, {source: "motion", payload: {motion: true}});
   assert.equal(sent.length, 1);
-  assert.equal(sent[0]?.source, "occupancy");
-  const occupancy = sent[0]?.payload as {occupied?: boolean} | undefined;
+  assert.equal(sent[0]?.[1], null);
+  assert.equal(sent[0]?.[0]?.source, "occupancy");
+  const occupancy = sent[0]?.[0]?.payload as {occupied?: boolean} | undefined;
   assert.equal(occupancy?.occupied, true);
   const trace = traces(node);
   assert.equal(trace.at(-1)?.component, "occupancy-fusion");
@@ -1534,4 +1536,65 @@ test("entity cleanup: switching Publish state off clears the room's state topics
     ["home/hall/bed-time/state", ""],
     ["home/hall/lighting/main/control", ""]
   ]);
+});
+
+test("occupancy publishing: off unless switched on; then its state, availability and binary sensor", async (t) => {
+  const occupancyRuntime = runtime(registerOccupancy);
+  const quiet = new occupancyRuntime.Constructor({id: "o1", area: "Den"});
+  t.after(() => close(quiet));
+  occupancyRuntime.events.emit("flows:started");
+  const quietMotion = await receive<SendEnvelope>(quiet, {source: "motion", payload: {motion: true}});
+  assert.equal(quietMotion.length, 1, "only the occupancy event");
+  assert.deepEqual(quiet.sent, [], "nothing at start either");
+
+  const noArea = new occupancyRuntime.Constructor({id: "o2", publishState: true});
+  assert.deepEqual(noArea.errors.map(String), ["invalid configuration: area is required"]);
+
+  const node = new occupancyRuntime.Constructor({id: "o3", area: "Den", publishState: true, discovery: true});
+  t.after(() => close(node));
+  occupancyRuntime.events.emit("flows:started");
+  const started = (node.sent[0] as SendEnvelope)[1] ?? [];
+  assert.deepEqual(started.map(({topic}) => topic), [
+    "homeassistant/binary_sensor/nrha_o3_occupancy/config",
+    "home/den/occupancy/availability",
+    "home/den/occupancy/state"
+  ], "a node without a scheme set is named after the node");
+  const entry = JSON.parse(String(started[0]?.payload)) as Record<string, unknown>;
+  assert.deepEqual([entry.device_class, entry.state_topic, entry.availability_topic, entry.default_entity_id],
+    ["occupancy", "home/den/occupancy/state", "home/den/occupancy/availability", ["binary_sensor", "den_occupancy"].join(".")]);
+  assert.deepEqual([entry.name, (entry.device as {name: string}).name], ["Occupancy", "Den Occupancy"], "the device carries the area");
+  assert.deepEqual(started.slice(1).map(({payload}) => payload), ["online", "OFF"]);
+
+  const occupied = await receive<SendEnvelope>(node, {source: "motion", payload: {motion: true}});
+  assert.equal((occupied[0]?.[0] as WireMessage | undefined)?.source, "occupancy");
+  assert.deepEqual(occupied[1], [null, [{topic: "home/den/occupancy/state", payload: "ON", retain: true}]]);
+  // A startup message announces the node again, with the current state.
+  const startup = await receive<SendEnvelope>(node, {source: "startup"});
+  assert.deepEqual((startup[0]?.[1] ?? []).map(({payload}) => typeof payload === "string" && payload.startsWith("{") ? "entry" : payload),
+    ["entry", "online", "ON"]);
+
+  // Discovery switched off and redeployed: the entry is cleared at the next start.
+  await close(node);
+  const stateOnly = new occupancyRuntime.Constructor({id: "o3", area: "Den", publishState: true, discovery: false});
+  t.after(() => close(stateOnly));
+  const stateOnlyStartup = await receive<SendEnvelope>(stateOnly, {source: "startup"});
+  assert.deepEqual((stateOnlyStartup[0]?.[1] ?? [])[0], {topic: "homeassistant/binary_sensor/nrha_o3_occupancy/config", payload: "", retain: true});
+});
+
+test("occupancy publishing: deleting the node clears its entity; disabling it only goes offline", async () => {
+  const occupancyRuntime = runtime(registerOccupancy);
+  const settings = {id: "o9", area: "den", publishState: true, discovery: true};
+  const stop = (node: RuntimeNode, removed: boolean) => new Promise<unknown[]>((resolve) => {
+    const before = node.sent.length;
+    node.emit("close", removed, () => resolve(node.sent.slice(before)));
+  });
+  const disabled = new occupancyRuntime.Constructor(settings);
+  assert.deepEqual(await stop(disabled, true), [[null, [{topic: "home/den/occupancy/availability", payload: "offline", retain: true}]]]);
+  const deleted = new occupancyRuntime.Constructor(settings);
+  occupancyRuntime.flowNodeIds.delete("o9");
+  assert.deepEqual(await stop(deleted, true), [[null, [
+    {topic: "homeassistant/binary_sensor/nrha_o9_occupancy/config", payload: "", retain: true},
+    {topic: "home/den/occupancy/availability", payload: "", retain: true},
+    {topic: "home/den/occupancy/state", payload: "", retain: true}
+  ]]]);
 });

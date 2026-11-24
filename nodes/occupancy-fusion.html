@@ -1,22 +1,54 @@
 <script type="text/javascript">
-  RED.nodes.registerType("home-occupancy-fusion", {
-    category: "home automation",
-    color: "#c7e9c0",
-    defaults: {
-      name: {value: ""},
-      area: {value: ""},
-      presenceMode: {value: "none", required: true}
-    },
-    inputs: 1,
-    outputs: 1,
-    icon: "font-awesome/fa-users",
-    label: function () { return this.name || (this.area ? this.area + " " : "") + "occupancy"; }
-  });
+  (function () {
+    function on(value) { return value === true || value === "true"; }
+    RED.nodes.registerType("home-occupancy-fusion", {
+      category: "home automation",
+      color: "#c7e9c0",
+      defaults: {
+        name: {value: ""},
+        // Required only when the node publishes, and then with a letter or
+        // digit, from which its topics and IDs are made.
+        area: {value: "", validate: function (v) {
+          var publishing = $("#node-input-publishState").length ? $("#node-input-publishState").prop("checked") : on(this.publishState);
+          return !publishing || /[a-z0-9]/i.test(String(v || ""));
+        }},
+        presenceMode: {value: "none", required: true},
+        // Occupancy published nothing before these settings, so both start off.
+        publishState: {value: false},
+        discovery: {value: false},
+        discoveryPrefix: {value: "homeassistant", required: true, validate: function (v) { var prefix = String(v || "").trim().replace(/^\/+|\/+$/g, ""); return Boolean(prefix) && !/[+#]/.test(prefix); }},
+        // How Home Assistant IDs are named; occupancy has no older entities,
+        // so not set also means "node".
+        idScheme: {value: null}
+      },
+      onadd: function () {
+        this.idScheme = "node";
+      },
+      oneditprepare: function () {
+        $("#node-input-publishState").prop("checked", on(this.publishState));
+        $("#node-input-discovery").prop("checked", on(this.discovery));
+        // Discovery describes the published state, so it needs it.
+        function follow() {
+          var publishing = $("#node-input-publishState").prop("checked");
+          if (!publishing) $("#node-input-discovery").prop("checked", false);
+          $("#node-input-discovery").prop("disabled", !publishing);
+          $("#node-input-area").trigger("change");
+        }
+        $("#node-input-publishState, #node-input-discovery").on("change", follow);
+        follow();
+      },
+      inputs: 1,
+      outputs: 2,
+      outputLabels: ["occupancy events", "MQTT publications"],
+      icon: "font-awesome/fa-users",
+      label: function () { return this.name || (this.area ? this.area + " " : "") + "occupancy"; }
+    });
+  })();
 </script>
 
 <script type="text/html" data-template-name="home-occupancy-fusion">
   <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
-  <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area"></div>
+  <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area" placeholder="needed when publishing"></div>
   <div class="form-row">
     <label for="node-input-presenceMode">Presence sensor</label>
     <select id="node-input-presenceMode">
@@ -24,9 +56,28 @@
       <option value="hold">Hold occupancy (PIR + mmWave)</option>
     </select>
   </div>
+  <div class="form-row"><label for="node-input-publishState">Publish state over MQTT</label><input type="checkbox" id="node-input-publishState" style="display:inline-block; width:auto;"></div>
+  <div class="form-row"><label for="node-input-discovery">Home Assistant discovery</label><input type="checkbox" id="node-input-discovery" style="display:inline-block; width:auto;"> <span>(needs Publish state)</span></div>
+  <div class="form-row"><label for="node-input-discoveryPrefix">Discovery prefix</label><input type="text" id="node-input-discoveryPrefix"></div>
 </script>
 
 <script type="text/html" data-help-name="home-occupancy-fusion">
   <p>Combines normalised <code>motion</code> and optional <code>presence</code> events into <code>msg.source = "occupancy"</code>.</p>
   <p>PIR establishes occupancy. Presence can hold an established occupancy but cannot establish one by itself.</p>
+  <h3>Publishing</h3>
+  <p>Off unless switched on. Both are named after the <b>Area</b>, which is needed then; topics use it in lowercase,
+    with spaces and other characters as <code>_</code>.</p>
+  <dl class="message-properties">
+    <dt>Publish state over MQTT</dt><dd>the occupancy, retained <code>ON</code> or <code>OFF</code>, on
+      <code>home/&lt;area&gt;/occupancy/state</code> whenever it changes, and <code>online</code> or
+      <code>offline</code> on <code>home/&lt;area&gt;/occupancy/availability</code>.</dd>
+    <dt>Home Assistant discovery</dt><dd>an occupancy binary sensor reading that state. It needs <b>Publish state</b>.</dd>
+  </dl>
+  <p>These go on the second output; wire it to an MQTT out node. The node announces itself once the flows have
+    started, and again when it receives <code>msg.source = "startup"</code>.</p>
+  <h3>Outputs</h3>
+  <ol class="node-ports">
+    <li>Occupancy events, for the motion lighting policy.</li>
+    <li>MQTT publications, when publishing is on.</li>
+  </ol>
 </script>

@@ -146,6 +146,9 @@ Version 3.0 changes some behaviour. Check these after upgrading:
   so an older node brought in that way switches to node-based IDs at its next start: its area-named entities are
   removed and new ones created with the same entity IDs, keeping their history but not changes made to them in Home
   Assistant (name, area, icon).
+- **Occupancy fusion can publish too**, off unless you switch it on: its occupancy as retained `ON`/`OFF` on
+  `home/<area>/occupancy/state`, with availability, and an occupancy binary sensor in Home Assistant. These go on its
+  new second output, so wire that to an MQTT out node; the first output still feeds the motion policy.
 - **Topics no longer published are cleared.** Once the flows have started, and again at its startup message, a node
   clears any retained topic it published before and no longer does, for example after an area, base topic,
   discovery prefix or target change. It remembers what it published in its node context, which lasts across deploys;
