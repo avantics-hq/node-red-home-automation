@@ -34,6 +34,7 @@ interface MotionPolicyConfig extends NodeDef {
   discovery?: boolean | string | null;
   discoveryPrefix?: string;
   idScheme?: string | null;
+  maxPauseSeconds?: number | string;
 }
 
 interface MotionPolicyNode extends Node {}

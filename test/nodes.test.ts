@@ -1984,8 +1984,21 @@ test("motion node: a pause names its owner and shows as paused", async (t) => {
   const node = new (runtime(registerMotion).Constructor)({onTargets: "[\"main\"]"});
   t.after(() => close(node));
   await receive(node, {source: "pause", payload: true, owner: "blind"});
-  assert.deepEqual((node.context().get("state") as {pausedBy: string[]}).pausedBy, ["blind"]);
+  assert.deepEqual((node.context().get("state") as {pausedBy: Array<{owner: string}>}).pausedBy.map(({owner}) => owner), ["blind"]);
   assert.match(String((node.statuses.at(-1) as {text: string}).text), /^paused/);
   await receive(node, {source: "pause", payload: false, owner: "blind"});
   assert.match(String((node.statuses.at(-1) as {text: string}).text), /^enabled/);
+});
+
+test("cover node: closing while the cover moves says it is no longer moving", async () => {
+  const node = new (runtime(registerCover).Constructor)({id: "c-close"});
+  await receive(node, {cover: {kind: "observed", position: 20, motion: "opening", observedAt: new Date().toISOString()}});
+  const before = node.sent.length;
+  await close(node);
+  assert.deepEqual(node.sent.slice(before), [[null, null, {topic: "moving", payload: false}]]);
+  const still = new (runtime(registerCover).Constructor)({id: "c-still"});
+  await receive(still, {cover: {kind: "observed", position: 20, motion: "stopped", observedAt: new Date().toISOString()}});
+  const stillBefore = still.sent.length;
+  await close(still);
+  assert.deepEqual(still.sent.slice(stillBefore), [], "nothing to say when it was still");
 });

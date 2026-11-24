@@ -175,9 +175,9 @@ test("re-enabling motion switches nothing off; a later vacancy schedules OFF as 
 });
 
 test("motion settings are read once, from the node's editor values", () => {
-  assert.deepEqual(normaliseMotionConfig({}), {onTargets: ["main"], offTargets: ["main"], defaultDelaySeconds: 120, defaultIlluminanceCutoff: 10});
+  assert.deepEqual(normaliseMotionConfig({}), {onTargets: ["main"], offTargets: ["main"], defaultDelaySeconds: 120, defaultIlluminanceCutoff: 10, maxPauseSeconds: 600});
   const read = normaliseMotionConfig({onTargets: "[\"ceiling\",\"lamp\"]", defaultDelaySeconds: "300", defaultIlluminanceCutoff: "0"});
-  assert.deepEqual(read, {onTargets: ["ceiling", "lamp"], offTargets: ["ceiling", "lamp"], defaultDelaySeconds: 300, defaultIlluminanceCutoff: 0});
+  assert.deepEqual(read, {onTargets: ["ceiling", "lamp"], offTargets: ["ceiling", "lamp"], defaultDelaySeconds: 300, defaultIlluminanceCutoff: 0, maxPauseSeconds: 600});
   assert.throws(() => normaliseMotionConfig({onTargets: "[1]"}), /on targets must be a JSON array of strings/);
   assert.throws(() => normaliseMotionConfig({offTargets: ""}), /off targets must be valid JSON/);
   assert.throws(() => normaliseMotionConfig({defaultDelaySeconds: ""}), /vacancy delay must be a number/);
@@ -237,7 +237,7 @@ test("a pause holds motion lighting for its owner, apart from the user's enable"
     transitionMotion(state, input, config, true, at);
   let result = run(undefined, {source: "illuminance", payload: 10}, 1000);
   result = run(result.state, {source: "pause", payload: true, owner: "blind"}, 2000);
-  assert.deepEqual(result.state.pausedBy, ["blind"]);
+  assert.deepEqual(result.state.pausedBy.map(({owner}) => owner), ["blind"]);
   assert.equal(result.state.areaEnabled, true, "the user's enable is untouched");
   assert.deepEqual([result.status.enabled, result.status.paused], [false, true]);
   assert.deepEqual(sendEffects(run(result.state, {source: "occupancy", payload: {occupied: true}}, 3000)), [], "no intent while paused");
@@ -245,9 +245,9 @@ test("a pause holds motion lighting for its owner, apart from the user's enable"
   // Two owners: motion resumes only when both have released.
   result = run(result.state, {source: "pause", payload: "ON", owner: "curtain"}, 4000);
   result = run(result.state, {source: "pause", payload: false, owner: "blind"}, 5000);
-  assert.deepEqual([result.state.pausedBy, result.status.enabled], [["curtain"], false]);
+  assert.deepEqual([result.state.pausedBy.map(({owner}) => owner), result.status.enabled], [["curtain"], false]);
   result = run(result.state, {source: "pause", payload: false, owner: "curtain"}, 6000);
-  assert.deepEqual([result.state.pausedBy, result.status.enabled], [[], true]);
+  assert.deepEqual([result.state.pausedBy.map(({owner}) => owner), result.status.enabled], [[], true]);
   assert.equal(sendEffects(run(result.state, {source: "occupancy", payload: {occupied: true}}, 7000))[0]?.lighting.state, "ON");
 });
 
@@ -259,4 +259,24 @@ test("a pause cancels a pending vacancy timer, as switching motion off does", ()
   result = transitionMotion(result.state, {source: "pause", payload: true, owner: "blind"}, config, true, 4000);
   assert.equal(result.state.offTimerDueAt, null);
   assert.ok(result.effects.some((effect) => effect.kind === "cancel-off-timer"));
+});
+
+test("a pause runs out after the maximum pause unless renewed, and needs an owner", () => {
+  const limited = {...config, maxPauseSeconds: 60};
+  const run = (state: Parameters<typeof transitionMotion>[0], input: Parameters<typeof transitionMotion>[1], at: number) =>
+    transitionMotion(state, input, limited, true, at);
+  let result = run(undefined, {source: "pause", payload: true, owner: "blind"}, 0);
+  assert.equal(result.status.paused, true);
+  // Renewed at 50 s, so still held at 100 s.
+  result = run(result.state, {source: "pause", payload: true, owner: "blind"}, 50_000);
+  assert.equal(result.traces.at(-1)?.outcome, "renewed");
+  result = run(result.state, {source: "illuminance", payload: 10}, 100_000);
+  assert.equal(result.status.paused, true);
+  // Never released: gone by 111 s, and the expiry is traced.
+  result = run(result.state, {source: "illuminance", payload: 10}, 111_000);
+  assert.deepEqual([result.status.paused, result.status.enabled], [false, true]);
+  assert.deepEqual(result.traces.find(({event}) => event === "pause"), {event: "pause", outcome: "expired", reason: null, details: {owner: "blind"}});
+  // No owner: ignored, so a stray pause can't take a shared slot.
+  const ownerless = run(undefined, {source: "pause", payload: true}, 0);
+  assert.deepEqual([ownerless.status.paused, ownerless.traces.at(-1)?.reason], [false, "owner-required"]);
 });

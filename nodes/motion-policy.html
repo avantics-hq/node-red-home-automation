@@ -18,6 +18,9 @@
       offTargets: {value: "[\"main\"]", required: true, validate: function (v) { try { JSON.parse(v); return true; } catch (e) { return false; } }},
       defaultDelaySeconds: {value: 120, required: true, validate: RED.validators.number()},
       defaultIlluminanceCutoff: {value: 10, required: true, validate: RED.validators.number()},
+      // How long a pause lasts unless renewed, so a lost release can't stop
+      // motion lighting for good.
+      maxPauseSeconds: {value: 600, required: true, validate: function (v) { return RED.validators.number()(v) && Number(v) >= 1; }},
       // Motion published nothing before these settings, so both start off.
       publishState: {value: false},
       discovery: {value: false},
@@ -60,6 +63,7 @@
   <div class="form-row"><label for="node-input-offTargets">OFF targets</label><input type="text" id="node-input-offTargets"></div>
   <div class="form-row"><label for="node-input-defaultDelaySeconds">Vacancy seconds</label><input type="number" id="node-input-defaultDelaySeconds"></div>
   <div class="form-row"><label for="node-input-defaultIlluminanceCutoff">Lux cutoff</label><input type="number" id="node-input-defaultIlluminanceCutoff"></div>
+  <div class="form-row"><label for="node-input-maxPauseSeconds">Maximum pause (s)</label><input type="number" id="node-input-maxPauseSeconds"></div>
   <div class="form-row"><label for="node-input-publishState">Publish state over MQTT</label><input type="checkbox" id="node-input-publishState" style="display:inline-block; width:auto;"></div>
   <div class="form-row"><label for="node-input-discovery">Home Assistant discovery</label><input type="checkbox" id="node-input-discovery" style="display:inline-block; width:auto;"> <span>(needs Publish state)</span></div>
   <div class="form-row"><label for="node-input-discoveryPrefix">Discovery prefix</label><input type="text" id="node-input-discoveryPrefix"></div>
@@ -81,7 +85,8 @@
     <dt>delay</dt><dd>a new vacancy time, in <b>seconds</b>, the same unit as <b>Vacancy seconds</b>.</dd>
     <dt>illuminance-cut-off</dt><dd>a new lux cutoff.</dd>
     <dt>pause</dt><dd><code>true</code> pauses motion lighting, <code>false</code> releases it, for the owner in
-      <code>msg.owner</code> (for example a cover's name). Motion lighting acts only while no owner holds a pause,
+      <code>msg.owner</code> (for example a cover's name), which is required. A pause lasts at most the
+      <b>Maximum pause</b> unless sent again, so a lost release can't stop motion lighting for good. Motion lighting acts only while no owner holds a pause,
       and a pause cancels a pending vacancy timer, as switching it off does. A pause never changes the enables,
       which are the user's own: wire a cover's <i>moving</i> output here to pause motion while it moves.</dd>
   </dl>
