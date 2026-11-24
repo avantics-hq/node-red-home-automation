@@ -392,3 +392,38 @@ test("a retry after a transport failure gets its own full deadline", () => {
   result = apply(result.state, {kind: "tick", generation: 1}, 4.5);
   assert.notEqual(result.state.phase, "failed");
 });
+
+test("a display with nothing saved adopts a refresh's wanted mode and rediscovers, sending nothing when it matches", () => {
+  let result = apply(undefined, {kind: "refresh", requestId: "activity-4", generation: 4, mode: "projector"}, 0);
+  assert.equal(result.state.desired?.mode, "projector");
+  assert.deepEqual(result.commands.map(({operation}) => operation).sort(), ["query_position", "query_power", "query_power"],
+    "discovery queries only");
+  // The projector is already running, the screen down and the TV in standby.
+  result = observe(result.state, "tv", {power: "standby"}, 0.1, 4);
+  result = observe(result.state, "screen", {position: 82, state: "stopped"}, 0.2, 4);
+  result = observe(result.state, "projector", {watts: 155}, 0.3, 4);
+  assert.ok(!result.commands.some(({operation}) => operation === "set_power" || operation === "toggle_power" || operation.startsWith("move")),
+    JSON.stringify(result.commands));
+  assert.equal(result.state.phase, "ready");
+  assert.equal(result.targetStates.at(-1)?.theatre.requestId, "activity-4");
+});
+
+test("an adopted request the display doesn't match is a manual override: no toggle, no screen move", () => {
+  let result = apply(undefined, {kind: "refresh", requestId: "activity-6", generation: 6, mode: "projector"}, 0);
+  const sent = [...result.commands];
+  // Someone is watching TV: TV on, screen up, projector off.
+  for (const [seconds, device, values] of [[0.1, "tv", {power: "on"}], [0.2, "screen", {position: 0, state: "closed"}], [0.3, "projector", {watts: 2}]] as const) {
+    result = observe(result.state, device, values, seconds, 6);
+    sent.push(...result.commands);
+  }
+  for (const seconds of [2, 5, 10]) {
+    result = apply(result.state, {kind: "tick", generation: 6}, seconds);
+    sent.push(...result.commands);
+  }
+  assert.deepEqual([...new Set(sent.map(({operation}) => operation))].sort(), ["query_position", "query_power"], "reads only");
+  assert.equal(result.state.phase, "manual_override");
+  assert.equal(result.targetStates.at(-1)?.theatre.classification ?? result.state.classification, "manual_override");
+  // A new explicit request is carried out as usual.
+  const next = apply(result.state, {kind: "intent", requestId: "projector-7", generation: 7, mode: "projector"}, 11);
+  assert.equal(next.state.desired?.requestId, "projector-7");
+});

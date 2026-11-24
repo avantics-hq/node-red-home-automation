@@ -1,5 +1,6 @@
 "use strict";
 
+import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {numberSetting} from "./settings";
 
@@ -51,6 +52,8 @@ export interface BacklightingState {
   blockedGeneration: number | null;
   classification: "manual_override" | null;
   lastAttempt: number;
+  // The generation adopted from a refresh (see adopted-request.ts).
+  adoptedGeneration: number | null;
 }
 
 export type BacklightingEvent =
@@ -69,7 +72,9 @@ export type BacklightingEvent =
   }
   | {kind: "command_result"; generation: number; ok: boolean; reason?: string}
   | {kind: "tick"; generation: number}
-  | {kind: "startup" | "refresh"};
+  | {kind: "startup"}
+  // From the theatre activity controller, with the activity's wanted values.
+  | {kind: "refresh"; requestId?: string | null; generation?: number; power?: string};
 
 export interface BacklightingMessage {
   backlighting?: BacklightingEvent;
@@ -112,7 +117,8 @@ function initialState(saved: Partial<BacklightingState> = {}): BacklightingState
     classification: saved.classification === "manual_override" ? "manual_override" : null,
     lastAttempt: Number.isInteger(saved.lastAttempt) && (saved.lastAttempt ?? -1) >= 0
       ? saved.lastAttempt!
-      : 0
+      : 0,
+    adoptedGeneration: savedAdoptedGeneration(saved)
   };
 }
 
@@ -250,11 +256,13 @@ export function transitionBacklighting(
       state.classification = null;
       state.phase = "ready";
       trace("observation", "ready", null, {power: observation.power});
-    } else if (wasReady) {
+    } else if (wasReady || isAdopted(state)) {
+      // A change seen after ready, or an adopted request the device doesn't
+      // match: someone else's, and never corrected.
       state.pending = null;
       state.classification = "manual_override";
       state.phase = "manual_override";
-      trace("observation", "manual_override", null, {
+      trace("observation", "manual_override", wasReady ? null : ADOPTED_MISMATCH, {
         expected: state.desired.power,
         observed: observation.power
       });
@@ -268,6 +276,17 @@ export function transitionBacklighting(
         observed: observation.power
       });
     }
+  }
+
+  // A refresh with the activity's wanted values, reaching a node with
+  // nothing desired (it started with nothing saved): adopt them, and observe
+  // below as at startup (see adopted-request.ts).
+  const adoptable = event.kind === "refresh" ? adoptableRefresh(event, state) : null;
+  if (adoptable && event.kind === "refresh" && typeof event.power === "string" && Object.hasOwn(POWERS, event.power)) {
+    state.desired = {...adoptable, power: event.power as BacklightingPower, requestedAt: now.toISOString()};
+    state.generation = adoptable.generation;
+    state.adoptedGeneration = adoptable.generation;
+    trace("refresh", "adopted", "nothing-desired", {power: event.power, generation: adoptable.generation});
   }
 
   if (event.kind === "intent") {
@@ -318,6 +337,16 @@ export function transitionBacklighting(
     }
   } else {
     throw new Error("unknown backlighting event kind");
+  }
+
+  // An adopted request only reads the device (see adopted-request.ts).
+  const held = readsOnly(state, commands, (command) => command.operation === "observe");
+  if (held.mismatch) {
+    commands.splice(0, commands.length, ...held.commands);
+    state.pending = null;
+    state.classification = "manual_override";
+    state.phase = "manual_override";
+    trace("command", "withheld", ADOPTED_MISMATCH);
   }
 
   if (state.desired) {

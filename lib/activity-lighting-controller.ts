@@ -1,5 +1,6 @@
 "use strict";
 
+import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {numberSetting, textSetting} from "./settings";
 
@@ -70,6 +71,8 @@ export interface ActivityLightingState {
   pending: ActivityLightingPending | null;
   failure: ActivityLightingFailure | null;
   blockedGeneration: number | null;
+  // The generation adopted from a refresh (see adopted-request.ts).
+  adoptedGeneration: number | null;
 }
 
 export type ActivityLightingEvent =
@@ -92,7 +95,9 @@ export type ActivityLightingEvent =
   }
   | {kind: "command_result"; generation: number; ok: boolean; reason?: string}
   | {kind: "tick"; generation: number}
-  | {kind: "startup" | "refresh"};
+  | {kind: "startup"}
+  // From the theatre activity controller, with the activity's wanted values.
+  | {kind: "refresh"; requestId?: string | null; generation?: number; profile?: string};
 
 export interface ActivityLightingMessage {
   activityLighting?: ActivityLightingEvent;
@@ -199,7 +204,8 @@ function initialState(
     ),
     pending: saved.pending && typeof saved.pending === "object" ? {...saved.pending} : null,
     failure: saved.failure && typeof saved.failure === "object" ? {...saved.failure} : null,
-    blockedGeneration: Number.isInteger(saved.blockedGeneration) ? saved.blockedGeneration! : null
+    blockedGeneration: Number.isInteger(saved.blockedGeneration) ? saved.blockedGeneration! : null,
+    adoptedGeneration: savedAdoptedGeneration(saved)
   };
 }
 
@@ -314,6 +320,14 @@ export function transitionActivityLighting(
         continue;
       }
       if (!valuesMatch(profile.values, observation.values)) {
+        if (isAdopted(state)) {
+          // An adopted request the lights don't match: someone else's, and
+          // never re-applied.
+          state.pending = null;
+          state.phase = "manual_override";
+          trace("observation", "manual_override", ADOPTED_MISMATCH, {target});
+          return;
+        }
         state.phase = "confirming";
         return;
       }
@@ -425,6 +439,20 @@ export function transitionActivityLighting(
     reconcile();
   }
 
+  // A refresh with the activity's wanted values, reaching a node with
+  // nothing desired (it started with nothing saved): adopt them, and observe
+  // below as at startup (see adopted-request.ts). Which lights it held is
+  // unknown, so the next activity releases every light it holds.
+  const adoptable = event.kind === "refresh" ? adoptableRefresh(event, state) : null;
+  const adopted = adoptable !== null && event.kind === "refresh" && typeof event.profile === "string" && Object.hasOwn(config.profiles, event.profile);
+  if (adopted && event.kind === "refresh") {
+    state.desired = {...adoptable, profile: event.profile as string, requestedAt: now.toISOString()};
+    state.generation = adoptable.generation;
+    state.adoptedGeneration = adoptable.generation;
+    state.applied = {profile: event.profile as string, targets: null};
+    trace("refresh", "adopted", "nothing-desired", {profile: event.profile, generation: adoptable.generation});
+  }
+
   if (event.kind === "intent") {
     acceptIntent(event);
   } else if (event.kind === "observed") {
@@ -457,7 +485,7 @@ export function transitionActivityLighting(
         state.phase = "confirming";
         // After a restart nothing else would end an unanswered observe: give
         // it a deadline, so it re-applies and then fails as a live request.
-        if (event.kind === "startup" && state.blockedGeneration !== state.generation) {
+        if ((event.kind === "startup" || adopted) && state.blockedGeneration !== state.generation) {
           state.pending = {attempt: 0, deadlineAt: nowMs + config.confirmationTimeoutMs};
         }
         trace(event.kind, "observing", null, {profile: state.desired.profile});
@@ -469,12 +497,24 @@ export function transitionActivityLighting(
     throw new Error("unknown activity lighting event kind");
   }
 
+  // An adopted request only reads the lights (see adopted-request.ts): an
+  // apply means they aren't as wanted.
+  const held = readsOnly(state, commands, (command) => command.operation === "observe");
+  if (held.mismatch) {
+    commands.splice(0, commands.length, ...held.commands);
+    state.pending = null;
+    state.phase = "manual_override";
+    trace("command", "withheld", ADOPTED_MISMATCH);
+  }
+
   if (state.desired) {
+    const manual = state.phase === "manual_override";
     const theatre = targetStateEvent({
       target: "lighting",
       requestId: state.desired.requestId,
       generation: state.generation,
-      status: asTargetStatus(state.phase, "confirming"),
+      status: manual ? "transitioning" : asTargetStatus(state.phase, "confirming"),
+      classification: manual ? "manual_override" : null,
       observedAt: now.toISOString(),
       details: {
         profile: state.desired.profile,

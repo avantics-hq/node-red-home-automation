@@ -1,5 +1,6 @@
 "use strict";
 
+import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {numberSetting} from "./settings";
 
@@ -100,6 +101,8 @@ export interface SourceState {
   fallbackUsed: boolean;
   // Set while a refresh of a settled source waits for its reading.
   refreshAsked: boolean;
+  // The generation adopted from a refresh (see adopted-request.ts).
+  adoptedGeneration: number | null;
 }
 
 export type SourceEvent =
@@ -127,7 +130,9 @@ export type SourceEvent =
     reason?: string;
   }
   | {kind: "tick"; generation: number}
-  | {kind: "startup" | "refresh"};
+  | {kind: "startup"}
+  // From the theatre activity controller, with the activity's wanted values.
+  | {kind: "refresh"; requestId?: string | null; generation?: number; sourceId?: string | null; action?: string};
 
 export interface SourceMessage {
   sourceCapability?: SourceEvent;
@@ -212,7 +217,8 @@ function initialState(
       ? saved.lastAttempt!
       : 0,
     fallbackUsed: saved.fallbackUsed === true,
-    refreshAsked: saved.refreshAsked === true
+    refreshAsked: saved.refreshAsked === true,
+    adoptedGeneration: savedAdoptedGeneration(saved)
   };
 }
 
@@ -425,10 +431,13 @@ export function transitionSource(
         playback: readiness.playback,
         required: readiness.required
       });
-    } else if (state.phase === "ready" && !state.pending) {
+    } else if ((state.phase === "ready" && !state.pending) || isAdopted(state)) {
+      // A change seen after ready, or an adopted request the source doesn't
+      // match: someone else's, and never corrected.
+      state.pending = null;
       state.classification = "manual_override";
       state.phase = "manual_override";
-      trace("observation", "manual_override", null, {
+      trace("observation", "manual_override", isAdopted(state) ? ADOPTED_MISMATCH : null, {
         sourceId: state.desired.sourceId,
         status: state.observed.status
       });
@@ -583,6 +592,19 @@ export function transitionSource(
     }
   }
 
+  // A refresh with the activity's wanted values, reaching a node with
+  // nothing desired (it started with nothing saved): adopt them, and observe
+  // below as at startup (see adopted-request.ts).
+  const adoptable = event.kind === "refresh" ? adoptableRefresh(event, state) : null;
+  if (adoptable && event.kind === "refresh" && typeof event.action === "string" && Object.hasOwn(ACTIONS, event.action) &&
+    ((typeof event.sourceId === "string" && Object.hasOwn(config.sources, event.sourceId)) ||
+      (!event.sourceId && event.action === "deactivate"))) {
+    state.desired = {...adoptable, sourceId: event.sourceId || null, action: event.action as SourceAction};
+    state.generation = adoptable.generation;
+    state.adoptedGeneration = adoptable.generation;
+    trace("refresh", "adopted", "nothing-desired", {sourceId: event.sourceId || null, action: event.action, generation: adoptable.generation});
+  }
+
   if (event.kind === "intent") {
     acceptIntent(event);
   } else if (event.kind === "observed") {
@@ -625,6 +647,16 @@ export function transitionSource(
   }
 
   // A refresh of a settled source reports nothing until its reading arrives.
+  // An adopted request only reads the source (see adopted-request.ts).
+  const held = readsOnly(state, commands, (command) => command.operation === "observe");
+  if (held.mismatch) {
+    commands.splice(0, commands.length, ...held.commands);
+    state.pending = null;
+    state.classification = "manual_override";
+    state.phase = "manual_override";
+    trace("command", "withheld", ADOPTED_MISMATCH);
+  }
+
   const outputEvent = event.kind === "refresh" && state.refreshAsked ? null : targetEvent(state, now, config.sources);
   if (outputEvent) events.push(outputEvent);
   return {state, commands, events, traces, status: statusFor(state)};

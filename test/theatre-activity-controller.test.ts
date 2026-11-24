@@ -729,3 +729,23 @@ test("a target that stopped answering is still refreshed on later cycles", () =>
   result = target(result.state, "avr", "ready", 1, 121);
   assert.equal(result.state.degraded.some(({target: name}) => name === "avr"), false);
 });
+
+test("a refresh carries the activity's wanted values, so a target node with nothing saved can adopt them", () => {
+  let result = confirmActivity("tv_shield", 21);
+  // Past freshness, the controller refreshes its targets.
+  result = apply(result.state, {kind: "tick", generation: 21}, 15);
+  const refreshes = Object.fromEntries(result.commands.filter(({kind}) => kind === "refresh").map((command) => [command.target, command]));
+  // Each target refreshed carries its part of the profile, as its intent did.
+  const wanted: Record<string, Record<string, unknown>> = {
+    display: {mode: "tv"}, avr: {power: "on", source: "shield"}, source: {action: "activate", sourceId: "shield"},
+    lighting: {profile: "tv"}, backlighting: {power: "on"}
+  };
+  assert.ok(Object.keys(refreshes).length >= 3, Object.keys(refreshes).join());
+  for (const [target, command] of Object.entries(refreshes)) {
+    for (const [key, value] of Object.entries(wanted[target]!)) assert.equal((command as Record<string, unknown>)[key], value, `${target}.${key}`);
+  }
+  assert.equal(refreshes.display?.requestId, result.state.desired?.requestId);
+  // A probe with nothing desired carries none.
+  const probe = apply(undefined, {kind: "startup"}, 0).commands.find(({target}) => target === "display");
+  assert.equal(probe?.mode, undefined);
+});

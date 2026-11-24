@@ -238,7 +238,13 @@ second ahead of Node-RED's clock is treated as observed on receipt and traced as
 
 Unsolicited display, AVR, source, and backlighting changes latch manual
 ownership instead of issuing corrective commands. A newer explicit activity
-request resumes automation. Recovery adopts physical state only when fresh
+request resumes automation. A target controller that starts with nothing
+saved (a redeploy or restart without a context store) takes the activity's
+wanted values from the activity controller's next refresh, which carries them
+as the intent did, and only reads its device for it: it reports ready when
+the device already matches, and a manual override (reason `adopted-mismatch`)
+when it doesn't, sending no command until the next request.
+Recovery adopts physical state only when fresh
 display, AVR, source, and backlighting evidence matches exactly one configured
 profile. With missing or ambiguous startup evidence the activity is unknown,
 and nothing is commanded until the next request: a redeploy or restart, which

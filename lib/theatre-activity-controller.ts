@@ -151,8 +151,16 @@ function targetIntentCommands(
   });
 }
 
-function targetRefreshCommands(desired: TheatreDesired): TargetCommand[] {
-  return TARGETS.map((target) => targetCommand(target, "refresh", desired));
+// A refresh carries the activity's wanted values for the target, as its
+// intent did, so a target node that has nothing desired (it started with
+// nothing saved) can adopt them and observe, instead of staying idle.
+function targetRefreshCommand(target: TheatreTarget, desired: TheatreDesired | null, config: TheatreConfig): TargetCommand {
+  const values = desired ? config.activityProfiles[desired.activity]?.[target] ?? {} : {};
+  return targetCommand(target, "refresh", desired, values);
+}
+
+function targetRefreshCommands(desired: TheatreDesired, config: TheatreConfig): TargetCommand[] {
+  return TARGETS.map((target) => targetRefreshCommand(target, desired, config));
 }
 
 function targetProbeCommands(): TargetCommand[] {
@@ -411,7 +419,7 @@ export function transitionTheatre(
         noResponse(action.target);
         continue;
       }
-      commands.push(targetCommand(action.target, "refresh", state.desired));
+      commands.push(targetRefreshCommand(action.target, state.desired, config));
       if (action.kind === "retry") trace("refresh", "retried", null, {target: action.target, attempt: action.attempt});
       if (action.kind === "re-ask") trace("refresh", "retried", "no-response", {target: action.target});
     }
@@ -669,7 +677,7 @@ export function transitionTheatre(
     state.targets = emptyTargets();
     state.refreshPending = emptyRefreshPending();
     if (state.desired) {
-      commands.push(...targetRefreshCommands(state.desired));
+      commands.push(...targetRefreshCommands(state.desired, config));
       for (const target of TARGETS) state.refreshPending[target] = {sentAt: nowMs, attempts: 1, exhausted: false};
       state.phase = state.blockedGeneration === state.generation ? "failed" : "confirming";
       state.currentActivity = "unknown";

@@ -491,3 +491,32 @@ test("a new request for a ready receiver is carried out, not mistaken for a manu
   assert.deepEqual(off.commands.map((command) => command.payload), ["PWSTANDBY\r"]);
   assert.equal(off.targetStates.at(-1)!.theatre.status, "transitioning");
 });
+
+test("a receiver node with nothing saved adopts a refresh's wanted state and queries, sending nothing when it matches", () => {
+  const apply = (state: Partial<AvrState> | undefined, avr: Parameters<typeof transitionAvr>[1]["avr"], seconds = 0) =>
+    transitionAvr(state, {avr}, config, at(seconds));
+  let result = apply(undefined, {kind: "refresh", requestId: "activity-5", generation: 5, power: "on", source: "shield"});
+  assert.deepEqual([result.state.desired?.power, result.state.desired?.source], ["on", "shield"]);
+  assert.deepEqual(result.commands.map(({avrCommand}) => avrCommand.operation), ["query"], "a query, never the change itself");
+  result = transitionAvr(result.state, {avr: {kind: "observed", line: "PWON\rZMON\rSISAT/CBL\rMV31\r"}}, config, at(0.5));
+  assert.ok(!result.commands.some(({avrCommand}) => avrCommand.operation !== "query"), JSON.stringify(result.commands));
+  assert.equal(result.targetStates.at(-1)?.theatre.status, "ready");
+  assert.equal(result.targetStates.at(-1)?.theatre.requestId, "activity-5");
+  // An unknown source is not adopted.
+  assert.equal(apply(undefined, {kind: "refresh", requestId: "activity-6", generation: 6, power: "on", source: "vcr"}).state.desired, null);
+});
+
+test("an adopted request the receiver doesn't match is a manual override: no power or source command", () => {
+  let result = transitionAvr(undefined, {avr: {kind: "refresh", requestId: "activity-8", generation: 8, power: "on", source: "shield"}}, config, at(0));
+  const sent = [...result.commands];
+  // The receiver is in standby.
+  result = transitionAvr(result.state, {avr: {kind: "observed", line: "PWSTANDBY\rZMOFF\rSIGAME\rMV20\r"}}, config, at(0.5));
+  sent.push(...result.commands);
+  for (const seconds of [2, 4, 8]) {
+    result = transitionAvr(result.state, {avr: {kind: "tick"}}, config, at(seconds));
+    sent.push(...result.commands);
+  }
+  assert.deepEqual([...new Set(sent.map(({avrCommand}) => avrCommand.operation))], ["query"], "no PW or SI");
+  assert.equal(result.state.phase, "manual_override");
+  assert.equal(result.state.classification, "manual_override");
+});

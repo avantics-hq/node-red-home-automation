@@ -1,5 +1,6 @@
 "use strict";
 
+import {ADOPTED_MISMATCH, adoptableRefresh, readsOnly, savedAdoptedGeneration} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {booleanSetting, numberSetting} from "./settings";
 
@@ -100,6 +101,8 @@ export interface DisplayState {
   classification: "manual_override" | null;
   lastAttempt: number;
   fallbackUsed: boolean;
+  // The generation adopted from a refresh (see adopted-request.ts).
+  adoptedGeneration: number | null;
 }
 
 export type DisplayInputEvent =
@@ -124,7 +127,8 @@ export type DisplayInputEvent =
     reason?: string;
   }
   | {kind: "tick"; generation?: number}
-  | {kind: "refresh"};
+  // From the theatre activity controller, with the activity's wanted values.
+  | {kind: "refresh"; requestId?: string | null; generation?: number; mode?: string};
 
 export interface DisplayMessage {
   display?: DisplayInputEvent;
@@ -155,7 +159,8 @@ function initialState(saved: Partial<DisplayState> = {}): DisplayState {
     lastAttempt: Number.isInteger(saved.lastAttempt) && (saved.lastAttempt ?? -1) >= 0
       ? saved.lastAttempt!
       : 0,
-    fallbackUsed: saved.fallbackUsed === true
+    fallbackUsed: saved.fallbackUsed === true,
+    adoptedGeneration: savedAdoptedGeneration(saved)
   };
 }
 
@@ -607,7 +612,19 @@ export function transitionDisplay(
 
   if (!event || typeof event.kind !== "string") throw new Error("msg.display.kind is required");
 
-  if (event.kind === "startup") {
+  // A refresh with the activity's wanted values, reaching a node with
+  // nothing desired (it started with nothing saved): adopt them, and
+  // rediscover below as at startup (see adopted-request.ts).
+  const adoptable = event.kind === "refresh" ? adoptableRefresh(event, state) : null;
+  const adopted = adoptable !== null && event.kind === "refresh" && typeof event.mode === "string" && Object.hasOwn(MODES, event.mode);
+  if (adopted) {
+    state.desired = {...adoptable, mode: event.mode as DisplayMode};
+    state.generation = adoptable.generation;
+    state.adoptedGeneration = adoptable.generation;
+    trace("refresh", "adopted", "nothing-desired", {mode: event.mode, generation: adoptable.generation});
+  }
+
+  if (event.kind === "startup" || adopted) {
     // A projector power operation in flight cannot be repeated safely (a
     // second toggle can switch a warming lamp off), so it survives startup
     // and is only re-observed; everything else is rediscovered.
@@ -691,6 +708,18 @@ export function transitionDisplay(
   // reports ready only with a reading taken in this event, stamped with the
   // oldest of the device readings every mode relies on, so it is only as
   // fresh as its least recent confirmation.
+  // An adopted request only reads the device (see adopted-request.ts): a
+  // power, toggle or screen command means the display isn't as wanted.
+  const held = readsOnly(state, commands, (command) => command.operation.startsWith("query"));
+  if (held.mismatch) {
+    commands.splice(0, commands.length, ...held.commands);
+    state.pending = null;
+    state.classification = "manual_override";
+    state.phase = "manual_override";
+    events.push(displayEvent("manual_override", state, {reason: ADOPTED_MISMATCH}));
+    trace("command", "withheld", ADOPTED_MISMATCH);
+  }
+
   if (state.desired) {
     const readings = DEVICES.map((device) => parseObservedAt(state.observed[device]?.observedAt));
     const confirmedMs = readings.every((ms): ms is number => ms !== null) ? Math.min(...readings) : null;

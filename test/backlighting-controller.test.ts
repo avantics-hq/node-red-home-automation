@@ -132,3 +132,34 @@ test("new generation supersedes failed backlighting and can recover", () => {
   }, 12);
   assert.equal(result.state.phase, "ready");
 });
+
+test("a node with nothing saved adopts a refresh's wanted power and observes, never commanding it", () => {
+  // Started with nothing saved (no context store), mid-activity: the theatre
+  // activity controller's refresh carries the activity's wanted values.
+  let result = apply(undefined, {kind: "refresh", requestId: "activity-7", generation: 7, power: "on"}, 0);
+  assert.equal(result.state.desired?.requestId, "activity-7");
+  assert.deepEqual(result.commands.map(({operation}) => operation), ["observe"], "observes; never sets power");
+  assert.equal(result.events[0]?.theatre.requestId, "activity-7");
+  assert.equal(result.events[0]?.theatre.generation, 7);
+
+  // The device already matches: ready, with nothing sent.
+  result = apply(result.state, {kind: "observed", generation: 7, power: "on", observedAt: at(0.5).toISOString()}, 0.5);
+  assert.equal(result.events[0]?.theatre.status, "ready");
+  assert.deepEqual(result.commands, []);
+
+  // It doesn't match: a manual override, and never commanded.
+  let other = apply(undefined, {kind: "refresh", requestId: "activity-8", generation: 8, power: "on"}, 0);
+  other = apply(other.state, {kind: "observed", generation: 8, power: "off", observedAt: at(0.5).toISOString()}, 0.5);
+  assert.equal(other.state.phase, "manual_override");
+  assert.equal(other.events[0]?.theatre.classification, "manual_override");
+  assert.equal(other.traces.find(({outcome}) => outcome === "manual_override")?.reason, "adopted-mismatch");
+  other = apply(other.state, {kind: "tick", generation: 8}, 10);
+  assert.ok(!other.commands.some(({operation}) => operation === "set_power"));
+  // A new explicit request is commanded as usual.
+  assert.deepEqual(intent(other.state, "on", 9, 11).commands.map(({operation}) => operation), ["set_power"]);
+
+  // A refresh with no values, or for a node that has a request, changes nothing.
+  assert.equal(apply(undefined, {kind: "refresh"}, 0).state.desired, null);
+  const busy = intent(undefined, "off", 3);
+  assert.equal(apply(busy.state, {kind: "refresh", requestId: "activity-9", generation: 9, power: "on"}, 1).state.desired?.requestId, "backlighting-3");
+});
