@@ -12,15 +12,17 @@ import {scheduledLighting} from "../lib/circadian";
 import {resolveSchedule} from "../lib/circadian-schedule";
 import type {LightLevels} from "../lib/light-styling";
 import {publishingLifecycle} from "./publishing-lifecycle";
-import {publishRoom, roomRetainedTopics, roomStartingOutputs, roomStoppingOutputs, type RoomPublishingConfig, TIMES_FROM} from "../lib/room-publishing";
-import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
+import {publishRoom, roomRetainedTopics, roomStartingOutputs, roomStoppingOutputs, type RoomPublishingConfig} from "../lib/room-publishing";
+import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, whenFlowsStarted, type Send} from "./adapter";
+import {referencedSchedule} from "./shared-schedule";
 import {booleanSetting, jsonSetting, numberSetting, optionalBooleanSetting, optionalChoiceSetting, textSetting} from "../lib/settings";
 import {ID_SCHEMES, discoveryPrefixSetting} from "../lib/ha-discovery";
 import {publishingArea} from "../lib/topic-names";
 
 interface RoomControllerConfig extends NodeDef {
   idScheme?: string | null;
-  timesFrom?: string | null;
+  // The house schedule it follows, a config node's ID; "" or absent: none.
+  houseSchedule?: string | null;
   area?: string;
   publishState?: boolean | string;
   discovery?: boolean | string;
@@ -70,6 +72,9 @@ const registerRoomController: NodeInitializer = (RED) => {
 
     let controllerConfig: RoomConfig & RoomPublishingConfig;
     let refreshSeconds: number;
+    // A schedule that is set but not running, as when it was deleted: the
+    // room keeps to its own times and says so.
+    const {schedule: house, missing: houseMissing} = referencedSchedule(RED, config.houseSchedule);
     try {
       // Not set (null, or absent from a flow saved before these settings)
       // means on, so an older flow keeps publishing as before.
@@ -93,8 +98,7 @@ const registerRoomController: NodeInitializer = (RED) => {
         // Not set: a node saved before node IDs, which keeps its area-named
         // entities. The editor gives new nodes "node".
         idScheme: optionalChoiceSetting(config.idScheme, "ID scheme", ID_SCHEMES) ?? "area",
-        // Not set: the room's own times, as before this setting.
-        timesFrom: optionalChoiceSetting(config.timesFrom, "times from", TIMES_FROM) ?? "room",
+        timesFrom: house ? "house" : "room",
         area,
         displayName: config.displayName || area,
         discoveryPrefix: discoveryPrefixSetting(config.discoveryPrefix),
@@ -126,9 +130,9 @@ const registerRoomController: NodeInitializer = (RED) => {
 
     function updateStatus(status: RoomStatus) {
       node.status({
-        fill: status.manualCount ? "yellow" : status.circadianEnabled ? "green" : "grey",
+        fill: status.manualCount || houseMissing ? "yellow" : status.circadianEnabled ? "green" : "grey",
         shape: "dot",
-        text: (status.circadianEnabled
+        text: (houseMissing ? "schedule missing: own times · " : "") + (status.circadianEnabled
           ? (status.sleeping ? "sleep" : "circadian")
           : "manual only") + " · " + status.onCount + " on · " + status.manualCount + " manual" +
           (status.overriddenCount ? " · " + status.overriddenCount + " overridden" : "")
@@ -155,6 +159,35 @@ const registerRoomController: NodeInitializer = (RED) => {
         retain: msg.retain === true
       }, send);
     });
+
+    // Times taken from a house are the house's: a room that no longer follows
+    // one, as when its schedule was set to none or deleted, goes back to its
+    // own times rather than keeping the house's last ones.
+    const roomTrace = {area: controllerConfig.area, component: "room-controller"};
+    if (house) {
+      node.context().set("followsHouse", true);
+    } else if (node.context().get("followsHouse") === true) {
+      node.context().set("followsHouse", false);
+      runReducer(node, roomTrace, (saved: Partial<RoomState> | undefined) => ({
+        state: {...saved, schedule: undefined, scheduleSetting: undefined},
+        traces: [{event: "house-schedule", outcome: "changed", reason: "own-times", details: {}}]
+      }));
+    }
+    if (house) {
+      // The house's times: once the flows have started, as this room may
+      // have restarted alone, and at every change until it stops.
+      const follow = guarded(node, () => {
+        process({lighting: {kind: "schedule", ...house.schedule()}}, node.send.bind(node));
+      });
+      whenFlowsStarted(RED, node, follow);
+      node.on("close", house.subscribe(follow));
+    } else if (houseMissing) {
+      runReducer(node, roomTrace, (state: unknown) => ({
+        state,
+        traces: [{event: "house-schedule", outcome: "ignored", reason: "schedule-missing", details: {schedule: config.houseSchedule}}]
+      }));
+      node.status({fill: "yellow", shape: "ring", text: "schedule missing: own times"});
+    }
 
     refreshTimer = setInterval(guarded(node, () => {
       process({lighting: {kind: "refresh"}}, node.send.bind(node));

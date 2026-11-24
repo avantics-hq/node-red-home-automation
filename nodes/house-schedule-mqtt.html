@@ -1,0 +1,60 @@
+<script type="text/javascript">
+  (function () {
+    function on(value) { return value === true || value === "true"; }
+    RED.nodes.registerType("home-house-schedule-mqtt", {
+      category: "home automation",
+      color: "#ffd27f",
+      defaults: {
+        // A marker only a node new from the palette has, as core nodes do: import
+        // and paste keep the saved name, so onadd leaves a saved node's settings.
+        name: {value: "_DEFAULT_"},
+        schedule: {value: "", type: "home-house-schedule", required: true},
+        discovery: {value: true},
+        discoveryPrefix: {value: "homeassistant", required: true, validate: function (v) { var prefix = String(v || "").trim().replace(/^\/+|\/+$/g, ""); return Boolean(prefix) && !/[+#]/.test(prefix); }},
+        // How Home Assistant IDs are named; this node has no older entities,
+        // so not set also means "node".
+        idScheme: {value: null}
+      },
+      onadd: function () {
+        if (this.name !== "_DEFAULT_") return;
+        this.name = "";
+        this.idScheme = "node";
+      },
+      oneditprepare: function () {
+        $("#node-input-discovery").prop("checked", on(this.discovery));
+      },
+      inputs: 1,
+      outputs: 1,
+      outputLabels: ["MQTT publications"],
+      icon: "font-awesome/fa-clock-o",
+      label: function () { return this.name || "house schedule MQTT"; }
+    });
+  })();
+</script>
+
+<script type="text/html" data-template-name="home-house-schedule-mqtt">
+  <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
+  <div class="form-row"><label for="node-input-schedule">Schedule</label><input type="text" id="node-input-schedule"></div>
+  <div class="form-row"><label for="node-input-discovery">Home Assistant discovery</label><input type="checkbox" id="node-input-discovery" style="display:inline-block; width:auto;"></div>
+  <div class="form-row"><label for="node-input-discoveryPrefix">Discovery prefix</label><input type="text" id="node-input-discoveryPrefix"></div>
+</script>
+
+<script type="text/html" data-help-name="home-house-schedule-mqtt">
+  <p>A house schedule's MQTT and Home Assistant side. Optional: rooms follow the schedule without it.</p>
+  <p>It publishes the schedule's times, retained, on <code>home/&lt;name&gt;/schedule/wake-time/state</code> and
+    <code>bed-time/state</code>, with availability on <code>home/&lt;name&gt;/schedule/availability</code>; with
+    <b>Home Assistant discovery</b>, wake and bed time entities, named after the schedule so a replacement node keeps
+    them. Wire its output to an MQTT out node, and an MQTT in node on the set topics to its input.</p>
+  <h3>Inputs</h3>
+  <dl class="message-properties">
+    <dt>topic = home/&lt;name&gt;/schedule/wake-time/set or bed-time/set</dt><dd>a time from Home Assistant.
+      Retained messages and anything but a time are ignored.</dd>
+    <dt>lighting</dt><dd><code>{kind: "schedule", wakeTime, bedTime}</code>, each <code>HH:MM</code> and either one
+      alone: new times for the schedule.</dd>
+    <dt>source = "startup"</dt><dd>announce again, as after the broker reconnects.</dd>
+  </dl>
+  <h3>Outputs</h3>
+  <ol class="node-ports">
+    <li>MQTT publications.</li>
+  </ol>
+</script>

@@ -1,105 +1,61 @@
 "use strict";
 
+// The house schedule: a config node, as Node-RED shares a broker between the
+// nodes that use it. Rooms and the node that publishes it reference it and
+// hear of every change in process; it has no wires. Node-RED starts it
+// before the nodes that use it, and restarts them when it changes or goes.
+
 import type {Node, NodeDef, NodeInitializer} from "node-red";
+import type {TraceEntry} from "../lib/bounded-trace";
 import {resolveSchedule, type DaySchedule} from "../lib/circadian-schedule";
-import {ID_SCHEMES, discoveryPrefixSetting} from "../lib/ha-discovery";
-import {houseScheduleInUse, transitionHouseSchedule, type HouseScheduleEvent, type HouseScheduleState} from "../lib/house-schedule";
-import {
-  houseInbound,
-  houseRetainedTopics,
-  houseStartingOutputs,
-  houseStateOutputs,
-  houseStoppingOutputs,
-  type HouseSchedulePublishingConfig
-} from "../lib/house-schedule-publishing";
-import {optionalBooleanSetting, optionalChoiceSetting, textSetting} from "../lib/settings";
-import {publishingArea} from "../lib/topic-names";
-import {objectField, onEveryFlowsStarted, onInput, invalidConfig, runReducer, type Send} from "./adapter";
-import {publishesState} from "../lib/publishing-node";
-import {publishingLifecycle} from "./publishing-lifecycle";
+import {houseScheduleInUse, transitionHouseSchedule, type HouseScheduleState, type SharedSchedule} from "../lib/house-schedule";
+import {textSetting} from "../lib/settings";
+import {invalidConfig, runReducer} from "./adapter";
 
 interface HouseScheduleConfig extends NodeDef {
-  houseName?: string;
   wakeTime?: string;
   bedTime?: string;
-  publishState?: boolean | string | null;
-  discovery?: boolean | string | null;
-  discoveryPrefix?: string;
-  idScheme?: string | null;
 }
 
 const registerHouseSchedule: NodeInitializer = (RED) => {
-  function HomeHouseSchedule(this: Node, config: HouseScheduleConfig) {
+  function HomeHouseSchedule(this: Node & Partial<SharedSchedule>, config: HouseScheduleConfig) {
     RED.nodes.createNode(this, config);
     const node = this;
     let setting: DaySchedule;
-    let publishing: HouseSchedulePublishingConfig;
+    let name: string;
     try {
       setting = resolveSchedule(textSetting(config.wakeTime, "wake time", "07:00"), textSetting(config.bedTime, "bed time", "23:00"));
-      // Off unless switched on; it names its topics home/<name>/...
-      const name = textSetting(config.houseName, "name in topics", "house");
-      const publishState = optionalBooleanSetting(config.publishState, "publish state") ?? false;
-      const discovery = optionalBooleanSetting(config.discovery, "Home Assistant discovery") ?? false;
-      publishingArea(name, publishState || discovery);
-      publishing = {
-        area: name,
-        publishState,
-        discovery,
-        discoveryPrefix: discoveryPrefixSetting(config.discoveryPrefix),
-        nodeId: node.id,
-        idScheme: optionalChoiceSetting(config.idScheme, "ID scheme", ID_SCHEMES) ?? "node"
-      };
+      // Also its name in topics, home/<name>/schedule/...
+      name = textSetting(config.name, "name", "house");
     } catch (error) {
       invalidConfig(node, error);
       return;
     }
-    const trace = {area: publishing.area, component: "house-schedule"};
+    const trace = {area: name, component: "house-schedule"};
+    const listeners = new Set<(schedule: DaySchedule) => void>();
 
-    function schedule(): DaySchedule {
-      return houseScheduleInUse(node.context().get("state") as Partial<HouseScheduleState> | undefined, setting);
-    }
-
-    // The schedule for the rooms on output 1; MQTT publications on output 2.
-    const lifecycle = publishingLifecycle(RED, node, {
-      retainedTopics: () => houseRetainedTopics(publishing),
-      possible: {owner: publishing, topics: () => publishesState(publishing) ? houseRetainedTopics({...publishing, publishState: true, discovery: true}) : []},
-      starting: () => houseStartingOutputs(publishing, schedule()),
-      stopping: () => houseStoppingOutputs(publishing),
-      output: 1,
-      outputs: 2
-    });
-
-    function process(event: HouseScheduleEvent, send: Send, inboundTraces: Array<{event: string; outcome: string; reason: string | null; details: Record<string, unknown>}> = []) {
-      const result = runReducer(node, trace, (saved: Partial<HouseScheduleState> | undefined) => {
-        const decided = transitionHouseSchedule(saved, event, setting);
-        return {...decided, traces: [...inboundTraces, ...decided.traces]};
-      });
-      if (result.outputs.length) send([result.outputs.map((message) => ({...message})), null]);
-      if (event.kind === "schedule" && result.outputs.length) lifecycle.publish(send, houseStateOutputs(publishing, result.state.schedule));
-      node.status({fill: "green", shape: "dot", text: result.status.text});
-    }
-
-    // Rooms realign whenever the flows start: after every deploy, including
-    // one that only adds or changes a room, and every restart.
-    onEveryFlowsStarted(RED, node, () => process({kind: "announce"}, node.send.bind(node)));
-
-    onInput(node, (msg, send) => {
-      const lighting = objectField<{kind?: string; wakeTime?: unknown; bedTime?: unknown}>(msg, "lighting");
-      if (lighting?.kind === "startup" || msg.source === "startup") {
-        lifecycle.startup(send, houseStartingOutputs(publishing, schedule()));
-        process({kind: "announce"}, send);
-        return;
+    const shared: SharedSchedule = {
+      name,
+      schedule: () => houseScheduleInUse(node.context().get("state") as Partial<HouseScheduleState> | undefined, setting),
+      change(event, traces: TraceEntry[] = []) {
+        const result = runReducer(node, trace, (saved: Partial<HouseScheduleState> | undefined) => {
+          const decided = transitionHouseSchedule(saved, event, setting);
+          return {...decided, traces: [...traces, ...decided.traces]};
+        });
+        if (!result.changed) return;
+        for (const listener of [...listeners]) listener({...result.state.schedule});
+      },
+      subscribe(listener) {
+        listeners.add(listener);
+        return () => {
+          listeners.delete(listener);
+        };
       }
-      if (lighting?.kind === "schedule") {
-        process({kind: "schedule", wakeTime: lighting.wakeTime, bedTime: lighting.bedTime}, send);
-        return;
-      }
-      const inbound = houseInbound(msg, publishing);
-      if (inbound?.event) {
-        process(inbound.event, send);
-      } else if (inbound) {
-        runReducer(node, trace, (state: Partial<HouseScheduleState> | undefined) => ({state, traces: inbound.traces}));
-      }
+    };
+    Object.assign(node, shared);
+
+    node.on("close", () => {
+      listeners.clear();
     });
   }
 

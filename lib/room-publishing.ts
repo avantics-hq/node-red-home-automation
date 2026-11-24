@@ -36,9 +36,8 @@ import {areaId} from "./topic-names";
 type PublishSettings = {area: string; publishState?: boolean; discovery?: boolean; timesFrom?: TimesFrom};
 
 // Where a room's wake and bed times come from: its own settings and Home
-// Assistant entities, or a house schedule node. Absent means the room.
-export const TIMES_FROM = ["room", "house"] as const;
-export type TimesFrom = typeof TIMES_FROM[number];
+// Assistant entities, or the house schedule it follows. Absent means the room.
+export type TimesFrom = "room" | "house";
 
 function ownTimes(config: {timesFrom?: TimesFrom}): boolean {
   return config.timesFrom !== "house";

@@ -6,7 +6,8 @@ import {resolve} from "node:path";
 import test from "node:test";
 
 interface Definition {
-  defaults: Record<string, {value: unknown; validate?: (this: Record<string, unknown>, value: unknown) => boolean}>;
+  category?: string;
+  defaults: Record<string, {value: unknown; type?: string; required?: boolean; validate?: (this: Record<string, unknown>, value: unknown) => boolean}>;
   outputs?: number;
   outputLabels?: string[] | ((this: Record<string, unknown>, index: number) => string);
   onadd?: (this: Record<string, unknown>) => void;
@@ -35,7 +36,7 @@ function newNode(definition: Definition): Record<string, unknown> {
 }
 
 const ONADD_NODES = ["room-controller.html", "theatre-state-contract.html", "occupancy-fusion.html", "motion-policy.html",
-  "avr-controller.html", "house-schedule.html"];
+  "avr-controller.html", "house-schedule-mqtt.html"];
 
 test("importing, pasting or restoring a saved node keeps its settings; only a new node gets the new-node ones", () => {
   for (const file of ONADD_NODES) {
@@ -141,11 +142,15 @@ test("the contract editor asks for an area only where the runtime needs one", ()
   assert.equal(valid("!!!", {discovery: false, baseTopic: "x", idScheme: "node"}), false);
 });
 
-test("a house schedule starts with publishing off and names itself after the node; rooms default to their own times", () => {
+test("a house schedule is a config node rooms may reference; its MQTT node names its entities after the node", () => {
   const house = editorDefinition("house-schedule.html");
-  assert.deepEqual([house.defaults.publishState?.value, house.defaults.discovery?.value, house.defaults.houseName?.value], [false, false, "house"]);
-  assert.equal(newNode(house).idScheme, "node");
-  assert.equal(editorDefinition("room-controller.html").defaults.timesFrom?.value, null, "not set: the room's own times");
+  assert.deepEqual([house.category, house.defaults.name?.value, house.defaults.wakeTime?.value, house.defaults.bedTime?.value],
+    ["config", "house", "07:00", "23:00"]);
+  const room = editorDefinition("room-controller.html").defaults.houseSchedule;
+  assert.deepEqual([room?.value, room?.type, room?.required], ["", "home-house-schedule", false], "not required: none means its own times");
+  const mqtt = editorDefinition("house-schedule-mqtt.html");
+  assert.deepEqual([mqtt.defaults.schedule?.type, mqtt.defaults.schedule?.required, mqtt.defaults.idScheme?.value], ["home-house-schedule", true, null]);
+  assert.equal(newNode(mqtt).idScheme, "node");
 });
 
 test("a cover group has the group's result, then one output per member labelled from Members", () => {
