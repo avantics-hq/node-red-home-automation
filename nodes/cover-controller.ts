@@ -77,7 +77,8 @@ const registerCoverController: NodeInitializer = (RED) => {
       if (outputs.some((output) => output !== null)) send(outputs);
       const battery = result.state.observed?.battery;
       node.status({
-        fill: result.state.phase === "failed" ? "red" : result.state.phase === "manual_override" ? "yellow" : moving ? "blue" : "green",
+        fill: result.state.phase === "failed" ? "red" : result.state.phase === "unavailable" ? "grey"
+          : result.state.phase === "manual_override" ? "yellow" : moving ? "blue" : "green",
         shape: result.state.observed ? "dot" : "ring",
         text: result.status.text + (typeof battery === "number" ? ` · battery ${battery}%` : "")
       });
@@ -100,10 +101,12 @@ const registerCoverController: NodeInitializer = (RED) => {
         return;
       }
       requests += 1;
+      const current = saved();
       const request = coverRequest(
-        {payload: msg.payload, respectManual: msg.respectManual, source: msg.source},
+        {payload: msg.payload, respectManual: msg.respectManual, stopIfMoving: msg.stopIfMoving, source: msg.source},
         presets,
-        {requestId: `cover-${Date.now()}-${requests}`, generation: (saved()?.generation ?? 0) + 1}
+        {requestId: `cover-${Date.now()}-${requests}`, generation: (current?.generation ?? 0) + 1},
+        current ? coverMoving({observed: current.observed ?? null, phase: current.phase ?? "idle"}) : false
       );
       if ("invalid" in request) {
         runReducer(node, trace, (state: Partial<CoverState> | undefined) =>

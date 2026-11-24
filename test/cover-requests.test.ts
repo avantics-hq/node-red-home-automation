@@ -27,3 +27,10 @@ test("presets are named positions, checked at deploy", () => {
   assert.throws(() => coverPresets("{\"open\":50}"), /preset name open/);
   assert.throws(() => coverPresets("{\"partial\":160}"), /preset partial must be a position from 0 to 100/);
 });
+
+test("a button's request stops a moving cover, and otherwise does what it asks", () => {
+  const presets = coverPresets(undefined);
+  assert.deepEqual(coverRequest({payload: "open", stopIfMoving: true}, presets, ids, true), {intent: {...ids, kind: "stop"}});
+  assert.deepEqual(coverRequest({payload: "open", stopIfMoving: true}, presets, ids, false), {intent: {...ids, kind: "open"}});
+  assert.deepEqual(coverRequest({payload: "close"}, presets, ids, true), {intent: {...ids, kind: "close"}}, "only when asked");
+});

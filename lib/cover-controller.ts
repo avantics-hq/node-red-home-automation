@@ -78,6 +78,10 @@ export interface CoverState {
   blockedGeneration: number | null;
   classification: "manual_override" | null;
   lastAttempt: number;
+  // Whether the device says it is reachable, and the phase it was in when
+  // it went offline, to pick up from when it is back.
+  available: boolean;
+  phaseBeforeUnavailable: string | null;
 }
 
 interface IntentBase {
@@ -96,6 +100,7 @@ export type CoverEvent =
   | (IntentBase & {kind: "open" | "close" | "stop"})
   | {kind: "observed"; position: number; motion?: CoverMotion; observedAt: string; battery?: number; charging?: string}
   | {kind: "command_result"; generation: number; ok: boolean; reason?: string}
+  | {kind: "availability"; online: boolean}
   | {kind: "tick"; generation: number}
   | {kind: "startup" | "refresh"};
 
@@ -148,7 +153,9 @@ function initialState(saved: Partial<CoverState> = {}): CoverState {
     failure: saved.failure && typeof saved.failure === "object" ? {...saved.failure} : null,
     blockedGeneration: Number.isInteger(saved.blockedGeneration) ? saved.blockedGeneration! : null,
     classification: saved.classification === "manual_override" ? "manual_override" : null,
-    lastAttempt: Number.isInteger(saved.lastAttempt) && (saved.lastAttempt ?? -1) >= 0 ? saved.lastAttempt! : 0
+    lastAttempt: Number.isInteger(saved.lastAttempt) && (saved.lastAttempt ?? -1) >= 0 ? saved.lastAttempt! : 0,
+    available: saved.available !== false,
+    phaseBeforeUnavailable: typeof saved.phaseBeforeUnavailable === "string" ? saved.phaseBeforeUnavailable : null
   };
 }
 
@@ -253,7 +260,58 @@ export function transitionCover(
     trace("observation", "ready", null, {position});
   }
 
+  // A request while the device is offline: nothing is sent, and the request
+  // is answered as unavailable; what the cover was doing before is kept.
+  function rejectUnavailable(intent: Extract<CoverEvent, IntentBase>) {
+    const position = intent.kind === "set_position" ? intent.position : intent.kind === "open" ? 100 : intent.kind === "close" ? 0 : null;
+    const operation = position === null ? "stop" : "set_position";
+    events.push({theatre: {
+      kind: "target_state",
+      target: "cover",
+      requestId: intent.requestId,
+      generation: intent.generation,
+      status: "unavailable",
+      observedAt: now.toISOString(),
+      details: {
+        operation,
+        position,
+        observedPosition: null,
+        motion: null,
+        source: typeof intent.source === "string" && intent.source ? intent.source : null,
+        recovery: {},
+        metrics: {attempts: 0, retries: 0, fallbackUsed: false}
+      },
+      failure: {operation, reason: "unavailable", occurredAt: now.toISOString()}
+    }});
+    trace("intent", "rejected", "unavailable", {kind: intent.kind});
+  }
+
+  // Read the cover again rather than trust what it reported before: after a
+  // restart, or when it is back online.
+  function reobserve(reason: "startup" | "refresh" | "online") {
+    state.observed = null;
+    if (!state.desired) {
+      state.pending = null;
+      trace(reason, "idle");
+    } else if (state.phase === "failed") {
+      state.pending = null;
+      trace(reason, "blocked", "failed");
+    } else if (state.classification === "manual_override") {
+      state.pending = null;
+      emit("observe", 0);
+      trace(reason, "observing", "manual_override");
+    } else {
+      const verifying = state.phase === "ready" && !state.pending;
+      issue("observe", 0, verifying);
+      trace(reason, "observing", null, {position: state.desired.position, verifying});
+    }
+  }
+
   function acceptIntent(intent: Extract<CoverEvent, IntentBase>) {
+    if (!state.available) {
+      rejectUnavailable(intent);
+      return;
+    }
     if (intent.respectManual === true && state.classification === "manual_override") {
       trace("intent", "ignored", "manual-hold", {kind: intent.kind});
       return;
@@ -422,23 +480,27 @@ export function transitionCover(
       emit("observe", state.pending.attempt);
       state.pending.nextAt = nowMs + config.pollMs;
     }
-  } else if (event.kind === "startup" || event.kind === "refresh") {
-    state.observed = null;
-    if (!state.desired) {
+  } else if (event.kind === "availability") {
+    if (event.online !== true && event.online !== false) throw new Error("cover availability online must be true or false");
+    if (!event.online && state.available) {
+      state.available = false;
+      state.phaseBeforeUnavailable = state.phase;
       state.pending = null;
-      trace(event.kind, "idle");
-    } else if (state.phase === "failed") {
-      state.pending = null;
-      trace(event.kind, "blocked", "failed");
-    } else if (state.classification === "manual_override") {
-      state.pending = null;
-      emit("observe", 0);
-      trace(event.kind, "observing", "manual_override");
-    } else {
-      const verifying = state.phase === "ready" && !state.pending;
-      issue("observe", 0, verifying);
-      trace(event.kind, "observing", null, {position: state.desired.position, verifying});
+      state.observed = null;
+      state.phase = "unavailable";
+      trace("availability", "offline");
+    } else if (event.online && !state.available) {
+      state.available = true;
+      state.phase = state.phaseBeforeUnavailable ?? "idle";
+      state.phaseBeforeUnavailable = null;
+      trace("availability", "online");
+      reobserve("online");
     }
+  } else if (!state.available) {
+    // Offline: nothing to observe or retry until it is back.
+    trace(event.kind, "ignored", "unavailable");
+  } else if (event.kind === "startup" || event.kind === "refresh") {
+    reobserve(event.kind);
   } else {
     throw new Error("unknown cover event kind");
   }
@@ -450,7 +512,7 @@ export function transitionCover(
       generation: state.generation,
       // Theatre target statuses: cover phases moving/stopping/manual_override
       // are all "transitioning" there.
-      status: state.phase === "failed" || state.phase === "ready" || state.phase === "confirming"
+      status: state.phase === "failed" || state.phase === "ready" || state.phase === "confirming" || state.phase === "unavailable"
         ? state.phase
         : "transitioning" as const,
       observedAt: now.toISOString(),

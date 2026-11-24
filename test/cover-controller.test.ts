@@ -407,3 +407,22 @@ test("cover settings are read with the shared readers", () => {
   assert.throws(() => transitionCover(undefined, {cover: {kind: "startup"}}, {positionTolerance: -1}, at(0)), /position tolerance must not be negative/);
   assert.throws(() => transitionCover(undefined, {cover: {kind: "startup"}}, {invert: "maybe"} as never, at(0)), /invert must be on or off/);
 });
+
+test("an offline cover is sent nothing and answers requests as unavailable; back online it is read again", () => {
+  let result = setPosition(undefined, 40);
+  result = observe(result.state, 40, 6, "stopped");
+  assert.equal(result.state.phase, "ready");
+  result = apply(result.state, {kind: "availability", online: false}, 10);
+  assert.deepEqual([result.state.phase, result.state.available, result.commands], ["unavailable", false, []]);
+  assert.equal(result.events[0]?.theatre.status, "unavailable");
+  const request = setPosition(result.state, 80, 2, 20);
+  assert.deepEqual(request.commands, []);
+  const answer = request.events.find(({theatre}) => theatre.requestId === "cover-2")?.theatre;
+  assert.deepEqual([answer?.status, answer?.failure?.reason], ["unavailable", "unavailable"]);
+  assert.equal(request.state.desired?.requestId, "cover-1", "the earlier request is kept");
+  // Back online: it reads the cover before trusting anything.
+  const online = apply(request.state, {kind: "availability", online: true}, 30);
+  assert.deepEqual(online.commands.map(({operation}) => operation), ["observe"]);
+  assert.equal(online.state.phase, "confirming");
+  assert.equal(observe(online.state, 40, 31, "stopped").state.phase, "ready");
+});

@@ -1943,3 +1943,22 @@ test("cover node: simple requests, presets, and a moving signal on output 3", as
   const bad = new (runtime(registerCover).Constructor)({presets: "{\"open\":10}"});
   assert.match(String(bad.errors[0]), /invalid configuration: preset name open/);
 });
+
+test("cover node: a button stops a moving cover, and an offline cover rejects requests", async (t) => {
+  const node = new (runtime(registerCover).Constructor)({});
+  t.after(() => close(node));
+  await receive(node, {cover: {kind: "observed", position: 20, motion: "opening", observedAt: new Date().toISOString()}});
+  const stopped = await receive<SendEnvelope>(node, {payload: "open", stopIfMoving: true});
+  assert.equal((stopped[0]?.[0]?.[0] as {cover_command?: {operation: string}} | undefined)?.cover_command?.operation, "stop");
+  await receive(node, {cover: {kind: "observed", position: 30, motion: "stopped", observedAt: new Date().toISOString()}});
+  const opened = await receive<SendEnvelope>(node, {payload: "open", stopIfMoving: true});
+  assert.equal((opened[0]?.[0]?.[0] as {cover_command?: {operation: string; position: number}} | undefined)?.cover_command?.position, 100);
+
+  await receive(node, {cover: {kind: "availability", online: false}});
+  assert.match(String((node.statuses.at(-1) as {text: string}).text), /unavailable/);
+  const offline = await receive<SendEnvelope>(node, {payload: "close"});
+  assert.equal(offline[0]?.[0], null, "nothing sent");
+  assert.ok((offline[0]?.[1] ?? []).some((message) => (message as {theatre?: {status: string}}).theatre?.status === "unavailable"));
+  const back = await receive<SendEnvelope>(node, {cover: {kind: "availability", online: true}});
+  assert.equal((back[0]?.[0]?.[0] as {cover_command?: {operation: string}} | undefined)?.cover_command?.operation, "observe");
+});

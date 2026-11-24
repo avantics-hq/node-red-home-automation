@@ -122,7 +122,12 @@ that takes and reports a position from 0 (closed) to 100 (open). Send it
 number of times, and leaves a cover a person moved where they put it. An
 automatic target, such as a position computed from the weather, sets
 `msg.respectManual = true` so it waits while a person's move holds; a target
-the cover is already at is confirmed without a command. Its third output says
+the cover is already at is confirmed without a command. A button can send
+`msg.stopIfMoving = true` with `"open"` or `"close"` to stop the cover if it is
+moving and do the request otherwise. The cover's availability report
+(`{kind: "availability", online}`) keeps requests from going to an offline
+device: they are answered `unavailable`, and the cover is read again when it is
+back. Its third output says
 whether the cover is moving, so other policies can react; the example pauses
 motion lighting while a blind moves. Device commands come out in a neutral
 shape (`set_position`, `stop` or `observe`); the example flow maps them to and

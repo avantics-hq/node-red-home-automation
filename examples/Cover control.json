@@ -3,7 +3,7 @@
     "id": "example-cover-control-cover-control-example",
     "type": "comment",
     "name": "Cover control example",
-    "info": "A position cover (blind, shutter or curtain motor) owned by the cover controller. Requests go in as \"open\", \"close\", \"stop\", a position from 0 to 100, or a preset name; an automatic target sets respectManual so a person's move holds. The function nodes show the mapping to and from a Zigbee2MQTT cover: wire them to MQTT out and in nodes on your cover's topic. Output 3 says whether the cover is moving; here it pauses motion lighting while the cover moves.",
+    "info": "A position cover (blind, shutter or curtain motor) owned by the cover controller. Requests go in as \"open\", \"close\", \"stop\", a position from 0 to 100, or a preset name; an automatic target sets respectManual so a person's move holds. The function nodes show the mapping to and from a Zigbee2MQTT cover: wire them to MQTT out and in nodes on your cover's topic. A button can stop the cover if it is moving and open it otherwise, and the cover's availability report keeps requests from going to an offline device. Output 3 says whether the cover is moving; here it pauses motion lighting while the cover moves.",
     "x": 170,
     "y": 40,
     "wires": []
@@ -287,5 +287,77 @@
     "x": 1150,
     "y": 260,
     "wires": []
+  },
+  {
+    "id": "example-cover-control-button",
+    "type": "inject",
+    "name": "button: open, or stop if moving",
+    "props": [
+      {
+        "p": "payload",
+        "v": "open",
+        "vt": "str"
+      },
+      {
+        "p": "stopIfMoving",
+        "v": "true",
+        "vt": "bool"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 190,
+    "y": 400,
+    "wires": [
+      [
+        "example-cover-control-cover"
+      ]
+    ]
+  },
+  {
+    "id": "example-cover-control-availability-report",
+    "type": "inject",
+    "name": "availability report from the cover",
+    "props": [
+      {
+        "p": "payload",
+        "v": "{\"state\":\"online\"}",
+        "vt": "json"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 200,
+    "y": 360,
+    "wires": [
+      [
+        "example-cover-control-from-availability"
+      ]
+    ]
+  },
+  {
+    "id": "example-cover-control-from-availability",
+    "type": "function",
+    "name": "availability from Zigbee2MQTT",
+    "func": "// A Zigbee2MQTT availability report (retained, from an MQTT in node on\n// <your cover>/availability) as the cover controller reads it.\nconst report = typeof msg.payload === \"string\" ? JSON.parse(msg.payload) : msg.payload;\nif (!report || (report.state !== \"online\" && report.state !== \"offline\")) return null;\nreturn {cover: {kind: \"availability\", online: report.state === \"online\"}};",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 460,
+    "y": 360,
+    "wires": [
+      [
+        "example-cover-control-cover"
+      ]
+    ]
   }
 ]

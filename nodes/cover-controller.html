@@ -51,13 +51,18 @@
     <dt>payload</dt><dd><code>"open"</code>, <code>"close"</code> or <code>"stop"</code>; a position from 0 to 100;
       or the name of one of the <b>Presets</b>. A position the cover is already at, and still, is confirmed without
       a command.</dd>
+    <dt>stopIfMoving <span class="property-type">boolean</span></dt><dd><code>true</code> for a button: if the
+      cover is moving (as it reports, or while a move is unconfirmed), it stops; otherwise it does the request, such
+      as <code>"open"</code>.</dd>
     <dt>respectManual <span class="property-type">boolean</span></dt><dd><code>true</code> for an automatic target,
       such as a schedule or a position computed from the weather: it waits while a person's move holds the cover.
       A request without it (a button, say) takes the cover back.</dd>
     <dt>cover <span class="property-type">object</span></dt><dd>what the cover reports, as
       <code>{kind: "observed", position, motion, observedAt, battery, charging}</code>, where <code>motion</code> is
       <code>opening</code>, <code>closing</code> or <code>stopped</code> and <code>battery</code> and
-      <code>charging</code> are optional. Also <code>{kind: "startup"}</code> after a deploy (it re-reads the cover
+      <code>charging</code> are optional. <code>{kind: "availability", online}</code> from the device's
+      availability report: while it is offline nothing is sent and requests are answered <code>unavailable</code>;
+      when it is back, the node reads it again before trusting anything. Also <code>{kind: "startup"}</code> after a deploy (it re-reads the cover
       rather than trusting old state), <code>{kind: "command_result", generation, ok}</code> from the device path,
       or a full request such as <code>{kind: "set_position", requestId, generation, position}</code>.</dd>
   </dl>

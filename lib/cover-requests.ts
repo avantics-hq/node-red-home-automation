@@ -31,6 +31,8 @@ export function coverPresets(value: unknown): CoverPresets {
 
 export interface CoverRequestInput {
   payload?: unknown;
+  // A button's request: if the cover is moving, stop it instead.
+  stopIfMoving?: unknown;
   // An automatic target, which waits while a person's move holds the cover.
   respectManual?: unknown;
   source?: unknown;
@@ -43,7 +45,9 @@ type Intent = Extract<CoverEvent, {requestId: string}>;
 export function coverRequest(
   input: CoverRequestInput,
   presets: CoverPresets,
-  ids: {requestId: string; generation: number}
+  ids: {requestId: string; generation: number},
+  // Whether the cover is moving now, as the controller judges it.
+  moving = false
 ): {intent: Intent} | {invalid: string} {
   const base = {
     ...ids,
@@ -51,6 +55,7 @@ export function coverRequest(
     ...(input.respectManual === true ? {respectManual: true} : {})
   };
   const payload = typeof input.payload === "string" ? input.payload.trim().toLowerCase() : input.payload;
+  if (input.stopIfMoving === true && moving) return {intent: {...base, kind: "stop"}};
   if (payload === "open" || payload === "close" || payload === "stop") return {intent: {...base, kind: payload}};
   const position = typeof payload === "number" ? payload
     : typeof payload === "string" && /^\d+(\.\d+)?$/.test(payload) ? Number(payload)
