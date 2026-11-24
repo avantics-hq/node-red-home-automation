@@ -11,9 +11,9 @@ import {
 import {scheduledLighting} from "../lib/circadian";
 import {resolveSchedule} from "../lib/circadian-schedule";
 import type {LightLevels} from "../lib/light-styling";
+import {publishingLifecycle} from "./publishing-lifecycle";
 import {publishRoom, roomRetainedTopics, roomStartingOutputs, roomStoppingOutputs, type RoomPublishingConfig} from "../lib/room-publishing";
-import {retainedClears} from "../lib/retained-topics";
-import {allRetainedTopics, clearStaleRetained, wasDeleted, guarded, invalidConfig, whenFlowsStarted, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
+import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
 import {booleanSetting, jsonSetting, numberSetting, optionalBooleanSetting, optionalChoiceSetting, textSetting} from "../lib/settings";
 import {ID_SCHEMES, discoveryPrefixSetting} from "../lib/ha-discovery";
 import {publishingArea} from "../lib/topic-names";
@@ -111,6 +111,16 @@ const registerRoomController: NodeInitializer = (RED) => {
       return;
     }
 
+    // Available, and clear of what it no longer publishes, as soon as it
+    // runs; offline as it stops; nothing left behind when deleted.
+    const lifecycle = publishingLifecycle(RED, node, {
+      retainedTopics: () => roomRetainedTopics(controllerConfig),
+      starting: () => roomStartingOutputs(controllerConfig),
+      stopping: () => roomStoppingOutputs(controllerConfig),
+      output: 0,
+      outputs: 1
+    });
+
     function updateStatus(status: RoomStatus) {
       node.status({
         fill: status.manualCount ? "yellow" : status.circadianEnabled ? "green" : "grey",
@@ -133,10 +143,8 @@ const registerRoomController: NodeInitializer = (RED) => {
     }
 
     onInput(node, (msg, send) => {
-      if (objectField<RoomMessage["lighting"]>(msg, "lighting")?.kind === "startup") {
-        const clears = clearStaleRetained(node, roomRetainedTopics(controllerConfig));
-        if (clears.length) send([clears.map((clear) => ({...clear}))]);
-      }
+      // The startup's own announcement comes from publishRoom.
+      if (objectField<RoomMessage["lighting"]>(msg, "lighting")?.kind === "startup") lifecycle.startup(send);
       process({
         lighting: objectField<RoomMessage["lighting"]>(msg, "lighting"),
         topic: typeof msg.topic === "string" ? msg.topic : undefined,
@@ -151,22 +159,8 @@ const registerRoomController: NodeInitializer = (RED) => {
 
     // Available again as soon as this node runs, as after a redeploy of it
     // alone, rather than waiting for the flow's startup message.
-    whenFlowsStarted(RED, node, () => {
-      const clears = clearStaleRetained(node, roomRetainedTopics(controllerConfig), "flows-started");
-      const starting = [...clears, ...roomStartingOutputs(controllerConfig)];
-      if (starting.length) node.send([starting.map((output) => ({...output}))]);
-    });
-
-    node.on("close", (removed: boolean, done: () => void) => {
+    node.on("close", (_removed: boolean, done: () => void) => {
       clearInterval(refreshTimer);
-      // Reaches the broker only if the MQTT out node is still running, as in a
-      // deploy of modified nodes or flows; the broker's own Close and Will
-      // messages cover a full deploy, a restart and a crash (see the README).
-      // A deleted node removes its entities and retained state instead.
-      const stopping = wasDeleted(RED, node, removed)
-        ? retainedClears(allRetainedTopics(node, roomRetainedTopics(controllerConfig)))
-        : roomStoppingOutputs(controllerConfig);
-      if (stopping.length) node.send([stopping.map((output) => ({...output}))]);
       done();
     });
   }
