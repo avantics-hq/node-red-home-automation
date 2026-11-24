@@ -833,3 +833,42 @@ test("sleep from Home Assistant switches sleep and is published back", () => {
   assert.deepEqual(publishRoom(lit.state, {topic: "home/kitchen/sleep/set", payload: "ON"}, {...config, publishState: false}, now).state.sleeping,
     false, "not publishing: the set topic isn't read");
 });
+
+test("a room that starts with nothing saved leaves its lights alone until it is told about them", () => {
+  const later = (ms: number) => new Date(now.getTime() + ms);
+  const observe = (target: string, state: Partial<RoomState> | undefined, at: Date) => publishRoom(state, {
+    topic: `home/kitchen/light/group/${target}`,
+    payload: {state: "ON", brightness: 30, color_temp: 400},
+    lighting: {kind: "observed"}
+  }, config, at);
+  // Nothing saved, as after a redeploy or restart without a context store:
+  // both lights are on, perhaps held by an activity or set by a person.
+  let result = observe("cooking", undefined, now);
+  assert.deepEqual(result.state.untold, ["cooking", "dining"]);
+  result = observe("dining", result.state, later(10));
+  const commandsFor = (outputs: RoomOutput[]) => outputs.filter((output) => output.lighting_command).map((output) => output.lighting_command!.target);
+  result = publishRoom(result.state, {lighting: {kind: "refresh"}}, config, later(90000));
+  assert.deepEqual(commandsFor(result.outputs), [], "no restyle of lights it wasn't told about");
+  assert.equal(result.traces.at(-1)?.reason, "not-told-since-start");
+  // A sleep or schedule change restyles only lights it has been told about.
+  result = publishRoom(result.state, {lighting: {kind: "schedule", wakeTime: "06:00"}}, config, later(91000));
+  assert.deepEqual(commandsFor(result.outputs), []);
+
+  // An intent naming one light tells it about that light only.
+  result = publishRoom(result.state, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, later(92000));
+  assert.deepEqual(result.state.untold, ["dining"]);
+  result = publishRoom(result.state, {lighting: {kind: "refresh"}}, config, later(200000));
+  assert.ok(!commandsFor(result.outputs).includes("dining"));
+
+  // Switching circadian lighting on takes every light back.
+  result = publishRoom(result.state, {lighting: {kind: "circadian", enabled: true}}, config, later(201000));
+  assert.deepEqual(result.state.untold, []);
+  assert.ok(commandsFor(result.outputs).includes("dining"));
+});
+
+test("a room with saved state restyles as before", () => {
+  const saved = publishRoom({}, {topic: "home/kitchen/light/group/cooking", payload: {state: "ON", brightness: 30, color_temp: 400}, lighting: {kind: "observed"}}, config, now);
+  assert.deepEqual(saved.state.untold, []);
+  const refresh = publishRoom(saved.state, {lighting: {kind: "refresh"}}, config, new Date(now.getTime() + 90000));
+  assert.deepEqual(refresh.outputs.filter((output) => output.lighting_command).map((output) => output.lighting_command!.target), ["cooking"]);
+});
