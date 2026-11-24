@@ -1875,6 +1875,38 @@ test("house schedule node: tells the rooms when the flows start and when a time 
   assert.equal(traces(node).at(-1)?.reason, "not-a-time");
 });
 
+test("one flows:started listener however many nodes wait: no MaxListenersExceededWarning past ten", async () => {
+  const warnings: Error[] = [];
+  const onWarning = (warning: Error) => warnings.push(warning);
+  process.on("warning", onWarning);
+  try {
+    const motionRuntime = runtime(registerMotion);
+    const nodes = Array.from({length: 12}, (_, i) => new motionRuntime.Constructor({
+      id: `many${i}`, area: `room${i}`, onTargets: "[\"main\"]", publishState: true, discovery: true
+    }));
+    assert.equal(motionRuntime.events.listenerCount("flows:started"), 1);
+    motionRuntime.events.emit("flows:started");
+    // Each node's start-up publishing ran once.
+    assert.deepEqual(nodes.map((node) => node.sent.length), Array(12).fill(1));
+    // Once: a second start doesn't run them again.
+    motionRuntime.events.emit("flows:started");
+    assert.deepEqual(nodes.map((node) => node.sent.length), Array(12).fill(1));
+    await Promise.all(nodes.map((node) => close(node)));
+    // Warnings are emitted on the next tick.
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(warnings.filter(({name}) => name === "MaxListenersExceededWarning"), []);
+
+    // A node that closes before the flows start never runs.
+    const early = new motionRuntime.Constructor({id: "early", area: "hall", onTargets: "[\"main\"]", publishState: true});
+    await close(early);
+    const before = early.sent.length;
+    motionRuntime.events.emit("flows:started");
+    assert.equal(early.sent.length, before, "a closed node's callback is gone");
+  } finally {
+    process.off("warning", onWarning);
+  }
+});
+
 test("house schedule node: announces on every flows:started, not only its own, until it closes", async () => {
   const houseRuntime = runtime(registerHouse);
   const node = new houseRuntime.Constructor({id: "house2"});
@@ -1886,5 +1918,5 @@ test("house schedule node: announces on every flows:started, not only its own, u
   await close(node);
   houseRuntime.events.emit("flows:started");
   assert.equal(toRooms(), 2, "closed: no longer listening");
-  assert.equal(houseRuntime.events.listenerCount("flows:started"), 0);
+  assert.equal(houseRuntime.events.listenerCount("flows:started"), 1, "one listener for the runtime, not one per node");
 });
