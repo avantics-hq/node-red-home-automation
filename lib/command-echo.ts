@@ -14,7 +14,11 @@ export interface ExpectedCommand {
   expires: number;
   // Power state this command sets, while no state report has confirmed it yet.
   on?: boolean;
-  // The command topic echo has been seen; the entry now only marks the command in flight.
+  // Power state this command sets, kept after a state report confirms it, to
+  // know its echo even when something on the way rewrote the payload.
+  power?: boolean;
+  // The command topic echo has been seen. The entry is kept until it
+  // expires, so a duplicate or late echo of the same command is still ours.
   echoed?: boolean;
 }
 
@@ -48,7 +52,10 @@ export function rememberCommand(queue: ExpectedCommand[] | undefined, payload: u
   const requested = payload && typeof payload === "object"
     ? String((payload as Record<string, unknown>).state || "").toUpperCase()
     : "";
-  if (requested === "ON" || requested === "OFF") entry.on = requested === "ON";
+  if (requested === "ON" || requested === "OFF") {
+    entry.on = requested === "ON";
+    entry.power = entry.on;
+  }
   next.push(entry);
   return next.slice(-ECHO_QUEUE_LIMIT);
 }
@@ -72,25 +79,47 @@ export function checkStateReport(
   if (verdict === "confirms") {
     for (const entry of next) delete entry.on;
   }
-  return {
-    queue: next.filter((entry) => entry.on !== undefined || entry.echoed !== true),
-    verdict
-  };
+  return {queue: next, verdict};
 }
 
-// A command seen on the command topic: one of ours (its first echo), or
-// someone else's.
+// A command seen on the command topic: one of ours, or someone else's.
+// - Exactly a command we sent in the echo window is ours, even when its echo
+//   was already seen: a duplicate or late echo.
+// - A bare ON or OFF that arrives while one of our commands with that power
+//   isn't echoed yet is taken as that command, changed on the way (a
+//   function between the controller and MQTT out that cut the payload to
+//   {"state":"ON"}, say): `changed`. That command is then marked echoed but
+//   kept, so its own exact echo, if it still comes, is ours too. Without
+//   this the controller answered its own command as someone else's, which
+//   looped.
 export function checkCommandEcho(
   queue: ExpectedCommand[] | undefined,
   payload: unknown,
   nowMs: number
-): {queue: ExpectedCommand[]; own: boolean} {
+): {queue: ExpectedCommand[]; own: boolean; changed: boolean} {
   const next = live(queue, nowMs);
-  const ownIndex = next.findIndex((entry) => entry.echoed !== true && entry.fingerprint === fingerprint(payload));
+  const print = fingerprint(payload);
+  let ownIndex = next.findIndex((entry) => entry.echoed !== true && entry.fingerprint === print);
+  if (ownIndex < 0) {
+    const repeat = next.findIndex((entry) => entry.echoed === true && entry.fingerprint === print);
+    if (repeat >= 0) return {queue: next, own: true, changed: false};
+  }
+  let changed = false;
+  if (ownIndex < 0) {
+    const requested = payload && typeof payload === "object"
+      ? String((payload as Record<string, unknown>).state || "").toUpperCase()
+      : "";
+    if (requested === "ON" || requested === "OFF") {
+      for (let index = next.length - 1; index >= 0 && ownIndex < 0; index -= 1) {
+        if (next[index]!.echoed !== true && next[index]!.power === (requested === "ON")) ownIndex = index;
+      }
+      changed = ownIndex >= 0;
+    }
+  }
   const own = next[ownIndex];
-  if (!own) return {queue: next, own: false};
-  // Keep an unconfirmed power command as in flight for state reports.
-  if (own.on === undefined) next.splice(ownIndex, 1);
-  else own.echoed = true;
-  return {queue: next, own: true};
+  if (!own) return {queue: next, own: false, changed: false};
+  // Kept until it expires: for state reports while its power is unconfirmed,
+  // and to know a repeat of its echo.
+  own.echoed = true;
+  return {queue: next, own: true, changed};
 }
