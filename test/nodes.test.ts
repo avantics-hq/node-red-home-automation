@@ -1679,3 +1679,38 @@ test("a new theatre contract with discovery needs only a base topic and a displa
   const saved = new contract({id: "c9", displayName: "Media Room", baseTopic: "media/theatre", activities: "[\"off\"]", discovery: true});
   assert.deepEqual(saved.errors.map(String), ["invalid configuration: area is required"], "a contract saved before node IDs still needs one");
 });
+
+test("receiver publishing: off unless switched on; then power, source and volume as they change", async (t) => {
+  const avrRuntime = runtime(registerAvr);
+  const sources = JSON.stringify({shield: "SAT/CBL", playstation: "GAME"});
+  const quiet = new avrRuntime.Constructor({id: "a0", area: "den", sources});
+  t.after(() => close(quiet));
+  avrRuntime.events.emit("flows:started");
+  assert.deepEqual(quiet.sent, []);
+  const quietReading = await receive<SendEnvelope>(quiet, {avr: {kind: "observed", line: "PWON\rZMON\rSISAT/CBL\rMV31\r"}});
+  assert.ok(quietReading.every((envelope) => !envelope[2]), "nothing on output 3");
+
+  const node = new avrRuntime.Constructor({id: "a1", area: "den", sources, publishState: true, discovery: true});
+  t.after(() => close(node));
+  avrRuntime.events.emit("flows:started");
+  const started = (node.sent[0] as SendEnvelope)[2] ?? [];
+  assert.deepEqual(started.map(({topic}) => topic), [
+    "homeassistant/binary_sensor/nrha_a1_receiver_power/config",
+    "homeassistant/sensor/nrha_a1_receiver_source/config",
+    "homeassistant/sensor/nrha_a1_receiver_volume/config",
+    "home/den/receiver/availability"
+  ], "nothing known yet, so no state");
+  const first = await receive<SendEnvelope>(node, {avr: {kind: "observed", line: "PWON\rZMON\rSISAT/CBL\rMV31\r"}});
+  assert.deepEqual(first.flatMap((envelope) => envelope[2] ?? []).map(({topic, payload}) => [topic, payload]), [
+    ["home/den/receiver/power/state", "ON"],
+    ["home/den/receiver/source/state", "shield"],
+    ["home/den/receiver/volume/state", "31"]
+  ]);
+  const louder = await receive<SendEnvelope>(node, {avr: {kind: "observed", line: "MV315\r"}});
+  assert.deepEqual(louder.flatMap((envelope) => envelope[2] ?? []).map(({topic, payload}) => [topic, payload]),
+    [["home/den/receiver/volume/state", "31.5"]], "only what changed");
+  const same = await receive<SendEnvelope>(node, {avr: {kind: "observed", line: "MV315\r"}});
+  assert.deepEqual(same.flatMap((envelope) => envelope[2] ?? []), []);
+  const entry = JSON.parse(String(started[0]?.payload)) as Record<string, unknown>;
+  assert.deepEqual([entry.name, entry.device_class, (entry.device as {name: string}).name], ["Power", "power", "den Receiver"]);
+});

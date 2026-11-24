@@ -96,7 +96,7 @@ test("new nodes name their Home Assistant entities after the node; saved nodes k
 });
 
 test("occupancy and motion publishing start off, and a new node is named after itself", () => {
-  for (const file of ["occupancy-fusion.html", "motion-policy.html"]) {
+  for (const file of ["occupancy-fusion.html", "motion-policy.html", "avr-controller.html"]) {
     const definition = editorDefinition(file);
     assert.equal(definition.defaults.publishState?.value, false, file);
     assert.equal(definition.defaults.discovery?.value, false, file);

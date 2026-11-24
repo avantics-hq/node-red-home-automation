@@ -162,6 +162,9 @@ Version 3.0 changes some behaviour. Check these after upgrading:
   is enabled and its vacancy delay in seconds (`home/<area>/motion/enabled/state` and `…/delay/state`), which it also
   takes from their `/set` topics, and a switch and a vacancy delay number in Home Assistant. These go on its new
   second output; the shared global enable is not published.
+- **The AVR controller can publish what the receiver reports**, off unless you switch it on: power, source and
+  volume, retained under `home/<area>/receiver/`, with availability and Home Assistant sensors. These go on its new
+  third output, apart from the receiver commands and the theatre's state.
 - **Topics no longer published are cleared.** Once the flows have started, and again at its startup message, a node
   clears any retained topic it published before and no longer does, for example after an area, base topic,
   discovery prefix or target change. It remembers what it published in its node context, which lasts across deploys;

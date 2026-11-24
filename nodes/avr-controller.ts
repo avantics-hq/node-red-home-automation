@@ -15,7 +15,17 @@ import {
   type AvrState
 } from "../lib/avr-controller";
 import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
-import {jsonSetting} from "../lib/settings";
+import {jsonSetting, optionalBooleanSetting, optionalChoiceSetting} from "../lib/settings";
+import {
+  avrRetainedTopics,
+  avrStartingOutputs,
+  avrStateOutputs,
+  avrStoppingOutputs,
+  type AvrPublishingConfig
+} from "../lib/avr-publishing";
+import {ID_SCHEMES, discoveryPrefixSetting} from "../lib/ha-discovery";
+import {publishingArea} from "../lib/topic-names";
+import {publishingLifecycle} from "./publishing-lifecycle";
 
 interface AvrControllerConfig extends NodeDef {
   area?: string;
@@ -24,6 +34,10 @@ interface AvrControllerConfig extends NodeDef {
   maxAttempts?: number | string;
   minVolume?: number | string;
   maxVolume?: number | string;
+  publishState?: boolean | string | null;
+  discovery?: boolean | string | null;
+  discoveryPrefix?: string;
+  idScheme?: string | null;
 }
 
 interface AvrControllerNode extends Node {}
@@ -46,10 +60,25 @@ const registerAvrController: NodeInitializer = (RED) => {
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
     let controllerConfig: AvrConfig;
+    let publishing: AvrPublishingConfig;
     try {
       // The same validation the reducer applies, so a bad configuration
       // fails here at deploy rather than on every message.
       controllerConfig = normaliseAvrConfig({...config, area: optionalArea(config), sources: parseSources(config.sources)});
+      // Off unless switched on, as the receiver published nothing before;
+      // there are no older entities to keep, so not set names them after
+      // the node.
+      const publishState = optionalBooleanSetting(config.publishState, "publish state") ?? false;
+      const discovery = optionalBooleanSetting(config.discovery, "Home Assistant discovery") ?? false;
+      if (publishState || discovery) publishingArea(controllerConfig.area, true);
+      publishing = {
+        area: controllerConfig.area,
+        publishState,
+        discovery,
+        discoveryPrefix: discoveryPrefixSetting(config.discoveryPrefix),
+        nodeId: node.id,
+        idScheme: optionalChoiceSetting(config.idScheme, "ID scheme", ID_SCHEMES) ?? "node"
+      };
     } catch (error) {
       invalidConfig(node, error);
       return;
@@ -78,7 +107,24 @@ const registerAvrController: NodeInitializer = (RED) => {
       }), delay);
     }
 
+    function observed() {
+      return (context.get("state") as Partial<AvrState> | undefined)?.observed;
+    }
+
+    // MQTT publications go on the third output, apart from the receiver's
+    // commands and the theatre's events. Available, and clear of what it no
+    // longer publishes, as soon as it runs; offline as it stops; nothing
+    // left behind when deleted.
+    const lifecycle = publishingLifecycle(RED, node, {
+      retainedTopics: () => avrRetainedTopics(publishing),
+      starting: () => avrStartingOutputs(publishing, observed()),
+      stopping: () => avrStoppingOutputs(publishing),
+      output: 2,
+      outputs: 3
+    });
+
     function process(msg: AvrMessage, send: Send) {
+      const before = observed();
       const result = runReducer(node, {area: controllerConfig.area, component: "avr-controller"},
         (saved: Partial<AvrState> | undefined, now) => transitionAvr(saved, msg, controllerConfig, now));
       const commands = result.commands.map((command) => ({
@@ -91,9 +137,12 @@ const registerAvrController: NodeInitializer = (RED) => {
           commands.length ? commands : null,
           outputs.length
             ? outputs.map((event) => ({payload: undefined, ...event}))
-            : null
+            : null,
+          null
         ]);
       }
+      // Whatever it now observes differently from before.
+      lifecycle.publish(send, avrStateOutputs(publishing, result.state.observed, before ?? {}));
       updateStatus(result.status);
       scheduleRetry(result.state);
       return result;
@@ -109,6 +158,9 @@ const registerAvrController: NodeInitializer = (RED) => {
     }
 
     onInput(node, (msg, send) => {
+      if (objectField<AvrMessage["avr"]>(msg, "avr")?.kind === "startup") {
+        lifecycle.startup(send, avrStartingOutputs(publishing, observed()));
+      }
       process({
         avr: objectField<AvrMessage["avr"]>(msg, "avr"),
         payload: msg.payload
