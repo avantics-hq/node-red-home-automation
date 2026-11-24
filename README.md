@@ -44,6 +44,17 @@ day, and wind down to the sleep settings over the three hours before bed. Times
 are the Node-RED host's local time.
 Example: [`Room lighting.json`](https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/Room%20lighting.json).
 
+Wire the room controller's commands to MQTT out unchanged, and observe commands
+and state as they are wired. The controller watches each light's command topic
+to tell its own commands from other people's, so a function that rewrites them
+on the way makes them look like someone else's. To stop that becoming a loop, a
+bare ON or OFF that arrives within 5 seconds of one of its own commands with that
+power, before that command has come back on the topic, is taken as that command,
+and the controller restyles a light after someone else's bare ON at most once
+every 5 seconds. A person's bare ON or OFF in that moment is taken as the
+controller's own, which changes nothing, as the light is already being set that
+way; other rewrites can still be misread.
+
 | Node | Purpose |
 |---|---|
 | `home-occupancy-fusion` | Combines PIR motion with optional presence sensing. |

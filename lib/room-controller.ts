@@ -119,7 +119,7 @@ export function createRoomState(
     personAt: Object.fromEntries(Object.entries(saved.personAt || {})
       .filter(([, at]) => Number.isFinite(at))),
     restyledAt: Object.fromEntries(Object.entries(saved.restyledAt || {})
-      .filter(([, at]) => Number.isFinite(at)))
+      .filter(([target, at]) => Number.isFinite(at) && config.targets.some((entry) => entry.id === target)))
   };
 }
 
