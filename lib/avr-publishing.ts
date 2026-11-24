@@ -6,7 +6,7 @@
 // receiver controller only commands and observes the receiver.
 
 import type {AvrObserved} from "./avr-controller";
-import {areaId} from "./topic-names";
+import {homeTopic} from "./topic-names";
 import {
   discoveryEntry,
   publishesState,
@@ -30,7 +30,7 @@ const FIELDS: Field[] = ["power", "source", "volume"];
 const DEVICE = {kind: "receiver", label: "Receiver", model: "AV receiver controller"};
 
 export function receiverTopic(area: string, name: string): string {
-  return "home/" + areaId(area) + "/receiver/" + name;
+  return homeTopic(area, "receiver", name);
 }
 
 // A field's state as published, or null while it isn't known.
