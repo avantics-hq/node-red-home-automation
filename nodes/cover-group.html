@@ -1,0 +1,50 @@
+<script type="text/javascript">
+  RED.nodes.registerType("home-cover-group", {
+    category: "home automation",
+    color: "#e2d96e",
+    defaults: {
+      name: {value: ""},
+      area: {value: ""},
+      members: {value: "[\"left\",\"right\"]", required: true, validate: function (v) {
+        try {
+          var parsed = JSON.parse(v);
+          return Array.isArray(parsed) && parsed.length >= 2 && parsed.every(function (name) {
+            return typeof name === "string" && /^[a-z][a-z0-9_-]*$/.test(name);
+          }) && parsed.filter(function (name, index) { return parsed.indexOf(name) === index; }).length === parsed.length;
+        } catch (e) { return false; }
+      }}
+    },
+    inputs: 1,
+    outputs: 2,
+    outputLabels: ["member requests", "group result"],
+    icon: "font-awesome/fa-columns",
+    label: function () { return this.name || (this.area ? this.area + " " : "") + "cover group"; }
+  });
+</script>
+
+<script type="text/html" data-template-name="home-cover-group">
+  <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
+  <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area"></div>
+  <div class="form-row"><label for="node-input-members">Members</label><input type="text" id="node-input-members"></div>
+</script>
+
+<script type="text/html" data-help-name="home-cover-group">
+  <p>Moves several covers as one, such as the left and right of a curtain: one request goes to every member, and
+    the group says honestly how far it got.</p>
+  <h3>Inputs</h3>
+  <dl class="message-properties">
+    <dt>payload</dt><dd>a cover request (<code>"open"</code>, <code>"close"</code>, <code>"stop"</code>, a position or a
+      preset name), with <code>stopIfMoving</code> or <code>respectManual</code> if wanted. Each member gets the same
+      request.</dd>
+    <dt>theatre</dt><dd>a member's result: wire each member cover node's second output back into the group.</dd>
+  </dl>
+  <h3>Outputs</h3>
+  <ol class="node-ports">
+    <li>One request per member, with <code>msg.topic</code> naming it (from <b>Members</b>) and its own
+      <code>requestId</code>: route them to the member cover nodes with a switch node on the topic.</li>
+    <li>The group's result, <code>msg.theatre = {kind: "target_state", target: "cover", status, details}</code>:
+      <code>ready</code> only when every member confirms; once every member has settled with any not ready,
+      <code>failed</code> with reason <code>partial</code> (some confirmed) or <code>none-confirmed</code>, and
+      <code>details.members</code> saying what each did.</li>
+  </ol>
+</script>

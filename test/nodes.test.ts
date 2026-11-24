@@ -12,6 +12,7 @@ import registerTheatreActivity from "../nodes/theatre-activity-controller";
 import registerTheatreStateContract from "../nodes/theatre-state-contract";
 import registerAvr from "../nodes/avr-controller";
 import registerCover from "../nodes/cover-controller";
+import registerCoverGroup from "../nodes/cover-group";
 import registerDisplay from "../nodes/display-mode-controller";
 import registerMotion from "../nodes/motion-policy";
 import registerSwitch from "../nodes/switch-policy";
@@ -2001,4 +2002,26 @@ test("cover node: closing while the cover moves says it is no longer moving", as
   const stillBefore = still.sent.length;
   await close(still);
   assert.deepEqual(still.sent.slice(stillBefore), [], "nothing to say when it was still");
+});
+
+test("cover group node: one request moves both members, and their results come back together", async (t) => {
+  const group = new (runtime(registerCoverGroup).Constructor)({members: "[\"left\",\"right\"]"});
+  const coverRuntime = runtime(registerCover);
+  const left = new coverRuntime.Constructor({id: "left"});
+  const right = new coverRuntime.Constructor({id: "right"});
+  t.after(() => close(left));
+  t.after(() => close(right));
+  const requests = (await receive<SendEnvelope>(group, {payload: 40}))[0]?.[0] ?? [];
+  assert.deepEqual(requests.map((message) => message.topic), ["left", "right"]);
+  const forward = async (member: RuntimeNode, request: unknown) => {
+    await receive(member, request as Record<string, unknown>);
+    const result = await receive<SendEnvelope>(member, {cover: {kind: "observed", position: 40, motion: "stopped", observedAt: new Date().toISOString()}});
+    return (result[0]?.[1] ?? [])[0];
+  };
+  const leftResult = await forward(left, requests[0]);
+  const rightResult = await forward(right, requests[1]);
+  await receive(group, leftResult as Record<string, unknown>);
+  const done = await receive<SendEnvelope>(group, rightResult as Record<string, unknown>);
+  assert.equal((done[0]?.[1]?.[0] as {theatre?: {status: string}} | undefined)?.theatre?.status, "ready");
+  assert.equal(String((group.statuses.at(-1) as {text: string}).text), "2/2 confirmed");
 });

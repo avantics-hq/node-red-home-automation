@@ -102,7 +102,9 @@ const registerCoverController: NodeInitializer = (RED) => {
       const request = coverRequest(
         {payload: msg.payload, respectManual: msg.respectManual, stopIfMoving: msg.stopIfMoving, source: msg.source},
         presets,
-        {requestId: `cover-${Date.now()}-${requests}`, generation: model.generation(current) + 1},
+        // A caller's own request ID (a cover group's, say) lets it match the
+        // result to its request.
+        {requestId: typeof msg.requestId === "string" && msg.requestId ? msg.requestId : `cover-${Date.now()}-${requests}`, generation: model.generation(current) + 1},
         model.moving(current)
       );
       const invalid = "invalid" in request ? request.invalid

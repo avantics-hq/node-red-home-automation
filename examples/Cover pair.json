@@ -1,0 +1,258 @@
+[
+  {
+    "id": "example-cover-pair-cover-pair-example",
+    "type": "comment",
+    "name": "Cover pair example",
+    "info": "Two covers moved as one, such as the left and right of a curtain. The group sends each member the request with its own request ID; a switch node routes them by msg.topic; each member's second output comes back to the group, which reports ready only when both confirm, and otherwise which did what. Map each member's commands and reports to its device as in the Cover control example.",
+    "x": 160,
+    "y": 40,
+    "wires": []
+  },
+  {
+    "id": "example-cover-pair-open",
+    "type": "inject",
+    "name": "open both",
+    "props": [
+      {
+        "p": "payload",
+        "v": "open",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 130,
+    "y": 100,
+    "wires": [
+      [
+        "example-cover-pair-group"
+      ]
+    ]
+  },
+  {
+    "id": "example-cover-pair-partial",
+    "type": "inject",
+    "name": "partial preset",
+    "props": [
+      {
+        "p": "payload",
+        "v": "partial",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 140,
+    "y": 140,
+    "wires": [
+      [
+        "example-cover-pair-group"
+      ]
+    ]
+  },
+  {
+    "id": "example-cover-pair-group",
+    "type": "home-cover-group",
+    "name": "",
+    "area": "",
+    "members": "[\"left\",\"right\"]",
+    "x": 350,
+    "y": 120,
+    "wires": [
+      [
+        "example-cover-pair-route"
+      ],
+      [
+        "example-cover-pair-pair-result"
+      ]
+    ]
+  },
+  {
+    "id": "example-cover-pair-route",
+    "type": "switch",
+    "name": "to each member",
+    "property": "topic",
+    "propertyType": "msg",
+    "rules": [
+      {
+        "t": "eq",
+        "v": "left",
+        "vt": "str"
+      },
+      {
+        "t": "eq",
+        "v": "right",
+        "vt": "str"
+      }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 2,
+    "x": 560,
+    "y": 100,
+    "wires": [
+      [
+        "example-cover-pair-left"
+      ],
+      [
+        "example-cover-pair-right"
+      ]
+    ]
+  },
+  {
+    "id": "example-cover-pair-pair-result",
+    "type": "debug",
+    "name": "pair result",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 570,
+    "y": 180,
+    "wires": []
+  },
+  {
+    "id": "example-cover-pair-left",
+    "type": "home-cover-controller",
+    "name": "left curtain",
+    "area": "",
+    "coverType": "position",
+    "presets": "{\"partial\":60}",
+    "positionTolerance": 2,
+    "invert": false,
+    "travelTimeoutMs": 90000,
+    "maxAttempts": 2,
+    "pollMs": 5000,
+    "settleMs": 5000,
+    "travelMs": 30000,
+    "marginMs": 10000,
+    "x": 780,
+    "y": 80,
+    "wires": [
+      [
+        "example-cover-pair-left-commands"
+      ],
+      [
+        "example-cover-pair-group"
+      ],
+      []
+    ]
+  },
+  {
+    "id": "example-cover-pair-right",
+    "type": "home-cover-controller",
+    "name": "right curtain",
+    "area": "",
+    "coverType": "position",
+    "presets": "{\"partial\":60}",
+    "positionTolerance": 2,
+    "invert": false,
+    "travelTimeoutMs": 90000,
+    "maxAttempts": 2,
+    "pollMs": 5000,
+    "settleMs": 5000,
+    "travelMs": 30000,
+    "marginMs": 10000,
+    "x": 780,
+    "y": 160,
+    "wires": [
+      [
+        "example-cover-pair-right-commands"
+      ],
+      [
+        "example-cover-pair-group"
+      ],
+      []
+    ]
+  },
+  {
+    "id": "example-cover-pair-left-commands",
+    "type": "debug",
+    "name": "left curtain commands",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 1020,
+    "y": 80,
+    "wires": []
+  },
+  {
+    "id": "example-cover-pair-right-commands",
+    "type": "debug",
+    "name": "right curtain commands",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 1020,
+    "y": 160,
+    "wires": []
+  },
+  {
+    "id": "example-cover-pair-left-report",
+    "type": "inject",
+    "name": "left curtain reports open",
+    "props": [
+      {
+        "p": "cover",
+        "v": "{\"kind\": \"observed\", \"position\": 100, \"motion\": \"stopped\", \"observedAt\": $now()}",
+        "vt": "jsonata"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 170,
+    "y": 260,
+    "wires": [
+      [
+        "example-cover-pair-left"
+      ]
+    ]
+  },
+  {
+    "id": "example-cover-pair-right-report",
+    "type": "inject",
+    "name": "right curtain reports open",
+    "props": [
+      {
+        "p": "cover",
+        "v": "{\"kind\": \"observed\", \"position\": 100, \"motion\": \"stopped\", \"observedAt\": $now()}",
+        "vt": "jsonata"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 180,
+    "y": 300,
+    "wires": [
+      [
+        "example-cover-pair-right"
+      ]
+    ]
+  }
+]
