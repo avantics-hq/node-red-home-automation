@@ -265,6 +265,8 @@ Version 3.0 changes some behaviour. Check these after upgrading:
   one of them. The theatre's readiness (`unknown`, `available`, `degraded`
   or `unavailable`), which used `<base>/availability` before, is now on `<base>/readiness`.
 
+## Theatre MQTT contract
+
 The whole-theatre MQTT contract uses non-retained requests at
 `home/<area>/theatre/request`; every request supplies a unique `requestId` and an
 explicit configured activity. Controller output is retained under `desired`,
