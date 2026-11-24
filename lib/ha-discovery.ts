@@ -6,6 +6,7 @@
 
 import {textSetting} from "./settings";
 import {areaId} from "./topic-names";
+import {clockMinutes} from "./circadian-schedule";
 
 // The package's own manifest, loaded as a module from the package root (two
 // levels above dist/lib), so no file is read here. A JSON import would make
@@ -78,4 +79,11 @@ export function discoveryEntity(owner: DiscoveryOwner, component: string, entity
     uniqueId,
     defaultEntityId: `${component}.${areaId(owner.area).replace(/-/g, "_")}_${entity}`
   };
+}
+
+// A time from Home Assistant's time entity ("HH:MM:SS", in ISO format), or
+// "HH:MM", as "HH:MM"; null if it isn't one.
+export function timeEntityValue(payload: unknown): string | null {
+  const match = typeof payload === "string" ? /^(\d{2}:\d{2})(?::[0-5]\d(?:\.\d+)?)?$/.exec(payload.trim()) : null;
+  return match && clockMinutes(match[1]) !== null ? match[1]! : null;
 }

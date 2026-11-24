@@ -6,8 +6,7 @@
 // The room controller itself only decides about lights.
 
 import type {TraceEntry} from "./bounded-trace";
-import {clockMinutes} from "./circadian-schedule";
-import {DEFAULT_DISCOVERY_PREFIX, type IdScheme} from "./ha-discovery";
+import {DEFAULT_DISCOVERY_PREFIX, type IdScheme, timeEntityValue} from "./ha-discovery";
 import {
   transitionRoom,
   type RoomConfig,
@@ -23,6 +22,7 @@ import {
   roomAvailabilityTopic,
   roomControlTopic,
   roomDiscovery,
+  roomTimeDiscoveryTopics,
   scheduleCommandTopic,
   scheduleStateMessages,
   scheduleStateTopic,
@@ -33,7 +33,16 @@ import {
 } from "./room-lighting-discovery";
 import {areaId} from "./topic-names";
 
-type PublishSettings = {area: string; publishState?: boolean; discovery?: boolean};
+type PublishSettings = {area: string; publishState?: boolean; discovery?: boolean; timesFrom?: TimesFrom};
+
+// Where a room's wake and bed times come from: its own settings and Home
+// Assistant entities, or a house schedule node. Absent means the room.
+export const TIMES_FROM = ["room", "house"] as const;
+export type TimesFrom = typeof TIMES_FROM[number];
+
+function ownTimes(config: {timesFrom?: TimesFrom}): boolean {
+  return config.timesFrom !== "house";
+}
 
 // What the room's publishing needs beyond the controller's own settings: the
 // Node-RED node it runs in and how it names its Home Assistant device and
@@ -41,6 +50,7 @@ type PublishSettings = {area: string; publishState?: boolean; discovery?: boolea
 export interface RoomPublishingConfig {
   nodeId?: string;
   idScheme?: IdScheme;
+  timesFrom?: TimesFrom;
 }
 
 type PublishingRoomConfig = RoomConfig & RoomPublishingConfig;
@@ -60,7 +70,7 @@ export function roomRetainedTopics(config: PublishingRoomConfig): string[] {
   const topics = areaId(config.area) ? roomDiscovery(discoveryConfig(config), targetIds(config)).map(({topic}) => topic) : [];
   if (roomPublishesState(config)) {
     topics.push(roomAvailabilityTopic(config.area), circadianStateTopic(config.area), sleepStateTopic(config.area));
-    topics.push(scheduleStateTopic(config.area, "wake-time"), scheduleStateTopic(config.area, "bed-time"));
+    if (ownTimes(config)) topics.push(scheduleStateTopic(config.area, "wake-time"), scheduleStateTopic(config.area, "bed-time"));
     topics.push(...config.targets.map((target) => roomControlTopic(config.area, target.id)));
   }
   return topics;
@@ -86,12 +96,6 @@ export function roomStoppingOutputs(config: PublishSettings): RoomOutput[] {
   return roomPublishesState(config) ? [roomAvailabilityMessage(config.area, false)] : [];
 }
 
-// A time from Home Assistant's time entity ("HH:MM:SS", in ISO format), or
-// "HH:MM", as the room's "HH:MM"; null if it isn't one.
-function clockTime(payload: unknown): string | null {
-  const match = typeof payload === "string" ? /^(\d{2}:\d{2})(?::[0-5]\d(?:\.\d+)?)?$/.exec(payload.trim()) : null;
-  return match && clockMinutes(match[1]) !== null ? match[1]! : null;
-}
 
 function onOff(payload: unknown): boolean | null {
   const requested = typeof payload === "string" ? payload.trim().toUpperCase() : "";
@@ -100,8 +104,8 @@ function onOff(payload: unknown): boolean | null {
 
 // The set topics the room reads, what each payload means as a room event,
 // and the trace reason when it means nothing.
-function setTopics(area: string) {
-  return [
+function setTopics(area: string, ownTimesToo: boolean) {
+  const topics = [
     {name: "circadian-set", topic: circadianCommandTopic(area), invalid: "not-on-or-off",
       event: (payload: unknown) => {
         const enabled = onOff(payload);
@@ -114,15 +118,17 @@ function setTopics(area: string) {
       }},
     {name: "wake-time-set", topic: scheduleCommandTopic(area, "wake-time"), invalid: "not-a-time",
       event: (payload: unknown) => {
-        const wakeTime = clockTime(payload);
+        const wakeTime = timeEntityValue(payload);
         return wakeTime === null ? null : {kind: "schedule", wakeTime};
       }},
     {name: "bed-time-set", topic: scheduleCommandTopic(area, "bed-time"), invalid: "not-a-time",
       event: (payload: unknown) => {
-        const bedTime = clockTime(payload);
+        const bedTime = timeEntityValue(payload);
         return bedTime === null ? null : {kind: "schedule", bedTime};
       }}
   ];
+  // Following the house, the room's own wake and bed set topics are not read.
+  return ownTimesToo ? topics : topics.filter(({name}) => name !== "wake-time-set" && name !== "bed-time-set");
 }
 
 // MQTT the room reads, as room events: the set topics of its Home Assistant
@@ -133,7 +139,7 @@ function setTopics(area: string) {
 export function roomInbound(msg: RoomMessage, config: PublishSettings): {msg: RoomMessage; traces: TraceEntry[]} {
   const event = msg.lighting || {};
   const set = roomPublishesState(config) && (!event.kind || event.kind === "observed" || event.kind === "command-observed")
-    ? setTopics(config.area).find(({topic}) => topic === msg.topic)
+    ? setTopics(config.area, ownTimes(config)).find(({topic}) => topic === msg.topic)
     : undefined;
   if (!set) return {msg, traces: []};
   if (msg.retain === true || event.retained === true) {
@@ -194,13 +200,23 @@ export function publishRoom(
       before.push(roomAvailabilityMessage(config.area, true));
       before.push(circadianStateMessage(config.area, result.state.circadianEnabled));
       before.push(sleepStateMessage(config.area, result.state.sleeping));
-      before.push(...scheduleStateMessages(config.area, result.state.schedule));
+      if (ownTimes(config)) before.push(...scheduleStateMessages(config.area, result.state.schedule));
+    }
+    // Following the house, the room's own time entities and their state are
+    // cleared, every start, whatever was published before.
+    if (!ownTimes(config) && areaId(config.area) !== "") {
+      const ownTimeTopics = [
+        ...roomTimeDiscoveryTopics(discoveryConfig(config)),
+        scheduleStateTopic(config.area, "wake-time"),
+        scheduleStateTopic(config.area, "bed-time")
+      ];
+      before.push(...ownTimeTopics.map((topic) => ({topic, payload: "", retain: true})));
     }
   } else if (kind === "circadian" && publishes) {
     before.push(circadianStateMessage(config.area, result.state.circadianEnabled));
   } else if (kind === "sleep" && publishes) {
     before.push(sleepStateMessage(config.area, result.state.sleeping));
-  } else if (kind === "schedule" && publishes) {
+  } else if (kind === "schedule" && publishes && ownTimes(config)) {
     before.push(...scheduleStateMessages(config.area, result.state.schedule));
   }
   const controls = publishes

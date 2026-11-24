@@ -80,6 +80,9 @@ export function circadianStateMessage(area: string, enabled: boolean): Discovery
 
 export interface RoomDiscoveryConfig extends DiscoveryOwner {
   displayName: string;
+  // "house": the room's times come from a house schedule node, so it has no
+  // time entities of its own.
+  timesFrom?: "room" | "house";
 }
 
 const CIRCADIAN_ENTITY = "circadian_lighting";
@@ -114,14 +117,26 @@ function roomEntity(config: RoomDiscoveryConfig, component: string, entity: stri
 
 // Every discovery entry the room publishes: its circadian switch, a sleep
 // switch, its wake and bed times, and each light's control state.
-export function roomDiscovery(config: RoomDiscoveryConfig, targetIds: string[]): DiscoveryMessage[] {
-  const {area} = config;
+function roomTimeEntities(config: RoomDiscoveryConfig): DiscoveryMessage[] {
   const time = (which: ScheduleTime, entity: string, name: string, icon: string) => roomEntity(config, "time", entity, name, {
     icon,
-    command_topic: scheduleCommandTopic(area, which),
-    state_topic: scheduleStateTopic(area, which),
+    command_topic: scheduleCommandTopic(config.area, which),
+    state_topic: scheduleStateTopic(config.area, which),
     entity_category: "config"
   });
+  return [
+    time("wake-time", "wake_time", "Wake time", "mdi:weather-sunset-up"),
+    time("bed-time", "bed_time", "Bed time", "mdi:weather-night")
+  ];
+}
+
+// The discovery topics of the room's own wake and bed time entities.
+export function roomTimeDiscoveryTopics(config: RoomDiscoveryConfig): string[] {
+  return roomTimeEntities(config).map(({topic}) => topic);
+}
+
+export function roomDiscovery(config: RoomDiscoveryConfig, targetIds: string[]): DiscoveryMessage[] {
+  const {area} = config;
   return [
     roomLightingDiscovery(config, false)[0]!,
     roomEntity(config, "switch", "sleep", "Sleep", {
@@ -132,8 +147,7 @@ export function roomDiscovery(config: RoomDiscoveryConfig, targetIds: string[]):
       payload_off: "OFF",
       optimistic: false
     }),
-    time("wake-time", "wake_time", "Wake time", "mdi:weather-sunset-up"),
-    time("bed-time", "bed_time", "Bed time", "mdi:weather-night"),
+    ...(config.timesFrom === "house" ? [] : roomTimeEntities(config)),
     ...targetIds.map((id) => roomEntity(config, "sensor", id + "_control", id + " control", {
       icon: "mdi:account-lock-outline",
       state_topic: roomControlTopic(area, id),

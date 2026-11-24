@@ -1,0 +1,146 @@
+[
+  {
+    "id": "example-house-schedule-house-schedule-example",
+    "type": "comment",
+    "name": "House schedule example",
+    "info": "One wake and bed time for the whole house. The house schedule sends its times to every room wired to it when the flows start and whenever a time changes; those rooms have Times from set to house schedule, so they don't offer their own wake and bed times in Home Assistant. Rooms that keep their own times (a child's room, say) simply aren't wired to it.",
+    "x": 170,
+    "y": 40,
+    "wires": []
+  },
+  {
+    "id": "example-house-schedule-earlier",
+    "type": "inject",
+    "name": "wake earlier",
+    "props": [
+      {
+        "p": "lighting",
+        "v": "{\"kind\":\"schedule\",\"wakeTime\":\"06:30\"}",
+        "vt": "json"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 130,
+    "y": 120,
+    "wires": [
+      [
+        "example-house-schedule-house"
+      ]
+    ]
+  },
+  {
+    "id": "example-house-schedule-house",
+    "type": "home-house-schedule",
+    "name": "",
+    "wakeTime": "07:00",
+    "bedTime": "23:00",
+    "houseName": "house",
+    "publishState": false,
+    "discovery": false,
+    "discoveryPrefix": "homeassistant",
+    "idScheme": "node",
+    "x": 340,
+    "y": 120,
+    "wires": [
+      [
+        "example-house-schedule-living",
+        "example-house-schedule-bedroom"
+      ],
+      []
+    ]
+  },
+  {
+    "id": "example-house-schedule-living",
+    "type": "home-room-lighting-controller",
+    "name": "living room",
+    "area": "",
+    "displayName": "",
+    "targets": "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]",
+    "maxBrightnessPct": 100,
+    "maxColorTempKelvin": 6500,
+    "sleepBrightnessPct": 1,
+    "sleepColorTempKelvin": 2200,
+    "initialTransitionSeconds": 1,
+    "refreshTransitionSeconds": 60,
+    "refreshSeconds": 60,
+    "initialSleep": false,
+    "x": 600,
+    "y": 100,
+    "wires": [
+      [
+        "example-house-schedule-living-commands"
+      ]
+    ],
+    "wakeTime": "07:00",
+    "bedTime": "23:00",
+    "publishState": false,
+    "discovery": false,
+    "idScheme": "node",
+    "timesFrom": "house"
+  },
+  {
+    "id": "example-house-schedule-bedroom",
+    "type": "home-room-lighting-controller",
+    "name": "bedroom",
+    "area": "",
+    "displayName": "",
+    "targets": "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]",
+    "maxBrightnessPct": 100,
+    "maxColorTempKelvin": 6500,
+    "sleepBrightnessPct": 1,
+    "sleepColorTempKelvin": 2200,
+    "initialTransitionSeconds": 1,
+    "refreshTransitionSeconds": 60,
+    "refreshSeconds": 60,
+    "initialSleep": false,
+    "x": 600,
+    "y": 160,
+    "wires": [
+      [
+        "example-house-schedule-bedroom-commands"
+      ]
+    ],
+    "wakeTime": "07:00",
+    "bedTime": "23:00",
+    "publishState": false,
+    "discovery": false,
+    "idScheme": "node",
+    "timesFrom": "house"
+  },
+  {
+    "id": "example-house-schedule-living-commands",
+    "type": "debug",
+    "name": "living room commands",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 850,
+    "y": 100,
+    "wires": []
+  },
+  {
+    "id": "example-house-schedule-bedroom-commands",
+    "type": "debug",
+    "name": "bedroom commands",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 850,
+    "y": 160,
+    "wires": []
+  }
+]

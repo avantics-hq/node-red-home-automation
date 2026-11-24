@@ -1,0 +1,78 @@
+<script type="text/javascript">
+  (function () {
+    function on(value) { return value === true || value === "true"; }
+    function clock(v) { return /^([01]\d|2[0-3]):[0-5]\d$/.test(String(v || "").trim()); }
+    RED.nodes.registerType("home-house-schedule", {
+      category: "home automation",
+      color: "#ffd27f",
+      defaults: {
+        name: {value: ""},
+        wakeTime: {value: "07:00", required: true, validate: clock},
+        bedTime: {value: "23:00", required: true, validate: function (v) { return clock(v) && String(v).trim() !== String($("#node-input-wakeTime").val() || this.wakeTime || "").trim(); }},
+        // Its name in topics, home/<name>/schedule/...
+        houseName: {value: "house", required: true, validate: function (v) { return /[a-z0-9]/i.test(String(v || "")); }},
+        // Off until switched on.
+        publishState: {value: false},
+        discovery: {value: false},
+        discoveryPrefix: {value: "homeassistant", required: true, validate: function (v) { var prefix = String(v || "").trim().replace(/^\/+|\/+$/g, ""); return Boolean(prefix) && !/[+#]/.test(prefix); }},
+        idScheme: {value: null}
+      },
+      onadd: function () {
+        this.idScheme = "node";
+      },
+      oneditprepare: function () {
+        $("#node-input-publishState").prop("checked", on(this.publishState));
+        $("#node-input-discovery").prop("checked", on(this.discovery));
+        function follow() {
+          var publishing = $("#node-input-publishState").prop("checked");
+          if (!publishing) $("#node-input-discovery").prop("checked", false);
+          $("#node-input-discovery").prop("disabled", !publishing);
+        }
+        $("#node-input-publishState, #node-input-discovery").on("change", follow);
+        follow();
+      },
+      inputs: 1,
+      outputs: 2,
+      outputLabels: ["schedule for the rooms", "MQTT publications"],
+      icon: "font-awesome/fa-clock-o",
+      label: function () { return this.name || "house schedule"; }
+    });
+  })();
+</script>
+
+<script type="text/html" data-template-name="home-house-schedule">
+  <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
+  <div class="form-row"><label for="node-input-wakeTime">Wake time</label><input type="text" id="node-input-wakeTime" placeholder="07:00"></div>
+  <div class="form-row"><label for="node-input-bedTime">Bed time</label><input type="text" id="node-input-bedTime" placeholder="23:00"></div>
+  <div class="form-row"><label for="node-input-houseName">Name in topics</label><input type="text" id="node-input-houseName" placeholder="house"></div>
+  <div class="form-row"><label for="node-input-publishState">Publish state over MQTT</label><input type="checkbox" id="node-input-publishState" style="display:inline-block; width:auto;"></div>
+  <div class="form-row"><label for="node-input-discovery">Home Assistant discovery</label><input type="checkbox" id="node-input-discovery" style="display:inline-block; width:auto;"> <span>(needs Publish state)</span></div>
+  <div class="form-row"><label for="node-input-discoveryPrefix">Discovery prefix</label><input type="text" id="node-input-discoveryPrefix"></div>
+</script>
+
+<script type="text/html" data-help-name="home-house-schedule">
+  <p>One wake and bed time for every room that follows the house. Wire output 1 to each room lighting controller
+    that should follow it, and set those rooms' <b>Times from</b> to <i>house schedule</i>. Rooms that keep their own
+    times (a child's room, say) aren't wired to it.</p>
+  <p>It sends <code>msg.lighting = {kind: "schedule", wakeTime, bedTime}</code> every time the flows start, so the
+    rooms realign after every deploy (including one that only adds or changes a room) and restart, whenever a time changes, and at a startup message
+    (<code>msg.source = "startup"</code>).</p>
+  <h3>Inputs</h3>
+  <dl class="message-properties">
+    <dt>lighting</dt><dd><code>{kind: "schedule", wakeTime, bedTime}</code>, each <code>HH:MM</code> and either one
+      alone: new times for the house. A time set this way lasts until the node is deployed with a different
+      <b>Wake time</b> or <b>Bed time</b>, which then applies.</dd>
+    <dt>topic = home/&lt;name&gt;/schedule/wake-time/set or bed-time/set</dt><dd>a time from Home Assistant, while it
+      publishes. Retained messages and anything but a time are ignored.</dd>
+  </dl>
+  <h3>Publishing</h3>
+  <p>Off unless switched on. With <b>Publish state</b> it publishes its times, retained, on
+    <code>home/&lt;name&gt;/schedule/wake-time/state</code> and <code>bed-time/state</code>, with availability on
+    <code>home/&lt;name&gt;/schedule/availability</code>; with <b>Home Assistant discovery</b>, wake and bed time
+    entities.</p>
+  <h3>Outputs</h3>
+  <ol class="node-ports">
+    <li>The schedule, for the rooms that follow the house.</li>
+    <li>MQTT publications, when publishing is on.</li>
+  </ol>
+</script>
