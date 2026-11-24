@@ -2156,3 +2156,32 @@ test("cover group node: a request still open after a redeploy settles at its dea
   assert.equal(answer.at(-1)?.status, "failed");
   assert.deepEqual([answer.at(-1)?.failure?.reason, answer.at(-1)?.details.members.left?.reason], ["none-confirmed", "no-answer"]);
 });
+
+test("cover node publishing: a Home Assistant cover entity, its state as it changes, and its commands as requests", async (t) => {
+  const coverRuntime = runtime(registerCover);
+  const quiet = new coverRuntime.Constructor({id: "cover-quiet"});
+  t.after(() => close(quiet));
+  const node = new coverRuntime.Constructor({id: "cover-ha", area: "bedroom", topicName: "left", publishState: true, discovery: true, idScheme: "node"});
+  t.after(() => close(node));
+  assert.deepEqual(node.errors, []);
+  coverRuntime.events.emit("flows:started");
+  assert.equal(quiet.sent.length, 0, "off unless switched on");
+  const started = (node.sent as SendEnvelope[]).flatMap((envelope) => envelope[3] ?? []).map(({topic}) => topic);
+  assert.deepEqual(started, ["homeassistant/cover/nrha_cover-ha_cover_left/config", "home/bedroom/cover/left/availability"]);
+
+  // The cover reports: its state and position go to Home Assistant.
+  const reported = await receive<SendEnvelope>(node, {cover: {kind: "observed", position: 0, motion: "stopped", observedAt: new Date().toISOString()}});
+  assert.deepEqual(reported.flatMap((envelope) => envelope[3] ?? []).map(({topic, payload}) => [topic, payload]),
+    [["home/bedroom/cover/left/state", "closed"], ["home/bedroom/cover/left/position", "0"]]);
+
+  // Home Assistant's OPEN is a request like any other: a device command on output 1.
+  const opened = await receive<SendEnvelope>(node, {topic: "home/bedroom/cover/left/set", payload: "OPEN"});
+  const commands = opened.flatMap((envelope) => envelope[0] ?? []).map((message) => (message as {cover_command?: {operation: string; position?: number}}).cover_command);
+  assert.deepEqual(commands.map((command) => [command?.operation, command?.position]), [["set_position", 100]]);
+  // And a position from Home Assistant.
+  const moved = await receive<SendEnvelope>(node, {topic: "home/bedroom/cover/left/position/set", payload: "40"});
+  assert.ok(moved.flatMap((envelope) => envelope[0] ?? []).some((message) => (message as {cover_command?: {position?: number}}).cover_command?.position === 40));
+  // Anything else on its set topics is ignored, with a trace.
+  assert.deepEqual(await receive(node, {topic: "home/bedroom/cover/left/set", payload: "SIDEWAYS"}), []);
+  assert.equal(traces(node).at(-1)?.reason, "not-open-close-or-stop");
+});

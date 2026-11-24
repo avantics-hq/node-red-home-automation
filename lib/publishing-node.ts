@@ -80,7 +80,8 @@ export function discoveryEntry(
 // made.
 export interface PublishingParts<State, Config extends OptInPublishingConfig> {
   entries(config: Config): RetainedText[];
-  availabilityTopic(area: string): string;
+  // From the area, or the whole config for a node that names more in it.
+  availabilityTopic(area: string, config: Config): string;
   stateTopics(config: Config): string[];
   stateOutputs(config: Config, state: State): RetainedText[];
 }
@@ -92,17 +93,17 @@ export function publishingNode<State, Config extends OptInPublishingConfig = Opt
     // published.
     starting(config: Config, state: State): RetainedText[] {
       const outputs = publishesDiscovery(config) ? parts.entries(config) : [];
-      if (publishesState(config)) outputs.push(retainedText(parts.availabilityTopic(config.area), ONLINE));
+      if (publishesState(config)) outputs.push(retainedText(parts.availabilityTopic(config.area, config), ONLINE));
       return [...outputs, ...parts.stateOutputs(config, state)];
     },
     stopping(config: Config): RetainedText[] {
-      return publishesState(config) ? [retainedText(parts.availabilityTopic(config.area), OFFLINE)] : [];
+      return publishesState(config) ? [retainedText(parts.availabilityTopic(config.area, config), OFFLINE)] : [];
     },
     // Every retained topic it publishes, for clearing those it no longer
     // does after a change, or all of them when deleted.
     retainedTopics(config: Config): string[] {
       const topics = publishesDiscovery(config) ? parts.entries(config).map(({topic}) => topic) : [];
-      if (publishesState(config)) topics.push(parts.availabilityTopic(config.area), ...parts.stateTopics(config));
+      if (publishesState(config)) topics.push(parts.availabilityTopic(config.area, config), ...parts.stateTopics(config));
       return topics;
     }
   };
