@@ -87,7 +87,9 @@
   <p>When the node starts with nothing saved (its first deploy, or a redeploy or restart without a context store),
     it doesn't know whether the room is occupied, so it counts the room as vacant from then: unless occupancy is
     reported within <b>Vacancy seconds</b>, it sends its off intent. Lights left on when Node-RED stopped are not
-    left on for good. With a context store, a running off-timer carries on instead.</p>
+    left on for good, but someone sitting still in a lit room has the lights switched off after the delay unless
+    motion is seen. After a restart the room controller has also forgotten which lights a person set, so it doesn't
+    keep those either. With a context store, a running off-timer carries on instead.</p>
   <h3>Publishing</h3>
   <p>Off unless switched on, and then named after the <b>Area</b>, which is needed.</p>
   <dl class="message-properties">

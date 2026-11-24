@@ -42,7 +42,12 @@ Motion, presence, illuminance and wall switches drive one room's lights, with
 circadian styling and manual ownership. Wire occupancy fusion into the motion
 policy, wall switches into the switch policy, and both policies into the room
 controller. The room controller keeps a light a person set after the room went
-vacant, so motion doesn't switch it straight off. Circadian
+vacant, so motion doesn't switch it straight off. Without a Node-RED context
+store, a motion node that restarts or is redeployed doesn't know whether the
+room is occupied, so it counts the room as vacant from then: someone sitting
+still in a lit room has the motion-lit lights switched off after the vacancy
+delay unless motion is seen. After a restart the room has also forgotten which
+lights a person set, so it doesn't keep those either. Circadian
 levels follow the room controller's wake and bed times (default 07:00 and
 23:00): they rise over the hour after waking, stay bright and cool through the
 day, and wind down to the sleep settings over the three hours before bed. Times
