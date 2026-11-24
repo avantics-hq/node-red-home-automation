@@ -30,7 +30,7 @@ test("objectField returns only objects", () => {
   assert.equal(objectField(msg, "missing"), undefined);
 });
 
-test("onInput ends each message, reporting an error against it", () => {
+test("onInput ends each message, reporting an error against it once", () => {
   const {node, asNode} = fakeNode();
   const handled: unknown[] = [];
   onInput(asNode, (msg) => {
@@ -38,12 +38,18 @@ test("onInput ends each message, reporting an error against it", () => {
     handled.push(msg.payload);
   });
   const done: unknown[] = [];
-  node.emit("input", {payload: "good"}, () => {}, (error?: Error) => done.push(error));
-  node.emit("input", {payload: "bad"}, () => {}, (error?: Error) => done.push(error));
+  // As Node-RED's done does: done(error) reports the error against the
+  // message, which is what a Catch node hears.
+  const input = (msg: InputMessage) => node.emit("input", msg, () => {}, (error?: Error) => {
+    done.push(error);
+    if (error) node.error(error, msg);
+  });
+  input({payload: "good"} as InputMessage);
+  input({payload: "bad"} as InputMessage);
   assert.deepEqual(handled, ["good"]);
   assert.equal(done[0], undefined);
   assert.match(String(done[1]), /boom/);
-  assert.equal(node.errors.length, 1);
+  assert.equal(node.errors.length, 1, "one report, so a Catch node fires once");
   assert.deepEqual(node.errors[0]![1], {payload: "bad"});
 });
 

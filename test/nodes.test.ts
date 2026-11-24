@@ -41,7 +41,7 @@ interface RuntimeNode {
   errors: unknown[];
   statuses: unknown[];
   send(message: unknown): void;
-  error(error: unknown): void;
+  error(error: unknown, msg?: unknown): void;
   status(status: unknown): void;
   context(): RuntimeContext;
 }
@@ -137,9 +137,14 @@ function receive<T>(
 ): Promise<T[]> {
   return new Promise<T[]>((resolve, reject) => {
     const sent: T[] = [];
+    // As Node-RED's done does, an error is reported against the message.
     node.emit("input", msg, (message: T) => sent.push(message), (error?: Error) => {
-      if (error) reject(error);
-      else resolve(sent);
+      if (error) {
+        node.error(error, msg);
+        reject(error);
+      } else {
+        resolve(sent);
+      }
     });
   });
 }
