@@ -12,7 +12,7 @@ import {scheduledLighting} from "../lib/circadian";
 import {resolveSchedule} from "../lib/circadian-schedule";
 import type {LightLevels} from "../lib/light-styling";
 import {publishingLifecycle} from "./publishing-lifecycle";
-import {publishRoom, roomPublishesState, roomRetainedTopics, roomStartingOutputs, roomStoppingOutputs, type RoomPublishingConfig, TIMES_FROM} from "../lib/room-publishing";
+import {publishRoom, roomRetainedTopics, roomStartingOutputs, roomStoppingOutputs, type RoomPublishingConfig, TIMES_FROM} from "../lib/room-publishing";
 import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
 import {booleanSetting, jsonSetting, numberSetting, optionalBooleanSetting, optionalChoiceSetting, textSetting} from "../lib/settings";
 import {ID_SCHEMES, discoveryPrefixSetting} from "../lib/ha-discovery";
@@ -118,7 +118,6 @@ const registerRoomController: NodeInitializer = (RED) => {
     // runs; offline as it stops; nothing left behind when deleted.
     const lifecycle = publishingLifecycle(RED, node, {
       retainedTopics: () => roomRetainedTopics(controllerConfig),
-      possibleTopics: () => roomPublishesState(controllerConfig) ? roomRetainedTopics({...controllerConfig, publishState: true, discovery: true}) : [],
       starting: () => roomStartingOutputs(controllerConfig),
       stopping: () => roomStoppingOutputs(controllerConfig),
       output: 0,

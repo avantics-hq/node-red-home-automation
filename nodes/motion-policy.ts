@@ -102,7 +102,7 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
     // stops; nothing left behind when deleted.
     const lifecycle = publishingLifecycle(RED, node, {
       retainedTopics: () => motionRetainedTopics(publishing),
-      possibleTopics: () => publishesState(publishing) ? motionRetainedTopics({...publishing, publishState: true, discovery: true}) : [],
+      possible: {owner: publishing, topics: () => publishesState(publishing) ? motionRetainedTopics({...publishing, publishState: true, discovery: true}) : []},
       starting: () => motionStartingOutputs(publishing, savedPolicyState()),
       stopping: () => motionStoppingOutputs(publishing),
       output: 1,

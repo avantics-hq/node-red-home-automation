@@ -1649,6 +1649,30 @@ test("a publishing node clears the discovery entries it no longer publishes, wit
   assert.ok(started.some(({topic, payload}) => topic === "home/den/motion/enabled/state" && payload === "ON"), "and still publishes its state");
 });
 
+test("clearing without a record never touches another node's entities: none under the area scheme", async (t) => {
+  // Two motion nodes in the same area, named after the area: A publishes
+  // discovery; B publishes state with discovery off.
+  const motionRuntime = runtime(registerMotion);
+  const a = new motionRuntime.Constructor({id: "ma", area: "den", onTargets: "[\"main\"]", publishState: true, discovery: true, idScheme: "area"});
+  t.after(() => close(a));
+  motionRuntime.events.emit("flows:started");
+  const entriesOfA = ((a.sent[0] as SendEnvelope)[1] ?? []).map(({topic}) => String(topic)).filter((topic) => topic.endsWith("/config"));
+  assert.equal(entriesOfA.length, 2);
+
+  const b = new motionRuntime.Constructor({id: "mb", area: "den", onTargets: "[\"main\"]", publishState: true, discovery: false, idScheme: "area"});
+  motionRuntime.events.emit("flows:started");
+  const cleared = (sent: unknown[]) => sent.flatMap((envelope) => (envelope as SendEnvelope)[1] ?? [])
+    .filter(({payload}) => payload === "").map(({topic}) => String(topic));
+  assert.deepEqual(cleared(b.sent).filter((topic) => entriesOfA.includes(topic)), [], "B's start");
+  assert.deepEqual(cleared(await receive<SendEnvelope>(b, {source: "startup"})).filter((topic) => entriesOfA.includes(topic)), [], "B's startup message");
+  motionRuntime.flowNodeIds.delete("mb");
+  const deleted = await new Promise<unknown[]>((resolve) => {
+    const before = b.sent.length;
+    b.emit("close", true, () => resolve(b.sent.slice(before)));
+  });
+  assert.deepEqual(cleared(deleted).filter((topic) => entriesOfA.includes(topic)), [], "B's delete");
+});
+
 test("motion publishing: an enable switch and a vacancy delay, set from MQTT; off unless switched on", async (t) => {
   const motionRuntime = runtime(registerMotion);
   const quiet = new motionRuntime.Constructor({id: "m0", area: "den", onTargets: "[\"main\"]"});

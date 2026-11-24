@@ -85,7 +85,7 @@ const registerOccupancyFusion: NodeInitializer = (RED) => {
     // nothing left behind when deleted.
     const lifecycle = publishingLifecycle(RED, node, {
       retainedTopics: () => occupancyRetainedTopics(publishing),
-      possibleTopics: () => publishesState(publishing) ? occupancyRetainedTopics({...publishing, publishState: true, discovery: true}) : [],
+      possible: {owner: publishing, topics: () => publishesState(publishing) ? occupancyRetainedTopics({...publishing, publishState: true, discovery: true}) : []},
       starting: () => occupancyStartingOutputs(publishing, occupied()),
       stopping: () => occupancyStoppingOutputs(publishing),
       output: 1,

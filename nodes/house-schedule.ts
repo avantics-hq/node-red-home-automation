@@ -62,7 +62,7 @@ const registerHouseSchedule: NodeInitializer = (RED) => {
     // The schedule for the rooms on output 1; MQTT publications on output 2.
     const lifecycle = publishingLifecycle(RED, node, {
       retainedTopics: () => houseRetainedTopics(publishing),
-      possibleTopics: () => publishesState(publishing) ? houseRetainedTopics({...publishing, publishState: true, discovery: true}) : [],
+      possible: {owner: publishing, topics: () => publishesState(publishing) ? houseRetainedTopics({...publishing, publishState: true, discovery: true}) : []},
       starting: () => houseStartingOutputs(publishing, schedule()),
       stopping: () => houseStoppingOutputs(publishing),
       output: 1,

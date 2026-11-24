@@ -122,7 +122,7 @@ const registerAvrController: NodeInitializer = (RED) => {
     // left behind when deleted.
     const lifecycle = publishingLifecycle(RED, node, {
       retainedTopics: () => avrRetainedTopics(publishing),
-      possibleTopics: () => publishesState(publishing) ? avrRetainedTopics({...publishing, publishState: true, discovery: true}) : [],
+      possible: {owner: publishing, topics: () => publishesState(publishing) ? avrRetainedTopics({...publishing, publishState: true, discovery: true}) : []},
       starting: () => avrStartingOutputs(publishing, observed()),
       stopping: () => avrStoppingOutputs(publishing),
       output: 2,
