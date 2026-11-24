@@ -69,6 +69,17 @@ on output 2. Example: [`Home theatre equipment.json`](https://github.com/avantic
 | `home-source-capability-controller` | Gates source readiness on fresh availability, active-device, application or playback evidence. |
 | `home-backlighting-controller` | Owns TV-backlight power with observation-gated confirmation. |
 
+One house schedule node can set the wake and bed times for many rooms: wire
+it to each room that should follow it and set that room's **Times from** to
+*house schedule*. Those rooms then have no wake and bed time entities of their
+own in Home Assistant; the house has them instead, when its publishing is on.
+It tells its rooms the times whenever the flows start and whenever they change.
+Rooms that need their own times (a child's room, say) just aren't wired to it.
+
+| Node | Purpose |
+|---|---|
+| `home-house-schedule` | One wake and bed time for every room that follows the house. |
+
 ### Theatre activities
 
 One request, such as "tv" or "off", drives every target. The state contract

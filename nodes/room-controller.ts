@@ -12,7 +12,7 @@ import {scheduledLighting} from "../lib/circadian";
 import {resolveSchedule} from "../lib/circadian-schedule";
 import type {LightLevels} from "../lib/light-styling";
 import {publishingLifecycle} from "./publishing-lifecycle";
-import {publishRoom, roomRetainedTopics, roomStartingOutputs, roomStoppingOutputs, type RoomPublishingConfig} from "../lib/room-publishing";
+import {publishRoom, roomRetainedTopics, roomStartingOutputs, roomStoppingOutputs, type RoomPublishingConfig, TIMES_FROM} from "../lib/room-publishing";
 import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
 import {booleanSetting, jsonSetting, numberSetting, optionalBooleanSetting, optionalChoiceSetting, textSetting} from "../lib/settings";
 import {ID_SCHEMES, discoveryPrefixSetting} from "../lib/ha-discovery";
@@ -20,6 +20,7 @@ import {publishingArea} from "../lib/topic-names";
 
 interface RoomControllerConfig extends NodeDef {
   idScheme?: string | null;
+  timesFrom?: string | null;
   area?: string;
   publishState?: boolean | string;
   discovery?: boolean | string;
@@ -92,6 +93,8 @@ const registerRoomController: NodeInitializer = (RED) => {
         // Not set: a node saved before node IDs, which keeps its area-named
         // entities. The editor gives new nodes "node".
         idScheme: optionalChoiceSetting(config.idScheme, "ID scheme", ID_SCHEMES) ?? "area",
+        // Not set: the room's own times, as before this setting.
+        timesFrom: optionalChoiceSetting(config.timesFrom, "times from", TIMES_FROM) ?? "room",
         area,
         displayName: config.displayName || area,
         discoveryPrefix: discoveryPrefixSetting(config.discoveryPrefix),

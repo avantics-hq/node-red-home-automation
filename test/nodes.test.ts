@@ -16,6 +16,7 @@ import registerMotion from "../nodes/motion-policy";
 import registerSwitch from "../nodes/switch-policy";
 import registerOccupancy from "../nodes/occupancy-fusion";
 import registerRoom from "../nodes/room-controller";
+import registerHouse from "../nodes/house-schedule";
 import registerSource from "../nodes/source-capability-controller";
 import type {TraceRecord} from "../lib/bounded-trace";
 import {transitionActivityLighting} from "../lib/activity-lighting-controller";
@@ -1775,4 +1776,29 @@ test("receiver volume number: a burst of sets becomes one request for the last v
   const results = confirmed.flatMap((envelope) => envelope[1] ?? []).map((message) => (message as {avr?: {kind: string}}).avr?.kind);
   assert.ok(results.includes("volume_ready"), JSON.stringify(results));
   assert.ok(!results.includes("volume_manual_override"));
+});
+
+test("house schedule node: tells the rooms when the flows start and when a time changes", async (t) => {
+  const houseRuntime = runtime(registerHouse);
+  const node = new houseRuntime.Constructor({id: "house1", wakeTime: "07:00", bedTime: "23:00", houseName: "house", publishState: true, discovery: true});
+  t.after(() => close(node));
+  assert.deepEqual(node.errors, []);
+  houseRuntime.events.emit("flows:started");
+  const started = node.sent as SendEnvelope[];
+  const toRooms = started.flatMap((envelope) => envelope[0] ?? []).map((message) => (message as {lighting?: unknown}).lighting);
+  assert.deepEqual(toRooms, [{kind: "schedule", wakeTime: "07:00", bedTime: "23:00"}], "rooms realign at every start");
+  const announced = started.flatMap((envelope) => envelope[1] ?? []).map(({topic}) => topic);
+  assert.ok(announced.includes("homeassistant/time/nrha_house1_wake_time/config"), announced.join());
+  assert.ok(announced.includes("home/house/wake-time/state"), announced.join());
+
+  const changed = await receive<SendEnvelope>(node, {lighting: {kind: "schedule", bedTime: "22:30"}});
+  assert.deepEqual(changed.flatMap((envelope) => envelope[0] ?? []).map((message) => (message as {lighting?: unknown}).lighting),
+    [{kind: "schedule", wakeTime: "07:00", bedTime: "22:30"}]);
+  assert.deepEqual(changed.flatMap((envelope) => envelope[1] ?? []).map(({topic, payload}) => [topic, payload]),
+    [["home/house/wake-time/state", "07:00:00"], ["home/house/bed-time/state", "22:30:00"]]);
+  // From Home Assistant, on its own set topic.
+  const fromHa = await receive<SendEnvelope>(node, {topic: "home/house/wake-time/set", payload: "06:15:00"});
+  assert.deepEqual(fromHa.flatMap((envelope) => envelope[0] ?? []).map((message) => (message as {lighting?: {wakeTime: string}}).lighting?.wakeTime), ["06:15"]);
+  assert.deepEqual(await receive(node, {topic: "home/house/wake-time/set", payload: "soon"}), []);
+  assert.equal(traces(node).at(-1)?.reason, "not-a-time");
 });

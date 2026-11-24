@@ -47,3 +47,26 @@ test("the circadian set topic becomes a room event before the controller sees it
   assert.deepEqual(roomInbound(msg, {...config, publishState: false}).msg, msg, "not publishing: passed through");
   assert.equal(roomInbound({topic: "k/cooking", payload: "x"}, config).traces.length, 0);
 });
+
+test("a room following the house has no time entities of its own, ignores its own time set topics, and takes the house's", () => {
+  const house = {...config, timesFrom: "house" as const};
+  const startup = publishRoom(undefined, {lighting: {kind: "startup"}}, house, now).outputs;
+  const published = startup.filter(({payload}) => payload !== "").map(({topic}) => topic);
+  const cleared = startup.filter(({payload}) => payload === "").map(({topic}) => topic);
+  assert.ok(!published.some((topic) => /wake|bed/.test(topic)), published.join());
+  assert.deepEqual(cleared, [
+    "homeassistant/time/kitchen_wake_time/config",
+    "homeassistant/time/kitchen_bed_time/config",
+    "home/kitchen/wake-time/state",
+    "home/kitchen/bed-time/state"
+  ]);
+  // Its own set topic is not read.
+  const own = publishRoom(undefined, {topic: "home/kitchen/wake-time/set", payload: "05:00:00"}, house, now);
+  assert.deepEqual(own.state.schedule, {wakeTime: "07:00", bedTime: "23:00"});
+  // The house's message is.
+  const fromHouse = publishRoom(undefined, {lighting: {kind: "schedule", wakeTime: "06:00", bedTime: "22:00"}}, house, now);
+  assert.deepEqual(fromHouse.state.schedule, {wakeTime: "06:00", bedTime: "22:00"});
+  assert.ok(!fromHouse.outputs.some(({topic}) => /wake|bed/.test(String(topic))), "and no time state is published for it");
+  // A room on its own times is as before.
+  assert.ok(publishRoom(undefined, {lighting: {kind: "startup"}}, config, now).outputs.some(({topic}) => topic === "home/kitchen/wake-time/state"));
+});

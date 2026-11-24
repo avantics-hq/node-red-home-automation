@@ -115,3 +115,12 @@ test("the contract editor asks for an area only where the runtime needs one", ()
   assert.equal(valid("", {discovery: false, baseTopic: "", idScheme: "node"}), false, "the default base topic needs it");
   assert.equal(valid("!!!", {discovery: false, baseTopic: "x", idScheme: "node"}), false);
 });
+
+test("a house schedule starts with publishing off and names itself after the node; rooms default to their own times", () => {
+  const house = editorDefinition("house-schedule.html");
+  assert.deepEqual([house.defaults.publishState?.value, house.defaults.discovery?.value, house.defaults.houseName?.value], [false, false, "house"]);
+  const node: Record<string, unknown> = {};
+  house.onadd!.call(node);
+  assert.equal(node.idScheme, "node");
+  assert.equal(editorDefinition("room-controller.html").defaults.timesFrom?.value, null, "not set: the room's own times");
+});
