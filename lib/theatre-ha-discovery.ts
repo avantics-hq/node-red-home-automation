@@ -12,6 +12,9 @@ export type TheatreTopicName =
   | "desired"
   | "current"
   | "phase"
+  // When the latest transition started and finished, and which targets it
+  // left degraded.
+  | "transition"
   // The node's own availability, online or offline, for Home Assistant.
   | "availability"
   // The theatre's readiness: unknown, available, degraded or unavailable.
@@ -78,6 +81,7 @@ function theatreEntries(config: TheatreDiscoveryConfig) {
         name: "Phase",
         icon: "mdi:state-machine",
         state_topic: theatreTopic(baseTopic, "phase"),
+        json_attributes_topic: theatreTopic(baseTopic, "transition"),
         device: controllerDevice
       }
     },

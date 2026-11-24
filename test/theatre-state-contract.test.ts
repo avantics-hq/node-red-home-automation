@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   normaliseStateContractConfig,
+  theatreRetainedTopics,
+  theatreStoppingPublications,
   transitionTheatreStateContract,
   type TheatreStateContractConfig,
   type TheatreStateContractState,
@@ -170,7 +172,7 @@ test("controller snapshots publish retained desired, current, phase, failure and
     theatre: snapshot()
   }, config, at(2));
 
-  assert.equal(result.publications.length, 13);
+  assert.equal(result.publications.length, 14);
   assert.equal(result.publications.every(({retain}) => retain), true);
   const byTopic = Object.fromEntries(result.publications.map(({topic, payload}) => [topic, payload]));
   assert.deepEqual(JSON.parse(byTopic["home/lounge/theatre/desired"]!), {
@@ -253,4 +255,45 @@ test("the area is needed for discovery or the default base topic, and optional o
   const topicOnly = normaliseStateContractConfig({...noArea, discovery: false, baseTopic: "media/theatre"});
   assert.equal(topicOnly.area, "");
   assert.equal(topicOnly.baseTopic, "media/theatre");
+});
+
+test("the retained topic list covers everything the contract publishes", () => {
+  const listed = new Set(theatreRetainedTopics(config));
+  const startup = transitionTheatreStateContract(undefined, {theatreStateContract: {kind: "startup"}}, config, at(0));
+  const requested = request(startup.state, {requestId: "request-1", activity: "tv_streamer"});
+  const published = [...startup.publications, ...requested.publications, ...theatreStoppingPublications(config)].map(({topic}) => topic);
+  for (const topic of published) assert.ok(listed.has(topic), topic);
+  for (const target of ["display", "avr", "source", "lighting", "backlighting"]) {
+    assert.ok(listed.has(`home/lounge/theatre/health/${target}`), target);
+  }
+  assert.ok(listed.has("home/lounge/theatre/transition"));
+});
+
+test("the transition's timing and degraded targets reach Home Assistant as the Phase sensor's attributes", () => {
+  const started = at(0).toISOString();
+  const completed = at(9).toISOString();
+  const result = transitionTheatreStateContract(undefined, {
+    theatre: snapshot({
+      phase: "ready",
+      transitionStartedAt: started,
+      transitionCompletedAt: completed,
+      degraded: [{target: "source", reason: "unconfirmed"}]
+    })
+  }, config, at(10));
+  const transition = result.publications.find(({topic}) => topic === "home/lounge/theatre/transition");
+  assert.deepEqual(transition && JSON.parse(transition.payload), {
+    startedAt: started,
+    completedAt: completed,
+    degraded: [{target: "source", reason: "unconfirmed"}]
+  });
+  assert.equal(transition?.retain, true);
+  // A snapshot from a controller without these fields publishes empty details.
+  const older = transitionTheatreStateContract(undefined, {
+    theatre: {...snapshot(), transitionStartedAt: undefined, transitionCompletedAt: undefined, degraded: undefined}
+  } as never, config, at(10)).publications.find(({topic}) => topic === "home/lounge/theatre/transition");
+  assert.deepEqual(older && JSON.parse(older.payload), {startedAt: null, completedAt: null, degraded: []});
+
+  const startup = transitionTheatreStateContract(undefined, {theatreStateContract: {kind: "startup"}}, config, at(0)).publications;
+  const phase = startup.find(({topic}) => topic.includes("_theatre_phase/config"));
+  assert.equal(phase && JSON.parse(phase.payload).json_attributes_topic, "home/lounge/theatre/transition");
 });
