@@ -27,6 +27,7 @@ import {
 } from "../lib/avr-publishing";
 import {ID_SCHEMES, discoveryPrefixSetting} from "../lib/ha-discovery";
 import {publishingArea} from "../lib/topic-names";
+import {publishesState} from "../lib/publishing-node";
 import {publishingLifecycle} from "./publishing-lifecycle";
 
 interface AvrControllerConfig extends NodeDef {
@@ -121,6 +122,7 @@ const registerAvrController: NodeInitializer = (RED) => {
     // left behind when deleted.
     const lifecycle = publishingLifecycle(RED, node, {
       retainedTopics: () => avrRetainedTopics(publishing),
+      possible: {owner: publishing, topics: () => publishesState(publishing) ? avrRetainedTopics({...publishing, publishState: true, discovery: true}) : []},
       starting: () => avrStartingOutputs(publishing, observed()),
       stopping: () => avrStoppingOutputs(publishing),
       output: 2,

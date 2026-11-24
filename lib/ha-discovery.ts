@@ -67,6 +67,22 @@ export function discoveryDevice(owner: DiscoveryOwner, kind: string): {identifie
   return {identifiers: [owner.idScheme === "node" ? nodeKey(owner.nodeId ?? "") : `nodered_${areaId(owner.area)}_${kind}`]};
 }
 
+// Of the given topics, the discovery topics named after this node itself:
+// under the "node" scheme, those whose object ID is nrha_<node ID>_<entity>
+// (the key ends in "_", and the IDs Node-RED makes never contain one: hex
+// digits, joined with "-" for a node in a subflow, so one node's key can't
+// prefix another's; only an ID written by hand with "_" could). Under
+// "area" none are, since another node may share the area, so a node can
+// clear these without ever touching another node's topics.
+export function ownDiscoveryTopics(owner: DiscoveryOwner, topics: readonly string[]): string[] {
+  if (owner.idScheme !== "node" || !owner.nodeId) return [];
+  const key = nodeKey(owner.nodeId) + "_";
+  return topics.filter((topic) => {
+    const parts = topic.split("/");
+    return topic.startsWith(owner.discoveryPrefix + "/") && parts.at(-1) === "config" && (parts.at(-2) ?? "").startsWith(key);
+  });
+}
+
 // An entity's discovery topic and IDs: the topic's object ID and the unique
 // ID are <area ID>_<entity> under "area" and nrha_<node ID>_<entity> under
 // "node". The entity ID Home Assistant first gives it comes from the area

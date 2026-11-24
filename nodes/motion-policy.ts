@@ -21,6 +21,7 @@ import {ID_SCHEMES, discoveryPrefixSetting} from "../lib/ha-discovery";
 import {optionalBooleanSetting, optionalChoiceSetting} from "../lib/settings";
 import {publishingArea} from "../lib/topic-names";
 import {guarded, invalidConfig, onInput, optionalArea, runReducer, type Send} from "./adapter";
+import {publishesState} from "../lib/publishing-node";
 import {publishingLifecycle} from "./publishing-lifecycle";
 
 interface MotionPolicyConfig extends NodeDef {
@@ -101,6 +102,7 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
     // stops; nothing left behind when deleted.
     const lifecycle = publishingLifecycle(RED, node, {
       retainedTopics: () => motionRetainedTopics(publishing),
+      possible: {owner: publishing, topics: () => publishesState(publishing) ? motionRetainedTopics({...publishing, publishState: true, discovery: true}) : []},
       starting: () => motionStartingOutputs(publishing, savedPolicyState()),
       stopping: () => motionStoppingOutputs(publishing),
       output: 1,
