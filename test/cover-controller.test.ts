@@ -481,3 +481,30 @@ test("still: a request for where the cover already is, a cover that never moves,
   restarted = observe(restarted.state, 100, 4);
   assert.equal(restarted.state.phase, "ready");
 });
+
+test("a cover that reports once on arrival, and doesn't answer polls, is confirmed settleMs later", () => {
+  let result = observe(undefined, 0, 0);
+  result = setPosition(result.state, 100, 1, 1);
+  // Polls go unanswered: ticks only, until one report at the target.
+  result = apply(result.state, {kind: "tick", generation: 1}, 6);
+  assert.equal(result.state.phase, "moving");
+  result = observe(result.state, 100, 10);
+  assert.equal(result.traces.at(-1)?.reason, "awaiting-settle");
+  assert.ok(result.state.pending!.nextAt <= at(15).getTime(), "the next tick comes when it would settle");
+  result = apply(result.state, {kind: "tick", generation: 1}, 12);
+  assert.equal(result.state.phase, "moving", "not yet settleMs");
+  result = apply(result.state, {kind: "tick", generation: 1}, 15);
+  assert.equal(result.state.phase, "ready");
+  assert.equal(result.traces.find(({event}) => event === "tick")?.reason, "held-at-target");
+  assert.ok(!result.traces.some(({reason}) => reason === "travel-timeout"));
+  // Past the travel timeout it is still ready, not failed.
+  result = apply(result.state, {kind: "tick", generation: 1}, 40);
+  assert.equal(result.state.phase, "ready");
+
+  // An echo followed by travel still waits: the travel resets the hold.
+  let echoed = setPosition(observe(undefined, 0, 0).state, 100, 1, 1);
+  echoed = observe(echoed.state, 100, 1.1);
+  echoed = observe(echoed.state, 40, 4);
+  echoed = apply(echoed.state, {kind: "tick", generation: 1}, 7);
+  assert.equal(echoed.state.phase, "moving", "not settled on the echo");
+});

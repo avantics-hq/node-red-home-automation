@@ -429,6 +429,9 @@ export function transitionCover(
       if (within && !moving && (pending.operation !== "set_position" || settled)) {
         ready(target);
       } else if (within && !moving) {
+        // Settled once it holds here for settleMs, with or without another
+        // report: the tick then confirms it (see settledAtTarget).
+        pending.nextAt = Math.min(pending.nextAt, (pending.stableSince ?? observedAt) + config.settleMs);
         trace("observation", "accepted", "awaiting-settle", {position, motion});
       } else if (pending.verifying && !moving) {
         latchManual("moved-while-offline", target, position);
@@ -460,6 +463,18 @@ export function transitionCover(
     }
   }
 
+  // A set_position move whose last report is at the target, not moving, and
+  // has held there for settleMs. Travel reports after an echo reset the
+  // hold, so an echo alone settles only if nothing follows it for settleMs.
+  function settledAtTarget(): boolean {
+    const pending = state.pending;
+    const observed = state.observed;
+    if (!pending || pending.operation !== "set_position" || !observed || state.desired?.position === null || state.desired?.position === undefined) return false;
+    if (observed.motion === "opening" || observed.motion === "closing") return false;
+    if (pending.stableSince === null || pending.stablePosition !== observed.position) return false;
+    return Math.abs(observed.position - state.desired.position) <= config.positionTolerance && nowMs - pending.stableSince >= config.settleMs;
+  }
+
   function latchManual(reason: string | null, expected: number, observed: number) {
     state.pending = null;
     state.classification = "manual_override";
@@ -483,6 +498,11 @@ export function transitionCover(
   } else if (event.kind === "tick") {
     if (!state.desired || event.generation !== state.generation || !state.pending) {
       trace("tick", "ignored", "stale-generation");
+    } else if (settledAtTarget()) {
+      // At the target for settleMs, with no newer report: a cover that
+      // reports once on arrival, and doesn't answer polls, is done too.
+      trace("tick", "settled", "held-at-target", {position: state.observed!.position});
+      ready(state.desired.position!);
     } else if (nowMs >= state.pending.deadlineAt) {
       retryOrFail(state.pending.operation === "observe" ? "confirmation-timeout" : "travel-timeout");
     } else if (nowMs >= state.pending.nextAt) {

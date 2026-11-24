@@ -109,9 +109,10 @@
   <p>Owns one position cover: a blind, shutter or curtain motor that takes and reports a position from 0 (closed) to
     100 (open). It sends a move, confirms it from what the cover reports, retries a bounded number of times, and
     leaves a cover a person moved where they put it. A move is confirmed only once the cover has stopped at the
-    target: a <code>stopped</code> motion report, or the same position for the <b>Settle time</b>. A transport that
-    echoes the requested position as soon as the command goes doesn't end the move, or make the travel after it look
-    like a person's.</p>
+    target: a <code>stopped</code> motion report, or the same position for the <b>Settle time</b>, with or without
+    another report. A transport that echoes the requested position as soon as the command goes doesn't end the move,
+    or make the travel after it look like a person's, as long as the <b>Settle time</b> is at least how often the
+    motor reports while it travels.</p>
   <h3>Inputs</h3>
   <dl class="message-properties">
     <dt>payload</dt><dd><code>"open"</code>, <code>"close"</code> or <code>"stop"</code>; a position from 0 to 100;

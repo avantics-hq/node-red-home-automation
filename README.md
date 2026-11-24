@@ -136,8 +136,11 @@ that takes and reports a position from 0 (closed) to 100 (open). Send it
 `partial`. It confirms a move from what the cover reports, retries a bounded
 number of times, and leaves a cover a person moved where they put it. A move is
 confirmed only once the cover has stopped at the target, from a `stopped`
-motion report or the same position for the settle time, so a transport that
-echoes the requested position at once doesn't end the move early. An
+motion report or the same position for the settle time (with or without
+another report), so a transport that echoes the requested position at once
+doesn't end the move early. Set the settle time to at least how often the
+motor reports while it travels: otherwise an echo can be confirmed before the
+first travel report arrives. An
 automatic target, such as a position computed from the weather, sets
 `msg.respectManual = true` so it waits while a person's move holds; a target
 the cover is already at is confirmed without a command. A button can send
