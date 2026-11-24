@@ -3,7 +3,7 @@
 import type {Node, NodeDef, NodeInitializer} from "node-red";
 import {COVER_TYPES, openCloseCover, positionCover, type CoverModel} from "../lib/cover-models";
 import {coverPresets, coverRequest, type CoverPresets} from "../lib/cover-requests";
-import {textSetting} from "../lib/settings";
+import {optionalChoiceSetting} from "../lib/settings";
 import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
 
 interface CoverControllerConfig extends NodeDef {
@@ -36,8 +36,7 @@ const registerCoverController: NodeInitializer = (RED) => {
     try {
       area = optionalArea(config);
       // Not set: a position cover, as every cover node was before the type.
-      const type = config.coverType === undefined || config.coverType === null ? "position" : textSetting(config.coverType, "cover type");
-      if (!(COVER_TYPES as readonly string[]).includes(type)) throw new Error("cover type must be position or open-close");
+      const type = optionalChoiceSetting(config.coverType, "cover type", COVER_TYPES) ?? "position";
       model = type === "open-close" ? openCloseCover(config as unknown as Record<string, unknown>) : positionCover(config as unknown as Record<string, unknown>);
       presets = coverPresets(config.presets);
     } catch (error) {
