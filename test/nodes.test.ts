@@ -1962,3 +1962,20 @@ test("cover node: a button stops a moving cover, and an offline cover rejects re
   const back = await receive<SendEnvelope>(node, {cover: {kind: "availability", online: true}});
   assert.equal((back[0]?.[0]?.[0] as {cover_command?: {operation: string}} | undefined)?.cover_command?.operation, "observe");
 });
+
+test("cover node: an open/close-only cover takes open, close and stop, not positions", async (t) => {
+  const node = new (runtime(registerCover).Constructor)({coverType: "open-close", travelMs: 20000});
+  t.after(() => close(node));
+  assert.deepEqual(node.errors, []);
+  const opened = await receive<SendEnvelope>(node, {payload: "open"});
+  assert.equal((opened[0]?.[0]?.[0] as {cover_command?: {operation: string}} | undefined)?.cover_command?.operation, "open");
+  assert.deepEqual(opened[0]?.[2], {topic: "moving", payload: true});
+  assert.deepEqual(await receive(node, {payload: 40}), []);
+  assert.equal(traces(node).at(-1)?.reason, "position-not-supported");
+  const ended = await receive<SendEnvelope>(node, {cover: {kind: "observed", state: "open", motion: "stopped", observedAt: new Date().toISOString()}});
+  const theatre = (ended[0]?.[1]?.[0] as {theatre?: {status: string; details: {state: string; evidence: string}}} | undefined)?.theatre;
+  assert.deepEqual([theatre?.status, theatre?.details.state, theatre?.details.evidence], ["ready", "open", "reported"]);
+  assert.deepEqual(ended[0]?.[2], {topic: "moving", payload: false});
+  const bad = new (runtime(registerCover).Constructor)({coverType: "curtain"});
+  assert.deepEqual(bad.errors.map(String), ["invalid configuration: cover type must be position or open-close"]);
+});
