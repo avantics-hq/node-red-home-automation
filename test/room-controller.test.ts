@@ -259,7 +259,7 @@ test("a stale state report does not undo the controller's own command in flight"
   assert.equal(result.state.desired.cooking, false);
 });
 
-test("an own command echo still marks only one matching external command as own", () => {
+test("an own command echo seen twice in the echo window is ours; after it, someone else's", () => {
   let result = publishRoom(undefined, {
     lighting: {kind: "intent", targets: ["cooking"], state: "OFF", source: "wall"}
   }, config, now);
@@ -267,6 +267,8 @@ test("an own command echo still marks only one matching external command as own"
   result = publishRoom(result.state, echo, config, later(100));
   assert.equal(result.traces.length, 0);
   result = publishRoom(result.state, echo, config, later(200));
+  assert.equal(result.traces.length, 0, "a repeat of our own echo");
+  result = publishRoom(result.state, echo, config, later(6000));
   assert.equal(result.traces.at(-1)?.event, "external-command");
 });
 
@@ -935,4 +937,36 @@ test("someone else's bare ON is still restyled, once per echo window", () => {
     lighting: {kind: "command-observed", target: "cooking"}}, config, new Date(now.getTime() + 6000));
   assert.deepEqual(again.outputs.filter((output) => output.lighting_command).map((output) => output.lighting_command!.source), ["external-bare-on"],
     "after the window, restyled again");
+});
+
+test("echo orderings never turn our own command into a manual light", () => {
+  const send = () => publishRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, now);
+  const seen = (state: RoomState, payload: unknown, ms: number) => publishRoom(state, {
+    topic: "home/kitchen/light/group/cooking/set", payload, lighting: {kind: "command-observed", target: "cooking"}
+  }, config, later(ms));
+  const ours = (result: ReturnType<typeof publishRoom>) => result.outputs.find((output) => output.lighting_command)!.payload;
+  const control = (result: ReturnType<typeof publishRoom>) => result.status.control.cooking;
+
+  // A person's bare ON between our styled ON and its echo, then our echo.
+  let result = send();
+  const styled = ours(result);
+  result = seen(result.state, {state: "ON"}, 50);
+  result = seen(result.state, styled, 100);
+  assert.equal(control(result), "in-control", "a race with a person's bare ON");
+  assert.deepEqual(result.outputs.filter((output) => output.lighting_command), []);
+
+  // Our exact echo delivered twice.
+  result = send();
+  result = seen(result.state, styled, 50);
+  result = seen(result.state, styled, 100);
+  assert.equal(control(result), "in-control", "our echo twice");
+
+  // The light confirms first, then a bare ON, then our echo.
+  result = send();
+  result = publishRoom(result.state, {topic: "home/kitchen/light/group/cooking", payload: {state: "ON", brightness: 200},
+    lighting: {kind: "observed"}}, config, later(30));
+  assert.equal(result.state.expected.cooking?.[0]?.on, undefined, "confirmed");
+  result = seen(result.state, {state: "ON"}, 50);
+  result = seen(result.state, styled, 100);
+  assert.equal(control(result), "in-control", "echo after its state report, with a bare ON between");
 });

@@ -41,13 +41,7 @@ The nodes come in four groups. Each group has an importable example flow
 Motion, presence, illuminance and wall switches drive one room's lights, with
 circadian styling and manual ownership. Wire occupancy fusion into the motion
 policy, wall switches into the switch policy, and both policies into the room
-controller. Wire the room controller's commands to MQTT out unchanged: it watches
-each light's command topic to tell its own commands from other people's, so a
-function that rewrites them on the way makes its commands look like someone
-else's. It recognises its own command cut down to the power state alone, and
-restyles a light after someone else's bare ON at most once every 5 seconds, so it
-never answers itself in a loop, but other rewrites can still be misread. Observe
-commands and state as they are wired. The room controller keeps a light a person set after the room went
+controller. The room controller keeps a light a person set after the room went
 vacant, so motion doesn't switch it straight off. Without a Node-RED context
 store, a motion node that restarts or is redeployed doesn't know whether the
 room is occupied, so it counts the room as vacant from then: someone sitting
@@ -59,6 +53,17 @@ levels follow the room controller's wake and bed times (default 07:00 and
 day, and wind down to the sleep settings over the three hours before bed. Times
 are the Node-RED host's local time.
 Example: [`Room lighting.json`](https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/Room%20lighting.json).
+
+Wire the room controller's commands to MQTT out unchanged, and observe commands
+and state as they are wired. The controller watches each light's command topic
+to tell its own commands from other people's, so a function that rewrites them
+on the way makes them look like someone else's. To stop that becoming a loop, a
+bare ON or OFF that arrives within 5 seconds of one of its own commands with that
+power, before that command has come back on the topic, is taken as that command,
+and the controller restyles a light after someone else's bare ON at most once
+every 5 seconds. A person's bare ON or OFF in that moment is taken as the
+controller's own, which changes nothing, as the light is already being set that
+way; other rewrites can still be misread.
 
 | Node | Purpose |
 |---|---|

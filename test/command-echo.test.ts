@@ -19,16 +19,19 @@ test("remembered commands expire and the queue stays bounded", () => {
   assert.equal(queue.length, ECHO_QUEUE_LIMIT);
 });
 
-test("our own echo is recognised once; someone else's is not", () => {
+test("our own echo is ours, as is a repeat of it in the echo window; someone else's is not", () => {
   const sent = rememberCommand(rememberCommand(undefined, {brightness: 10}, 0), {state: "ON"}, 0);
   const valueEcho = checkCommandEcho(sent, {brightness: 10}, 100);
   assert.equal(valueEcho.own, true);
-  assert.equal(valueEcho.queue.length, 1, "a value command is done once echoed");
+  assert.equal(valueEcho.queue.length, 2, "an echoed command is kept until it expires");
   const powerEcho = checkCommandEcho(valueEcho.queue, {state: "ON"}, 100);
   assert.equal(powerEcho.own, true);
-  assert.equal(powerEcho.queue[0]!.echoed, true, "a power command stays in flight until a state report");
-  assert.equal(checkCommandEcho(powerEcho.queue, {state: "ON"}, 200).own, false, "a second identical command is someone else's");
+  assert.equal(powerEcho.queue[1]!.echoed, true, "a power command stays in flight until a state report");
+  // Delivered twice (two subscriptions, a QoS redelivery): still ours.
+  assert.deepEqual([checkCommandEcho(powerEcho.queue, {state: "ON"}, 200).own, checkCommandEcho(powerEcho.queue, {brightness: 10}, 200).own], [true, true]);
+  assert.equal(checkCommandEcho(powerEcho.queue, {state: "ON"}, ECHO_WINDOW_MS + 1).own, false, "after the window it is someone else's");
   assert.equal(checkCommandEcho(sent, {state: "OFF"}, 100).own, false);
+  assert.equal(checkCommandEcho(sent, {brightness: 20}, 100).own, false);
 });
 
 test("a state report confirms our command, is stale against it, or is someone else's change", () => {
@@ -38,8 +41,8 @@ test("a state report confirms our command, is stale against it, or is someone el
   assert.equal(stale.queue.length, 1, "the command is still pending");
   const confirms = checkStateReport(sent, true, 100);
   assert.equal(confirms.verdict, "confirms");
-  assert.deepEqual(confirms.queue, [], "a confirmed command is cleared");
-  assert.deepEqual(checkStateReport(confirms.queue, false, 200), {queue: [], verdict: "external"});
+  assert.equal(confirms.queue[0]!.on, undefined, "a confirmed command is no longer pending");
+  assert.equal(checkStateReport(confirms.queue, false, 200).verdict, "external");
   // Only power commands count: a pending value command is not a power command.
   assert.equal(checkStateReport(rememberCommand(undefined, {brightness: 10}, 0), true, 100).verdict, "external");
   // The input queue is not changed.

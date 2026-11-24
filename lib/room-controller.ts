@@ -143,7 +143,7 @@ export function createRoomState(
       ? saved.untold.filter((id) => config.targets.some((target) => target.id === id))
       : [],
     restyledAt: Object.fromEntries(Object.entries(saved.restyledAt || {})
-      .filter(([, at]) => Number.isFinite(at)))
+      .filter(([target, at]) => Number.isFinite(at) && config.targets.some((entry) => entry.id === target)))
   };
 }
 
