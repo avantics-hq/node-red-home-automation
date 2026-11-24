@@ -52,6 +52,8 @@ export interface OpenCloseState {
     deadlineAt: number;
     // When it was first reported moving the requested way.
     movingSince: number | null;
+    // Whether it has reported anything since this request was first sent.
+    reported: boolean;
   } | null;
   failure: {reason: string; occurredAt: string} | null;
   classification: "manual_override" | null;
@@ -117,7 +119,9 @@ export function transitionOpenCloseCover(
 
   function issue(operation: OpenCloseOperation, attempt: number) {
     commands.push({operation, requestId: state.desired?.requestId ?? null, generation: state.generation, attempt});
-    state.pending = {operation, attempt, issuedAt: nowMs, deadlineAt: nowMs + config.travelMs + config.marginMs, movingSince: null};
+    // A retry of the same request keeps what was heard since it was first sent.
+    const reported = attempt > 1 && state.pending?.operation === operation ? state.pending.reported : false;
+    state.pending = {operation, attempt, issuedAt: nowMs, deadlineAt: nowMs + config.travelMs + config.marginMs, movingSince: null, reported};
     state.phase = operation === "stop" ? "stopping" : operation === "observe" ? "confirming" : "moving";
     trace("command", "emitted", null, {operation, attempt});
   }
@@ -198,6 +202,7 @@ export function transitionOpenCloseCover(
       if (event.motion !== undefined) state.motion = event.motion;
       const pending = state.pending;
       const operation = state.desired?.operation;
+      if (pending && bounded.ms >= pending.issuedAt) pending.reported = true;
       if (pending && bounded.ms < pending.issuedAt) {
         trace("observation", "ignored", "stale-observation");
       } else if (pending && (operation === "open" || operation === "close")) {
@@ -214,6 +219,10 @@ export function transitionOpenCloseCover(
       } else if (pending && operation === "stop") {
         if (event.state !== undefined) settle(event.state, "reported", null);
         else if (event.motion === "stopped") settle("stopped", null, null);
+      } else if (event.state !== undefined && (state.phase === "unconfirmed" || state.phase === "failed") &&
+        state.desired && state.desired.operation !== "stop" && event.state === target(state.desired.operation)) {
+        // A late report of the end the request asked for settles it after all.
+        settle(event.state, "reported", "late-report");
       } else if (event.state !== undefined) {
         // Not ours: an end state reported while nothing was asked.
         state.position = event.state;
@@ -237,8 +246,8 @@ export function transitionOpenCloseCover(
         // Nothing it reported settles it. Without any reports, that is all we
         // can know, so it is unconfirmed rather than failed.
         state.pending = null;
-        state.phase = state.reports ? "failed" : "unconfirmed";
-        state.failure = {reason: state.reports ? "no-confirmation" : "no-reports", occurredAt: now.toISOString()};
+        state.phase = pending.reported ? "failed" : "unconfirmed";
+        state.failure = {reason: pending.reported ? "no-confirmation" : "no-reports", occurredAt: now.toISOString()};
         trace("cover", state.phase, state.failure.reason, {operation: pending.operation});
       }
     }

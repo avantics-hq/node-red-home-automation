@@ -86,3 +86,30 @@ test("a restart reads the cover again rather than trusting what it reported", ()
   const restarted = apply(result.state, {kind: "startup"}, 100);
   assert.deepEqual([restarted.commands.map(({operation}) => operation), restarted.state.position], [["observe"], "unknown"]);
 });
+
+test("unconfirmed means nothing was heard since this request, whatever it said before", () => {
+  // It reported before the request, then went quiet: unconfirmed, not failed.
+  let result = report(undefined, 0, {motion: "stopped"});
+  result = request(result.state, "open", 1, 1);
+  result = apply(result.state, {kind: "tick", generation: 1}, 27);
+  result = apply(result.state, {kind: "tick", generation: 1}, 53);
+  assert.deepEqual([result.state.phase, result.state.failure?.reason], ["unconfirmed", "no-reports"]);
+  // A report after the first attempt still counts for the retry.
+  let heard = request(undefined, "open", 1, 0);
+  heard = report(heard.state, 1, {motion: "stopped"});
+  heard = apply(heard.state, {kind: "tick", generation: 1}, 26);
+  heard = apply(heard.state, {kind: "tick", generation: 1}, 52);
+  assert.deepEqual([heard.state.phase, heard.state.failure?.reason], ["failed", "no-confirmation"]);
+});
+
+test("a late report of the requested end settles an unconfirmed request", () => {
+  let result = request(undefined, "close", 1, 0);
+  result = apply(result.state, {kind: "tick", generation: 1}, 26);
+  result = apply(result.state, {kind: "tick", generation: 1}, 52);
+  assert.equal(result.state.phase, "unconfirmed");
+  const late = report(result.state, 60, {state: "closed"});
+  assert.deepEqual([late.state.phase, late.state.position, late.state.evidence, late.state.failure], ["ready", "closed", "reported", null]);
+  // The other end is still just what it reports, not a confirmation.
+  const other = report(result.state, 60, {state: "open"});
+  assert.deepEqual([other.state.phase, other.state.position], ["unconfirmed", "open"]);
+});
