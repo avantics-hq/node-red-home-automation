@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {normaliseAvrConfig} from "../lib/avr-controller";
 import {normaliseConfig as normaliseDisplayConfig} from "../lib/display-mode-controller";
-import {booleanSetting, jsonSetting, numberSetting, optionalBooleanSetting, optionalChoiceSetting, textSetting} from "../lib/settings";
+import {booleanSetting, jsonSetting, keptOverride, numberSetting, optionalBooleanSetting, optionalChoiceSetting, textSetting} from "../lib/settings";
 import {normaliseConfig as normaliseSourceConfig} from "../lib/source-capability-controller";
 
 test("a number setting is a number, or its default only when absent from an older saved flow", () => {
@@ -85,4 +85,13 @@ test("choice settings: absent or null is not set; one of the choices is kept; an
   for (const value of ["", "Node", 1]) {
     assert.throws(() => optionalChoiceSetting(value, "ID scheme", schemes), /^Error: ID scheme must be area or node$/, JSON.stringify(value));
   }
+});
+
+test("a runtime value lasts until the setting it was based on changes", () => {
+  assert.equal(keptOverride(300, 120, 120), 300, "same setting: kept");
+  assert.equal(keptOverride(300, 120, 600), 600, "setting changed: the setting");
+  assert.equal(keptOverride(300, undefined, 120), 120, "saved before the rule: the setting");
+  assert.equal(keptOverride(undefined, 120, 120), 120, "nothing saved");
+  assert.equal(keptOverride("05:30", "07:00", "07:00"), "05:30");
+  assert.equal(keptOverride(530, "07:00", "07:00"), "07:00", "not the setting's kind of value");
 });

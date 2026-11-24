@@ -1,7 +1,7 @@
 "use strict";
 
 import type {TraceEntry} from "./bounded-trace";
-import {jsonSetting, numberSetting} from "./settings";
+import {jsonSetting, keptOverride, numberSetting} from "./settings";
 
 // Motion handles occupancy, illuminance and whether it is enabled. Wall
 // switches belong to the switch policy; the room controller keeps motion from
@@ -97,15 +97,8 @@ export function createMotionState(
   return {
     areaEnabled: saved.areaEnabled !== false,
     illuminance: saved.illuminance ?? null,
-    // A saved value stands only while the setting it was based on is
-    // unchanged; state saved before this rule recorded none, so the setting
-    // applies.
-    illuminanceCutoff: saved.illuminanceCutoffSetting === config.defaultIlluminanceCutoff && saved.illuminanceCutoff !== undefined
-      ? saved.illuminanceCutoff
-      : config.defaultIlluminanceCutoff,
-    delaySeconds: saved.delaySecondsSetting === config.defaultDelaySeconds && saved.delaySeconds !== undefined
-      ? saved.delaySeconds
-      : config.defaultDelaySeconds,
+    illuminanceCutoff: keptOverride(saved.illuminanceCutoff, saved.illuminanceCutoffSetting, config.defaultIlluminanceCutoff),
+    delaySeconds: keptOverride(saved.delaySeconds, saved.delaySecondsSetting, config.defaultDelaySeconds),
     illuminanceCutoffSetting: config.defaultIlluminanceCutoff,
     delaySecondsSetting: config.defaultDelaySeconds,
     offTimerGeneration: Number(saved.offTimerGeneration) || 0,
