@@ -243,8 +243,11 @@ display, AVR, source, and backlighting evidence matches exactly one configured
 profile. With missing or ambiguous startup evidence the activity is unknown,
 and nothing is commanded until the next request: a redeploy or restart, which
 starts the controller with nothing saved unless a context store is configured,
-never switches a running activity off. (Earlier versions ran a configured Off
-activity here; that setting is gone, and a saved value is ignored.)
+never switches a running activity off. While it is unknown, the theatre's
+phase shows `idle` (the controller isn't working on anything) and its current
+activity `unknown` until the next request, even if something is playing.
+(Earlier versions ran a configured Off activity here; that setting is gone,
+and a saved value is ignored.)
 
 ## Recommended setup: a file context store
 

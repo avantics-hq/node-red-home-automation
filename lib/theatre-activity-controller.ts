@@ -433,7 +433,7 @@ export function transitionTheatre(
     }
   }
 
-  function acceptIntent(event: Extract<TheatreInputEvent, {kind: "intent"}>, internal = false) {
+  function acceptIntent(event: Extract<TheatreInputEvent, {kind: "intent"}>) {
     if (typeof event.requestId !== "string" || !event.requestId) {
       throw new Error("theatre requestId is required");
     }
@@ -452,7 +452,7 @@ export function transitionTheatre(
     // already taken (for example by a recovery) gets the next free one.
     let generation = event.generation;
     const taken = generation < state.generation || (generation === state.generation && state.desired !== null);
-    if (taken && !internal && state.desired?.requestId !== event.requestId &&
+    if (taken && state.desired?.requestId !== event.requestId &&
       event.generation > state.lastProposedGeneration) {
       generation = state.generation + 1;
       trace("intent", "reassigned", "generation-taken", {requestId: event.requestId, proposed: event.generation, assigned: generation});
@@ -494,7 +494,7 @@ export function transitionTheatre(
       requestedAt
     };
     state.generation = generation;
-    if (!internal) state.lastProposedGeneration = Math.max(state.lastProposedGeneration, event.generation);
+    state.lastProposedGeneration = Math.max(state.lastProposedGeneration, event.generation);
     state.phase = "preparing";
     state.currentActivity = "unknown";
     state.targets = emptyTargets();
