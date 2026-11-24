@@ -13,8 +13,10 @@ const callbacks = new WeakMap<Events, Set<() => void>>();
 
 // Calls `callback` every time the flows start, until the returned function
 // is called. Callbacks run in the order they were added; one added or
-// removed while they run takes effect from the next start.
-export function onFlowsStarted(events: Events, callback: () => void): () => void {
+// removed while they run takes effect from the next start. Each runs on its
+// own: an error goes to `report` (the registering node's error), so it can
+// neither stop the others nor escape Node-RED's emit of "flows:started".
+export function onFlowsStarted(events: Events, callback: () => void, report: (error: unknown) => void): () => void {
   let waiting = callbacks.get(events);
   if (!waiting) {
     const created = new Set<() => void>();
@@ -24,7 +26,17 @@ export function onFlowsStarted(events: Events, callback: () => void): () => void
       for (const run of [...created]) run();
     });
   }
-  const own = () => callback();
+  const own = () => {
+    try {
+      callback();
+    } catch (error) {
+      try {
+        report(error);
+      } catch {
+        // Reporting failed too: nothing more can be done here.
+      }
+    }
+  };
   waiting.add(own);
   return () => {
     waiting.delete(own);

@@ -79,7 +79,7 @@ export function whenFlowsStarted(RED: NodeAPI, node: Node, action: () => void): 
   const stop = onFlowsStarted(RED.events, () => {
     stop();
     run();
-  });
+  }, (error) => node.error(error));
   node.on("close", stop);
 }
 
@@ -138,5 +138,5 @@ export function wasDeleted(RED: NodeAPI, node: Node, removed: boolean): boolean 
 // nodes (a room added, say) starts the flows again without restarting this
 // one. Stops when the node closes. The action must be safe to repeat.
 export function onEveryFlowsStarted(RED: NodeAPI, node: Node, action: () => void): void {
-  node.on("close", onFlowsStarted(RED.events, guarded(node, action)));
+  node.on("close", onFlowsStarted(RED.events, guarded(node, action), (error) => node.error(error)));
 }
