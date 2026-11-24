@@ -92,9 +92,11 @@ const registerActivityLightingController: NodeInitializer = (RED) => {
       return result;
     }
 
-    // Context survives a redeploy but timers do not. Recover a pending
-    // transition with the reducer's own startup (re-observe, never replay)
-    // rather than ticking old state; a later startup from the flow repeats it.
+    // A pending transition is here only if the node's context survived its
+    // stop, which needs a configured context store (see the README); timers
+    // never survive. Recover it with the reducer's own startup (re-observe,
+    // never replay) rather than ticking old state; a later startup from the
+    // flow repeats it.
     if ((context.get("state") as Partial<ActivityLightingState> | undefined)?.pending) {
       timer = setTimeout(guarded(node, () => {
         process({activityLighting: {kind: "startup"}}, node.send.bind(node));

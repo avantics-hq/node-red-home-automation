@@ -139,8 +139,9 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
       return result;
     }
 
-    // Context survives a redeploy but timers do not: a pending off-timer is
-    // re-armed.
+    // With a configured context store (see the README) the node's state
+    // survives a redeploy or restart, but timers never do: a pending
+    // off-timer is re-armed.
     const savedState = context.get("state") as Partial<MotionState> | undefined;
     if (typeof savedState?.offTimerDueAt === "number") {
       armOffTimer(Math.max(0, savedState.offTimerDueAt - Date.now()), Number(savedState.offTimerGeneration) || 0);
