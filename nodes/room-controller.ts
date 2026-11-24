@@ -11,13 +11,14 @@ import {
 import {scheduledLighting} from "../lib/circadian";
 import {resolveSchedule} from "../lib/circadian-schedule";
 import type {LightLevels} from "../lib/light-styling";
-import {publishRoom, roomStartingOutputs, roomStoppingOutputs} from "../lib/room-publishing";
-import {guarded, invalidConfig, whenFlowsStarted, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
-import {booleanSetting, jsonSetting, numberSetting, optionalBooleanSetting, textSetting} from "../lib/settings";
-import {discoveryPrefixSetting} from "../lib/ha-discovery";
+import {publishRoom, roomRetainedTopics, roomStartingOutputs, roomStoppingOutputs, type RoomPublishingConfig} from "../lib/room-publishing";
+import {clearStaleRetained, guarded, invalidConfig, whenFlowsStarted, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
+import {booleanSetting, jsonSetting, numberSetting, optionalBooleanSetting, optionalChoiceSetting, textSetting} from "../lib/settings";
+import {ID_SCHEMES, discoveryPrefixSetting} from "../lib/ha-discovery";
 import {publishingArea} from "../lib/topic-names";
 
 interface RoomControllerConfig extends NodeDef {
+  idScheme?: string | null;
   area?: string;
   publishState?: boolean | string;
   discovery?: boolean | string;
@@ -65,7 +66,7 @@ const registerRoomController: NodeInitializer = (RED) => {
     const area = optionalArea(config);
     let refreshTimer: ReturnType<typeof setInterval> | undefined;
 
-    let controllerConfig: RoomConfig;
+    let controllerConfig: RoomConfig & RoomPublishingConfig;
     let refreshSeconds: number;
     try {
       // Not set (null, or absent from a flow saved before these settings)
@@ -86,6 +87,10 @@ const registerRoomController: NodeInitializer = (RED) => {
       };
       const schedule = resolveSchedule(textSetting(config.wakeTime, "wake time", "07:00"), textSetting(config.bedTime, "bed time", "23:00"));
       controllerConfig = {
+        nodeId: node.id,
+        // Not set: a node saved before node IDs, which keeps its area-named
+        // entities. The editor gives new nodes "node".
+        idScheme: optionalChoiceSetting(config.idScheme, "ID scheme", ID_SCHEMES) ?? "area",
         area,
         displayName: config.displayName || area,
         discoveryPrefix: discoveryPrefixSetting(config.discoveryPrefix),
@@ -126,6 +131,10 @@ const registerRoomController: NodeInitializer = (RED) => {
     }
 
     onInput(node, (msg, send) => {
+      if (objectField<RoomMessage["lighting"]>(msg, "lighting")?.kind === "startup") {
+        const clears = clearStaleRetained(node, roomRetainedTopics(controllerConfig));
+        if (clears.length) send([clears.map((clear) => ({...clear}))]);
+      }
       process({
         lighting: objectField<RoomMessage["lighting"]>(msg, "lighting"),
         topic: typeof msg.topic === "string" ? msg.topic : undefined,
@@ -141,7 +150,8 @@ const registerRoomController: NodeInitializer = (RED) => {
     // Available again as soon as this node runs, as after a redeploy of it
     // alone, rather than waiting for the flow's startup message.
     whenFlowsStarted(RED, node, () => {
-      const starting = roomStartingOutputs(controllerConfig);
+      const clears = clearStaleRetained(node, roomRetainedTopics(controllerConfig), "flows-started");
+      const starting = [...clears, ...roomStartingOutputs(controllerConfig)];
       if (starting.length) node.send([starting.map((output) => ({...output}))]);
     });
 

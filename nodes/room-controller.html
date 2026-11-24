@@ -21,6 +21,10 @@
         // off (onadd).
         publishState: {value: null},
         discovery: {value: null},
+        // How Home Assistant IDs are named. null means "not set": a node saved
+        // before this setting, which keeps its area-named entities. New nodes
+        // name them after the node (onadd), so renaming the area keeps them.
+        idScheme: {value: null},
         displayName: {value: ""},
         discoveryPrefix: {value: "homeassistant", required: true, validate: function (v) { var prefix = String(v || "").trim().replace(/^\/+|\/+$/g, ""); return Boolean(prefix) && !/[+#]/.test(prefix); }},
         targets: {value: "[]", required: true, validate: function (v) { try { JSON.parse(v); return true; } catch (e) { return false; } }},
@@ -36,6 +40,7 @@
         bedTime: {value: "23:00", required: true, validate: function (v) { return /^([01]\d|2[0-3]):[0-5]\d$/.test(v); }}
       },
       onadd: function () {
+        this.idScheme = "node";
         this.publishState = false;
         this.discovery = false;
       },

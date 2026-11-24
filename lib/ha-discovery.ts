@@ -5,6 +5,7 @@
 // availability payloads.
 
 import {textSetting} from "./settings";
+import {areaId} from "./topic-names";
 
 // The package's own manifest, loaded as a module from the package root (two
 // levels above dist/lib), so no file is read here. A JSON import would make
@@ -35,3 +36,46 @@ export function discoveryPrefixSetting(value: unknown): string {
 // default availability payloads, so entities need only the topic.
 export const ONLINE = "online";
 export const OFFLINE = "offline";
+
+// How a node names its Home Assistant device and entities. "area" is how
+// every node did before node IDs: unique IDs, discovery topics and the
+// device come from the area. "node" names them after the Node-RED node, so
+// they stay the same when the area changes. Saved nodes keep "area"; the
+// editor gives new nodes "node".
+export const ID_SCHEMES = ["area", "node"] as const;
+export type IdScheme = typeof ID_SCHEMES[number];
+
+// Who an entity belongs to: the Node-RED node that publishes it and how it
+// names things (absent means "area"), the area its entity ID is named after,
+// and where Home Assistant listens.
+export interface DiscoveryOwner {
+  nodeId?: string;
+  idScheme?: IdScheme;
+  area: string;
+  discoveryPrefix: string;
+}
+
+// The node's ID in a form fit for unique IDs and discovery topics.
+function nodeKey(nodeId: string): string {
+  return "nrha_" + nodeId.replace(/[^A-Za-z0-9_-]+/g, "_");
+}
+
+// The device that groups a node's entities, one per node. Under "area" it
+// is nodered_<area ID>_<kind>, for example nodered_kitchen_lighting.
+export function discoveryDevice(owner: DiscoveryOwner, kind: string): {identifiers: string[]} {
+  return {identifiers: [owner.idScheme === "node" ? nodeKey(owner.nodeId ?? "") : `nodered_${areaId(owner.area)}_${kind}`]};
+}
+
+// An entity's discovery topic and IDs: the topic's object ID and the unique
+// ID are <area ID>_<entity> under "area" and nrha_<node ID>_<entity> under
+// "node". The entity ID Home Assistant first gives it comes from the area
+// either way, with "-" as "_", since entity IDs allow only lowercase
+// letters, digits and "_".
+export function discoveryEntity(owner: DiscoveryOwner, component: string, entity: string) {
+  const uniqueId = (owner.idScheme === "node" ? nodeKey(owner.nodeId ?? "") : areaId(owner.area)) + "_" + entity;
+  return {
+    topic: `${owner.discoveryPrefix}/${component}/${uniqueId}/config`,
+    uniqueId,
+    defaultEntityId: `${component}.${areaId(owner.area).replace(/-/g, "_")}_${entity}`
+  };
+}

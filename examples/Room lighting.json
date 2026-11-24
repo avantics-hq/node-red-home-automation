@@ -191,7 +191,8 @@
     "wakeTime": "07:00",
     "bedTime": "23:00",
     "publishState": false,
-    "discovery": false
+    "discovery": false,
+    "idScheme": "node"
   },
   {
     "id": "example-room-lighting-room-commands",

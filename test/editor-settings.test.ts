@@ -84,3 +84,13 @@ test("the discovery prefix field matches the runtime on both publishing nodes", 
     for (const value of ["", " ", "/", "ha/+", "#"]) assert.equal(valid(value), false, `${file} ${JSON.stringify(value)}`);
   }
 });
+
+test("new nodes name their Home Assistant entities after the node; saved nodes keep the area scheme", () => {
+  for (const file of ["room-controller.html", "theatre-state-contract.html"]) {
+    const definition = editorDefinition(file);
+    assert.equal(definition.defaults.idScheme?.value, null, `${file}: a saved node without the setting is not set`);
+    const node: Record<string, unknown> = {};
+    definition.onadd!.call(node);
+    assert.equal(node.idScheme, "node", file);
+  }
+});

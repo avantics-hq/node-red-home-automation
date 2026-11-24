@@ -54,3 +54,12 @@ export function jsonSetting(value: unknown, label: string, fallback: unknown): u
   }
   throw new Error(`${label} must be valid JSON`);
 }
+
+// One of a fixed set of words, such as a scheme name. Absent or null is "not
+// set" (null), for the caller to give its documented meaning; anything else
+// that isn't one of the choices is an error naming them.
+export function optionalChoiceSetting<Choice extends string>(value: unknown, label: string, choices: readonly Choice[]): Choice | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value === "string" && (choices as readonly string[]).includes(value)) return value as Choice;
+  throw new Error(`${label} must be ${choices.slice(0, -1).join(", ")}${choices.length > 1 ? " or " : ""}${choices.at(-1)}`);
+}

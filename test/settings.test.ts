@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {normaliseAvrConfig} from "../lib/avr-controller";
 import {normaliseConfig as normaliseDisplayConfig} from "../lib/display-mode-controller";
-import {booleanSetting, jsonSetting, numberSetting, optionalBooleanSetting, textSetting} from "../lib/settings";
+import {booleanSetting, jsonSetting, numberSetting, optionalBooleanSetting, optionalChoiceSetting, textSetting} from "../lib/settings";
 import {normaliseConfig as normaliseSourceConfig} from "../lib/source-capability-controller";
 
 test("a number setting is a number, or its default only when absent from an older saved flow", () => {
@@ -74,5 +74,15 @@ test("JSON settings: absent takes the default; empty or unparsable is an error",
   assert.deepEqual(jsonSetting("[\"lamp\"]", "targets", ["main"]), ["lamp"]);
   for (const value of ["", "  ", null, "[lamp", 7]) {
     assert.throws(() => jsonSetting(value, "targets", ["main"]), /^Error: targets must be valid JSON$/, JSON.stringify(value));
+  }
+});
+
+test("choice settings: absent or null is not set; one of the choices is kept; anything else is an error naming them", () => {
+  const schemes = ["area", "node"] as const;
+  assert.equal(optionalChoiceSetting(undefined, "ID scheme", schemes), null);
+  assert.equal(optionalChoiceSetting(null, "ID scheme", schemes), null);
+  assert.equal(optionalChoiceSetting("node", "ID scheme", schemes), "node");
+  for (const value of ["", "Node", 1]) {
+    assert.throws(() => optionalChoiceSetting(value, "ID scheme", schemes), /^Error: ID scheme must be area or node$/, JSON.stringify(value));
   }
 });

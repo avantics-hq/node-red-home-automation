@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {resolve} from "node:path";
 import test from "node:test";
-import {DISCOVERY_ORIGIN, discoveryPrefixSetting} from "../lib/ha-discovery";
+import {DISCOVERY_ORIGIN, discoveryDevice, discoveryEntity, discoveryPrefixSetting} from "../lib/ha-discovery";
 import {areaId, publishingArea} from "../lib/topic-names";
 import {theatreDiscovery} from "../lib/theatre-ha-discovery";
 
@@ -55,4 +55,27 @@ test("a publishing area is kept as typed, needed only when asked, and needs a le
   assert.equal(publishingArea("", false), "");
   assert.throws(() => publishingArea("", true), /^Error: area is required$/);
   assert.throws(() => publishingArea("!!!", false), /^Error: area must contain a letter or digit$/);
+});
+
+test("entity naming: the area scheme as before, the node scheme after the node; entity IDs valid in both", () => {
+  const area = {area: "kitchen", discoveryPrefix: "homeassistant"};
+  assert.deepEqual(discoveryEntity(area, "switch", "circadian_lighting"), {
+    topic: "homeassistant/switch/kitchen_circadian_lighting/config",
+    uniqueId: "kitchen_circadian_lighting",
+    defaultEntityId: ["switch", "kitchen_circadian_lighting"].join(".")
+  }, "no scheme: the area scheme");
+  assert.deepEqual(discoveryDevice(area, "lighting"), {identifiers: ["nodered_kitchen_lighting"]});
+  const node = {...area, nodeId: "flow.node 1", idScheme: "node" as const};
+  assert.deepEqual(discoveryEntity(node, "switch", "circadian_lighting"), {
+    topic: "homeassistant/switch/nrha_flow_node_1_circadian_lighting/config",
+    uniqueId: "nrha_flow_node_1_circadian_lighting",
+    defaultEntityId: ["switch", "kitchen_circadian_lighting"].join(".")
+  });
+  assert.deepEqual(discoveryDevice(node, "lighting"), {identifiers: ["nrha_flow_node_1"]});
+  // "-" is allowed in topics and unique IDs, not in entity IDs.
+  for (const idScheme of ["area", "node"] as const) {
+    const ids = discoveryEntity({area: "living-room", discoveryPrefix: "homeassistant", nodeId: "n1", idScheme}, "switch", "circadian_lighting");
+    assert.equal(ids.defaultEntityId, ["switch", "living_room_circadian_lighting"].join("."), idScheme);
+  }
+  assert.equal(discoveryEntity({area: "living-room", discoveryPrefix: "homeassistant"}, "switch", "x").topic, "homeassistant/switch/living-room_x/config");
 });
