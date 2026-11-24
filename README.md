@@ -10,6 +10,11 @@ State-aware Node-RED controllers for reliable lighting and home-theatre automati
 
 Most home automations translate an event directly into a command. This package adds a deterministic control layer between them: it tracks desired and observed state, preserves manual control, confirms outcomes, retries bounded failures, and rejects stale work.
 
+> [!NOTE]
+> **Under active development.** This package is changing quickly. Versions follow semver, but an update can
+> still change behaviour in ways that aren't marked as breaking. Read the release notes before updating, pin the
+> version you run, and check your flows after each update.
+
 ## What it solves
 
 - **Occupancy without flicker:** combine PIR motion with optional presence sensing before changing room state.
