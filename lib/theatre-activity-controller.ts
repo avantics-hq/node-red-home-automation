@@ -1,7 +1,7 @@
 "use strict";
 
 import type {TraceEntry} from "./bounded-trace";
-import {numberSetting, textSetting} from "./settings";
+import {numberSetting} from "./settings";
 
 import {boundObservedAt, isFresh as isFreshAt, isOutOfOrder, parseObservedAt} from "./observation-time";
 import {isTargetStatus} from "./target-state";
@@ -66,7 +66,6 @@ export interface TheatreConfig {
   area: string;
   freshnessMs: number;
   activityProfiles: ActivityProfiles;
-  recoveryOffActivity?: string;
 }
 
 export type TheatreInputEvent =
@@ -110,13 +109,11 @@ export function normaliseConfig(
   config: Partial<TheatreConfig> & {activityProfiles?: unknown} = {}
 ): TheatreConfig {
   const activityProfiles = normaliseActivityProfiles(config.activityProfiles);
-  const recoveryOffActivity = textSetting(config.recoveryOffActivity, "recovery off activity", "off");
   return {
     // Optional: an empty area means none.
     area: typeof config.area === "string" ? config.area.trim() : "",
     freshnessMs: Math.max(1000, numberSetting(config.freshnessMs, "freshness", 30000)),
-    activityProfiles,
-    recoveryOffActivity
+    activityProfiles
   };
 }
 
@@ -436,7 +433,7 @@ export function transitionTheatre(
     }
   }
 
-  function acceptIntent(event: Extract<TheatreInputEvent, {kind: "intent"}>, internal = false) {
+  function acceptIntent(event: Extract<TheatreInputEvent, {kind: "intent"}>) {
     if (typeof event.requestId !== "string" || !event.requestId) {
       throw new Error("theatre requestId is required");
     }
@@ -455,7 +452,7 @@ export function transitionTheatre(
     // already taken (for example by a recovery) gets the next free one.
     let generation = event.generation;
     const taken = generation < state.generation || (generation === state.generation && state.desired !== null);
-    if (taken && !internal && state.desired?.requestId !== event.requestId &&
+    if (taken && state.desired?.requestId !== event.requestId &&
       event.generation > state.lastProposedGeneration) {
       generation = state.generation + 1;
       trace("intent", "reassigned", "generation-taken", {requestId: event.requestId, proposed: event.generation, assigned: generation});
@@ -497,7 +494,7 @@ export function transitionTheatre(
       requestedAt
     };
     state.generation = generation;
-    if (!internal) state.lastProposedGeneration = Math.max(state.lastProposedGeneration, event.generation);
+    state.lastProposedGeneration = Math.max(state.lastProposedGeneration, event.generation);
     state.phase = "preparing";
     state.currentActivity = "unknown";
     state.targets = emptyTargets();
@@ -629,22 +626,21 @@ export function transitionTheatre(
     }
 
     if (event.reason === "startup") {
-      if (!Object.hasOwn(config.activityProfiles, config.recoveryOffActivity!)) {
-        throw new Error(`recovery off activity does not exist: ${config.recoveryOffActivity}`);
-      }
-      state.metrics.recoveriesSafeOff += 1;
-      acceptIntent({
-        kind: "intent",
-        requestId: `recovery-safe-off-${nowMs}`,
-        generation: state.generation + 1,
-        activity: config.recoveryOffActivity!,
-        requestedAt: now.toISOString()
-      }, true);
-      emit("recovery_safe_off", {
+      // No evidence, or more than one match: the activity is unknown, and
+      // nothing is commanded until the next request. Starting with nothing
+      // saved happens on a redeploy without a context store, so it must never
+      // switch a running activity off.
+      state.refreshPending = emptyRefreshPending();
+      state.phase = "idle";
+      state.currentActivity = "unknown";
+      state.availability = "unknown";
+      state.metrics.recoveriesUnknown += 1;
+      state.metrics.lastOutcome = "recovery_unknown";
+      emit("recovery_unknown", {
         matchCount: matches.length,
         matchedActivities: matches
       });
-      trace("recovery", "safe_off", matches.length ? "ambiguous" : "no-clean-match", {
+      trace("recovery", "unknown", matches.length ? "ambiguous" : "no-clean-match", {
         matchedActivities: matches
       });
       return;

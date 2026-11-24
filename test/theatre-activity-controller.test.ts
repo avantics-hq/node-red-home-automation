@@ -488,7 +488,7 @@ test("recovery adopts one clean physical profile without issuing commands", () =
   assert.equal(result.state.metrics.lastOutcome, "recovery_adopted");
 });
 
-test("ambiguous startup recovery coordinates the configured Off activity", () => {
+test("ambiguous startup recovery leaves the activity unknown and commands nothing", () => {
   const observedAt = at(1).toISOString();
   const result = apply(undefined, {
     kind: "recover",
@@ -501,12 +501,18 @@ test("ambiguous startup recovery coordinates the configured Off activity", () =>
     }
   }, 1);
 
-  assert.equal(result.state.desired?.activity, "off");
-  assert.equal(result.state.phase, "preparing");
-  assert.equal(result.commands.length, 5);
-  assert.equal(result.commands.every(({kind}) => kind === "intent"), true);
-  assert.equal(result.state.metrics.recoveriesSafeOff, 1);
-  assert.equal(result.events.some(({theatre}) => theatre.kind === "recovery_safe_off"), true);
+  assert.equal(result.state.desired, null);
+  assert.equal(result.state.phase, "idle");
+  assert.equal(result.state.currentActivity, "unknown");
+  assert.deepEqual(result.commands, [], "a running activity is never switched off");
+  assert.equal(result.state.metrics.recoveriesUnknown, 1);
+  assert.equal(result.state.metrics.lastOutcome, "recovery_unknown");
+  assert.equal(result.events.some(({theatre}) => theatre.kind === "recovery_unknown"), true);
+
+  // The next request is handled as usual.
+  const next = apply(result.state, {kind: "intent", requestId: "after-recovery", generation: 1, activity: "tv_shield"}, 2);
+  assert.equal(next.state.desired?.activity, "tv_shield");
+  assert.equal(next.commands.filter(({kind}) => kind === "intent").length, 5);
 });
 
 test("ambiguous manual recovery holds ownership without issuing commands", () => {
@@ -623,7 +629,7 @@ test("a refresh lost after a restart ends as unavailable, not stuck confirming",
   assert.equal(result.state.phase, "failed");
 });
 
-test("recovery with no observations times out to the configured off activity", () => {
+test("recovery with no observations times out to an unknown activity, commanding nothing", () => {
   let result = apply(undefined, {kind: "startup"}, 0);
   assert.equal(result.state.phase, "recovering");
   const kinds: string[] = [];
@@ -631,18 +637,29 @@ test("recovery with no observations times out to the configured off activity", (
     result = apply(result.state, {kind: "tick", generation: 0}, seconds);
     kinds.push(...result.commands.map((command) => command.kind));
   }
-  assert.equal(result.state.desired?.activity, "off");
+  assert.equal(result.state.desired, null);
+  assert.equal(result.state.currentActivity, "unknown");
   assert.equal(result.traces.some((entry) => entry.event === "recovery" && entry.outcome === "timed-out"), true);
-  assert.equal(result.events.some(({theatre}) => theatre.kind === "recovery_safe_off"), true);
-  assert.equal(kinds.filter((kind) => kind === "intent").length, 5);
+  assert.equal(result.events.some(({theatre}) => theatre.kind === "recovery_unknown"), true);
+  assert.equal(kinds.filter((kind) => kind === "intent").length, 0, "no Off activity");
+  // Idle: no more ticks are needed and none probe again.
+  assert.equal(result.state.phase, "idle");
+  assert.deepEqual(apply(result.state, {kind: "tick", generation: 0}, 20).commands, []);
 });
 
 test("a request is never lost to a generation the controller used for recovery", () => {
   // dev-review repro: recovery bumps the controller to generation 1 while the
-  // contract, not yet told, numbers the user's request 1 as well.
+  // contract, not yet told, numbers the user's request 1 as well. Adopting
+  // the one matching activity takes a generation.
   let result = apply(undefined, {kind: "startup"}, 0);
-  result = apply(result.state, {kind: "recover", reason: "startup", observations: {}}, 1);
-  assert.equal(result.state.desired?.activity, "off");
+  const observedAt = at(1).toISOString();
+  result = apply(result.state, {kind: "recover", reason: "startup", observations: {
+    display: {observedAt, values: {mode: "tv"}},
+    avr: {observedAt, values: {power: "on", source: "shield"}},
+    source: {observedAt, values: {action: "activate", sourceId: "shield"}},
+    backlighting: {observedAt, values: {power: "on"}}
+  }}, 1);
+  assert.equal(result.state.desired?.activity, "tv_shield");
   assert.equal(result.state.generation, 1);
 
   result = request(result.state, "tv_shield", 1, 2, "user-request-1");

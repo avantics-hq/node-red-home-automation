@@ -866,7 +866,7 @@ test("wired contract and activity controller never lose a request to a recovery 
     area: "room", displayName: "Room", baseTopic: "home/room/theatre", discoveryPrefix: "homeassistant", activities: "[\"off\",\"tv\"]"
   });
   const controller = new (runtime(registerTheatreActivity).Constructor)({
-    area: "room", freshnessMs: 30000, recoveryOffActivity: "off", activityProfiles: profiles
+    area: "room", freshnessMs: 30000, activityProfiles: profiles
   });
   t.after(() => close(contract));
   t.after(() => close(controller));
@@ -1283,9 +1283,6 @@ test("publish settings: null and a missing field mean on; only false means off",
 });
 
 test("an emptied JSON or text setting is an invalid configuration that names the setting", () => {
-  const theatreProfiles = JSON.stringify({
-    off: {display: {mode: "off"}, avr: {power: "standby"}, source: {action: "deactivate", readiness: "optional"}, lighting: {profile: "off"}, backlighting: {power: "off"}}
-  });
   const cases: Array<[string, NodeInitializer, Record<string, unknown>, string]> = [
     ["receiver", registerAvr, {sources: ""}, "sources must be valid JSON"],
     ["display", registerDisplay, {tvHost: "tv", screenHost: " ", projectorMeterHost: "m"}, "screen host is required"],
@@ -1295,7 +1292,7 @@ test("an emptied JSON or text setting is an invalid configuration that names the
     ["motion", registerMotion, {onTargets: "[\"main\"]", offTargets: ""}, "off targets must be valid JSON"],
     ["switch", registerSwitch, {targets: ""}, "targets must be valid JSON"],
     ["occupancy", registerOccupancy, {presenceMode: "always"}, "presence sensor must be none or hold"],
-    ["theatre activity", registerTheatreActivity, {activityProfiles: theatreProfiles, recoveryOffActivity: ""}, "recovery off activity is required"],
+    ["theatre activity", registerTheatreActivity, {activityProfiles: ""}, "activity profiles must be valid JSON"],
     ["theatre state contract", registerTheatreStateContract, {area: "a", activities: "[\"off\"]", discoveryPrefix: ""}, "discovery prefix is required"]
   ];
   for (const [name, register, config, reason] of cases) {
