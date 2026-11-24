@@ -505,3 +505,18 @@ test("a receiver node with nothing saved adopts a refresh's wanted state and que
   // An unknown source is not adopted.
   assert.equal(apply(undefined, {kind: "refresh", requestId: "activity-6", generation: 6, power: "on", source: "vcr"}).state.desired, null);
 });
+
+test("an adopted request the receiver doesn't match is a manual override: no power or source command", () => {
+  let result = transitionAvr(undefined, {avr: {kind: "refresh", requestId: "activity-8", generation: 8, power: "on", source: "shield"}}, config, at(0));
+  const sent = [...result.commands];
+  // The receiver is in standby.
+  result = transitionAvr(result.state, {avr: {kind: "observed", line: "PWSTANDBY\rZMOFF\rSIGAME\rMV20\r"}}, config, at(0.5));
+  sent.push(...result.commands);
+  for (const seconds of [2, 4, 8]) {
+    result = transitionAvr(result.state, {avr: {kind: "tick"}}, config, at(seconds));
+    sent.push(...result.commands);
+  }
+  assert.deepEqual([...new Set(sent.map(({avrCommand}) => avrCommand.operation))], ["query"], "no PW or SI");
+  assert.equal(result.state.phase, "manual_override");
+  assert.equal(result.state.classification, "manual_override");
+});

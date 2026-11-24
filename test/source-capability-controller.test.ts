@@ -378,3 +378,11 @@ test("a source node with nothing saved adopts a refresh's wanted source and obse
   assert.ok(!sent.some(({operation}) => operation === "activate"), JSON.stringify(sent));
   assert.notEqual(theatreState(other).status, "ready");
 });
+
+test("an adopted request the source doesn't match is a manual override, and it is never activated", () => {
+  let result = apply(undefined, {kind: "refresh", requestId: "activity-5", generation: 5, sourceId: "streamer", action: "activate"});
+  result = observed(result.state, "streamer", "inactive", 5, 0.5);
+  assert.equal(result.state.phase, "manual_override");
+  assert.equal(theatreState(result).classification, "manual_override");
+  assert.ok(!result.commands.some(({operation}) => operation === "activate"));
+});

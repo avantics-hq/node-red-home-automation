@@ -293,3 +293,18 @@ test("a node with nothing saved adopts a refresh's wanted profile and observes, 
   const release = next.commands.find(({operation}) => operation === "release");
   assert.ok(release, JSON.stringify(next.commands));
 });
+
+test("an adopted request the lights don't match is a manual override: nothing applied", () => {
+  let result = apply(undefined, {kind: "refresh", requestId: "activity-9", generation: 9, profile: "tv"});
+  const sent = [...result.commands];
+  result = apply(result.state, {kind: "observed", generation: 9, target: "wall", on: true, values: {brightness: 200, color_temp: 250},
+    observedAt: at(1).toISOString()}, 1);
+  sent.push(...result.commands);
+  for (const seconds of [3, 6, 12]) {
+    result = apply(result.state, {kind: "tick", generation: 9}, seconds);
+    sent.push(...result.commands);
+  }
+  assert.deepEqual([...new Set(sent.map(({operation}) => operation))], ["observe"], "no apply");
+  assert.equal(result.state.phase, "manual_override");
+  assert.equal(result.events.at(-1)?.theatre.classification, "manual_override");
+});

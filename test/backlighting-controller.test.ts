@@ -147,13 +147,16 @@ test("a node with nothing saved adopts a refresh's wanted power and observes, ne
   assert.equal(result.events[0]?.theatre.status, "ready");
   assert.deepEqual(result.commands, []);
 
-  // It doesn't match: confirming, never commanded, then failed at the deadline.
+  // It doesn't match: a manual override, and never commanded.
   let other = apply(undefined, {kind: "refresh", requestId: "activity-8", generation: 8, power: "on"}, 0);
   other = apply(other.state, {kind: "observed", generation: 8, power: "off", observedAt: at(0.5).toISOString()}, 0.5);
-  assert.notEqual(other.events[0]?.theatre.status, "ready");
+  assert.equal(other.state.phase, "manual_override");
+  assert.equal(other.events[0]?.theatre.classification, "manual_override");
+  assert.equal(other.traces.find(({outcome}) => outcome === "manual_override")?.reason, "adopted-mismatch");
   other = apply(other.state, {kind: "tick", generation: 8}, 10);
   assert.ok(!other.commands.some(({operation}) => operation === "set_power"));
-  assert.equal(other.events[0]?.theatre.status, "failed");
+  // A new explicit request is commanded as usual.
+  assert.deepEqual(intent(other.state, "on", 9, 11).commands.map(({operation}) => operation), ["set_power"]);
 
   // A refresh with no values, or for a node that has a request, changes nothing.
   assert.equal(apply(undefined, {kind: "refresh"}, 0).state.desired, null);

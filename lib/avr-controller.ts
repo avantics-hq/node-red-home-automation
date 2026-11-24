@@ -1,5 +1,6 @@
 "use strict";
 
+import {ADOPTED_MISMATCH, adoptableRefresh, readsOnly, savedAdoptedGeneration} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {numberSetting} from "./settings";
 import {asTargetStatus, targetStateEvent, type TargetStateEvent} from "./target-state";
@@ -101,6 +102,8 @@ export interface AvrState {
   recentVolumeRequestIds: string[];
   volumeMetrics: AvrVolumeMetrics;
   lastAttempt: number;
+  // The generation adopted from a refresh (see adopted-request.ts).
+  adoptedGeneration: number | null;
 }
 
 export type AvrInputEvent =
@@ -218,7 +221,8 @@ export function createAvrState(
     },
     lastAttempt: Number.isInteger(saved.lastAttempt) && (saved.lastAttempt ?? -1) >= 0
       ? saved.lastAttempt!
-      : 0
+      : 0,
+    adoptedGeneration: savedAdoptedGeneration(saved)
   };
 }
 
@@ -588,17 +592,16 @@ export function transitionAvr(
   }
 
   // A refresh with the activity's wanted values, reaching a node with
-  // nothing desired (it started with nothing saved): adopt them as a saved
-  // state would hold them, and rediscover below as at startup, never
-  // commanding the change itself.
-  const adopted = event.kind === "refresh" && !state.desired && typeof event.requestId === "string" && event.requestId !== "" &&
-    Number.isInteger(event.generation) && event.generation! >= Math.max(1, state.generation) &&
-    validateIntent({kind: "intent", requestId: event.requestId, generation: event.generation!,
-      power: event.power as AvrPower, source: event.source ?? null}) === null;
-  if (adopted) {
-    state.desired = {requestId: event.requestId as string, generation: event.generation!, power: event.power as AvrPower, source: event.source || null};
-    state.generation = event.generation!;
-    trace("refresh", "adopted", "nothing-desired", {power: event.power, source: event.source || null, generation: event.generation});
+  // nothing desired (it started with nothing saved): adopt them, and
+  // rediscover below as at startup (see adopted-request.ts).
+  const adoptable = event.kind === "refresh" ? adoptableRefresh(event, state) : null;
+  const adopted = adoptable !== null && event.kind === "refresh" &&
+    validateIntent({kind: "intent", ...adoptable, power: event.power as AvrPower, source: event.source ?? null}) === null;
+  if (adopted && event.kind === "refresh") {
+    state.desired = {...adoptable, power: event.power as AvrPower, source: event.source || null};
+    state.generation = adoptable.generation;
+    state.adoptedGeneration = adoptable.generation;
+    trace("refresh", "adopted", "nothing-desired", {power: event.power, source: event.source || null, generation: adoptable.generation});
   }
 
   if (event.kind === "refresh" && !adopted) {
@@ -907,6 +910,17 @@ export function transitionAvr(
       }
     }
     forceStateEvent = true;
+  }
+
+  // An adopted request only reads the receiver (see adopted-request.ts): a
+  // power, zone or source command means it isn't as wanted.
+  const held = readsOnly(state, commands, (command) => command.avrCommand.operation === "query" || command.avrCommand.operation === "volume-query");
+  if (held.mismatch) {
+    commands.splice(0, commands.length, ...held.commands);
+    state.pending = null;
+    state.classification = "manual_override";
+    state.phase = "manual_override";
+    trace("command", "withheld", ADOPTED_MISMATCH);
   }
 
   const after = JSON.stringify({

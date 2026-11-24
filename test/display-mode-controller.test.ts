@@ -407,3 +407,23 @@ test("a display with nothing saved adopts a refresh's wanted mode and rediscover
   assert.equal(result.state.phase, "ready");
   assert.equal(result.targetStates.at(-1)?.theatre.requestId, "activity-4");
 });
+
+test("an adopted request the display doesn't match is a manual override: no toggle, no screen move", () => {
+  let result = apply(undefined, {kind: "refresh", requestId: "activity-6", generation: 6, mode: "projector"}, 0);
+  const sent = [...result.commands];
+  // Someone is watching TV: TV on, screen up, projector off.
+  for (const [seconds, device, values] of [[0.1, "tv", {power: "on"}], [0.2, "screen", {position: 0, state: "closed"}], [0.3, "projector", {watts: 2}]] as const) {
+    result = observe(result.state, device, values, seconds, 6);
+    sent.push(...result.commands);
+  }
+  for (const seconds of [2, 5, 10]) {
+    result = apply(result.state, {kind: "tick", generation: 6}, seconds);
+    sent.push(...result.commands);
+  }
+  assert.deepEqual([...new Set(sent.map(({operation}) => operation))].sort(), ["query_position", "query_power"], "reads only");
+  assert.equal(result.state.phase, "manual_override");
+  assert.equal(result.targetStates.at(-1)?.theatre.classification ?? result.state.classification, "manual_override");
+  // A new explicit request is carried out as usual.
+  const next = apply(result.state, {kind: "intent", requestId: "projector-7", generation: 7, mode: "projector"}, 11);
+  assert.equal(next.state.desired?.requestId, "projector-7");
+});
