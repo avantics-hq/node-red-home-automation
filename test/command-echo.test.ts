@@ -11,7 +11,7 @@ test("fingerprints ignore key order", () => {
 
 test("remembered commands expire and the queue stays bounded", () => {
   let queue = rememberCommand(undefined, {state: "ON"}, 0);
-  assert.deepEqual(queue, [{fingerprint: fingerprint({state: "ON"}), expires: ECHO_WINDOW_MS, on: true}]);
+  assert.deepEqual(queue, [{fingerprint: fingerprint({state: "ON"}), expires: ECHO_WINDOW_MS, on: true, power: true}]);
   queue = rememberCommand(queue, {brightness: 10}, ECHO_WINDOW_MS + 1);
   assert.equal(queue.length, 1, "the first command expired");
   assert.equal(queue[0]!.on, undefined, "a non-power command sets no power");
@@ -44,4 +44,23 @@ test("a state report confirms our command, is stale against it, or is someone el
   assert.equal(checkStateReport(rememberCommand(undefined, {brightness: 10}, 0), true, 100).verdict, "external");
   // The input queue is not changed.
   assert.equal(sent[0]!.on, true);
+});
+
+test("our own command, changed on the way, still counts as ours: once", () => {
+  const sent = rememberCommand(undefined, {state: "ON", brightness: 200, color_temp: 300, transition: 1}, 0);
+  // Something on the command path cut it to the power state alone.
+  const changed = checkCommandEcho(sent, {state: "ON"}, 100);
+  assert.deepEqual([changed.own, changed.changed], [true, true]);
+  // A second one is not ours: our command has had its echo.
+  assert.deepEqual([checkCommandEcho(changed.queue, {state: "ON"}, 200).own], [false]);
+  // A different power is not ours.
+  assert.equal(checkCommandEcho(sent, {state: "OFF"}, 100).own, false);
+  // The exact echo is ours and not changed.
+  assert.deepEqual([checkCommandEcho(sent, {state: "ON", brightness: 200, color_temp: 300, transition: 1}, 100).changed], [false]);
+  // Known even when the light confirmed the power before the echo came back.
+  const confirmed = checkStateReport(sent, true, 50).queue;
+  assert.equal(checkCommandEcho(confirmed, {state: "ON"}, 100).own, true);
+  // No command of ours pending: someone else's bare ON.
+  assert.equal(checkCommandEcho(undefined, {state: "ON"}, 100).own, false);
+  assert.equal(checkCommandEcho(sent, {state: "ON"}, ECHO_WINDOW_MS + 1).own, false, "after the echo window");
 });
