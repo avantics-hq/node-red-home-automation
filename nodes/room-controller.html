@@ -136,6 +136,13 @@
     <dd>payload <code>ON</code> or <code>OFF</code> (any case) switches circadian lighting on or off, as
       <code>lighting.kind = "circadian"</code> does. Read only while <b>Publish state</b> is on and the area is set.
       Retained messages and other payloads are ignored.</dd>
+    <dt>topic = home/&lt;area&gt;/sleep/set</dt>
+    <dd><code>ON</code> or <code>OFF</code> switches sleep, as <code>lighting.kind = "sleep"</code> does, under the
+      same conditions.</dd>
+    <dt>topic = home/&lt;area&gt;/wake-time/set or bed-time/set</dt>
+    <dd>a time, <code>HH:MM</code> or <code>HH:MM:SS</code>, changes that time, as
+      <code>lighting = {kind: "schedule", wakeTime, bedTime}</code> does. A time set this way lasts until the node is
+      deployed with a different <b>Wake time</b> or <b>Bed time</b>, which then applies.</dd>
     <dt>lighting.owner <span class="property-type">string</span></dt>
     <dd>on an <code>intent</code> that switches targets on, marks them overridden by this owner. With
       <code>preserveManual: true</code>, manual lights are skipped.</dd>

@@ -264,7 +264,14 @@ Flows that filter that output by topic must pass the `/control` topics through.
 It also publishes the circadian state on `home/<area>/circadian/state`, and
 acts on ON or OFF sent to `home/<area>/circadian/set`, which is where the Home
 Assistant circadian switch sends them: wire an MQTT in node subscribed to that
-topic into the room controller.
+topic into the room controller. In the same way it publishes and acts on sleep
+(`home/<area>/sleep/state` and `/set`, ON or OFF) and the wake and bed times
+(`home/<area>/wake-time/state` and `/set`, likewise `bed-time`, as `HH:MM:SS`);
+subscribing to `home/<area>/+/set` covers all four. A time set from Home
+Assistant lasts until the node is deployed with a different setting for it.
+With discovery on, Home Assistant also gets a sleep switch, wake and bed time
+entities (under the device's configuration), and a diagnostic sensor per light
+showing its control state, with the owner as an attribute.
 
 ## Receiver volume ownership
 

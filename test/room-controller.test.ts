@@ -179,12 +179,23 @@ test("off-only intents preserve active lights while applying a bedtime level to 
 
 test("startup publishes stable discovery and state messages", () => {
   const result = publishRoom(undefined, {lighting: {kind: "startup"}}, config, now);
-  assert.equal(result.outputs.length, 5);
-  assert.equal(output(result, 0).topic, "homeassistant/switch/kitchen_circadian_lighting/config");
-  assert.equal(output(result, 0).retain, true);
-  assert.deepEqual(output(result, 1), {topic: "home/kitchen/lighting/availability", payload: "online", retain: true});
-  assert.equal(output(result, 2).topic, "home/kitchen/circadian/state");
-  assert.deepEqual(result.outputs.slice(3), [
+  assert.deepEqual(result.outputs.slice(0, 6).map(({topic}) => topic), [
+    "homeassistant/switch/kitchen_circadian_lighting/config",
+    "homeassistant/switch/kitchen_sleep/config",
+    "homeassistant/time/kitchen_wake_time/config",
+    "homeassistant/time/kitchen_bed_time/config",
+    "homeassistant/sensor/kitchen_cooking_control/config",
+    "homeassistant/sensor/kitchen_dining_control/config"
+  ]);
+  assert.ok(result.outputs.slice(0, 6).every(({retain}) => retain));
+  assert.deepEqual(result.outputs.slice(6, 11), [
+    {topic: "home/kitchen/lighting/availability", payload: "online", retain: true},
+    {topic: "home/kitchen/circadian/state", payload: "ON", retain: true},
+    {topic: "home/kitchen/sleep/state", payload: "OFF", retain: true},
+    {topic: "home/kitchen/wake-time/state", payload: "07:00:00", retain: true},
+    {topic: "home/kitchen/bed-time/state", payload: "23:00:00", retain: true}
+  ]);
+  assert.deepEqual(result.outputs.slice(11), [
     {topic: "home/kitchen/lighting/cooking/control", payload: {state: "in-control", owner: null}, retain: true},
     {topic: "home/kitchen/lighting/dining/control", payload: {state: "in-control", owner: null}, retain: true}
   ]);
@@ -694,8 +705,9 @@ test("publish settings: state and discovery each switch on and off, and unset me
   // Discovery needs the state: with state off, nothing named after the area
   // is published, and the discovery entry is cleared.
   const off = startupTopics({publishState: false, discovery: true});
-  assert.deepEqual(off, [[discoveryTopic, ""]]);
-  assert.deepEqual(startupTopics({publishState: false, discovery: false}), [[discoveryTopic, ""]]);
+  assert.deepEqual(off.map(([, payload]) => payload), ["", "", "", "", "", ""], "every entry cleared");
+  assert.deepEqual(off[0], [discoveryTopic, ""]);
+  assert.deepEqual(startupTopics({publishState: false, discovery: false}), off);
 
   // Circadian changes publish their state only with state on.
   const circadian = (settings: Partial<RoomConfig>) =>
@@ -735,8 +747,16 @@ test("an area that isn't an identifier publishes under its ID, and keeps its nam
   const startup = publishRoom(undefined, {lighting: {kind: "startup"}}, living, now);
   assert.deepEqual(startup.outputs.map(({topic}) => topic), [
     "homeassistant/switch/living_room_circadian_lighting/config",
+    "homeassistant/switch/living_room_sleep/config",
+    "homeassistant/time/living_room_wake_time/config",
+    "homeassistant/time/living_room_bed_time/config",
+    "homeassistant/sensor/living_room_cooking_control/config",
+    "homeassistant/sensor/living_room_dining_control/config",
     "home/living_room/lighting/availability",
     "home/living_room/circadian/state",
+    "home/living_room/sleep/state",
+    "home/living_room/wake-time/state",
+    "home/living_room/bed-time/state",
     "home/living_room/lighting/cooking/control",
     "home/living_room/lighting/dining/control"
   ]);
@@ -748,4 +768,68 @@ test("an area that isn't an identifier publishes under its ID, and keeps its nam
   // The set topic is matched under the ID too.
   const off = publishRoom(startup.state, {topic: "home/living_room/circadian/set", payload: "OFF"}, living, now);
   assert.equal(off.state.circadianEnabled, false);
+});
+
+test("wake and bed times from Home Assistant change the schedule, restyle lit lights and are published back", () => {
+  // 06:30 local: before the default 07:00 wake, so the room is still at night level.
+  const early = new Date(2026, 5, 21, 6, 30);
+  const lit = publishRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, early);
+  const nightBrightness = (lit.outputs.find(({lighting_command}) => lighting_command)!.payload as {brightness: number}).brightness;
+
+  const changed = publishRoom(lit.state, {topic: "home/kitchen/wake-time/set", payload: "05:30:00"}, config, early);
+  assert.deepEqual(changed.state.schedule, {wakeTime: "05:30", bedTime: "23:00"});
+  assert.deepEqual(changed.outputs.slice(0, 2), [
+    {topic: "home/kitchen/wake-time/state", payload: "05:30:00", retain: true},
+    {topic: "home/kitchen/bed-time/state", payload: "23:00:00", retain: true}
+  ]);
+  const restyled = changed.outputs.find(({lighting_command}) => lighting_command?.target === "cooking");
+  assert.ok(restyled, "the lit light is restyled for the new schedule");
+  assert.ok((restyled.payload as {brightness: number}).brightness > nightBrightness, "an hour after the new wake time, brighter");
+  assert.deepEqual(changed.traces.find(({event}) => event === "schedule"), {
+    event: "schedule", outcome: "changed", reason: null, details: {wakeTime: "05:30", bedTime: "23:00"}
+  });
+
+  // "HH:MM" works too; junk, a retained message and equal times change nothing.
+  assert.deepEqual(publishRoom(lit.state, {topic: "home/kitchen/bed-time/set", payload: "22:15"}, config, early).state.schedule,
+    {wakeTime: "07:00", bedTime: "22:15"});
+  for (const [msg, reason] of [
+    [{topic: "home/kitchen/wake-time/set", payload: "25:00"}, "not-a-time"],
+    [{topic: "home/kitchen/wake-time/set", payload: "06:00:00", retain: true}, "retained-message"]
+  ] as const) {
+    const ignored = publishRoom(lit.state, msg, config, early);
+    assert.deepEqual(ignored.state.schedule, {wakeTime: "07:00", bedTime: "23:00"}, reason);
+    assert.equal(ignored.traces[0]?.reason, reason);
+  }
+  const same = publishRoom(lit.state, {topic: "home/kitchen/wake-time/set", payload: "23:00:00"}, config, early);
+  assert.equal(same.traces.find(({event}) => event === "schedule")?.reason, "invalid-times");
+  assert.deepEqual(same.state.schedule, {wakeTime: "07:00", bedTime: "23:00"});
+});
+
+test("a time set at runtime lasts until a redeploy changes that setting", () => {
+  const withSchedule = (wakeTime: string, bedTime: string): RoomConfig =>
+    ({...onSchedule(wakeTime, bedTime), schedule: {wakeTime, bedTime}});
+  const set = publishRoom(undefined, {lighting: {kind: "schedule", wakeTime: "05:30", bedTime: "22:00"}}, withSchedule("07:00", "23:00"), now).state;
+  // A redeploy with the same settings keeps both.
+  assert.deepEqual(publishRoom(set, {lighting: {kind: "refresh"}}, withSchedule("07:00", "23:00"), now).state.schedule,
+    {wakeTime: "05:30", bedTime: "22:00"});
+  // A changed wake setting replaces only the wake time.
+  assert.deepEqual(publishRoom(set, {lighting: {kind: "refresh"}}, withSchedule("06:00", "23:00"), now).state.schedule,
+    {wakeTime: "06:00", bedTime: "22:00"});
+  // State saved before times could change takes the settings.
+  const {schedule: _schedule, scheduleSetting: _setting, ...older} = set;
+  assert.deepEqual(publishRoom(older, {lighting: {kind: "refresh"}}, withSchedule("07:00", "23:00"), now).state.schedule,
+    {wakeTime: "07:00", bedTime: "23:00"});
+});
+
+test("sleep from Home Assistant switches sleep and is published back", () => {
+  const lit = publishRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, now);
+  const asleep = publishRoom(lit.state, {topic: "home/kitchen/sleep/set", payload: "on"}, config, now);
+  assert.equal(asleep.state.sleeping, true);
+  assert.deepEqual(asleep.outputs[0], {topic: "home/kitchen/sleep/state", payload: "ON", retain: true});
+  assert.ok(asleep.outputs.some(({lighting_command}) => lighting_command?.target === "cooking"), "restyled for sleep");
+  const junk = publishRoom(lit.state, {topic: "home/kitchen/sleep/set", payload: "maybe"}, config, now);
+  assert.equal(junk.state.sleeping, false);
+  assert.deepEqual(junk.traces[0], {event: "sleep-set", outcome: "ignored", reason: "not-on-or-off", details: {payload: "maybe"}});
+  assert.deepEqual(publishRoom(lit.state, {topic: "home/kitchen/sleep/set", payload: "ON"}, {...config, publishState: false}, now).state.sleeping,
+    false, "not publishing: the set topic isn't read");
 });
