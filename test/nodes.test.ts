@@ -2064,3 +2064,19 @@ test("cover group node: a cover's other state and its moving signal are not requ
   const requests = (await receive<SendEnvelope>(group, {payload: "open"}))[0]?.[0] ?? [];
   assert.deepEqual(requests.map((message) => (message as {coverRequestId?: string}).coverRequestId?.endsWith(":left")), [true, false]);
 });
+
+test("cover group node: a request still open after a redeploy settles at its deadline", async (t) => {
+  const groupRuntime = runtime(registerCoverGroup, {}, STORE);
+  const config = {id: "g-redeploy", members: "[\"left\",\"right\"]", deadlineSeconds: 1};
+  const before = new groupRuntime.Constructor(config);
+  await receive(before, {payload: "open"});
+  await close(before);
+  // Redeployed: no input at all, yet the deadline still comes.
+  const after = new groupRuntime.Constructor(config);
+  t.after(() => close(after));
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+  const answer = (after.sent as SendEnvelope[]).flatMap((envelope) => envelope[1] ?? [])
+    .map((message) => (message as {theatre?: {status: string; failure?: {reason: string}; details: {members: Record<string, {reason: string}>}}}).theatre);
+  assert.equal(answer.at(-1)?.status, "failed");
+  assert.deepEqual([answer.at(-1)?.failure?.reason, answer.at(-1)?.details.members.left?.reason], ["none-confirmed", "no-answer"]);
+});

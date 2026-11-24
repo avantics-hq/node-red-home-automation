@@ -12,9 +12,8 @@ import {
 } from "./theatre-slo";
 import type {TraceEntry} from "./bounded-trace";
 import {OFFLINE, ONLINE, discoveryPrefixSetting, type IdScheme} from "./ha-discovery";
-import {IDENTIFIER, areaId, publishingArea} from "./topic-names";
+import {IDENTIFIER, REQUEST_ID, areaId, publishingArea} from "./topic-names";
 
-const REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 
 export interface TheatreStateContractConfig {
   // The Node-RED node's ID, and how the contract names its Home Assistant

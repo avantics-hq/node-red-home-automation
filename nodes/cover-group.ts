@@ -54,6 +54,13 @@ const registerCoverGroup: NodeInitializer = (RED) => {
       }
     }
 
+    // Context survives a redeploy but timers do not: re-arm the deadline of
+    // a request still open (an overdue one settles at the first tick).
+    const open = (node.context().get("state") as Partial<CoverGroupState> | undefined)?.request;
+    if (open && !open.settled && Number.isFinite(open.deadlineAt)) {
+      timer = setTimeout(guarded(node, () => process({kind: "tick"}, node.send.bind(node))), Math.max(0, open.deadlineAt - Date.now()));
+    }
+
     onInput(node, (msg, send) => {
       const theatre = objectField<{kind?: string; requestId?: string; status?: string; classification?: string; failure?: {reason?: string}}>(msg, "theatre");
       // A member's answer, from its cover node's second output. Anything else

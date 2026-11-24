@@ -5,9 +5,8 @@ import {COVER_TYPES, openCloseCover, positionCover, type CoverModel} from "../li
 import {coverPresets, coverRequest, type CoverPresets} from "../lib/cover-requests";
 import {optionalChoiceSetting} from "../lib/settings";
 import {targetStateEvent} from "../lib/target-state";
+import {REQUEST_ID} from "../lib/topic-names";
 import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
-
-const REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 
 interface CoverControllerConfig extends NodeDef {
   area?: string;
