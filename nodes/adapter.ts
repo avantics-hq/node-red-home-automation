@@ -23,7 +23,8 @@ export function onInput(node: Node, handle: (msg: InputMessage, send: Send) => v
       handle(msg as InputMessage, send);
       done();
     } catch (error) {
-      node.error(error, msg);
+      // done(error) reports it against the message, once, so a Catch node
+      // fires once (Node-RED 5.0.10 runtime/lib/nodes/Node.js:132-143).
       done(error instanceof Error ? error : new Error(String(error)));
     }
   });
