@@ -122,3 +122,14 @@ export function wasDeleted(RED: NodeAPI, node: Node, removed: boolean): boolean 
   });
   return !listed;
 }
+
+// Runs every time the flows start, not only the first: a deploy of other
+// nodes (a room added, say) starts the flows again without restarting this
+// one. Stops when the node closes. The action must be safe to repeat.
+export function onEveryFlowsStarted(RED: NodeAPI, node: Node, action: () => void): void {
+  const run = guarded(node, action);
+  RED.events.on("flows:started", run);
+  node.on("close", () => {
+    RED.events.removeListener("flows:started", run);
+  });
+}

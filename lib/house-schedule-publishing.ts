@@ -1,7 +1,8 @@
 "use strict";
 
 // The house schedule's MQTT and Home Assistant side: its wake and bed times
-// as retained state, under home/<name>/wake-time and bed-time like a room's,
+// as retained state under its own path, home/<name>/schedule/wake-time and
+// bed-time, apart from any room's topics even when a room has the same name,
 // with set topics Home Assistant commands and two time entities. Opt-in (see
 // publishing-node.ts).
 
@@ -13,24 +14,35 @@ import {
   discoveryEntry,
   publishesState,
   publishingNode,
+  retainedText,
   type OptInPublishingConfig,
   type RetainedText
 } from "./publishing-node";
-import {roomTopic, scheduleCommandTopic, scheduleStateMessages, scheduleStateTopic, type ScheduleTime} from "./room-lighting-discovery";
+import {areaId} from "./topic-names";
+
+type ScheduleTime = "wake-time" | "bed-time";
+
+// The one place a house schedule topic is named.
+function houseTopic(name: string, path: string): string {
+  return "home/" + areaId(name) + "/schedule/" + path;
+}
+
+export const houseStateTopic = (name: string, which: ScheduleTime) => houseTopic(name, which + "/state");
+export const houseCommandTopic = (name: string, which: ScheduleTime) => houseTopic(name, which + "/set");
 
 // `area` is the house's name in topics, such as "house".
 export type HouseSchedulePublishingConfig = OptInPublishingConfig;
 
 const DEVICE = {kind: "schedule", label: "Schedule", model: "House schedule"};
 
-export const houseAvailabilityTopic = (name: string) => roomTopic(name, "schedule/availability");
+export const houseAvailabilityTopic = (name: string) => houseTopic(name, "availability");
 
 export function houseDiscovery(config: HouseSchedulePublishingConfig): RetainedText[] {
   const time = (which: ScheduleTime, id: string, name: string, icon: string) =>
     discoveryEntry(config, DEVICE, houseAvailabilityTopic(config.area), {component: "time", id, name, fields: {
       icon,
-      command_topic: scheduleCommandTopic(config.area, which),
-      state_topic: scheduleStateTopic(config.area, which),
+      command_topic: houseCommandTopic(config.area, which),
+      state_topic: houseStateTopic(config.area, which),
       entity_category: "config"
     }});
   return [
@@ -40,13 +52,19 @@ export function houseDiscovery(config: HouseSchedulePublishingConfig): RetainedT
 }
 
 export function houseStateOutputs(config: HouseSchedulePublishingConfig, schedule: DaySchedule): RetainedText[] {
-  return publishesState(config) ? scheduleStateMessages(config.area, schedule) as RetainedText[] : [];
+  // "HH:MM:SS", as Home Assistant's time entity reads it.
+  return publishesState(config)
+    ? [
+      retainedText(houseStateTopic(config.area, "wake-time"), schedule.wakeTime + ":00"),
+      retainedText(houseStateTopic(config.area, "bed-time"), schedule.bedTime + ":00")
+    ]
+    : [];
 }
 
 const house = publishingNode<DaySchedule>({
   entries: houseDiscovery,
   availabilityTopic: houseAvailabilityTopic,
-  stateTopics: (config) => [scheduleStateTopic(config.area, "wake-time"), scheduleStateTopic(config.area, "bed-time")],
+  stateTopics: (config) => [houseStateTopic(config.area, "wake-time"), houseStateTopic(config.area, "bed-time")],
   stateOutputs: houseStateOutputs
 });
 
@@ -62,8 +80,8 @@ export function houseInbound(
   config: HouseSchedulePublishingConfig
 ): {event: HouseScheduleEvent | null; traces: TraceEntry[]} | null {
   if (!publishesState(config)) return null;
-  const which: ScheduleTime | null = msg.topic === scheduleCommandTopic(config.area, "wake-time") ? "wake-time"
-    : msg.topic === scheduleCommandTopic(config.area, "bed-time") ? "bed-time"
+  const which: ScheduleTime | null = msg.topic === houseCommandTopic(config.area, "wake-time") ? "wake-time"
+    : msg.topic === houseCommandTopic(config.area, "bed-time") ? "bed-time"
     : null;
   if (!which) return null;
   const name = which + "-set";

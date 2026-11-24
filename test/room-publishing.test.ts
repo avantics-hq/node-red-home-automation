@@ -6,6 +6,7 @@ import {scheduledLighting} from "../lib/circadian";
 import {resolveSchedule} from "../lib/circadian-schedule";
 import {transitionRoom, type RoomConfig} from "../lib/room-controller";
 import {publishRoom, roomInbound} from "../lib/room-publishing";
+import {houseRetainedTopics} from "../lib/house-schedule-publishing";
 
 const config: RoomConfig = {
   area: "kitchen",
@@ -69,4 +70,15 @@ test("a room following the house has no time entities of its own, ignores its ow
   assert.ok(!fromHouse.outputs.some(({topic}) => /wake|bed/.test(String(topic))), "and no time state is published for it");
   // A room on its own times is as before.
   assert.ok(publishRoom(undefined, {lighting: {kind: "startup"}}, config, now).outputs.some(({topic}) => topic === "home/kitchen/wake-time/state"));
+});
+
+test("a house and a room of the same name don't share topics: the room's clear leaves the house's alone", () => {
+  const room = {...config, area: "hall", timesFrom: "house" as const};
+  const cleared = publishRoom(undefined, {lighting: {kind: "startup"}}, room, now).outputs.filter(({payload}) => payload === "").map(({topic}) => topic);
+  const houseTopics = houseRetainedTopics({area: "hall", publishState: true, discovery: true, discoveryPrefix: "homeassistant", nodeId: "house1", idScheme: "node"});
+  assert.ok(houseTopics.includes("home/hall/schedule/wake-time/state"), houseTopics.join());
+  assert.deepEqual(cleared.filter((topic) => houseTopics.includes(topic)), []);
+  // Its own set topics are the house's, not the room's.
+  assert.deepEqual(publishRoom(undefined, {topic: "home/hall/schedule/wake-time/set", payload: "05:00"}, {...config, area: "hall"}, now).state.schedule,
+    {wakeTime: "07:00", bedTime: "23:00"});
 });

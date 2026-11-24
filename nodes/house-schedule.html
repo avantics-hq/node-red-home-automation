@@ -9,8 +9,7 @@
         name: {value: ""},
         wakeTime: {value: "07:00", required: true, validate: clock},
         bedTime: {value: "23:00", required: true, validate: function (v) { return clock(v) && String(v).trim() !== String($("#node-input-wakeTime").val() || this.wakeTime || "").trim(); }},
-        // Its name in topics, home/<name>/wake-time and bed-time: it must not be
-        // a room's area, as rooms use the same topics.
+        // Its name in topics, home/<name>/schedule/...
         houseName: {value: "house", required: true, validate: function (v) { return /[a-z0-9]/i.test(String(v || "")); }},
         // Off until switched on.
         publishState: {value: false},
@@ -55,22 +54,22 @@
   <p>One wake and bed time for every room that follows the house. Wire output 1 to each room lighting controller
     that should follow it, and set those rooms' <b>Times from</b> to <i>house schedule</i>. Rooms that keep their own
     times (a child's room, say) aren't wired to it.</p>
-  <p>It sends <code>msg.lighting = {kind: "schedule", wakeTime, bedTime}</code> once the flows have started, so the
-    rooms realign after every deploy and restart, whenever a time changes, and at a startup message
+  <p>It sends <code>msg.lighting = {kind: "schedule", wakeTime, bedTime}</code> every time the flows start, so the
+    rooms realign after every deploy (including one that only adds or changes a room) and restart, whenever a time changes, and at a startup message
     (<code>msg.source = "startup"</code>).</p>
   <h3>Inputs</h3>
   <dl class="message-properties">
     <dt>lighting</dt><dd><code>{kind: "schedule", wakeTime, bedTime}</code>, each <code>HH:MM</code> and either one
       alone: new times for the house. A time set this way lasts until the node is deployed with a different
       <b>Wake time</b> or <b>Bed time</b>, which then applies.</dd>
-    <dt>topic = home/&lt;name&gt;/wake-time/set or bed-time/set</dt><dd>a time from Home Assistant, while it
+    <dt>topic = home/&lt;name&gt;/schedule/wake-time/set or bed-time/set</dt><dd>a time from Home Assistant, while it
       publishes. Retained messages and anything but a time are ignored.</dd>
   </dl>
   <h3>Publishing</h3>
   <p>Off unless switched on. With <b>Publish state</b> it publishes its times, retained, on
-    <code>home/&lt;name&gt;/wake-time/state</code> and <code>bed-time/state</code>, with availability; with
-    <b>Home Assistant discovery</b>, wake and bed time entities. The <b>Name in topics</b> must not be a room's area,
-    as rooms use the same topics.</p>
+    <code>home/&lt;name&gt;/schedule/wake-time/state</code> and <code>bed-time/state</code>, with availability on
+    <code>home/&lt;name&gt;/schedule/availability</code>; with <b>Home Assistant discovery</b>, wake and bed time
+    entities.</p>
   <h3>Outputs</h3>
   <ol class="node-ports">
     <li>The schedule, for the rooms that follow the house.</li>

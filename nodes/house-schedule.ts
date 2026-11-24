@@ -14,7 +14,7 @@ import {
 } from "../lib/house-schedule-publishing";
 import {optionalBooleanSetting, optionalChoiceSetting, textSetting} from "../lib/settings";
 import {publishingArea} from "../lib/topic-names";
-import {objectField, onInput, invalidConfig, runReducer, whenFlowsStarted, type Send} from "./adapter";
+import {objectField, onEveryFlowsStarted, onInput, invalidConfig, runReducer, type Send} from "./adapter";
 import {publishingLifecycle} from "./publishing-lifecycle";
 
 interface HouseScheduleConfig extends NodeDef {
@@ -77,8 +77,9 @@ const registerHouseSchedule: NodeInitializer = (RED) => {
       node.status({fill: "green", shape: "dot", text: result.status.text});
     }
 
-    // Rooms realign whenever the flows start: after every deploy and restart.
-    whenFlowsStarted(RED, node, () => process({kind: "announce"}, node.send.bind(node)));
+    // Rooms realign whenever the flows start: after every deploy, including
+    // one that only adds or changes a room, and every restart.
+    onEveryFlowsStarted(RED, node, () => process({kind: "announce"}, node.send.bind(node)));
 
     onInput(node, (msg, send) => {
       const lighting = objectField<{kind?: string; wakeTime?: unknown; bedTime?: unknown}>(msg, "lighting");
