@@ -194,10 +194,22 @@ also attaches the package tarball and its SHA-256 checksum. Install a downloaded
 tarball through **Manage palette → Install → Upload module**, or with:
 
 ```sh
-npm install /path/to/avantics-node-red-home-automation-3.0.0.tgz
+npm install /path/to/avantics-node-red-home-automation-3.0.1.tgz
 ```
 
 Add the installed nodes from the **home automation** section of the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.
+
+### 3.0.1
+
+Fixes the room lighting controller looping on its own commands when something
+between it and MQTT out rewrites them, for example a function that cuts a styled
+ON down to `{"state":"ON"}`: it took each rewritten command for someone else's
+and answered with another, without end. It now takes a bare ON or OFF that
+arrives within 5 seconds of one of its own commands with that power, before that
+command has come back on the topic, as that command, and restyles a light after
+someone else's bare ON at most once every 5 seconds.
+It also no longer marks a light manual when its own command is seen twice. Wire
+its commands to MQTT out unchanged (see Room lighting).
 
 ### Upgrading from 2.x
 
