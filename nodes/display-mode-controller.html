@@ -13,6 +13,10 @@
       projectorPowerMeterHost: {value: "", validate: function (v) {
         return String(v || "").trim() !== "" || String(this.projectorMeterHost || "").trim() !== "";
       }},
+      // The name before 5.0, with no form row. Listed so the editor keeps it:
+      // it holds only the properties named here. Cleared once the dialog
+      // saves the new one.
+      projectorMeterHost: {value: ""},
       // DEFAULT_SCREEN_OPEN_POSITION in lib/display-mode-controller.ts.
       screenOpenPosition: {value: 82, required: true, validate: RED.validators.number()},
       screenTolerance: {value: 2, required: true, validate: RED.validators.number()},
@@ -36,6 +40,9 @@
       if (!this.projectorPowerMeterHost && this.projectorMeterHost) {
         $("#node-input-projectorPowerMeterHost").val(this.projectorMeterHost);
       }
+    },
+    oneditsave: function () {
+      if (String($("#node-input-projectorPowerMeterHost").val() || "").trim() !== "") this.projectorMeterHost = "";
     },
     inputs: 1,
     outputs: 2,

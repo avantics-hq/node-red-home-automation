@@ -7,6 +7,8 @@ import test from "node:test";
 
 interface Definition {
   category?: string;
+  oneditprepare?: (this: Record<string, unknown>) => void;
+  oneditsave?: (this: Record<string, unknown>) => void;
   defaults: Record<string, {value: unknown; type?: string; required?: boolean; validate?: (this: Record<string, unknown>, value: unknown) => boolean}>;
   outputs?: number;
   outputLabels?: string[] | ((this: Record<string, unknown>, index: number) => string);
@@ -226,4 +228,36 @@ test("a display node saved before 5.0, with only projectorMeterHost, isn't shown
   assert.equal(valid({projectorPowerMeterHost: "meter.example"}), true);
   assert.equal(valid({projectorPowerMeterHost: "", projectorMeterHost: ""}), false, "neither");
   assert.equal(valid({}), false);
+});
+
+// A saved node as the editor holds it: only the properties its defaults
+// name (Node-RED's importNodes copies those and nothing else).
+function asLoaded(definition: Definition, saved: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.keys(definition.defaults).filter((key) => key in saved).map((key) => [key, saved[key]]));
+}
+
+// A stand-in jQuery over an edit dialog's input values.
+function dialog(values: Record<string, unknown> = {}) {
+  return Object.assign((selector: string) => ({
+    val(value?: unknown) {
+      if (value === undefined) return values[selector];
+      values[selector] = value;
+      return this;
+    },
+    prop() { return this; },
+    on() { return this; },
+    trigger() { return this; },
+    length: 1
+  }), {values});
+}
+
+test("a display node saved before 5.0 keeps its meter host through the editor, and saving moves it to the new name", () => {
+  const $ = dialog();
+  const definition = editorDefinition("display-mode-controller.html", $);
+  const node = asLoaded(definition, {type: "home-display-mode-controller", projectorMeterHost: "meter.example"});
+  assert.equal(node.projectorMeterHost, "meter.example", "kept as loaded, so the runtime still reads it");
+  definition.oneditprepare!.call(node);
+  assert.equal($.values["#node-input-projectorPowerMeterHost"], "meter.example");
+  definition.oneditsave!.call(node);
+  assert.equal(node.projectorMeterHost, "");
 });
