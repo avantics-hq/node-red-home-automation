@@ -200,10 +200,19 @@ also attaches the package tarball and its SHA-256 checksum. Install a downloaded
 tarball through **Manage palette → Install → Upload module**, or with:
 
 ```sh
-npm install /path/to/avantics-node-red-home-automation-4.0.2.tgz
+npm install /path/to/avantics-node-red-home-automation-4.0.3.tgz
 ```
 
 Add the installed nodes from the **home automation** section of the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.
+
+### 4.0.3
+
+Fixes the theatre state flapping on every scheduled refresh: with an activity
+settled and ready, backlighting and room lighting reported themselves as
+confirming while they re-read their devices, so the theatre published
+`unknown` and back, and counted drift each time. A refresh of a ready target
+now re-reads it without leaving ready, as the display, receiver and source
+already did. A target that really changes on its own still counts as drift.
 
 ### 4.0.2
 
