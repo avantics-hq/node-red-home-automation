@@ -471,15 +471,18 @@ export function transitionDisplay(
       return markReady();
     }
 
+    // Make before break, as TV mode does: the projector warms up and the
+    // screen opens while the TV still shows the picture, which goes to
+    // standby last. A projector that fails to start leaves the TV on.
     if (mode === "projector") {
-      if (state.observed.tv?.power !== "standby") return issueTv("standby");
-      if (!screenAtPosition(state.observed.screen, config.screenOpenPosition, config.screenTolerance)) {
-        return issueScreen(config.screenOpenPosition);
-      }
       if (state.observed.projector?.power !== "on") {
         if (state.observed.projector?.power === "standby") return issueProjectorStart();
         return awaitProjectorPower();
       }
+      if (!screenAtPosition(state.observed.screen, config.screenOpenPosition, config.screenTolerance)) {
+        return issueScreen(config.screenOpenPosition);
+      }
+      if (state.observed.tv?.power !== "standby") return issueTv("standby");
       return markReady();
     }
 
@@ -664,7 +667,11 @@ export function transitionDisplay(
       state.lastAttempt = 0;
       state.fallbackUsed = false;
       state.blockedGeneration = null;
-      state.pending = null;
+      // As at startup, a projector power operation in flight (a warm-up, a
+      // shutdown or a cool-down) carries on under the new request: a toggle
+      // now could switch a warming lamp off or a cooling one back on. The
+      // new request's steps follow once it settles.
+      state.pending = state.pending && !state.pending.retryable ? state.pending : null;
       state.seen = {tv: false, screen: false, projector: false};
       state.querying = {tv: false, screen: false, projector: false};
       beginDiscovery();
