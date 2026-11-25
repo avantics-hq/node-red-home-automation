@@ -69,7 +69,7 @@ const registerDisplayModeController: NodeInitializer = (RED) => {
         tvHost: textSetting(config.tvHost, "TV host"),
         tvPsk: String(node.credentials?.tvPsk ?? ""),
         screenHost: textSetting(config.screenHost, "screen host"),
-        projectorMeterHost: textSetting(config.projectorPowerMeterHost || config.projectorMeterHost, "projector power meter host"),
+        projectorMeterHost: textSetting(String(config.projectorPowerMeterHost ?? "").trim() || config.projectorMeterHost, "projector power meter host"),
         timeoutMs: numberSetting(config.transportTimeoutMs, "transport timeout", 5000)
       });
     } catch (error) {

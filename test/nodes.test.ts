@@ -764,6 +764,7 @@ test("display node: a projector power meter host saved before 5.0 is still read,
   for (const [config, host] of [
     [{...base, projectorMeterHost: "old-meter.invalid"}, "old-meter.invalid"],
     [{...base, projectorPowerMeterHost: "", projectorMeterHost: "old-meter.invalid"}, "old-meter.invalid"],
+    [{...base, projectorPowerMeterHost: "   ", projectorMeterHost: "old-meter.invalid"}, "old-meter.invalid"],
     [{...base, projectorPowerMeterHost: "new-meter.invalid", projectorMeterHost: "old-meter.invalid"}, "new-meter.invalid"]
   ] as const) {
     asked.length = 0;
