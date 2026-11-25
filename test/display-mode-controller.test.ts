@@ -164,6 +164,30 @@ test("back to TV mode mid-warm-up: the warming lamp isn't toggled, and the TV ne
   assert.equal(command(result, "projector", "power_toggle")?.reason, "shutdown-request");
 });
 
+test("a kept projector start that never confirms doesn't fail the newer request: it carries on from a fresh reading", () => {
+  // The start toggle is missed (say, an infrared command not received), so the lamp stays in standby.
+  let result = discover("projector", 1, [
+    [0.1, "tv", {power: "on"}],
+    [0.2, "screen", {position: 0, state: "closed"}],
+    [0.3, "projector", {watts: 2.1}]
+  ]);
+  assert.equal(command(result, "projector", "power_toggle")?.reason, "start");
+  result = apply(result.state, {kind: "intent", requestId: "tv-2", generation: 2, mode: "tv"}, 1);
+  for (const [device, values] of [["tv", {power: "on"}], ["screen", {position: 0, state: "closed"}], ["projector", {watts: 2.1}]] as const) {
+    result = observe(result.state, device, values, 1.1, 2);
+  }
+  assert.equal(result.state.pending?.operation, "projector_start", "kept while it may still be warming");
+
+  // Past the start's deadline: dropped, and the projector asked again under the TV request.
+  result = apply(result.state, {kind: "tick", generation: 2}, 4.3);
+  assert.notEqual(result.state.phase, "failed");
+  assert.deepEqual(result.commands.map(({device, operation, generation}) => [device, operation, generation]), [["projector", "query_power", 2]]);
+  assert.ok(result.traces.some(({reason}) => reason === "superseded-operation-unconfirmed"));
+  result = observe(result.state, "projector", {watts: 2.1}, 4.4, 2);
+  assert.equal(result.state.phase, "ready");
+  assert.deepEqual(result.commands.filter(({operation}) => operation === "power_toggle"), []);
+});
+
 test("back to TV mode while the screen opens: the TV stays on, the lamp is shut down and the screen closes", () => {
   let result = discover("projector", 1, [
     [0.1, "tv", {power: "on"}],

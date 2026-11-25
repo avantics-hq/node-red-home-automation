@@ -597,6 +597,23 @@ export function transitionDisplay(
     }
 
     if (now.getTime() >= pending.deadlineAt) {
+      // A projector step kept from an older request (see the intent) that
+      // never confirmed isn't the newer request's failure: its goal may
+      // already be met. Drop it, read the projector afresh, and let the
+      // newer request act on what it reports; its own steps fail it, under
+      // its own generation, if the projector really is stuck.
+      if (state.desired && pending.command.generation !== state.desired.generation) {
+        state.pending = null;
+        state.seen.projector = false;
+        state.querying.projector = true;
+        commands.push(queryFor(state, "projector"));
+        trace("transition", "dropped", "superseded-operation-unconfirmed", {
+          device: pending.device,
+          operation: pending.operation,
+          generation: pending.command.generation
+        });
+        return;
+      }
       if (pending.retryable && pending.attempt < config.maxAttempts) {
         retry(pending, null);
         return;
