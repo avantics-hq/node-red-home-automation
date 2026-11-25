@@ -7,8 +7,12 @@
       area: {value: ""},
       tvHost: {value: "", required: true},
       screenHost: {value: "", required: true},
-      // projectorMeterHost before 5.0; the dialog fills this from it.
-      projectorPowerMeterHost: {value: "", required: true},
+      // projectorMeterHost before 5.0; the dialog fills this from it. Needed,
+      // but a flow saved before 5.0 has only the old key, which still works,
+      // so the node isn't shown as invalid for it.
+      projectorPowerMeterHost: {value: "", validate: function (v) {
+        return String(v || "").trim() !== "" || String(this.projectorMeterHost || "").trim() !== "";
+      }},
       // DEFAULT_SCREEN_OPEN_POSITION in lib/display-mode-controller.ts.
       screenOpenPosition: {value: 82, required: true, validate: RED.validators.number()},
       screenTolerance: {value: 2, required: true, validate: RED.validators.number()},

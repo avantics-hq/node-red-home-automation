@@ -217,3 +217,13 @@ test("a cover starts with publishing off, named after the node, and has a fourth
   assert.equal(newNode(cover).idScheme, "node");
   assert.deepEqual(cover.outputLabels, ["device commands", "state and results", "moving", "MQTT publications"]);
 });
+
+test("a display node saved before 5.0, with only projectorMeterHost, isn't shown as invalid", () => {
+  const {projectorPowerMeterHost: setting} = editorDefinition("display-mode-controller.html").defaults;
+  assert.equal(setting!.required, undefined, "required would mark it invalid whatever validate says");
+  const valid = (node: Record<string, unknown>) => setting!.validate!.call(node, node.projectorPowerMeterHost);
+  assert.equal(valid({projectorMeterHost: "meter.example"}), true, "as loaded: the old key only");
+  assert.equal(valid({projectorPowerMeterHost: "meter.example"}), true);
+  assert.equal(valid({projectorPowerMeterHost: "", projectorMeterHost: ""}), false, "neither");
+  assert.equal(valid({}), false);
+});
