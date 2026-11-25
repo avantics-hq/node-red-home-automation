@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {normaliseAvrConfig} from "../lib/avr-controller";
-import {normaliseConfig as normaliseDisplayConfig} from "../lib/display-mode-controller";
+import {DEFAULT_SCREEN_OPEN_POSITION, normaliseConfig as normaliseDisplayConfig} from "../lib/display-mode-controller";
 import {booleanSetting, jsonSetting, keptOverride, numberSetting, optionalBooleanSetting, optionalChoiceSetting, textSetting} from "../lib/settings";
 import {normaliseConfig as normaliseSourceConfig} from "../lib/source-capability-controller";
 
@@ -35,7 +35,8 @@ test("display and source settings are read from editor strings", () => {
   const display = normaliseDisplayConfig({pollMs: "100", tvTimeoutMs: "45000", projectorPowerFallback: true});
   assert.equal(display.pollMs, 250);
   assert.equal(display.tvTimeoutMs, 45000);
-  assert.equal(display.screenOpenPosition, 82);
+  assert.equal(display.screenOpenPosition, DEFAULT_SCREEN_OPEN_POSITION);
+  assert.equal(DEFAULT_SCREEN_OPEN_POSITION, 82);
   assert.equal(display.projectorPowerFallback, true);
   const sources = {streamer: {activation: "command", deactivation: "command", confirmation: "active"}};
   const source = normaliseSourceConfig({sources, pollMs: "500"});

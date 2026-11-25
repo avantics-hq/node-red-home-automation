@@ -23,6 +23,8 @@ interface DisplayControllerConfig extends NodeDef {
   area?: string;
   tvHost?: string;
   screenHost?: string;
+  projectorPowerMeterHost?: string;
+  // Before 5.0; read when projectorPowerMeterHost is missing.
   projectorMeterHost?: string;
   transportTimeoutMs?: number | string;
   screenOpenPosition?: number | string;
@@ -67,7 +69,7 @@ const registerDisplayModeController: NodeInitializer = (RED) => {
         tvHost: textSetting(config.tvHost, "TV host"),
         tvPsk: String(node.credentials?.tvPsk ?? ""),
         screenHost: textSetting(config.screenHost, "screen host"),
-        projectorMeterHost: textSetting(config.projectorMeterHost, "projector meter host"),
+        projectorMeterHost: textSetting(config.projectorPowerMeterHost || config.projectorMeterHost, "projector power meter host"),
         timeoutMs: numberSetting(config.transportTimeoutMs, "transport timeout", 5000)
       });
     } catch (error) {
