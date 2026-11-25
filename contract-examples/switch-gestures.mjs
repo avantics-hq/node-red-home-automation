@@ -19,7 +19,7 @@ export function run() {
       source: "wall",
       person: true,
       manual: true,
-      values: {brightness: 254}
+      values: {brightnessPct: 100}
     }
   }]);
 

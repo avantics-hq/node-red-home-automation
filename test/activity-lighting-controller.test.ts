@@ -308,3 +308,14 @@ test("an adopted request the lights don't match is a manual override: nothing ap
   assert.equal(result.state.phase, "manual_override");
   assert.equal(result.events.at(-1)?.theatre.classification, "manual_override");
 });
+
+test("a profile in percent and kelvin matches the light's report in its own units, as an old-unit profile still does", () => {
+  for (const values of [{brightnessPct: 25, colorTempKelvin: 2500}, {brightness: 64, color_temp: 400}]) {
+    const neutral = {...config, profiles: {...config.profiles, tv: {targets: ["wall"], values}}};
+    let result = transitionActivityLighting(undefined, {activityLighting: {kind: "intent", requestId: "tv-1", generation: 1, profile: "tv"}}, neutral, at(0));
+    assert.deepEqual(result.commands[0]?.lighting?.values, values, "the intent carries the profile's own values");
+    result = transitionActivityLighting(result.state, {activityLighting: {kind: "observed", generation: 1, target: "wall", on: true,
+      values: {brightness: 64, color_temp: 400}, observedAt: at(1).toISOString()}}, neutral, at(1));
+    assert.equal(result.state.phase, "ready", JSON.stringify(values));
+  }
+});

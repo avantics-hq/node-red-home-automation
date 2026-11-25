@@ -46,6 +46,8 @@ interface RuntimeNode {
   statuses: unknown[];
   send(message: unknown): void;
   error(error: unknown, msg?: unknown): void;
+  warnings: unknown[];
+  warn(warning: unknown): void;
   status(status: unknown): void;
   context(): RuntimeContext;
   // What Node-RED does to the node's context once it has closed.
@@ -114,6 +116,10 @@ function runtime(
         };
         node.error = (error: unknown) => {
           node.errors.push(error);
+        };
+        node.warnings = [];
+        node.warn = (warning: unknown) => {
+          node.warnings.push(warning);
         };
         node.status = (status: unknown) => {
           node.statuses.push(status);
@@ -236,7 +242,7 @@ test("switch adapter emits gestures without motion state", async (t) => {
   });
   assert.equal(sent.length, 1);
   assert.equal(sent[0]?.lighting?.state, "ON");
-  assert.deepEqual(sent[0]?.lighting?.values, {brightness: 254});
+  assert.deepEqual(sent[0]?.lighting?.values, {brightnessPct: 100});
   assert.equal(traces(node).at(-1)?.component, "switch-policy");
   assert.equal(node.errors.length, 0);
 });
@@ -2194,4 +2200,20 @@ test("cover node publishing: a Home Assistant cover entity, its state as it chan
   // Anything else on its set topics is ignored, with a trace.
   assert.deepEqual(await receive(node, {topic: "home/bedroom/cover/left/set", payload: "SIDEWAYS"}), []);
   assert.equal(traces(node).at(-1)?.reason, "not-open-close-or-stop");
+});
+
+test("room node: lighting values in Zigbee2MQTT's units still work during 5.x, with one warning", async (t) => {
+  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
+  const node = new (runtime(registerRoom).Constructor)({id: "legacy-units", targets, area: "", publishState: false, discovery: false});
+  t.after(() => close(node));
+  const send = async (values: Record<string, unknown>) => ((await receive<SendEnvelope>(node, {lighting: {kind: "intent", state: "ON", manual: true, values}}))[0]?.[0] ?? [])
+    .map((message) => message.payload);
+  // The package's own units, converted for the light.
+  assert.deepEqual(await send({brightnessPct: 50, colorTempKelvin: 2500}), [{state: "ON", brightness: 127, color_temp: 400, transition: 1}]);
+  assert.deepEqual(node.warnings, []);
+  // Zigbee2MQTT's units, passed on as they are, and one warning however often.
+  assert.deepEqual(await send({brightness: 64, color_temp: 400}), [{state: "ON", brightness: 64, color_temp: 400, transition: 1}]);
+  await send({brightness: 64});
+  assert.equal(node.warnings.length, 1);
+  assert.match(String(node.warnings[0]), /brightnessPct .* colorTempKelvin/);
 });

@@ -12,8 +12,8 @@ test("a state report needs an ON or OFF state", () => {
 });
 
 test("a light command fades a style in, and OFF stands alone", () => {
-  assert.deepEqual(lightCommand("ON", {brightness: 200, color_temp: 250}, 60), {state: "ON", brightness: 200, color_temp: 250, transition: 60});
-  assert.deepEqual(lightCommand("OFF", {brightness: 200, color_temp: 250}, 60), {state: "OFF"});
+  assert.deepEqual(lightCommand("ON", {brightnessPct: 200 * 100 / 254, colorTempKelvin: 4000}, 60), {state: "ON", brightness: 200, color_temp: 250, transition: 60});
+  assert.deepEqual(lightCommand("OFF", {brightnessPct: 50, colorTempKelvin: 4000}, 60), {state: "OFF"});
 });
 
 test("value fields mark a command that sets a light's values", () => {

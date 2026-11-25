@@ -4,7 +4,7 @@ import type {TraceEntry} from "./bounded-trace";
 import type {CircadianLighting} from "./circadian";
 import type {DaySchedule} from "./circadian-schedule";
 import {requestedSchedule, savedSchedule, withActiveSchedule} from "./room-schedule";
-import {alreadyStyled, lightCommand, readLightReport, setsLightValues, type LightCommand, type LightReport} from "./z2m-light";
+import {alreadyStyled, lightCommand, lightValues, readLightReport, setsLightValues, type LightCommand, type LightReport} from "./z2m-light";
 import {ECHO_WINDOW_MS, checkCommandEcho, checkStateReport, parsePayload, rememberCommand, type ExpectedCommand} from "./command-echo";
 
 export {fingerprint, parsePayload, type ExpectedCommand} from "./command-echo";
@@ -48,6 +48,11 @@ export interface RoomObservation extends LightReport {
 // holds it until released. "manual": a person changed it.
 export type TargetControlState = "in-control" | "overridden" | "manual";
 export type TargetControl = {state: "manual"} | {state: "overridden"; owner: string};
+
+// Traced when an intent gives brightness or color_temp in Zigbee2MQTT's own
+// units rather than brightnessPct or colorTempKelvin: still accepted during
+// 5.x, and the node warns.
+export const LEGACY_LIGHT_UNITS = "legacy-light-units";
 
 export interface RoomState {
   observed: Record<string, RoomObservation>;
@@ -293,7 +298,10 @@ export function transitionRoom(
       if (resolvedState === "OFF") {
         payload = {state: "OFF"};
       } else if (manualValues) {
-        payload = {state: "ON", ...manualValues};
+        // The intent's values in the light's own units (z2m-light).
+        const device = lightValues(manualValues);
+        if (device.legacy) trace("intent", "accepted", LEGACY_LIGHT_UNITS, {target: targetId, values: manualValues});
+        payload = {state: "ON", ...device.values};
         if (!Object.hasOwn(payload, "transition")) {
           payload.transition = config.initialTransitionSeconds;
         }

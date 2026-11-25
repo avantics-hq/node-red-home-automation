@@ -458,10 +458,17 @@ msg.lighting = {
   state: "ON",
   source: "activity",
   owner: "theatre",
-  values: {brightness: 64, color_temp: 400},
+  values: {brightnessPct: 25, colorTempKelvin: 2500},
   preserveManual: true
 };
 ```
+
+An intent's `values` use the package's own units: `brightnessPct` (0-100) and
+`colorTempKelvin`. The room controller converts them for the light (for a
+Zigbee2MQTT light, to its 1-254 brightness and mireds); other fields, such as
+`effect`, are passed on as they are. During 5.x, `brightness` and `color_temp`
+in Zigbee2MQTT's own units are still accepted and passed on unchanged, and the
+room controller logs a warning once per deploy; they stop working in 6.0.
 
 `home-activity-lighting-controller` does this itself: while a profile is active
 it overrides that profile's lights under its configured owner (default

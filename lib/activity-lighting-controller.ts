@@ -1,5 +1,6 @@
 "use strict";
 
+import {lightValues} from "./z2m-light";
 import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {numberSetting, textSetting} from "./settings";
@@ -131,7 +132,10 @@ function stable(value: unknown): unknown {
   return value;
 }
 
-function valuesMatch(expected: Record<string, unknown>, actual: Record<string, unknown>): boolean {
+// Whether a light's report shows the profile's values. Reports come in the
+// light's own units, so the profile's are converted first (z2m-light).
+function valuesMatch(profileValues: Record<string, unknown>, actual: Record<string, unknown>): boolean {
+  const expected = lightValues(profileValues).values;
   return Object.entries(expected).every(([key, value]) =>
     Object.hasOwn(actual, key) && JSON.stringify(stable(actual[key])) === JSON.stringify(stable(value))
   );
