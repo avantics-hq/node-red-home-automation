@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {evaluateTheatreSlo, type TheatreSloState} from "../lib/theatre-slo";
+import {transitionBacklighting, type BacklightingState} from "../lib/backlighting-controller";
 import {
   normaliseActivityProfiles,
   transitionTheatre,
@@ -748,4 +749,42 @@ test("a refresh carries the activity's wanted values, so a target node with noth
   // A probe with nothing desired carries none.
   const probe = apply(undefined, {kind: "startup"}, 0).commands.find(({target}) => target === "display");
   assert.equal(probe?.mode, undefined);
+});
+
+test("off and ready: a backlighting refresh round trip through its own controller is no drift and no phase change", () => {
+  let theatre = confirmActivity("off", 1);
+  assert.equal(theatre.state.phase, "ready");
+  const backlightingConfig = {pollMs: 1000, confirmationTimeoutMs: 5000, maxAttempts: 2};
+  const backlighting = (state: Partial<BacklightingState> | undefined, event: Record<string, unknown>, seconds: number) =>
+    transitionBacklighting(state, {backlighting: event as never}, backlightingConfig, at(seconds));
+  // The backlighting node, settled off under the same request.
+  let lights = backlighting(undefined, {kind: "intent", requestId: "off-1", generation: 1, power: "off", requestedAt: at(0).toISOString()}, 0);
+  lights = backlighting(lights.state, {kind: "command_result", generation: 1, ok: true}, 0.1);
+  lights = backlighting(lights.state, {kind: "observed", generation: 1, power: "off", observedAt: at(0.5).toISOString()}, 0.5);
+  assert.equal(lights.state.phase, "ready");
+
+  const driftBefore = theatre.state.metrics.driftEvents;
+  for (let seconds = 15; seconds <= 75; seconds += 15) {
+    theatre = apply(theatre.state, {kind: "tick", generation: 1}, seconds);
+    for (const command of theatre.commands) {
+      if (command.target !== "backlighting") {
+        theatre = target(theatre.state, command.target as TheatreTarget, "ready", 1, seconds + 0.1);
+        continue;
+      }
+      // The refresh reaches the backlighting node; whatever it reports goes back, then its reading.
+      lights = backlighting(lights.state, {...command}, seconds);
+      const answers = [...lights.events];
+      if (lights.commands.some(({operation}) => operation === "observe")) {
+        lights = backlighting(lights.state, {kind: "observed", generation: 1, power: "off", observedAt: at(seconds + 0.04).toISOString()}, seconds + 0.04);
+        answers.push(...lights.events);
+      }
+      for (const {theatre: event} of answers) {
+        theatre = apply(theatre.state, event as unknown as TheatreInputEvent, seconds + 0.05);
+        assert.equal(theatre.state.phase, "ready", `phase at ${seconds} s`);
+        assert.equal(theatre.state.targets.backlighting?.status, "ready", `backlighting at ${seconds} s`);
+      }
+    }
+    assert.equal(theatre.state.phase, "ready", `phase at ${seconds} s`);
+  }
+  assert.equal(theatre.state.metrics.driftEvents, driftBefore, "no drift events");
 });
