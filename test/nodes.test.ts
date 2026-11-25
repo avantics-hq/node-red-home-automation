@@ -1866,6 +1866,20 @@ test("receiver node: volume bounds and requests saved before 5.0 still work, wit
   assert.match(String(node.warnings[0]), /valueDb/);
 });
 
+test("receiver node: a volume saved before 5.0 by a context store is published in dB as it starts", async (t) => {
+  const avrRuntime = runtime(registerAvr, {}, STORE);
+  const config = {id: "a5", area: "den", sources: JSON.stringify({shield: "SAT/CBL"}), publishState: true};
+  const before = new avrRuntime.Constructor(config);
+  // As 4.x saved it: the receiver's own 31, no units marker.
+  before.context().set("state", {observed: {power: "on", mainZone: "on", source: "shield", sourceCode: "SAT/CBL", volume: 31, at: null}});
+  await close(before);
+  const node = new avrRuntime.Constructor(config);
+  t.after(() => close(node));
+  avrRuntime.events.emit("flows:started");
+  const started = (node.sent.at(-1) as SendEnvelope)[2] ?? [];
+  assert.deepEqual(started.filter(({topic}) => String(topic).endsWith("volume/state")).map(({payload}) => payload), ["-49"]);
+});
+
 test("receiver volume number: a burst of sets becomes one request for the last value", async (t) => {
   const avrRuntime = runtime(registerAvr);
   const node = new avrRuntime.Constructor({id: "a3", area: "den", sources: JSON.stringify({shield: "SAT/CBL"}), publishState: true, discovery: true});

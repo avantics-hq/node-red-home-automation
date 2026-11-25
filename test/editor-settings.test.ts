@@ -7,6 +7,8 @@ import test from "node:test";
 
 interface Definition {
   category?: string;
+  oneditprepare?: (this: Record<string, unknown>) => void;
+  oneditsave?: (this: Record<string, unknown>) => void;
   defaults: Record<string, {value: unknown; type?: string; required?: boolean; validate?: (this: Record<string, unknown>, value: unknown) => boolean}>;
   outputs?: number;
   outputLabels?: string[] | ((this: Record<string, unknown>, index: number) => string);
@@ -216,4 +218,42 @@ test("a cover starts with publishing off, named after the node, and has a fourth
     [false, false, true, true]);
   assert.equal(newNode(cover).idScheme, "node");
   assert.deepEqual(cover.outputLabels, ["device commands", "state and results", "moving", "MQTT publications"]);
+});
+
+// A saved node as the editor holds it: only the properties its defaults
+// name (Node-RED's importNodes copies those and nothing else).
+function asLoaded(definition: Definition, saved: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.keys(definition.defaults).filter((key) => key in saved).map((key) => [key, saved[key]]));
+}
+
+// A stand-in jQuery over an edit dialog's input values.
+function dialog(values: Record<string, unknown> = {}) {
+  return Object.assign((selector: string) => ({
+    val(value?: unknown) {
+      if (value === undefined) return values[selector];
+      values[selector] = value;
+      return this;
+    },
+    prop() { return this; },
+    on() { return this; },
+    trigger() { return this; },
+    length: 1
+  }), {values});
+}
+
+test("a receiver saved before 5.0 keeps its volume bounds through the editor, isn't invalid, and saving moves them to dB", () => {
+  const $ = dialog();
+  const definition = editorDefinition("avr-controller.html", $);
+  const node = asLoaded(definition, {type: "home-avr-controller", minVolume: 10, maxVolume: 50, publishState: false});
+  assert.deepEqual([node.minVolume, node.maxVolume], [10, 50], "kept as loaded, so the runtime still reads them");
+  const valid = (key: string) => definition.defaults[key]!.required !== true && definition.defaults[key]!.validate!.call(node, node[key]);
+  assert.deepEqual([valid("minVolumeDb"), valid("maxVolumeDb")], [true, true]);
+  definition.oneditprepare!.call(node);
+  assert.deepEqual([$.values["#node-input-minVolumeDb"], $.values["#node-input-maxVolumeDb"]], [-70, -30]);
+  definition.oneditsave!.call(node);
+  assert.deepEqual([node.minVolume, node.maxVolume], ["", ""]);
+  // Neither form, or a non-number, is invalid.
+  assert.equal(definition.defaults.minVolumeDb!.validate!.call({minVolume: ""}, ""), false);
+  assert.equal(definition.defaults.minVolumeDb!.validate!.call({}, "quiet"), false);
+  assert.equal(definition.defaults.minVolumeDb!.validate!.call({}, -60), true);
 });

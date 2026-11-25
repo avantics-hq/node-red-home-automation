@@ -561,3 +561,14 @@ test("a receiver state saved before 5.0 has its volumes read as the receiver's u
     {avr: {kind: "tick"}}, config, at(1));
   assert.deepEqual([relative.state.volumeRequest?.requested, relative.state.volumeRequest?.target], [2, -47]);
 });
+
+test("a volume request's valueDb may be a numeric string, and an old value beside it is ignored, traced", () => {
+  let result = transitionAvr(readyState(), {avr: {kind: "volume", requestId: "text", mode: "absolute", valueDb: " -45 "}}, config, at(1));
+  assert.equal(result.commands[0]?.payload, "MV35\r");
+  result = transitionAvr(readyState(), {avr: {kind: "volume", requestId: "both", mode: "absolute", valueDb: "-45", value: 40}}, config, at(1));
+  assert.equal(result.commands[0]?.payload, "MV35\r");
+  assert.ok(result.traces.some(({reason}) => reason === "legacy-volume-units-ignored"));
+  result = transitionAvr(readyState(), {avr: {kind: "volume", requestId: "loud", mode: "absolute", valueDb: "loud"}}, config, at(1));
+  assert.deepEqual(result.commands, []);
+  assert.ok(result.events.some(({avr}) => avr.kind === "volume_rejected" && avr.reason === "invalid-volume-value"));
+});

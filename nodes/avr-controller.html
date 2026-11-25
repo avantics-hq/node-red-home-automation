@@ -1,6 +1,11 @@
 <script type="text/javascript">
   (function () {
   function on(value) { return value === true || value === "true"; }
+  function given(value) { return value !== undefined && value !== null && String(value).trim() !== ""; }
+  // A dB bound, or a bound saved before 5.0 in its place.
+  function volumeBound(value, legacy) {
+    return given(value) ? Number.isFinite(Number(value)) : given(legacy) && Number.isFinite(Number(legacy));
+  }
   RED.nodes.registerType("home-avr-controller", {
     category: "home automation",
     color: "#c7d9f1",
@@ -18,10 +23,16 @@
       retryMs: {value: 2000, required: true, validate: RED.validators.number()},
       maxAttempts: {value: 3, required: true, validate: RED.validators.number()},
       // In dB (the receiver's 80 is 0 dB). A flow saved before 5.0 has
-      // minVolume and maxVolume in the receiver's own 0-98 instead; the
-      // dialog fills these from them.
-      minVolumeDb: {value: -80, required: true, validate: RED.validators.number()},
-      maxVolumeDb: {value: -20, required: true, validate: RED.validators.number()},
+      // minVolume and maxVolume in the receiver's own 0-98 instead, which
+      // still work: the node isn't shown invalid for them, and the dialog
+      // fills these from them.
+      minVolumeDb: {value: -80, validate: function (v) { return volumeBound(v, this.minVolume); }},
+      maxVolumeDb: {value: -20, validate: function (v) { return volumeBound(v, this.maxVolume); }},
+      // The bounds before 5.0, with no form rows. Listed so the editor keeps
+      // them: it holds only the properties named here. Cleared once the
+      // dialog saves the dB ones.
+      minVolume: {value: ""},
+      maxVolume: {value: ""},
       // The receiver published nothing before these settings, so both start off.
       publishState: {value: false},
       discovery: {value: false},
@@ -38,12 +49,8 @@
     oneditprepare: function () {
       // A flow saved before 5.0: show its volume bounds in dB, so saving
       // the dialog keeps them.
-      if ((this.minVolumeDb === undefined || this.minVolumeDb === "") && this.minVolume !== undefined && this.minVolume !== "") {
-        $("#node-input-minVolumeDb").val(Number(this.minVolume) - 80);
-      }
-      if ((this.maxVolumeDb === undefined || this.maxVolumeDb === "") && this.maxVolume !== undefined && this.maxVolume !== "") {
-        $("#node-input-maxVolumeDb").val(Number(this.maxVolume) - 80);
-      }
+      if (!given(this.minVolumeDb) && given(this.minVolume)) $("#node-input-minVolumeDb").val(Number(this.minVolume) - 80);
+      if (!given(this.maxVolumeDb) && given(this.maxVolume)) $("#node-input-maxVolumeDb").val(Number(this.maxVolume) - 80);
       $("#node-input-publishState").prop("checked", on(this.publishState));
       $("#node-input-discovery").prop("checked", on(this.discovery));
       // Discovery describes the published state, so it needs it.
@@ -55,6 +62,10 @@
       }
       $("#node-input-publishState, #node-input-discovery").on("change", follow);
       follow();
+    },
+    oneditsave: function () {
+      if (given($("#node-input-minVolumeDb").val())) this.minVolume = "";
+      if (given($("#node-input-maxVolumeDb").val())) this.maxVolume = "";
     },
     inputs: 1,
     outputs: 3,

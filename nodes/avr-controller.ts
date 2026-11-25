@@ -9,6 +9,7 @@ import type {
 } from "node-red";
 import {
   LEGACY_VOLUME_UNITS,
+  createAvrState,
   normaliseAvrConfig,
   transitionAvr,
   type AvrConfig,
@@ -116,8 +117,10 @@ const registerAvrController: NodeInitializer = (RED) => {
       }), delay);
     }
 
+    // As the reducer restores it, so a state saved before 5.0 is published in dB.
     function observed() {
-      return (context.get("state") as Partial<AvrState> | undefined)?.observed;
+      const saved = context.get("state") as Partial<AvrState> | undefined;
+      return saved ? createAvrState(controllerConfig, saved).observed : undefined;
     }
 
     // MQTT publications go on the third output, apart from the receiver's

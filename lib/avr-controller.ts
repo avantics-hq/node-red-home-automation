@@ -133,10 +133,10 @@ export type AvrInputEvent =
     kind: "volume";
     requestId: string;
     mode: AvrVolumeMode;
-    // In dB: absolute, or a change for "relative".
-    valueDb?: number;
+    // In dB: absolute, or a change for "relative". A numeric string counts.
+    valueDb?: number | string;
     // Before 5.0: the receiver's own 0-98 for "absolute".
-    value?: number;
+    value?: number | string;
   }
   | {kind: "tick"};
 
@@ -171,6 +171,12 @@ export interface AvrOutputEvent {
 
 function observedTime(value: unknown): string | null {
   return typeof value === "string" && Number.isFinite(Date.parse(value)) ? value : null;
+}
+
+// A number, or a finite numeric string, as a number; null otherwise.
+function numberValue(value: unknown): number | null {
+  const number = typeof value === "number" ? value : typeof value === "string" && value.trim() !== "" ? Number(value) : NaN;
+  return Number.isFinite(number) ? number : null;
 }
 
 export function createAvrState(
@@ -261,8 +267,10 @@ function sameVolume(left: number | null, right: number | null): boolean {
 // bounds -80 to -20 dB. A flow saved before 5.0 has minVolume and maxVolume
 // in the receiver's own 0-98, read when the dB settings are missing.
 export function normaliseAvrConfig(rawConfig: {[K in keyof AvrConfig]?: unknown} & {minVolume?: unknown; maxVolume?: unknown}): AvrConfig {
+  // The editor keeps the old keys, empty once the dialog saves dB ones.
+  const given = (value: unknown) => value !== undefined && value !== null && String(value).trim() !== "";
   const bound = (db: unknown, legacy: unknown, label: string, fallback: number) =>
-    db === undefined && legacy !== undefined
+    !given(db) && given(legacy)
       ? legacyVolumeDb(numberSetting(legacy, label, fallback - VOLUME_MIN_DB), "absolute")
       : numberSetting(db, label, fallback);
   const rawMinVolume = bound(rawConfig.minVolumeDb, rawConfig.minVolume, "minimum volume", -80);
@@ -820,13 +828,19 @@ export function transitionAvr(
     }
     forceStateEvent = true;
   } else if (event.kind === "volume") {
-    // In dB; `value` from before 5.0 is in the receiver's own units, still
-    // read during 5.x and traced so the node can warn.
-    const legacyUnits = typeof event.valueDb !== "number" && event.value !== undefined;
-    const volume = {...event, value: typeof event.valueDb === "number" ? event.valueDb
-      : typeof event.value === "number" && (event.mode === "absolute" || event.mode === "relative") ? legacyVolumeDb(event.value, event.mode)
-        : typeof event.value === "number" ? event.value : NaN};
+    // In dB; a finite numeric string counts. `value` from before 5.0 is in
+    // the receiver's own units, still read during 5.x and traced so the
+    // node can warn; given with a usable valueDb, it is ignored and traced.
+    const valueDb = numberValue(event.valueDb);
+    const value = numberValue(event.value);
+    const legacyUnits = valueDb === null && event.value !== undefined;
+    const volume = {...event, value: valueDb !== null ? valueDb
+      : value !== null && (event.mode === "absolute" || event.mode === "relative") ? legacyVolumeDb(value, event.mode)
+        : value ?? NaN};
     if (legacyUnits) trace("volume", "accepted", LEGACY_VOLUME_UNITS, {requestId: event.requestId, value: event.value});
+    if (valueDb !== null && event.value !== undefined) {
+      trace("volume", "accepted", "legacy-volume-units-ignored", {requestId: event.requestId, value: event.value});
+    }
     const reason = validateVolumeIntent(volume);
     if (reason) {
       events.push({
