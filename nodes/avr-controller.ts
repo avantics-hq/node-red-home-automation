@@ -8,6 +8,7 @@ import type {
   NodeStatusShape
 } from "node-red";
 import {
+  LEGACY_VOLUME_UNITS,
   normaliseAvrConfig,
   transitionAvr,
   type AvrConfig,
@@ -35,6 +36,9 @@ interface AvrControllerConfig extends NodeDef {
   sources?: string;
   retryMs?: number | string;
   maxAttempts?: number | string;
+  minVolumeDb?: number | string;
+  maxVolumeDb?: number | string;
+  // Before 5.0, in the receiver's own 0-98; read when the dB ones are missing.
   minVolume?: number | string;
   maxVolume?: number | string;
   publishState?: boolean | string | null;
@@ -81,8 +85,8 @@ const registerAvrController: NodeInitializer = (RED) => {
         discoveryPrefix: discoveryPrefixSetting(config.discoveryPrefix),
         nodeId: node.id,
         idScheme: optionalChoiceSetting(config.idScheme, "ID scheme", ID_SCHEMES) ?? "node",
-        minVolume: controllerConfig.minVolume,
-        maxVolume: controllerConfig.maxVolume
+        minVolumeDb: controllerConfig.minVolumeDb,
+        maxVolumeDb: controllerConfig.maxVolumeDb
       };
     } catch (error) {
       invalidConfig(node, error);
@@ -129,6 +133,7 @@ const registerAvrController: NodeInitializer = (RED) => {
       outputs: 3
     });
 
+    let warnedLegacyVolume = false;
     function process(msg: AvrMessage, send: Send) {
       const before = observed();
       const result = runReducer(node, {area: controllerConfig.area, component: "avr-controller"},
@@ -137,6 +142,13 @@ const registerAvrController: NodeInitializer = (RED) => {
         payload: Buffer.from(command.payload, "utf8"),
         avr_command: command.avrCommand
       }));
+      // Once per deploy, so a flow still sending the receiver's own units is
+      // told without filling the log.
+      if (!warnedLegacyVolume && result.traces.some(({reason}) => reason === LEGACY_VOLUME_UNITS)) {
+        warnedLegacyVolume = true;
+        node.warn("volume requests with value in the receiver's own 0-98 are deprecated and will stop working in 6.0: " +
+          "send valueDb (dB, where the receiver's 80 is 0 dB) instead");
+      }
       const outputs = [...result.events, ...result.targetStates];
       if (commands.length || outputs.length) {
         send([
@@ -171,9 +183,9 @@ const registerAvrController: NodeInitializer = (RED) => {
     let volumeRequests = 0;
     let volumeSetTimer: ReturnType<typeof setTimeout> | undefined;
 
-    function requestVolume(value: number) {
+    function requestVolume(valueDb: number) {
       volumeRequests += 1;
-      process({avr: {kind: "volume", requestId: `mqtt-volume-${Date.now()}-${volumeRequests}`, mode: "absolute", value}}, node.send.bind(node));
+      process({avr: {kind: "volume", requestId: `mqtt-volume-${Date.now()}-${volumeRequests}`, mode: "absolute", valueDb}}, node.send.bind(node));
     }
 
     onInput(node, (msg, send) => {
@@ -187,7 +199,7 @@ const registerAvrController: NodeInitializer = (RED) => {
         clearTimeout(volumeSetTimer);
         volumeSetTimer = setTimeout(guarded(node, () => {
           volumeSetTimer = undefined;
-          requestVolume(volume.value);
+          requestVolume(volume.valueDb);
         }), VOLUME_SET_SETTLE_MS);
         return;
       }

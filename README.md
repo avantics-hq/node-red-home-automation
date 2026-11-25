@@ -519,9 +519,17 @@ msg.avr = {
   kind: "volume",
   requestId: "volume-control-1",
   mode: "relative",
-  value: 1
+  valueDb: 1
 };
 ```
+
+Volume is in dB: `valueDb` is the volume for `absolute`, or the change for
+`relative`, and the bounds, results, published state and Home Assistant
+number are in dB too. The controller converts for the receiver (for a Denon,
+whose 0-98 has 80 at 0 dB, -80 to +18 dB in half steps). During 5.x, a request
+with `value` in the receiver's own 0-98, and bounds saved before 5.0 as
+**minVolume** and **maxVolume**, are still read, and the node logs a warning
+once per deploy for such requests; they stop working in 6.0.
 
 `mode` may be `absolute` or `relative`. The controller resolves relative input
 from fresh observed volume, accumulates rapid requests against the pending
