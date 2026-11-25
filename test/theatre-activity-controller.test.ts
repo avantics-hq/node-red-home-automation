@@ -751,9 +751,12 @@ test("a refresh carries the activity's wanted values, so a target node with noth
   assert.equal(probe?.mode, undefined);
 });
 
-test("off and ready: a backlighting refresh round trip through its own controller is no drift and no phase change", () => {
+// The activity off and ready, ticked every 15 s; each backlighting refresh
+// goes through the backlighting controller itself, and what it reports goes
+// back to the theatre. The device answers each observe unless `silent` says
+// it doesn't at that time. Returns what was seen at each tick.
+function backlightingRefreshRounds(until: number, silent: (seconds: number) => boolean = () => false) {
   let theatre = confirmActivity("off", 1);
-  assert.equal(theatre.state.phase, "ready");
   const backlightingConfig = {pollMs: 1000, confirmationTimeoutMs: 5000, maxAttempts: 2};
   const backlighting = (state: Partial<BacklightingState> | undefined, event: Record<string, unknown>, seconds: number) =>
     transitionBacklighting(state, {backlighting: event as never}, backlightingConfig, at(seconds));
@@ -762,29 +765,52 @@ test("off and ready: a backlighting refresh round trip through its own controlle
   lights = backlighting(lights.state, {kind: "command_result", generation: 1, ok: true}, 0.1);
   lights = backlighting(lights.state, {kind: "observed", generation: 1, power: "off", observedAt: at(0.5).toISOString()}, 0.5);
   assert.equal(lights.state.phase, "ready");
-
   const driftBefore = theatre.state.metrics.driftEvents;
-  for (let seconds = 15; seconds <= 75; seconds += 15) {
+  const rounds: Array<{seconds: number; phase: string; status: string | undefined; pending: unknown; degraded: string | null}> = [];
+  for (let seconds = 15; seconds <= until; seconds += 15) {
     theatre = apply(theatre.state, {kind: "tick", generation: 1}, seconds);
     for (const command of theatre.commands) {
       if (command.target !== "backlighting") {
         theatre = target(theatre.state, command.target as TheatreTarget, "ready", 1, seconds + 0.1);
         continue;
       }
-      // The refresh reaches the backlighting node; whatever it reports goes back, then its reading.
       lights = backlighting(lights.state, {...command}, seconds);
       const answers = [...lights.events];
-      if (lights.commands.some(({operation}) => operation === "observe")) {
+      if (lights.commands.some(({operation}) => operation === "observe") && !silent(seconds)) {
         lights = backlighting(lights.state, {kind: "observed", generation: 1, power: "off", observedAt: at(seconds + 0.04).toISOString()}, seconds + 0.04);
         answers.push(...lights.events);
       }
       for (const {theatre: event} of answers) {
         theatre = apply(theatre.state, event as unknown as TheatreInputEvent, seconds + 0.05);
         assert.equal(theatre.state.phase, "ready", `phase at ${seconds} s`);
-        assert.equal(theatre.state.targets.backlighting?.status, "ready", `backlighting at ${seconds} s`);
       }
     }
-    assert.equal(theatre.state.phase, "ready", `phase at ${seconds} s`);
+    rounds.push({
+      seconds,
+      phase: theatre.state.phase,
+      status: theatre.state.targets.backlighting?.status,
+      pending: theatre.state.refreshPending.backlighting,
+      degraded: theatre.state.degraded.find(({target: name}) => name === "backlighting")?.reason ?? null
+    });
   }
-  assert.equal(theatre.state.metrics.driftEvents, driftBefore, "no drift events");
+  return {rounds, drift: theatre.state.metrics.driftEvents - driftBefore};
+}
+
+test("off and ready: a backlighting refresh round trip through its own controller is no drift and no phase change", () => {
+  const {rounds, drift} = backlightingRefreshRounds(120);
+  assert.ok(rounds.length >= 8);
+  for (const round of rounds) {
+    // Each refresh is answered: nothing left pending, and nothing degraded.
+    assert.deepEqual(round, {seconds: round.seconds, phase: "ready", status: "ready", pending: null, degraded: null});
+  }
+  assert.equal(drift, 0, "no drift events");
+});
+
+test("off and ready: unanswered backlighting refreshes end as no-response with the activity still ready, then recover", () => {
+  const {rounds, drift} = backlightingRefreshRounds(400, (seconds) => seconds >= 60 && seconds < 300);
+  assert.ok(rounds.every(({phase}) => phase === "ready"), "the activity is held ready throughout");
+  assert.ok(rounds.some(({seconds, degraded}) => seconds < 300 && degraded === "no-response"), JSON.stringify(rounds));
+  const last = rounds.at(-1)!;
+  assert.deepEqual([last.status, last.pending, last.degraded], ["ready", null, null], "recovers once the device answers");
+  assert.equal(drift, 0);
 });
