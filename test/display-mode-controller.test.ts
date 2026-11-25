@@ -527,23 +527,34 @@ test("an adopted request the display doesn't match is a manual override: no togg
   assert.equal(next.state.desired?.requestId, "projector-7");
 });
 
-test("pushed projector power states alone, with every query left unanswered, take the display into and out of projector mode", () => {
-  // The projector as an adapter sees it: standby until toggled on, then
-  // transitioning for 1.5 s; when on, the first toggle is the shutdown
-  // prompt and the second starts a 2 s cool-down.
+// The display driven with no built-in meter: the TV and screen answer as
+// their transports do, the infrared toggle works, and the projector's power
+// comes from an adapter that reports every second unasked ("periodic"),
+// only when its state changes ("on-change"), or also when output 3's query
+// reaches it ("answered"). Returns each mode's outcome.
+function withoutMeter(meter: "periodic" | "on-change" | "answered") {
   const projector = {power: "standby" as "on" | "standby" | "transitioning", until: 0, next: "standby" as "on" | "standby", prompted: false};
   const devices = {tv: "on" as "on" | "standby", screen: 0};
-  let queries = 0;
+  let reported: string | null = null;
   let state: Partial<DisplayState> | undefined;
-  let result: ReturnType<typeof transitionDisplay>;
-  // Carries out each command, as the transports and the infrared blaster
-  // would, and feeds back what the TV and screen then report, until the
-  // node has nothing more to send. Projector queries go unanswered.
-  const answer = (now: number, generation: number): void => {
+  let result!: ReturnType<typeof transitionDisplay>;
+  let queries = 0;
+  const report = (now: number, generation: number) => {
+    result = observe(result.state, "projector", {power: projector.power}, now, generation);
+    state = result.state;
+    reported = projector.power;
+    answer(now, generation);
+  };
+  // Carries out each command and feeds back what the devices then report,
+  // until the node has nothing more to send.
+  function answer(now: number, generation: number): void {
     const follow: Array<[DisplayDevice, ObservationValues]> = [];
+    let asked = false;
     for (const entry of result.commands) {
-      if (entry.device === "projector" && entry.operation === "query_power") queries += 1;
-      else if (entry.device === "projector" && entry.operation === "power_toggle") {
+      if (entry.device === "projector" && entry.operation === "query_power") {
+        queries += 1;
+        asked = true;
+      } else if (entry.device === "projector" && entry.operation === "power_toggle") {
         if (projector.power === "standby") Object.assign(projector, {power: "transitioning", until: now + 1.5, next: "on"});
         else if (!projector.prompted) projector.prompted = true;
         else Object.assign(projector, {power: "transitioning", until: now + 2, next: "standby", prompted: false});
@@ -560,31 +571,66 @@ test("pushed projector power states alone, with every query left unanswered, tak
       state = result.state;
       answer(now, generation);
     }
-  };
+    if (asked && meter === "answered") report(now, generation);
+  }
   const run = (mode: DisplayMode, generation: number, from: number) => {
     result = apply(state, {kind: "intent", requestId: `${mode}-${generation}`, generation, mode}, from);
     state = result.state;
     answer(from, generation);
-    for (let tenth = 1; tenth <= 200 && result.state.phase !== "ready"; tenth += 1) {
+    for (let tenth = 1; tenth <= 300 && !["ready", "failed"].includes(result.state.phase); tenth += 1) {
       const now = from + tenth / 10;
       if (projector.power === "transitioning" && now >= projector.until) projector.power = projector.next;
-      // Reports once a second, unasked.
-      if (tenth % 10 === 0) {
-        result = observe(state, "projector", {power: projector.power}, now, generation);
+      const due = meter === "periodic" ? tenth % 10 === 0 : projector.power !== reported;
+      if (due) {
+        report(now, generation);
       } else {
         result = apply(state, {kind: "tick", generation}, now);
+        state = result.state;
+        answer(now, generation);
       }
-      state = result.state;
-      answer(now, generation);
-      assert.notEqual(result.state.phase, "failed", `${mode} at ${now}: ${JSON.stringify(result.state.failure)}`);
     }
-    return result.state.phase;
+    return {phase: result.state.phase, failure: result.state.failure && {device: result.state.failure.device, reason: result.state.failure.reason}};
   };
-  assert.equal(run("projector", 1, 0), "ready");
-  assert.equal(projector.power, "on");
-  assert.equal(run("tv", 2, 30), "ready");
-  assert.equal(projector.power, "standby");
-  assert.ok(queries > 0, "the node did ask; nothing answered");
+  // The meter has reported once, as one would when first set up.
+  reported = projector.power;
+  const into = run("projector", 1, 0);
+  const out = into.phase === "ready" ? run("tv", 2, 60) : null;
+  return {into, out, power: projector.power, queries};
+}
+
+test("with no built-in meter, a periodic meter or an answered query takes the display into and out of projector mode", () => {
+  for (const meter of ["periodic", "answered"] as const) {
+    const outcome = withoutMeter(meter);
+    assert.deepEqual([outcome.into.phase, outcome.out?.phase, outcome.power], ["ready", "ready", "standby"], meter);
+    assert.ok(outcome.queries > 0, meter);
+  }
+});
+
+test("a meter that reports only on change, with nothing answering output 3, fails the request naming the projector", () => {
+  const outcome = withoutMeter("on-change");
+  assert.deepEqual(outcome.into, {phase: "failed", failure: {device: "projector", reason: "no-reading"}});
+});
+
+test("discovery asks a silent device again, then fails naming it, at the query timeout each time", () => {
+  let result = apply(undefined, {kind: "intent", requestId: "p-1", generation: 1, mode: "projector"}, 0);
+  result = observe(result.state, "tv", {power: "standby"}, 0.1);
+  result = observe(result.state, "screen", {position: 0, state: "stopped"}, 0.1);
+  result = apply(result.state, {kind: "tick", generation: 1}, 0.9);
+  assert.deepEqual([result.commands.length, result.state.phase], [0, "discovering"], "not yet due");
+  result = apply(result.state, {kind: "tick", generation: 1}, 1);
+  assert.deepEqual(result.commands.map(({device, operation, attempt}) => [device, operation, attempt]), [["projector", "query_power", 2]]);
+  assert.equal(result.state.discovery?.nextAt, at(2).getTime());
+  result = apply(result.state, {kind: "tick", generation: 1}, 2);
+  assert.equal(result.state.phase, "failed");
+  assert.deepEqual(result.state.failure, {device: "projector", operation: "discovery", reason: "no-reading", occurredAt: at(2).toISOString()});
+  assert.ok(result.events.some(({display}) => display.kind === "failed"));
+  // A reading in time ends discovery: no deadline is left behind.
+  result = apply(undefined, {kind: "intent", requestId: "p-2", generation: 1, mode: "tv"}, 0);
+  for (const [device, values] of [["tv", {power: "on"}], ["screen", {position: 0, state: "stopped"}], ["projector", {power: "STANDBY"}]] as const) {
+    result = observe(result.state, device, values, 0.5);
+  }
+  assert.equal(result.state.discovery, undefined);
+  assert.equal(result.state.phase, "ready");
 });
 
 test("a projector reading may give its power state instead of watts", () => {
@@ -602,5 +648,9 @@ test("a projector reading may give its power state instead of watts", () => {
   // Both: the state wins, and the watts are kept.
   assert.deepEqual([reading({power: "standby", watts: 155})?.power, reading({power: "standby", watts: 155})?.watts], ["standby", 155]);
   assert.throws(() => reading({power: "warming"}), /on, standby or transitioning/);
+  // Any case; a plug's OFF is its socket, not the lamp, so it isn't standby.
+  assert.equal(reading({power: "On"})?.power, "on");
+  assert.equal(reading({power: " TRANSITIONING "})?.power, "transitioning");
+  assert.throws(() => reading({power: "OFF"}), /on, standby or transitioning/);
   assert.throws(() => reading({}), /invalid projector power observation/);
 });

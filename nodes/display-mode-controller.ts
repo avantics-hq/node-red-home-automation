@@ -97,8 +97,10 @@ const registerDisplayModeController: NodeInitializer = (RED) => {
     function schedule(state: DisplayState) {
       clearTimeout(timer);
       timer = undefined;
-      if (!state.pending?.nextAt) return;
-      const delay = Math.max(0, state.pending.nextAt - Date.now());
+      // The pending step's next check or the discovery deadline, whichever is first.
+      const due = [state.pending?.nextAt, state.discovery?.nextAt].filter((at): at is number => Number.isFinite(at));
+      if (!due.length) return;
+      const delay = Math.max(0, Math.min(...due) - Date.now());
       const generation = state.desired?.generation || state.generation;
       timer = setTimeout(guarded(node, () => {
         process({display: {kind: "tick", generation}}, node.send.bind(node));

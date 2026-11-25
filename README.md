@@ -103,9 +103,10 @@ on output 2. Example: [`Home theatre equipment.json`](https://github.com/avantic
 The display controller reads the projector's power from any meter or adapter:
 send `msg.display = {kind: "observed", device: "projector", power: "on"}`
 (`"on"`, `"standby"` or `"transitioning"`), or `watts` from a meter. Its
-built-in Shelly meter is optional; without one, it asks for a reading on
-output 3 when it needs one, and readings the meter sends unasked are enough on
-their own. The node's help has the details.
+built-in Shelly meter is optional. Without one, it asks for a reading on output
+3 whenever it needs one; wire that to your meter, unless the meter reports on
+its own at least once per query timeout. A device that doesn't report fails
+the request with reason `no-reading`. The node's help has the details.
 
 ### Theatre activities
 

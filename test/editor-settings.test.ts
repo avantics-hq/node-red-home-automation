@@ -258,6 +258,13 @@ test("a display node saved before 5.0 keeps its meter host through the editor, a
   assert.equal($.values["#node-input-projectorPowerMeterHost"], "meter.example");
   definition.oneditsave!.call(node);
   assert.equal(node.projectorMeterHost, "");
+  // Clearing the filled-in host and saving leaves none: the node then reads
+  // the projector's power from the flow.
+  const migrated = asLoaded(definition, {type: "home-display-mode-controller", projectorMeterHost: "meter.example"});
+  definition.oneditprepare!.call(migrated);
+  $.values["#node-input-projectorPowerMeterHost"] = "";
+  definition.oneditsave!.call(migrated);
+  assert.equal(migrated.projectorMeterHost, "");
 });
 
 test("a receiver saved before 5.0 keeps its volume bounds through the editor, isn't invalid, and saving moves them to dB", () => {

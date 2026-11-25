@@ -39,7 +39,9 @@
       }
     },
     oneditsave: function () {
-      if (String($("#node-input-projectorPowerMeterHost").val() || "").trim() !== "") this.projectorMeterHost = "";
+      // The dialog showed the old host in the field, so what's left there is
+      // the user's choice, including none.
+      this.projectorMeterHost = "";
     },
     inputs: 1,
     outputs: 3,
@@ -90,15 +92,17 @@
   <h3>Projector power from your own flow</h3>
   <p>Leave <b>Projector power meter host</b> empty to report the projector's power from any meter or adapter: send
     <code>msg.display = {kind: "observed", device: "projector", power: "on"}</code> (<code>"on"</code>,
-    <code>"standby"</code> or <code>"transitioning"</code>), or a meter's reading as <code>watts: 140</code>, read
-    against the on and standby watts. A lamp <code>"transitioning"</code>, or watts between the two, keeps its last
+    <code>"standby"</code> or <code>"transitioning"</code>, in any case), or a meter's reading as <code>watts: 140</code>,
+    read against the on and standby watts. A smart plug's own <code>ON</code> and <code>OFF</code> are its socket, not the
+    lamp, so send its power in watts instead. A lamp <code>"transitioning"</code>, or watts between the two, keeps its last
     settled state while it warms or cools. <code>observedAt</code> (an ISO time) and <code>source</code> are optional.</p>
-  <p>Readings you push are enough on their own: the node confirms from them with nothing wired to output 3, as long as
-    the meter reports at least once every <b>Query timeout milliseconds</b> while a change is being confirmed (most
-    report on every change in power, which a lamp starting or stopping makes). To ask it for a reading instead, wire
-    output 3, which sends <code>msg.payload = "query"</code> whenever the node needs a fresh one (at startup and while it
-    confirms), to whatever makes your meter report, such as a Zigbee2MQTT plug's <code>/get</code> topic. Until the
-    projector has reported once, the node waits in discovering.</p>
+  <p>The node needs a fresh projector reading at every request and while it confirms a change. When it does, it sends
+    <code>msg.payload = "query"</code> on output 3: wire that to whatever makes your meter report, such as a Zigbee2MQTT
+    plug's <code>/get</code> topic. Output 3 can be left unwired only if the meter reports on its own at least once every
+    <b>Query timeout milliseconds</b>, whether or not the power changes; a meter that reports only on a change says
+    nothing while the projector sits steady. A device that hasn't reported within the query timeout is asked again, up to
+    <b>Maximum idempotent attempts</b> in all, and then the request fails with reason <code>no-reading</code>, naming
+    the device.</p>
   <p>An unsolicited physical-state change after readiness latches manual ownership. The controller observes and reports it without issuing corrective commands; a newer activity intent resumes automation.</p>
   <p>The TV pre-shared key remains in Node-RED's encrypted credential store and is never emitted in a message or status.</p>
 </script>
