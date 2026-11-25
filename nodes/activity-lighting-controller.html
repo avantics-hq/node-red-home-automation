@@ -34,7 +34,9 @@
   <p>Input <code>msg.activityLighting</code> carries generation-scoped intent, observation, refresh, result or tick events. Output 1 emits standard <code>msg.lighting</code> intents for a room controller. Output 2 emits theatre <code>target_state</code> evidence. Room-light failure is optional degradation, not activity success.</p>
   <p>Each profile is <code>{targets: [...], values: {...}}</code>, with <code>values</code> in the package's own units:
     <code>brightnessPct</code> (0-100) and <code>colorTempKelvin</code>, for example
-    <code>{"tv": {"targets": ["main"], "values": {"brightnessPct": 25, "colorTempKelvin": 2500}}}</code>. The room
+    <code>{"tv": {"targets": ["main"], "values": {"brightnessPct": 25, "colorTempKelvin": 2500}}}</code>.
+    <code>brightnessPct</code> runs from 0 (the dimmest the light goes, not off) to 100, and
+    <code>colorTempKelvin</code> must be above 0; anything else is an invalid configuration. The room
     controller converts them for the light, and a light's report (in its own units) is compared after the same
     conversion. Zigbee2MQTT's <code>brightness</code> and <code>color_temp</code> still work during 5.x, with a
     warning from the room controller.</p>

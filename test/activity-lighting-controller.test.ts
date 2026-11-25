@@ -319,3 +319,13 @@ test("a profile in percent and kelvin matches the light's report in its own unit
     assert.equal(result.state.phase, "ready", JSON.stringify(values));
   }
 });
+
+test("a profile's brightnessPct and colorTempKelvin are checked when deployed", () => {
+  const profile = (values: Record<string, unknown>) => normaliseLightingProfiles({tv: {targets: ["wall"], values}});
+  assert.doesNotThrow(() => profile({brightnessPct: 0, colorTempKelvin: 2700}));
+  assert.doesNotThrow(() => profile({brightness: 64, color_temp: 400}), "old units still deploy in 5.x");
+  for (const [values, message] of [[{brightnessPct: 101}, /brightnessPct must be a number from 0 to 100/], [{brightnessPct: "50"}, /brightnessPct/],
+    [{brightnessPct: -1}, /brightnessPct/], [{colorTempKelvin: 0}, /colorTempKelvin must be a number above 0/], [{colorTempKelvin: null}, /colorTempKelvin/]] as const) {
+    assert.throws(() => profile(values as Record<string, unknown>), message, JSON.stringify(values));
+  }
+});

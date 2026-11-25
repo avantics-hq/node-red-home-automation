@@ -2216,4 +2216,10 @@ test("room node: lighting values in Zigbee2MQTT's units still work during 5.x, w
   await send({brightness: 64});
   assert.equal(node.warnings.length, 1);
   assert.match(String(node.warnings[0]), /brightnessPct .* colorTempKelvin/);
+  // Both forms: the new one wins, and an unusable value is left out with one more warning.
+  assert.deepEqual(await send({brightness: 10, brightnessPct: 50}), [{state: "ON", brightness: 127, transition: 1}]);
+  assert.deepEqual(await send({brightnessPct: "lots", colorTempKelvin: 2500}), [{state: "ON", color_temp: 400, transition: 1}]);
+  await send({colorTempKelvin: 0});
+  assert.equal(node.warnings.length, 2);
+  assert.match(String(node.warnings[1]), /left out/);
 });

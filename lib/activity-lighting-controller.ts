@@ -166,6 +166,17 @@ export function normaliseLightingProfiles(value: unknown): ActivityLightingProfi
     if (!values || typeof values !== "object" || Array.isArray(values)) {
       throw new Error(`lighting profile ${name} has invalid values`);
     }
+    // The package's own units, checked when deployed so a bad profile shows
+    // on the node rather than leaving lights unstyled.
+    const {brightnessPct, colorTempKelvin} = values as Record<string, unknown>;
+    if (brightnessPct !== undefined &&
+      (typeof brightnessPct !== "number" || !Number.isFinite(brightnessPct) || brightnessPct < 0 || brightnessPct > 100)) {
+      throw new Error(`lighting profile ${name} brightnessPct must be a number from 0 to 100`);
+    }
+    if (colorTempKelvin !== undefined &&
+      (typeof colorTempKelvin !== "number" || !Number.isFinite(colorTempKelvin) || colorTempKelvin <= 0)) {
+      throw new Error(`lighting profile ${name} colorTempKelvin must be a number above 0`);
+    }
     profiles[name] = {
       targets: [...descriptor.targets],
       values: {...values as Record<string, unknown>}

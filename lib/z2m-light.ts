@@ -34,8 +34,11 @@ export function zigbeeBrightness(percent: number): number {
   return Math.min(254, Math.max(1, Math.round(percent * 254 / 100)));
 }
 
+// Rounded after trimming float noise to 12 significant digits, so a mired
+// value that is exactly n.5 in decimal rounds up as it always has, rather than
+// down because its kelvin round trip left it a hair under.
 export function zigbeeColorTemp(kelvin: number): number {
-  return Math.round(1_000_000 / kelvin);
+  return Math.round(Number((1_000_000 / kelvin).toPrecision(12)));
 }
 
 function zigbeeStyle(style: LightStyle): {brightness: number; color_temp: number} {
@@ -49,24 +52,52 @@ export function lightCommand(state: string, style: LightStyle, transitionSeconds
   return {state, ...zigbeeStyle(style), transition: transitionSeconds};
 }
 
+// A brightness percent or kelvin as a number: a number, or a finite numeric
+// string; null otherwise.
+function numberValue(value: unknown): number | null {
+  const number = typeof value === "number" ? value : typeof value === "string" && value.trim() !== "" ? Number(value) : NaN;
+  return Number.isFinite(number) ? number : null;
+}
+
+// The package's own value fields and the Zigbee2MQTT field each becomes.
+const NEUTRAL_FIELDS = {brightnessPct: "brightness", colorTempKelvin: "color_temp"} as const;
+
 // An intent's or profile's values as Zigbee2MQTT fields: brightnessPct and
 // colorTempKelvin converted; anything else (an effect, say) passed on as it
 // is. brightness and color_temp are Zigbee2MQTT's own units, accepted as
-// they are during 5.x and reported as `legacy` so the node can warn.
-export function lightValues(values: Record<string, unknown>): {values: Record<string, unknown>; legacy: boolean} {
+// they are during 5.x and reported as `legacy` so the node can warn; given
+// with the new field too, the new one wins, whatever the order, and the old
+// one is `superseded`. An unusable brightnessPct or colorTempKelvin is
+// `invalid` and never reaches the device.
+export function lightValues(values: Record<string, unknown>): {
+  values: Record<string, unknown>;
+  legacy: boolean;
+  superseded: string[];
+  invalid: string[];
+} {
   const converted: Record<string, unknown> = {};
+  const superseded: string[] = [];
+  const invalid: string[] = [];
   let legacy = false;
-  for (const [key, value] of Object.entries(values)) {
-    if (key === "brightnessPct" && typeof value === "number" && Number.isFinite(value)) {
-      converted.brightness = zigbeeBrightness(value);
-    } else if (key === "colorTempKelvin" && typeof value === "number" && Number.isFinite(value) && value > 0) {
-      converted.color_temp = zigbeeColorTemp(value);
-    } else {
-      if (key === "brightness" || key === "color_temp") legacy = true;
-      converted[key] = value;
-    }
+  const neutral: Record<string, number> = {};
+  for (const [field, device] of Object.entries(NEUTRAL_FIELDS) as Array<[keyof typeof NEUTRAL_FIELDS, string]>) {
+    if (!Object.hasOwn(values, field)) continue;
+    const number = numberValue(values[field]);
+    if (number === null || (field === "colorTempKelvin" && number <= 0)) invalid.push(field);
+    else neutral[device] = field === "brightnessPct" ? zigbeeBrightness(number) : zigbeeColorTemp(number);
   }
-  return {values: converted, legacy};
+  for (const [key, value] of Object.entries(values)) {
+    if (Object.hasOwn(NEUTRAL_FIELDS, key)) continue;
+    if (key === "brightness" || key === "color_temp") {
+      if (Object.hasOwn(neutral, key)) {
+        superseded.push(key);
+        continue;
+      }
+      legacy = true;
+    }
+    converted[key] = value;
+  }
+  return {values: {...converted, ...neutral}, legacy, superseded, invalid};
 }
 
 // Command fields that set a light's values rather than just its power.

@@ -54,6 +54,11 @@ export type TargetControl = {state: "manual"} | {state: "overridden"; owner: str
 // 5.x, and the node warns.
 export const LEGACY_LIGHT_UNITS = "legacy-light-units";
 
+// Traced when an intent's brightnessPct or colorTempKelvin is unusable (not
+// a number, or a kelvin of 0 or less): it is left out of the command, and
+// the node warns.
+export const INVALID_LIGHT_VALUES = "invalid-light-values";
+
 export interface RoomState {
   observed: Record<string, RoomObservation>;
   desired: Record<string, boolean>;
@@ -301,6 +306,8 @@ export function transitionRoom(
         // The intent's values in the light's own units (z2m-light).
         const device = lightValues(manualValues);
         if (device.legacy) trace("intent", "accepted", LEGACY_LIGHT_UNITS, {target: targetId, values: manualValues});
+        if (device.superseded.length) trace("intent", "accepted", "legacy-light-units-ignored", {target: targetId, ignored: device.superseded});
+        if (device.invalid.length) trace("intent", "accepted", INVALID_LIGHT_VALUES, {target: targetId, dropped: device.invalid, values: manualValues});
         payload = {state: "ON", ...device.values};
         if (!Object.hasOwn(payload, "transition")) {
           payload.transition = config.initialTransitionSeconds;

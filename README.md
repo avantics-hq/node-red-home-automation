@@ -466,7 +466,10 @@ msg.lighting = {
 An intent's `values` use the package's own units: `brightnessPct` (0-100) and
 `colorTempKelvin`. The room controller converts them for the light (for a
 Zigbee2MQTT light, to its 1-254 brightness and mireds); other fields, such as
-`effect`, are passed on as they are. During 5.x, `brightness` and `color_temp`
+`effect`, are passed on as they are. `brightnessPct: 0` is the dimmest the
+light goes, not off: send `state: "OFF"` to switch it off. A value that isn't a
+number (a numeric string such as `"50"` counts), or a colour temperature of 0
+or less, is left out with a warning in the log. During 5.x, `brightness` and `color_temp`
 in Zigbee2MQTT's own units are still accepted and passed on unchanged, and the
 room controller logs a warning once per deploy; they stop working in 6.0.
 
