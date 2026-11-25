@@ -65,7 +65,8 @@ interface ScreenObservation extends DeviceObservation {
 }
 
 interface ProjectorObservation extends DeviceObservation {
-  watts: number;
+  // Null when the reading gave the power state rather than a meter's watts.
+  watts: number | null;
   power: PowerReading;
 }
 
@@ -188,6 +189,31 @@ export function classifyProjectorPower(
     onWatts: Number(config.projectorOnWatts ?? 20),
     offWatts: Number(config.projectorOffWatts ?? 10)
   });
+}
+
+// What a projector power reading says: a meter's watts, classified against
+// the on and standby watts, or the state itself from any adapter. A
+// "transitioning" lamp is read as a reading between the two would be: it
+// keeps its last settled state, or is transitioning if it has none. Given
+// both, the state wins and the watts are kept for reporting.
+const PROJECTOR_POWER_STATES = ["on", "standby", "transitioning"];
+
+function projectorReading(
+  event: {power?: unknown; watts?: unknown},
+  previous: ProjectorObservation["power"],
+  config: DisplayConfig
+): {watts: number | null; power: ProjectorObservation["power"]} {
+  const watts = event.watts === undefined ? null : Number(event.watts);
+  if (watts !== null && (!Number.isFinite(watts) || watts < 0)) throw new Error("invalid projector power observation");
+  if (event.power === undefined) {
+    if (watts === null) throw new Error("invalid projector power observation");
+    return {watts, power: classifyProjectorPower(watts, previous, config)};
+  }
+  if (typeof event.power !== "string" || !PROJECTOR_POWER_STATES.includes(event.power)) {
+    throw new Error("projector power must be on, standby or transitioning");
+  }
+  const settled = previous === "on" || previous === "standby" ? previous : "transitioning";
+  return {watts, power: event.power === "transitioning" ? settled : event.power as ProjectorObservation["power"]};
 }
 
 function statusFor(state: DisplayState) {
@@ -537,15 +563,8 @@ export function transitionDisplay(
       if (!Number.isFinite(position) || position < 0 || position > 100) throw new Error("invalid screen position");
       state.observed.screen = {position, state: event.state || "unknown", observedAt, source};
     } else {
-      const watts = Number(event.watts);
-      if (!Number.isFinite(watts) || watts < 0) throw new Error("invalid projector power observation");
       const previous = state.observed.projector?.power || "unknown";
-      state.observed.projector = {
-        watts,
-        power: classifyProjectorPower(watts, previous, config),
-        observedAt,
-        source
-      };
+      state.observed.projector = {...projectorReading(event, previous, config), observedAt, source};
     }
     state.seen[device] = true;
     observationAccepted = true;

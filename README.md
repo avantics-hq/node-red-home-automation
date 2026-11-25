@@ -100,6 +100,13 @@ on output 2. Example: [`Home theatre equipment.json`](https://github.com/avantic
 | `home-source-capability-controller` | Gates source readiness on fresh availability, active-device, application or playback evidence. |
 | `home-backlighting-controller` | Owns TV-backlight power with observation-gated confirmation. |
 
+The display controller reads the projector's power from any meter or adapter:
+send `msg.display = {kind: "observed", device: "projector", power: "on"}`
+(`"on"`, `"standby"` or `"transitioning"`), or `watts` from a meter. Its
+built-in Shelly meter is optional; without one, it asks for a reading on
+output 3 when it needs one, and readings the meter sends unasked are enough on
+their own. The node's help has the details.
+
 ### Theatre activities
 
 One request, such as "tv" or "off", drives every target. The state contract

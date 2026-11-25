@@ -26,7 +26,7 @@ import type {TraceRecord} from "../lib/bounded-trace";
 import {transitionActivityLighting} from "../lib/activity-lighting-controller";
 import {transitionAvr} from "../lib/avr-controller";
 import {transitionBacklighting} from "../lib/backlighting-controller";
-import {normaliseConfig as normaliseDisplayConfig, transitionDisplay} from "../lib/display-mode-controller";
+import {normaliseConfig as normaliseDisplayConfig, transitionDisplay, type DisplayCommand} from "../lib/display-mode-controller";
 import {transitionSource} from "../lib/source-capability-controller";
 
 interface RuntimeContext {
@@ -782,6 +782,31 @@ test("display node: a projector power meter host saved before 5.0 is still read,
     assert.ok(!asked.some((url) => url.includes("meter.invalid") && !url.includes(host)), asked.join(" "));
     await close(node);
   }
+});
+
+test("display node: with no power meter host, it asks for the projector's power on output 3 and reads what the flow sends", async (t) => {
+  const devices = fakeDisplayDevices(t);
+  const asked: string[] = [];
+  const fakeFetch = globalThis.fetch;
+  globalThis.fetch = ((url: string | URL | Request, init?: RequestInit) => {
+    asked.push(String(url instanceof Request ? url.url : url));
+    return fakeFetch(url, init);
+  }) as typeof fetch;
+  const {projectorPowerMeterHost: _meter, ...withoutMeter} = displayConfig;
+  const node = new (runtime(registerDisplay, {tvPsk: "synthetic"}).Constructor)(withoutMeter);
+  t.after(() => close(node));
+  assert.deepEqual(node.errors, []);
+  await receive(node, {display: {kind: "startup"}});
+  await wait(50);
+  const queries = (node.sent as SendEnvelope[]).flatMap((envelope) => envelope[2] ?? []);
+  assert.deepEqual(queries.map(({payload}) => payload), ["query"]);
+  assert.equal((queries[0] as {display_command?: DisplayCommand}).display_command?.operation, "query_power");
+  assert.ok(!asked.some((url) => url.includes("Switch.GetStatus")), "no built-in meter");
+  assert.equal(devices.watts, 2);
+  // The flow's reading, as any adapter would send it.
+  await receive(node, {display: {kind: "observed", device: "projector", power: "standby", source: "plug"}});
+  const state = savedState(node) as {observed: {projector: {power: string; watts: number | null; source: string}}};
+  assert.deepEqual(state.observed.projector, {...state.observed.projector, power: "standby", watts: null, source: "plug"});
 });
 
 async function displayStartingProjector(t: {after(fn: () => void): void}) {

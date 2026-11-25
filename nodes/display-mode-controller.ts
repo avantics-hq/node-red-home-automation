@@ -62,14 +62,18 @@ const registerDisplayModeController: NodeInitializer = (RED) => {
     let controllerConfig: DisplayConfig;
 
     let transport: DisplayTransport;
+    let projectorPowerMeterHost: string;
     try {
       controllerConfig = normaliseConfig(config);
+      // Optional: without a meter of its own, the node asks the flow for the
+      // projector's power on its third output, and reads what comes back.
+      projectorPowerMeterHost = String(config.projectorPowerMeterHost ?? "").trim() || String(config.projectorMeterHost ?? "").trim();
       transport = new DisplayTransport({
         // No defaults: these name the user's own devices.
         tvHost: textSetting(config.tvHost, "TV host"),
         tvPsk: String(node.credentials?.tvPsk ?? ""),
         screenHost: textSetting(config.screenHost, "screen host"),
-        projectorMeterHost: textSetting(String(config.projectorPowerMeterHost ?? "").trim() || config.projectorMeterHost, "projector power meter host"),
+        projectorMeterHost: projectorPowerMeterHost,
         timeoutMs: numberSetting(config.transportTimeoutMs, "transport timeout", 5000)
       });
     } catch (error) {
@@ -106,7 +110,11 @@ const registerDisplayModeController: NodeInitializer = (RED) => {
         node.send([{
           payload: "power",
           display_command: command
-        }, null]);
+        }, null, null]);
+        return;
+      }
+      if (command.device === "projector" && command.operation === "query_power" && !projectorPowerMeterHost) {
+        node.send([null, null, {payload: "query", display_command: command}]);
         return;
       }
       const result = await transport.execute(command);
@@ -118,7 +126,7 @@ const registerDisplayModeController: NodeInitializer = (RED) => {
         (saved: Partial<DisplayState> | undefined, now) => transitionDisplay(saved, msg, controllerConfig, now));
       const outputs = [...result.events, ...result.targetStates];
       if (outputs.length) {
-        send([null, outputs.map((event) => ({payload: undefined, ...event}))]);
+        send([null, outputs.map((event) => ({payload: undefined, ...event})), null]);
       }
       updateStatus(result.status);
       schedule(result.state);

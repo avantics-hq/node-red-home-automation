@@ -526,3 +526,81 @@ test("an adopted request the display doesn't match is a manual override: no togg
   const next = apply(result.state, {kind: "intent", requestId: "projector-7", generation: 7, mode: "projector"}, 11);
   assert.equal(next.state.desired?.requestId, "projector-7");
 });
+
+test("pushed projector power states alone, with every query left unanswered, take the display into and out of projector mode", () => {
+  // The projector as an adapter sees it: standby until toggled on, then
+  // transitioning for 1.5 s; when on, the first toggle is the shutdown
+  // prompt and the second starts a 2 s cool-down.
+  const projector = {power: "standby" as "on" | "standby" | "transitioning", until: 0, next: "standby" as "on" | "standby", prompted: false};
+  const devices = {tv: "on" as "on" | "standby", screen: 0};
+  let queries = 0;
+  let state: Partial<DisplayState> | undefined;
+  let result: ReturnType<typeof transitionDisplay>;
+  // Carries out each command, as the transports and the infrared blaster
+  // would, and feeds back what the TV and screen then report, until the
+  // node has nothing more to send. Projector queries go unanswered.
+  const answer = (now: number, generation: number): void => {
+    const follow: Array<[DisplayDevice, ObservationValues]> = [];
+    for (const entry of result.commands) {
+      if (entry.device === "projector" && entry.operation === "query_power") queries += 1;
+      else if (entry.device === "projector" && entry.operation === "power_toggle") {
+        if (projector.power === "standby") Object.assign(projector, {power: "transitioning", until: now + 1.5, next: "on"});
+        else if (!projector.prompted) projector.prompted = true;
+        else Object.assign(projector, {power: "transitioning", until: now + 2, next: "standby", prompted: false});
+      } else if (entry.device === "tv") {
+        if (entry.operation === "set_power") devices.tv = entry.power as "on" | "standby";
+        follow.push(["tv", {power: devices.tv}]);
+      } else if (entry.device === "screen") {
+        if (entry.operation === "set_position") devices.screen = Number(entry.position);
+        follow.push(["screen", {position: devices.screen, state: "stopped"}]);
+      }
+    }
+    for (const [device, values] of follow) {
+      result = observe(result.state, device, values, now, generation);
+      state = result.state;
+      answer(now, generation);
+    }
+  };
+  const run = (mode: DisplayMode, generation: number, from: number) => {
+    result = apply(state, {kind: "intent", requestId: `${mode}-${generation}`, generation, mode}, from);
+    state = result.state;
+    answer(from, generation);
+    for (let tenth = 1; tenth <= 200 && result.state.phase !== "ready"; tenth += 1) {
+      const now = from + tenth / 10;
+      if (projector.power === "transitioning" && now >= projector.until) projector.power = projector.next;
+      // Reports once a second, unasked.
+      if (tenth % 10 === 0) {
+        result = observe(state, "projector", {power: projector.power}, now, generation);
+      } else {
+        result = apply(state, {kind: "tick", generation}, now);
+      }
+      state = result.state;
+      answer(now, generation);
+      assert.notEqual(result.state.phase, "failed", `${mode} at ${now}: ${JSON.stringify(result.state.failure)}`);
+    }
+    return result.state.phase;
+  };
+  assert.equal(run("projector", 1, 0), "ready");
+  assert.equal(projector.power, "on");
+  assert.equal(run("tv", 2, 30), "ready");
+  assert.equal(projector.power, "standby");
+  assert.ok(queries > 0, "the node did ask; nothing answered");
+});
+
+test("a projector reading may give its power state instead of watts", () => {
+  const reading = (values: ObservationValues, previous?: ObservationValues) => {
+    let state: Partial<DisplayState> | undefined;
+    if (previous) state = observe(undefined, "projector", previous, 0).state;
+    return observe(state, "projector", values, 1).state.observed?.projector;
+  };
+  assert.deepEqual([reading({power: "on"})?.power, reading({power: "on"})?.watts], ["on", null]);
+  assert.equal(reading({power: "standby"})?.power, "standby");
+  // Transitioning reads as watts between the thresholds do: the last settled state, if any.
+  assert.equal(reading({power: "transitioning"})?.power, "transitioning");
+  assert.equal(reading({power: "transitioning"}, {power: "on"})?.power, "on");
+  assert.equal(reading({power: "transitioning"}, {watts: 2})?.power, "standby");
+  // Both: the state wins, and the watts are kept.
+  assert.deepEqual([reading({power: "standby", watts: 155})?.power, reading({power: "standby", watts: 155})?.watts], ["standby", 155]);
+  assert.throws(() => reading({power: "warming"}), /on, standby or transitioning/);
+  assert.throws(() => reading({}), /invalid projector power observation/);
+});
