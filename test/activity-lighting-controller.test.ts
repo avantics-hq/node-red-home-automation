@@ -308,3 +308,43 @@ test("an adopted request the lights don't match is a manual override: nothing ap
   assert.equal(result.state.phase, "manual_override");
   assert.equal(result.events.at(-1)?.theatre.classification, "manual_override");
 });
+
+function readyTv() {
+  let result = intent(undefined);
+  for (const [seconds, target] of [[1, "wall"], [1.1, "lamp"]] as const) {
+    result = apply(result.state, {kind: "observed", generation: 1, target, on: true, values: {brightness: 64, color_temp: 400}, observedAt: at(seconds).toISOString()}, seconds);
+  }
+  assert.equal(result.state.phase, "ready");
+  return result;
+}
+
+test("a refresh of ready room lighting re-reads it without leaving ready; the readings answer", () => {
+  let result = apply(readyTv().state, {kind: "refresh", requestId: "tv-1", generation: 1, profile: "tv"}, 30);
+  assert.deepEqual(result.commands.map(({operation, generation}) => [operation, generation]), [["observe", 1]]);
+  assert.deepEqual(result.events, [], "no target state until a reading answers");
+  assert.deepEqual([result.state.phase, result.state.pending, Object.keys(result.state.observed).sort()], ["ready", null, ["lamp", "wall"]]);
+
+  const matching = apply(result.state, {kind: "observed", generation: 1, target: "wall", on: true, values: {brightness: 64, color_temp: 400}, observedAt: at(30.1).toISOString()}, 30.1);
+  assert.equal(matching.events[0]?.theatre.status, "ready");
+
+  // A light restyled by someone else classifies as any reading after ready does.
+  const differing = apply(result.state, {kind: "observed", generation: 1, target: "wall", on: true, values: {brightness: 200}, observedAt: at(30.1).toISOString()}, 30.1);
+  assert.equal(differing.state.phase, readyAfter(readyTv().state, {brightness: 200}).state.phase);
+
+  // Unanswered, nothing is left waiting.
+  const later = apply(result.state, {kind: "tick", generation: 1}, 60);
+  assert.deepEqual([later.state.phase, later.state.pending, later.commands], ["ready", null, []]);
+});
+
+// The same different reading reaching ready lighting with no refresh before it.
+function readyAfter(state: ActivityLightingState, values: Record<string, unknown>) {
+  return apply(state, {kind: "observed", generation: 1, target: "wall", on: true, values, observedAt: at(30.1).toISOString()}, 30.1);
+}
+
+test("a refresh of room lighting that isn't ready, and a startup, still re-observe as before", () => {
+  const transitioning = intent(undefined);
+  const refreshed = apply(transitioning.state, {kind: "refresh", requestId: "tv-1", generation: 1, profile: "tv"}, 1);
+  assert.deepEqual([refreshed.state.phase, refreshed.state.observed, refreshed.events[0]?.theatre.status], ["confirming", {}, "confirming"]);
+  const started = apply(readyTv().state, {kind: "startup"}, 30);
+  assert.deepEqual([started.state.phase, started.state.observed, started.state.pending?.attempt], ["confirming", {}, 0]);
+});
