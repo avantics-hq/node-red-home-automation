@@ -626,7 +626,7 @@ test("discovery asks a silent device again, then fails naming it, at the query t
   assert.ok(result.events.some(({display}) => display.kind === "failed"));
   // A reading in time ends discovery: no deadline is left behind.
   result = apply(undefined, {kind: "intent", requestId: "p-2", generation: 1, mode: "tv"}, 0);
-  for (const [device, values] of [["tv", {power: "on"}], ["screen", {position: 0, state: "stopped"}], ["projector", {power: "STANDBY"}]] as const) {
+  for (const [device, values] of [["tv", {power: "on"}], ["screen", {position: 0, state: "stopped"}], ["projector", {power: "standby"}]] as const) {
     result = observe(result.state, device, values, 0.5);
   }
   assert.equal(result.state.discovery, undefined);
@@ -648,9 +648,11 @@ test("a projector reading may give its power state instead of watts", () => {
   // Both: the state wins, and the watts are kept.
   assert.deepEqual([reading({power: "standby", watts: 155})?.power, reading({power: "standby", watts: 155})?.watts], ["standby", 155]);
   assert.throws(() => reading({power: "warming"}), /on, standby or transitioning/);
-  // Any case; a plug's OFF is its socket, not the lamp, so it isn't standby.
-  assert.equal(reading({power: "On"})?.power, "on");
-  assert.equal(reading({power: " TRANSITIONING "})?.power, "transitioning");
-  assert.throws(() => reading({power: "OFF"}), /on, standby or transitioning/);
+  // Lower case only, trimmed: a plug's relay ON and OFF aren't the lamp's
+  // state, so they fail as invalid rather than read as on or standby.
+  assert.equal(reading({power: " transitioning "})?.power, "transitioning");
+  for (const power of ["ON", "OFF", "On", "STANDBY"]) {
+    assert.throws(() => reading({power}), /on, standby or transitioning/, power);
+  }
   assert.throws(() => reading({}), /invalid projector power observation/);
 });

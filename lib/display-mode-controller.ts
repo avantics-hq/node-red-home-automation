@@ -213,10 +213,10 @@ function projectorReading(
     if (watts === null) throw new Error("invalid projector power observation");
     return {watts, power: classifyProjectorPower(watts, previous, config)};
   }
-  // In any case. A smart plug's own ON and OFF are its relay, not the lamp
-  // (a projector on a switched-on plug is often in standby), so they aren't
-  // taken as the projector's state.
-  const power = typeof event.power === "string" ? event.power.trim().toLowerCase() : "";
+  // Lower case only. A smart plug's own ON and OFF are its relay, not the
+  // lamp: a projector in standby on a switched-on plug would read as on, and
+  // a request for TV mode would then toggle it on. So they fail as invalid.
+  const power = typeof event.power === "string" ? event.power.trim() : "";
   if (!PROJECTOR_POWER_STATES.includes(power)) {
     throw new Error("projector power must be on, standby or transitioning");
   }
