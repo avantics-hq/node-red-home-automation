@@ -250,25 +250,36 @@ upgrading from 4.0:
   requests. `value` on the receiver's 0-98 scale still works in 5.x, with a
   warning, and stops in 6.0. Saved volume bounds are converted when read; open
   and save the node to store them in dB. The published volume state and the
-  Home Assistant volume number now show dB, so update any automation that sets
-  or reads them with 0-98 values. Without a context store, the old retained
+  Home Assistant volume number now show dB, as do the node's volume results and
+  state messages, so update any automation or flow that sets or reads them with
+  0-98 values. Without a context store, the old retained
   volume can sit outside Home Assistant's new dB range until the receiver
   first reports after a restart.
 - **The display controller's settings are named by role:** TV host, TV
   pre-shared key, Screen controller host and Projector power meter host (saved
   as `projectorPowerMeterHost`). A flow saved before 5.0 keeps working; open and
-  save the node to store the new name. `projectorMeterHost` stops being read in
-  6.0.
+  save the node to store the new name before 6.0, when `projectorMeterHost`
+  stops being read. No warning is logged for this one.
 - **The projector's power can come from any meter or adapter:** send
   `msg.display = {kind: "observed", device: "projector", power: "on" |
   "standby" | "transitioning"}`, or `watts`. The built-in power meter host is
-  now optional. Without it, wire output 3 to ask your meter for a reading, or
-  let the meter report on its own.
+  now optional. Without it, wire the new third output (projector power queries)
+  to ask your meter for a reading. Leave output 3 unwired only if your meter
+  reports on its own at least once every Query timeout, even when the power
+  doesn't change: a meter that reports only on a change says nothing while the
+  projector sits steady. Saved wiring on outputs 1 and 2 is kept. Power values
+  are lower case only (`on`, `standby`, `transitioning`); a smart plug's own
+  `ON` or `OFF` is rejected, so send its watts.
+- **A display request fails rather than waiting** when a device hasn't reported
+  within Query timeout × Maximum attempts (it's asked again once): the reason is
+  `no-reading`, naming the device. Before, it waited in discovering. This
+  applies with the built-in hosts too.
 - **The screen opens by its own command when no viewing position is set.** A
   display node with no Screen viewing position (new nodes, and flows written
   without the key) opens the screen with the screen's own open command and
   confirms it fully open, rather than going to 82%. Nodes saved with a position
-  keep it. Closing always uses the screen's own close command and runs to the
+  keep it; a saved position must now be above 0 and at most 100, or empty, or
+  the node won't deploy. Closing always uses the screen's own close command and runs to the
   end, which also restores a position the screen has lost. A screen with a
   viewing position but no known position is closed first, then sent to the
   position; one that has never been calibrated fails with
