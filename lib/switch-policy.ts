@@ -36,7 +36,7 @@ export interface SwitchLightingIntent {
     source: "wall";
     person: true;
     manual?: boolean;
-    values?: {brightness: number};
+    values?: {brightnessPct: number};
   };
 }
 
@@ -76,7 +76,7 @@ function intent(
       state,
       source: "wall",
       person: true,
-      ...(manual ? {manual: true, values: {brightness: 254}} : {})
+      ...(manual ? {manual: true, values: {brightnessPct: 100}} : {})
     }
   };
 }

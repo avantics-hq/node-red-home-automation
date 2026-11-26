@@ -308,3 +308,64 @@ test("an adopted request the lights don't match is a manual override: nothing ap
   assert.equal(result.state.phase, "manual_override");
   assert.equal(result.events.at(-1)?.theatre.classification, "manual_override");
 });
+
+test("a profile in percent and kelvin matches the light's report in its own units, as an old-unit profile still does", () => {
+  for (const values of [{brightnessPct: 25, colorTempKelvin: 2500}, {brightness: 64, color_temp: 400}]) {
+    const neutral = {...config, profiles: {...config.profiles, tv: {targets: ["wall"], values}}};
+    let result = transitionActivityLighting(undefined, {activityLighting: {kind: "intent", requestId: "tv-1", generation: 1, profile: "tv"}}, neutral, at(0));
+    assert.deepEqual(result.commands[0]?.lighting?.values, values, "the intent carries the profile's own values");
+    result = transitionActivityLighting(result.state, {activityLighting: {kind: "observed", generation: 1, target: "wall", on: true,
+      values: {brightness: 64, color_temp: 400}, observedAt: at(1).toISOString()}}, neutral, at(1));
+    assert.equal(result.state.phase, "ready", JSON.stringify(values));
+  }
+});
+
+test("a profile's brightnessPct and colorTempKelvin are checked when deployed", () => {
+  const profile = (values: Record<string, unknown>) => normaliseLightingProfiles({tv: {targets: ["wall"], values}});
+  assert.doesNotThrow(() => profile({brightnessPct: 0, colorTempKelvin: 2700}));
+  assert.doesNotThrow(() => profile({brightness: 64, color_temp: 400}), "old units still deploy in 5.x");
+  for (const [values, message] of [[{brightnessPct: 101}, /brightnessPct must be a number from 0 to 100/], [{brightnessPct: "50"}, /brightnessPct/],
+    [{brightnessPct: -1}, /brightnessPct/], [{colorTempKelvin: 0}, /colorTempKelvin must be a number above 0/], [{colorTempKelvin: null}, /colorTempKelvin/]] as const) {
+    assert.throws(() => profile(values as Record<string, unknown>), message, JSON.stringify(values));
+  }
+});
+
+function readyTv() {
+  let result = intent(undefined);
+  for (const [seconds, target] of [[1, "wall"], [1.1, "lamp"]] as const) {
+    result = apply(result.state, {kind: "observed", generation: 1, target, on: true, values: {brightness: 64, color_temp: 400}, observedAt: at(seconds).toISOString()}, seconds);
+  }
+  assert.equal(result.state.phase, "ready");
+  return result;
+}
+
+test("a refresh of ready room lighting re-reads it without leaving ready; the readings answer", () => {
+  let result = apply(readyTv().state, {kind: "refresh", requestId: "tv-1", generation: 1, profile: "tv"}, 30);
+  assert.deepEqual(result.commands.map(({operation, generation}) => [operation, generation]), [["observe", 1]]);
+  assert.deepEqual(result.events, [], "no target state until a reading answers");
+  assert.deepEqual([result.state.phase, result.state.pending, Object.keys(result.state.observed).sort()], ["ready", null, ["lamp", "wall"]]);
+
+  const matching = apply(result.state, {kind: "observed", generation: 1, target: "wall", on: true, values: {brightness: 64, color_temp: 400}, observedAt: at(30.1).toISOString()}, 30.1);
+  assert.equal(matching.events[0]?.theatre.status, "ready");
+
+  // A light restyled by someone else classifies as any reading after ready does.
+  const differing = apply(result.state, {kind: "observed", generation: 1, target: "wall", on: true, values: {brightness: 200}, observedAt: at(30.1).toISOString()}, 30.1);
+  assert.equal(differing.state.phase, readyAfter(readyTv().state, {brightness: 200}).state.phase);
+
+  // Unanswered, nothing is left waiting.
+  const later = apply(result.state, {kind: "tick", generation: 1}, 60);
+  assert.deepEqual([later.state.phase, later.state.pending, later.commands], ["ready", null, []]);
+});
+
+// The same different reading reaching ready lighting with no refresh before it.
+function readyAfter(state: ActivityLightingState, values: Record<string, unknown>) {
+  return apply(state, {kind: "observed", generation: 1, target: "wall", on: true, values, observedAt: at(30.1).toISOString()}, 30.1);
+}
+
+test("a refresh of room lighting that isn't ready, and a startup, still re-observe as before", () => {
+  const transitioning = intent(undefined);
+  const refreshed = apply(transitioning.state, {kind: "refresh", requestId: "tv-1", generation: 1, profile: "tv"}, 1);
+  assert.deepEqual([refreshed.state.phase, refreshed.state.observed, refreshed.events[0]?.theatre.status], ["confirming", {}, "confirming"]);
+  const started = apply(readyTv().state, {kind: "startup"}, 30);
+  assert.deepEqual([started.state.phase, started.state.observed, started.state.pending?.attempt], ["confirming", {}, 0]);
+});

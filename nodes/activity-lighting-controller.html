@@ -32,6 +32,14 @@
 <script type="text/html" data-help-name="home-activity-lighting-controller">
   <p>Applies configuration-owned activity styles only to room lights that are already on and not manually owned.</p>
   <p>Input <code>msg.activityLighting</code> carries generation-scoped intent, observation, refresh, result or tick events. Output 1 emits standard <code>msg.lighting</code> intents for a room controller. Output 2 emits theatre <code>target_state</code> evidence. Room-light failure is optional degradation, not activity success.</p>
+  <p>Each profile is <code>{targets: [...], values: {...}}</code>, with <code>values</code> in the package's own units:
+    <code>brightnessPct</code> (0-100) and <code>colorTempKelvin</code>, for example
+    <code>{"tv": {"targets": ["main"], "values": {"brightnessPct": 25, "colorTempKelvin": 2500}}}</code>.
+    <code>brightnessPct</code> runs from 0 (the dimmest the light goes, not off) to 100, and
+    <code>colorTempKelvin</code> must be above 0; anything else is an invalid configuration. The room
+    controller converts them for the light, and a light's report (in its own units) is compared after the same
+    conversion. Zigbee2MQTT's <code>brightness</code> and <code>color_temp</code> still work during 5.x, with a
+    warning from the room controller.</p>
   <p>While a profile is active, its lights are overridden in the room controller under <b>Owner</b>
     (default <code>activity</code>), so circadian refresh leaves the activity style alone. When a new profile
     no longer includes a light, including a switch to an off profile with no targets, the node emits

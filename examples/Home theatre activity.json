@@ -126,7 +126,7 @@
     "type": "home-activity-lighting-controller",
     "name": "",
     "area": "",
-    "profiles": "{\"off\":{\"targets\":[],\"values\":{}},\"tv\":{\"targets\":[\"main\"],\"values\":{\"brightness\":64,\"color_temp\":400}}}",
+    "profiles": "{\"off\":{\"targets\":[],\"values\":{}},\"tv\":{\"targets\":[\"main\"],\"values\":{\"brightnessPct\":25,\"colorTempKelvin\":2500}}}",
     "confirmationTimeoutMs": 15000,
     "maxAttempts": 2,
     "x": 1380,

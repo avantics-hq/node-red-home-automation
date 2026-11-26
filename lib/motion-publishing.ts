@@ -8,7 +8,7 @@
 
 import type {TraceEntry} from "./bounded-trace";
 import type {MotionInput} from "./motion-policy";
-import {areaId} from "./topic-names";
+import {homeTopic} from "./topic-names";
 import {
   discoveryEntry,
   publishesState,
@@ -25,7 +25,7 @@ export type MotionPublication = RetainedText;
 export const MAX_DELAY_SECONDS = 86400;
 
 function motionTopic(area: string, name: string): string {
-  return "home/" + areaId(area) + "/motion/" + name;
+  return homeTopic(area, "motion", name);
 }
 
 export const motionEnabledTopic = (area: string, end: "state" | "set") => motionTopic(area, "enabled/" + end);

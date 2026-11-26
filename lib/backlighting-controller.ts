@@ -281,6 +281,7 @@ export function transitionBacklighting(
   // A refresh with the activity's wanted values, reaching a node with
   // nothing desired (it started with nothing saved): adopt them, and observe
   // below as at startup (see adopted-request.ts).
+  let answerWithReading = false;
   const adoptable = event.kind === "refresh" ? adoptableRefresh(event, state) : null;
   if (adoptable && event.kind === "refresh" && typeof event.power === "string" && Object.hasOwn(POWERS, event.power)) {
     state.desired = {...adoptable, power: event.power as BacklightingPower, requestedAt: now.toISOString()};
@@ -320,6 +321,13 @@ export function transitionBacklighting(
       state.phase = "confirming";
       trace("command", "emitted", null, {operation: "observe", power: state.desired.power});
     }
+  } else if (event.kind === "refresh" && state.desired && state.phase === "ready" && !state.pending) {
+    // A settled, ready target is re-read without leaving ready, as the
+    // display, source and receiver are: its target state follows the
+    // reading, which classifies as any reading after ready does.
+    commands.push(commandFor(state, "observe", 0));
+    answerWithReading = true;
+    trace("refresh", "observing", "ready", {power: state.desired.power});
   } else if (event.kind === "startup" || event.kind === "refresh") {
     state.observed = null;
     state.pending = null;
@@ -349,7 +357,7 @@ export function transitionBacklighting(
     trace("command", "withheld", ADOPTED_MISMATCH);
   }
 
-  if (state.desired) {
+  if (state.desired && !answerWithReading) {
     const theatre = targetStateEvent({
       target: "backlighting",
       requestId: state.desired.requestId,

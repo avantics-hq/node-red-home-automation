@@ -93,26 +93,125 @@ test("TV mode discovers state, requests idempotent Bravia power, and waits for c
   assert.equal(result.events.some((entry) => entry.display.kind === "ready"), true);
 });
 
-test("projector mode sequences TV standby, screen position, then observed-state-gated lamp power", () => {
+test("projector mode starts the lamp first, then opens the screen, and puts the TV in standby last", () => {
   let result = discover("projector", 1, [
     [0.1, "tv", {power: "on"}],
     [0.2, "screen", {position: 0, state: "closed"}],
     [0.3, "projector", {watts: 2.1}]
   ]);
-  assert.equal(command(result, "tv", "set_power")?.power, "standby");
-
-  result = observe(result.state, "tv", {power: "standby"}, 0.5);
-  assert.equal(command(result, "screen", "set_position")?.position, 82);
-
-  result = observe(result.state, "screen", {position: 82, state: "stopped"}, 1);
+  // The TV keeps the picture while the lamp warms up.
+  assert.deepEqual(result.commands.map(({device, operation}) => [device, operation]), [["projector", "power_toggle"]]);
   assert.equal(command(result, "projector", "power_toggle")?.reason, "start");
 
   result = observe(result.state, "projector", {watts: 155}, 2);
   assert.equal(result.state.phase, "transitioning");
+  assert.deepEqual(result.commands, [], "nothing more until the minimum warm-up has passed");
 
   result = apply(result.state, {kind: "tick", generation: 1}, 4);
   assert.ok(command(result, "projector", "query_power"));
   result = observe(result.state, "projector", {watts: 155}, 4.1);
+  assert.equal(command(result, "screen", "set_position")?.position, 82);
+  assert.equal(command(result, "tv", "set_power"), undefined, "the TV stays on while the screen moves");
+
+  result = observe(result.state, "screen", {position: 82, state: "stopped"}, 5);
+  assert.equal(command(result, "tv", "set_power")?.power, "standby");
+
+  result = observe(result.state, "tv", {power: "standby"}, 5.5);
+  assert.equal(result.state.phase, "ready");
+});
+
+test("a projector that fails to start fails the display with the TV still on and the screen untouched", () => {
+  let result = discover("projector", 1, [
+    [0.1, "tv", {power: "on"}],
+    [0.2, "screen", {position: 0, state: "closed"}],
+    [0.3, "projector", {watts: 2.1}]
+  ]);
+  const sent = [...result.commands];
+  result = observe(result.state, "projector", {watts: 2.1}, 2);
+  sent.push(...result.commands);
+  result = apply(result.state, {kind: "tick", generation: 1}, 4.3);
+  sent.push(...result.commands);
+  assert.equal(result.state.phase, "failed");
+  assert.deepEqual(result.state.failure && [result.state.failure.device, result.state.failure.operation], ["projector", "projector_start"]);
+  assert.deepEqual(sent.filter(({device}) => device !== "projector"), [], "no TV or screen command");
+  assert.equal(result.state.observed.tv?.power, "on");
+});
+
+test("back to TV mode mid-warm-up: the warming lamp isn't toggled, and the TV never leaves the picture", () => {
+  let result = discover("projector", 1, [
+    [0.1, "tv", {power: "on"}],
+    [0.2, "screen", {position: 0, state: "closed"}],
+    [0.3, "projector", {watts: 2.1}]
+  ]);
+  assert.equal(command(result, "projector", "power_toggle")?.reason, "start");
+  result = observe(result.state, "projector", {watts: 155}, 1);
+
+  // A TV request 1 s into the warm-up, read back as the lamp still warming.
+  result = apply(result.state, {kind: "intent", requestId: "tv-2", generation: 2, mode: "tv"}, 1.5);
+  const sent = [...result.commands];
+  for (const [seconds, device, values] of [[1.6, "tv", {power: "on"}], [1.6, "screen", {position: 0, state: "closed"}], [1.6, "projector", {watts: 155}]] as const) {
+    result = observe(result.state, device, values, seconds, 2);
+    sent.push(...result.commands);
+  }
+  result = apply(result.state, {kind: "tick", generation: 2}, 2.5);
+  sent.push(...result.commands);
+  assert.deepEqual(sent.filter(({operation}) => operation === "power_toggle"), [], "no toggle while the lamp warms");
+  assert.deepEqual(sent.filter(({device, operation}) => device === "tv" && operation === "set_power"), [], "the TV is never sent to standby");
+
+  // Once the minimum warm-up has passed and the lamp reads on, it is shut down as TV mode does.
+  result = apply(result.state, {kind: "tick", generation: 2}, 3.3);
+  result = observe(result.state, "projector", {watts: 155}, 3.4, 2);
+  assert.equal(command(result, "projector", "power_toggle")?.reason, "shutdown-request");
+});
+
+test("a kept projector start that never confirms doesn't fail the newer request: it carries on from a fresh reading", () => {
+  // The start toggle is missed (say, an infrared command not received), so the lamp stays in standby.
+  let result = discover("projector", 1, [
+    [0.1, "tv", {power: "on"}],
+    [0.2, "screen", {position: 0, state: "closed"}],
+    [0.3, "projector", {watts: 2.1}]
+  ]);
+  assert.equal(command(result, "projector", "power_toggle")?.reason, "start");
+  result = apply(result.state, {kind: "intent", requestId: "tv-2", generation: 2, mode: "tv"}, 1);
+  for (const [device, values] of [["tv", {power: "on"}], ["screen", {position: 0, state: "closed"}], ["projector", {watts: 2.1}]] as const) {
+    result = observe(result.state, device, values, 1.1, 2);
+  }
+  assert.equal(result.state.pending?.operation, "projector_start", "kept while it may still be warming");
+
+  // Past the start's deadline: dropped, and the projector asked again under the TV request.
+  result = apply(result.state, {kind: "tick", generation: 2}, 4.3);
+  assert.notEqual(result.state.phase, "failed");
+  assert.deepEqual(result.commands.map(({device, operation, generation}) => [device, operation, generation]), [["projector", "query_power", 2]]);
+  assert.ok(result.traces.some(({reason}) => reason === "superseded-operation-unconfirmed"));
+  result = observe(result.state, "projector", {watts: 2.1}, 4.4, 2);
+  assert.equal(result.state.phase, "ready");
+  assert.deepEqual(result.commands.filter(({operation}) => operation === "power_toggle"), []);
+});
+
+test("back to TV mode while the screen opens: the TV stays on, the lamp is shut down and the screen closes", () => {
+  let result = discover("projector", 1, [
+    [0.1, "tv", {power: "on"}],
+    [0.2, "screen", {position: 0, state: "closed"}],
+    [0.3, "projector", {watts: 155}]
+  ]);
+  assert.equal(command(result, "screen", "set_position")?.position, 82);
+
+  result = apply(result.state, {kind: "intent", requestId: "tv-2", generation: 2, mode: "tv"}, 1);
+  const sent = [...result.commands];
+  for (const [device, values] of [["tv", {power: "on"}], ["screen", {position: 40, state: "opening"}], ["projector", {watts: 155}]] as const) {
+    result = observe(result.state, device, values, 1.1, 2);
+    sent.push(...result.commands);
+  }
+  assert.deepEqual(sent.filter(({device, operation}) => device === "tv" && operation === "set_power"), []);
+  assert.equal(command(result, "projector", "power_toggle")?.reason, "shutdown-request");
+
+  result = apply(result.state, {kind: "tick", generation: 2}, 3.1);
+  assert.ok(command(result, "projector", "query_power"));
+  result = observe(result.state, "projector", {watts: 155}, 3.2, 2);
+  assert.equal(command(result, "projector", "power_toggle")?.reason, "shutdown-confirm");
+  result = observe(result.state, "projector", {watts: 2.1}, 5, 2);
+  assert.equal(command(result, "screen", "set_position")?.position, 0);
+  result = observe(result.state, "screen", {position: 0, state: "closed"}, 6, 2);
   assert.equal(result.state.phase, "ready");
 });
 
