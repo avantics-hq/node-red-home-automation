@@ -227,10 +227,67 @@ also attaches the package tarball and its SHA-256 checksum. Install a downloaded
 tarball through **Manage palette → Install → Upload module**, or with:
 
 ```sh
-npm install /path/to/avantics-node-red-home-automation-4.0.3.tgz
+npm install /path/to/avantics-node-red-home-automation-5.0.0.tgz
 ```
 
 Add the installed nodes from the **home automation** section of the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.
+
+### 5.0.0
+
+Separates the decision logic from the devices it drives, adds a Shelly cover
+adapter, and fixes theatre recovery and screen handling. Check these after
+upgrading from 4.0:
+
+- **Lighting values are in percent and kelvin.** Intents and activity lighting
+  profiles take `brightnessPct` (0-100) and `colorTempKelvin` instead of
+  Zigbee2MQTT's `brightness` (1-254) and `color_temp` (mireds), and the switch
+  policy's double press now sends `{brightnessPct: 100}`. Your lights get the
+  same commands. The old values still work in 5.x, with a warning in the log;
+  change them before 6.0. For example, brightness 64 becomes brightnessPct 25,
+  and color_temp 400 becomes colorTempKelvin 2500 (1,000,000 ÷ mireds). 0% is
+  the dimmest level, not off: send state OFF to switch a light off.
+- **Receiver volume is in dB** (a Denon's 80 is 0 dB). Send `valueDb` in volume
+  requests. `value` on the receiver's 0-98 scale still works in 5.x, with a
+  warning, and stops in 6.0. Saved volume bounds are converted when read; open
+  and save the node to store them in dB. The published volume state and the
+  Home Assistant volume number now show dB, so update any automation that sets
+  or reads them with 0-98 values. Without a context store, the old retained
+  volume can sit outside Home Assistant's new dB range until the receiver
+  first reports after a restart.
+- **The display controller's settings are named by role:** TV host, TV
+  pre-shared key, Screen controller host and Projector power meter host (saved
+  as `projectorPowerMeterHost`). A flow saved before 5.0 keeps working; open and
+  save the node to store the new name. `projectorMeterHost` stops being read in
+  6.0.
+- **The projector's power can come from any meter or adapter:** send
+  `msg.display = {kind: "observed", device: "projector", power: "on" |
+  "standby" | "transitioning"}`, or `watts`. The built-in power meter host is
+  now optional. Without it, wire output 3 to ask your meter for a reading, or
+  let the meter report on its own.
+- **The screen opens by its own command when no viewing position is set.** A
+  display node with no Screen viewing position (new nodes, and flows written
+  without the key) opens the screen with the screen's own open command and
+  confirms it fully open, rather than going to 82%. Nodes saved with a position
+  keep it. Closing always uses the screen's own close command and runs to the
+  end, which also restores a position the screen has lost. A screen with a
+  viewing position but no known position is closed first, then sent to the
+  position; one that has never been calibrated fails with
+  `screen-not-calibrated`. The display's state events may report the screen's
+  position as null when it reports only open or closed.
+- **Theatre recovery now reaches the devices.** After the theatre recovers an
+  activity, each device takes on the new request by reading itself, never by
+  commanding: one that matches is ready, and its old manual override clears;
+  one that doesn't reports a manual override once. Before, devices kept the old
+  request, and a flow that recovered on every manual override could loop.
+- **Backlighting's ready carries the time of its reading,** so a repeated
+  request no longer counts as a fresh reading, and a silent device is reported
+  stale and then not responding.
+- **New node: Shelly cover**, which connects a Shelly Gen2+ cover to a cover
+  controller over the device's own MQTT API (see "Covers").
+- **For code that imports the package's files directly:** the display's device
+  transport moved from `dist/lib/display-transport` to
+  `dist/lib/transports/display-transport`. Only the nodes are a public
+  interface.
 
 ### 4.0.3
 
