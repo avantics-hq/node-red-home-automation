@@ -1,6 +1,6 @@
 "use strict";
 
-import {ADOPTED_MISMATCH, adoptableRefresh, readsOnly, savedAdoptedGeneration, adoptionReason} from "./adopted-request";
+import {ADOPTED_MISMATCH, adoptableRefresh, readsOnly, savedAdoptedGeneration, adoptionReason, carryOn} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {booleanSetting, numberSetting} from "./settings";
 
@@ -696,7 +696,12 @@ export function transitionDisplay(
   // rediscover below as at startup (see adopted-request.ts).
   let replacedRequest = false;
   const adoptable = event.kind === "refresh" ? adoptableRefresh(event, state) : null;
-  const adopted = adoptable !== null && event.kind === "refresh" && typeof event.mode === "string" && Object.hasOwn(MODES, event.mode);
+  // The same wanted values as the work in hand: carry on under the new
+  // request rather than adopting it read-only (see carryOn).
+  const carried = event.kind === "refresh" && carryOn(state, adoptable, event.mode === state.desired?.mode,
+    state.classification === "manual_override" || state.phase === "failed" || state.blockedGeneration === state.desired?.generation);
+  if (carried) trace("refresh", "continued", "same-request", {generation: state.generation});
+  const adopted = !carried && adoptable !== null && event.kind === "refresh" && typeof event.mode === "string" && Object.hasOwn(MODES, event.mode);
   if (adopted) {
     const reason = adoptionReason(state.desired);
     // Replacing a request the theatre already counts as ready, it answers

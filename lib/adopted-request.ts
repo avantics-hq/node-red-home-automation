@@ -34,6 +34,34 @@ export function adoptableRefresh(
   return {requestId: event.requestId, generation};
 }
 
+// A newer refresh that wants exactly what this node is already doing (the
+// same mode, power, source or profile): rather than adopting it read-only,
+// which would drop the work in hand (a lamp warming up, a source switching),
+// the node takes the refresh's request ID and generation and carries on. Not
+// when it holds a manual override or a failure (`held`): those are read
+// afresh by adopting. An adopted request stays read-only under the new
+// generation. Returns whether it carried on.
+export function carryOn(
+  state: {desired: AdoptedRequest | null; generation: number; adoptedGeneration: number | null; phase: string; pending?: unknown},
+  adoptable: AdoptedRequest | null,
+  wantsSame: boolean,
+  held: boolean
+): boolean {
+  if (!adoptable || !state.desired || !wantsSame || held) return false;
+  const adopted = isAdopted(state);
+  state.desired.requestId = adoptable.requestId;
+  state.desired.generation = adoptable.generation;
+  state.generation = adoptable.generation;
+  if (adopted) state.adoptedGeneration = adoptable.generation;
+  // A command in flight belongs to the request it carries on.
+  const command = (state.pending as {command?: {generation?: unknown; requestId?: unknown}} | null | undefined)?.command;
+  if (command && typeof command.generation === "number") {
+    command.generation = adoptable.generation;
+    command.requestId = adoptable.requestId;
+  }
+  return true;
+}
+
 // The trace reason for an adoption: a node with nothing saved, or one whose
 // request the theatre replaced.
 export function adoptionReason(desired: unknown): string {

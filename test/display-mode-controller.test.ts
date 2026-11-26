@@ -656,3 +656,37 @@ test("a projector reading may give its power state instead of watts", () => {
   }
   assert.throws(() => reading({}), /invalid projector power observation/);
 });
+
+test("a newer refresh that wants the projector mode already warming up carries on: screen, then TV, under the new request", () => {
+  let result = discover("projector", 1, [
+    [0.1, "tv", {power: "on"}],
+    [0.2, "screen", {position: 0, state: "closed"}],
+    [0.3, "projector", {watts: 2.1}]
+  ]);
+  assert.equal(command(result, "projector", "power_toggle")?.reason, "start");
+  result = observe(result.state, "projector", {watts: 155}, 1);
+  // The theatre recovered to an activity wanting projector mode, mid warm-up.
+  result = apply(result.state, {kind: "refresh", requestId: "recovery-2", generation: 2, mode: "projector"}, 1.5);
+  assert.deepEqual(result.commands.filter(({operation}) => operation !== "query_power" && operation !== "query_position"), []);
+  assert.deepEqual([result.state.desired?.requestId, result.state.generation, result.state.pending?.operation, result.state.pending?.command.generation],
+    ["recovery-2", 2, "projector_start", 2]);
+  const sent: DisplayCommand[] = [];
+  result = apply(result.state, {kind: "tick", generation: 2}, 3.3);
+  sent.push(...result.commands);
+  result = observe(result.state, "projector", {watts: 155}, 3.4, 2);
+  sent.push(...result.commands);
+  assert.equal(command(result, "screen", "set_position")?.position, 82);
+  result = observe(result.state, "screen", {position: 82, state: "stopped"}, 4, 2);
+  sent.push(...result.commands);
+  assert.equal(command(result, "tv", "set_power")?.power, "standby");
+  result = observe(result.state, "tv", {power: "standby"}, 4.5, 2);
+  assert.equal(result.state.phase, "ready");
+  assert.deepEqual(sent.filter(({operation}) => operation === "power_toggle"), [], "the warming lamp is never toggled again");
+  assert.ok(sent.every(({generation}) => generation === 2));
+
+  // A refresh wanting another mode mid warm-up is read-only, as before: nothing toggled or moved.
+  const other = apply(observe(discover("projector", 1, [[0.1, "tv", {power: "on"}], [0.2, "screen", {position: 0, state: "closed"}], [0.3, "projector", {watts: 2.1}]]).state,
+    "projector", {watts: 155}, 1).state, {kind: "refresh", requestId: "recovery-3", generation: 3, mode: "tv"}, 1.5);
+  assert.equal(other.state.adoptedGeneration, 3);
+  assert.deepEqual(other.commands.filter(({operation}) => !operation.startsWith("query")), []);
+});

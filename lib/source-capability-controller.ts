@@ -1,6 +1,6 @@
 "use strict";
 
-import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration, adoptionReason} from "./adopted-request";
+import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration, adoptionReason, carryOn} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {numberSetting} from "./settings";
 
@@ -597,7 +597,13 @@ export function transitionSource(
   // below as at startup (see adopted-request.ts).
   let replacedRequest = false;
   const adoptable = event.kind === "refresh" ? adoptableRefresh(event, state) : null;
-  if (adoptable && event.kind === "refresh" && typeof event.action === "string" && Object.hasOwn(ACTIONS, event.action) &&
+  // The same wanted values as the work in hand: carry on under the new
+  // request rather than adopting it read-only (see carryOn).
+  const carried = event.kind === "refresh" && carryOn(state, adoptable,
+    event.action === state.desired?.action && (event.sourceId || null) === (state.desired?.sourceId ?? null),
+    state.classification === "manual_override" || state.phase === "failed");
+  if (carried) trace("refresh", "continued", "same-request", {generation: state.generation});
+  if (!carried && adoptable && event.kind === "refresh" && typeof event.action === "string" && Object.hasOwn(ACTIONS, event.action) &&
     ((typeof event.sourceId === "string" && Object.hasOwn(config.sources, event.sourceId)) ||
       (!event.sourceId && event.action === "deactivate"))) {
     const reason = adoptionReason(state.desired);

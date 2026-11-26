@@ -1,6 +1,6 @@
 "use strict";
 
-import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration, adoptionReason} from "./adopted-request";
+import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration, adoptionReason, carryOn} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {numberSetting} from "./settings";
 
@@ -283,7 +283,12 @@ export function transitionBacklighting(
   // below as at startup (see adopted-request.ts).
   let answerWithReading = false;
   const adoptable = event.kind === "refresh" ? adoptableRefresh(event, state) : null;
-  if (adoptable && event.kind === "refresh" && typeof event.power === "string" && Object.hasOwn(POWERS, event.power)) {
+  // The same wanted values as the work in hand: carry on under the new
+  // request rather than adopting it read-only (see carryOn).
+  const carried = event.kind === "refresh" && carryOn(state, adoptable, event.power === state.desired?.power,
+    state.classification === "manual_override" || state.phase === "failed" || state.blockedGeneration === state.desired?.generation);
+  if (carried) trace("refresh", "continued", "same-request", {generation: state.generation});
+  if (!carried && adoptable && event.kind === "refresh" && typeof event.power === "string" && Object.hasOwn(POWERS, event.power)) {
     const reason = adoptionReason(state.desired);
     // Replacing a request the theatre already counts as ready, it answers
     // from its reading, not with an interim state the theatre would take as

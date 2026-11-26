@@ -386,3 +386,23 @@ test("an adopted request the source doesn't match is a manual override, and it i
   assert.equal(theatreState(result).classification, "manual_override");
   assert.ok(!result.commands.some(({operation}) => operation === "activate"));
 });
+
+test("a newer refresh that wants the source already being switched to carries on with it under the new request", () => {
+  let result = intent(undefined, "streamer");
+  result = apply(result.state, {kind: "command_result", sourceId: "streamer", generation: 1, ok: true}, 0.1);
+  assert.equal(result.state.phase, "confirming");
+  // The theatre recovered to an activity wanting the same source, mid-activation.
+  result = apply(result.state, {kind: "refresh", requestId: "recovery-2", generation: 2, sourceId: "streamer", action: "activate"}, 0.2);
+  assert.deepEqual(result.commands.filter(({operation}) => operation === "activate"), [], "not activated again");
+  assert.deepEqual([result.state.desired?.requestId, result.state.generation, result.state.adoptedGeneration], ["recovery-2", 2, null]);
+  assert.notEqual(result.state.phase, "manual_override");
+  result = observed(result.state, "streamer", "active", 2, 0.5);
+  assert.equal(result.state.phase, "ready");
+  assert.deepEqual([theatreState(result).status, theatreState(result).generation], ["ready", 2]);
+
+  // A refresh wanting a different source is adopted read-only, as before: nothing activated.
+  let other = intent(undefined, "streamer");
+  other = apply(other.state, {kind: "refresh", requestId: "recovery-3", generation: 3, sourceId: "player", action: "activate"}, 0.2);
+  assert.deepEqual([other.state.desired?.sourceId, other.state.adoptedGeneration], ["player", 3]);
+  assert.deepEqual(other.commands.filter(({operation}) => operation === "activate"), []);
+});

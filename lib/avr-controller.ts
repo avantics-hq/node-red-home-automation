@@ -1,6 +1,6 @@
 "use strict";
 
-import {ADOPTED_MISMATCH, adoptableRefresh, readsOnly, savedAdoptedGeneration, adoptionReason} from "./adopted-request";
+import {ADOPTED_MISMATCH, adoptableRefresh, readsOnly, savedAdoptedGeneration, adoptionReason, carryOn} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {numberSetting} from "./settings";
 import {asTargetStatus, targetStateEvent, type TargetStateEvent} from "./target-state";
@@ -631,7 +631,13 @@ export function transitionAvr(
   // rediscover below as at startup (see adopted-request.ts).
   let replacedRequest = false;
   const adoptable = event.kind === "refresh" ? adoptableRefresh(event, state) : null;
-  const adopted = adoptable !== null && event.kind === "refresh" &&
+  // The same wanted values as the work in hand: carry on under the new
+  // request rather than adopting it read-only (see carryOn).
+  const carried = event.kind === "refresh" && carryOn(state, adoptable,
+    event.power === state.desired?.power && (event.source || null) === (state.desired?.source ?? null),
+    state.classification === "manual_override" || state.phase === "failed" || state.blockedGeneration === state.desired?.generation);
+  if (carried) trace("refresh", "continued", "same-request", {generation: state.generation});
+  const adopted = !carried && adoptable !== null && event.kind === "refresh" &&
     validateIntent({kind: "intent", ...adoptable, power: event.power as AvrPower, source: event.source ?? null}) === null;
   if (adopted && event.kind === "refresh") {
     const reason = adoptionReason(state.desired);

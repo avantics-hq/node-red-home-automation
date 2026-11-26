@@ -1,7 +1,7 @@
 "use strict";
 
 import {lightValues} from "./z2m-light";
-import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration, adoptionReason} from "./adopted-request";
+import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration, adoptionReason, carryOn} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {numberSetting, textSetting} from "./settings";
 
@@ -460,7 +460,12 @@ export function transitionActivityLighting(
   // unknown, so the next activity releases every light it holds.
   let answerWithReading = false;
   const adoptable = event.kind === "refresh" ? adoptableRefresh(event, state) : null;
-  const adopted = adoptable !== null && event.kind === "refresh" && typeof event.profile === "string" && Object.hasOwn(config.profiles, event.profile);
+  // The same wanted values as the work in hand: carry on under the new
+  // request rather than adopting it read-only (see carryOn).
+  const carried = event.kind === "refresh" && carryOn(state, adoptable, event.profile === state.desired?.profile,
+    state.phase === "manual_override" || state.phase === "failed" || state.blockedGeneration === state.desired?.generation);
+  if (carried) trace("refresh", "continued", "same-request", {generation: state.generation});
+  const adopted = !carried && adoptable !== null && event.kind === "refresh" && typeof event.profile === "string" && Object.hasOwn(config.profiles, event.profile);
   if (adopted && event.kind === "refresh") {
     const reason = adoptionReason(state.desired);
     // Replacing a request the theatre already counts as ready, it answers
