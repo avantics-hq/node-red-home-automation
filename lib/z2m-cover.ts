@@ -16,6 +16,7 @@
 //   option is set; state is OPEN or CLOSE;
 // - some covers report motion: motor_state (opening, closing, stopped),
 //   moving (UP, DOWN, STOP) or running (true or false); many report none;
+//   motor_state also has pause on some motors;
 // - availability is {"state": "online" | "offline"} on
 //   <base>/<name>/availability, retained.
 
@@ -63,7 +64,8 @@ export function z2mCoverTopics(config: Z2mCoverConfig) {
   return {device, set: `${device}/set`, get: `${device}/get`, availability: `${device}/availability`};
 }
 
-const MOTOR_STATES: Record<string, CoverMotion> = {opening: "opening", closing: "closing", stopped: "stopped"};
+// "pause": stopped part-way, as some motors report it.
+const MOTOR_STATES: Record<string, CoverMotion> = {opening: "opening", closing: "closing", stopped: "stopped", pause: "stopped"};
 const MOVING: Record<string, CoverMotion> = {UP: "opening", DOWN: "closing", STOP: "stopped"};
 const COMMAND_STATES: Record<string, string> = {open: "OPEN", close: "CLOSE", stop: "STOP"};
 
@@ -137,7 +139,9 @@ export function transitionZ2mCover(
         // When received, never a time the device gives: its clock may be off.
         observedAt: now.toISOString(),
         ...(typeof report.battery === "number" ? {battery: report.battery} : {}),
-        ...(typeof report.charging_status === "string" ? {charging: report.charging_status} : {})
+        // A string, or a binary's true or false: passed on as text.
+        ...(typeof report.charging_status === "string" || typeof report.charging_status === "boolean"
+          ? {charging: String(report.charging_status)} : {})
       }});
       trace("report", "read", null, {position: position ?? null, motion: motion ?? null, state: end ?? null});
     }

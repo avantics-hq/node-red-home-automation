@@ -60,7 +60,7 @@
       settle time. <code>observedAt</code> is when the report arrived. Battery and charging status are passed on.</li>
     <li>A cover with no position (open, close and stop only) reports its end state from Zigbee2MQTT's
       <code>OPEN</code> or <code>CLOSE</code> once its motion says it has stopped: before that, the state can show
-      where it is going rather than where it is. Set the cover controller's type to <i>open, close and stop only</i>.
+      where it is going rather than where it is. Set the cover node's <b>Cover</b> to <i>Open, close and stop only</i>.
       Such a cover that reports no motion either can't be confirmed, and the controller says so.</li>
     <li><code>…/availability</code> (<code>{"state": "online"}</code>, or plain <code>online</code>) becomes
       <code>{kind: "availability", online}</code>.</li>

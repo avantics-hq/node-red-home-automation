@@ -42,7 +42,7 @@ test("a state report becomes a reading: position, motion from whichever field th
   for (const [fields, motion] of [
     [{motor_state: "opening"}, "opening"], [{motor_state: "closing"}, "closing"], [{motor_state: "stopped"}, "stopped"],
     [{moving: "UP"}, "opening"], [{moving: "DOWN"}, "closing"], [{moving: "STOP"}, "stopped"],
-    [{running: false}, "stopped"]
+    [{running: false}, "stopped"], [{motor_state: "pause"}, "stopped"]
   ] as const) {
     assert.deepEqual(read({position: 37, state: "OPEN", ...fields}), [{kind: "observed", position: 37, motion, observedAt}], JSON.stringify(fields));
   }
@@ -56,6 +56,10 @@ test("a state report becomes a reading: position, motion from whichever field th
   assert.deepEqual(read(JSON.stringify({position: 5, battery: 87, charging_status: "false"}))[0],
     {kind: "observed", position: 5, observedAt, battery: 87, charging: "false"});
   assert.deepEqual(read({linkquality: 120}), []);
+  // A binary charging status, as Zigbee2MQTT publishes true or false, is passed on as text too.
+  assert.equal(read({position: 5, charging_status: true})[0]?.kind === "observed" && (read({position: 5, charging_status: true})[0] as {charging?: string}).charging, "true");
+  // Paused without a position: stopped, so its end state counts.
+  assert.deepEqual(read({state: "CLOSE", motor_state: "pause"}), [{kind: "observed", state: "closed", motion: "stopped", observedAt}]);
 });
 
 test("a cover with no position reports its end state once stopped, and is then read by state", () => {
