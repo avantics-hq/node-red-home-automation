@@ -74,6 +74,15 @@ return msg; // keep the boolean payload</code></pre></div>
 <li>A light another owner holds, such as an activity or a scene, is left alone by motion ON and OFF; its other targets are still handled.</li>
 <li>Switching a light from a wall switch goes through the switch policy, which marks the press as a person’s.</li>
 </ul>
+<p>Your flow decides who a request is from; the room controller doesn’t guess, and values alone don’t count as a person’s change. When a request comes from a person, for example a dashboard slider, set <code>person: true</code> (or <code>manual: true</code>) on the intent you send the room controller. A light set that way after the room went vacant stays on when motion’s OFF arrives.</p>
+<div class="code-block"><div class="code-label"><span>Function → room controller · a dashboard slider, from a person</span></div><pre><code>msg.lighting = {
+  kind: "intent",
+  targets: ["main"],
+  state: "ON",
+  values: {brightnessPct: msg.payload},
+  person: true
+};
+return msg;</code></pre></div>
 <p>The room controller’s control states are described in <a href="https://github.com/avantics-hq/node-red-home-automation#room-light-control">Room light control</a> in the README.</p>
 <aside class="callout"><strong>Without a context store, a restart forgets who is in the room.</strong>
 <p>A motion policy that starts with nothing saved (its first deploy, or a redeploy or restart without a context store) counts the room as vacant from then. Unless occupancy is reported within <strong>Vacancy seconds</strong>, it sends its OFF intent, so someone sitting still in a lit room has the lights switched off unless motion is seen. The room controller has also forgotten which lights a person set. A <a href="https://github.com/avantics-hq/node-red-home-automation#recommended-setup-a-file-context-store">file context store</a> keeps both; a running countdown then carries on.</p></aside>

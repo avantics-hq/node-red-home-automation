@@ -65,6 +65,15 @@ return msg;</code></pre></div>
 };
 return msg;</code></pre></div>
 <p><code>brightnessPct</code> is 0–100 and <code>colorTempKelvin</code> is in kelvin; the controller converts them for a Zigbee2MQTT light to its 1–254 brightness and mireds. <code>brightnessPct: 0</code> is the dimmest the light goes, not off: send <code>state: "OFF"</code> to switch it off. An intent with values (other than from an activity) makes the light <code>manual</code>, described next.</p>
+<p>Values alone don’t count as a person’s change. Your flow decides who a request is from; the controller doesn’t guess. When a request comes from a person, for example a dashboard slider, set <code>person: true</code> (or <code>manual: true</code>) on the intent. The controller then records that a person set the light, and motion’s vacancy OFF leaves it on when the person set it after the room went vacant (see <a href="#manual">Leave a person’s change alone</a>).</p>
+<div class="code-block"><div class="code-label"><span>Function → controller · a dashboard slider, from a person</span></div><pre><code>msg.lighting = {
+  kind: "intent",
+  targets: ["main"],
+  state: "ON",
+  values: {brightnessPct: msg.payload},
+  person: true
+};
+return msg;</code></pre></div>
 </section>
 <section id="circadian"><h2>Circadian brightness and colour</h2>
 <p>Circadian lighting is on unless you switch it off. Its levels follow the controller’s <strong>Wake time</strong> and <strong>Bed time</strong> (24-hour <code>HH:MM</code>, default 07:00 and 23:00):</p>

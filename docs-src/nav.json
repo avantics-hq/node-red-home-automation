@@ -50,7 +50,8 @@
       {
         "label": "Adapters",
         "items": [
-          {"label": "Shelly cover", "href": "guide-device-adapters.html#shelly-cover"}
+          {"label": "Shelly cover", "href": "guide-device-adapters.html#shelly-cover"},
+          {"label": "Zigbee2MQTT cover", "href": "guide-device-adapters.html#zigbee2mqtt"}
         ]
       }
     ]
