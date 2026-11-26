@@ -458,6 +458,7 @@ export function transitionActivityLighting(
   // nothing desired (it started with nothing saved): adopt them, and observe
   // below as at startup (see adopted-request.ts). Which lights it held is
   // unknown, so the next activity releases every light it holds.
+  let answerWithReading = false;
   const adoptable = event.kind === "refresh" ? adoptableRefresh(event, state) : null;
   const adopted = adoptable !== null && event.kind === "refresh" && typeof event.profile === "string" && Object.hasOwn(config.profiles, event.profile);
   if (adopted && event.kind === "refresh") {
@@ -490,6 +491,14 @@ export function transitionActivityLighting(
       if (state.pending.attempt < config.maxAttempts) issueApply(state.pending.attempt + 1);
       else fail("confirmation-timeout");
     }
+  } else if (event.kind === "refresh" && state.desired && state.phase === "ready" && !state.pending &&
+    profileFor(state, config).targets.length > 0) {
+    // A settled, ready profile is re-read without leaving ready, as the
+    // display, source and receiver are: its target state follows the
+    // readings, which reconcile as any reading after ready does.
+    commands.push(commandFor(state, config, "observe", 0));
+    answerWithReading = true;
+    trace("refresh", "observing", "ready", {profile: state.desired.profile});
   } else if (event.kind === "startup" || event.kind === "refresh") {
     state.observed = {};
     state.pending = null;
@@ -522,7 +531,7 @@ export function transitionActivityLighting(
     trace("command", "withheld", ADOPTED_MISMATCH);
   }
 
-  if (state.desired) {
+  if (state.desired && !answerWithReading) {
     const manual = state.phase === "manual_override";
     const theatre = targetStateEvent({
       target: "lighting",
