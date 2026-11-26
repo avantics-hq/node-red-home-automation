@@ -1,0 +1,75 @@
+<!--{
+ "title": "Share a house schedule",
+ "kind": "Guides / House schedule",
+ "lead": "Give many rooms one wake time and one bed time. Each room lighting controller follows the house schedule without wires, and an optional MQTT node lets Home Assistant change the times.",
+ "description": "",
+ "htmlTitle": "Share a house schedule · Node-RED Home Automation"
+}-->
+<div class="meta"><span class="tag">Guide</span><span class="tag">Config node · wake 07:00 · bed 23:00</span><a class="tag" href="guide-room-lighting.html">Room lighting guide →</a></div>
+<section id="before"><h2>Before you wire it</h2>
+<p>A room lighting controller styles its lights by a wake time and a bed time (default <strong>07:00</strong> and <strong>23:00</strong>). Levels rise to the daytime level over the hour after waking, stay at the daytime brightness and colour through the day, wind down to the sleep settings over the three hours before bed, and stay at the sleep settings until you wake. Without a schedule, every room keeps its own two times.</p>
+<p>The <strong>house schedule</strong> (<code>home-house-schedule</code>) holds one wake and bed time for every room that uses it. It is a <strong>configuration node</strong>, like an MQTT broker: it has no wires and does not sit on the canvas. You choose it in each room controller’s <strong>Schedule</strong> setting, and it appears with the editor’s other configuration nodes.</p>
+<ul>
+<li>You need at least one <a href="guide-room-lighting.html">room lighting controller</a> already wired to its lights.</li>
+<li>Times are 24-hour <code>HH:MM</code> in the Node-RED host’s local time. Docker containers default to UTC: set the container’s <code>TZ</code> if the host should follow a local timezone.</li>
+<li>The house schedule MQTT node is optional. Rooms follow the schedule without it; add it when you want the times on MQTT or in Home Assistant.</li>
+</ul>
+<div class="table-wrap" role="region" aria-label="House schedule settings; scroll horizontally on a phone" tabindex="0"><table><caption>House schedule settings</caption><thead><tr><th scope="col">Setting</th><th scope="col">Default</th><th scope="col">What it does</th></tr></thead><tbody>
+<tr><td>Name</td><td><code>house</code></td><td>Labels the schedule and names its topics, <code>home/&lt;name&gt;/schedule/...</code>. Needs a letter or digit. In topics the name is lower-cased and other characters become <code>_</code>: <i>Main House</i> publishes on <code>home/main_house/schedule/...</code>.</td></tr>
+<tr><td>Wake time</td><td><code>07:00</code></td><td>When the rooms start to brighten.</td></tr>
+<tr><td>Bed time</td><td><code>23:00</code></td><td>When the rooms reach the sleep settings. It must differ from the wake time.</td></tr>
+</tbody></table></div>
+<p>A bed time after midnight, or a wake time later than the bed time, works.</p></section>
+<section id="wiring"><h2>Share one schedule between rooms</h2>
+<p>Rooms reference the schedule; only the optional MQTT node has wires. Each room hears of every change as it happens.</p>
+<figure class="diagram"><div class="wiring-flow"><div class="flow-node">house schedule MQTT<small>Publishes the times · takes changes</small></div><span class="arrow" aria-hidden="true">⇢</span><div class="flow-node owner">house schedule<small>Configuration node · no wires</small></div><span class="arrow controller-arrow" aria-hidden="true">⇢</span><div class="flow-node controller">Room lighting controllers<small>Schedule: house</small></div><div class="return">MQTT in → house schedule MQTT → MQTT out</div><div class="flow-node broker-out" style="grid-column:1 / -1">MQTT in and MQTT out<small>Same broker · set topics in, retained times out</small></div></div><figcaption>The dashed arrows are settings that reference the house schedule, not wires. The only wires run between the house schedule MQTT node and the broker.</figcaption></figure>
+<div class="table-wrap" role="region" aria-label="What connects to what; scroll horizontally on a phone" tabindex="0"><table><caption>What connects to what</caption><thead><tr><th scope="col">From</th><th scope="col">Connect to</th><th scope="col">Why</th></tr></thead><tbody>
+<tr><td>Room controller <strong>Schedule</strong> setting</td><td>house schedule</td><td>The room takes its wake and bed times from it. No wire.</td></tr>
+<tr><td>house schedule MQTT <strong>Schedule</strong> setting</td><td>house schedule</td><td>Required. The node publishes and changes this schedule. No wire.</td></tr>
+<tr><td>MQTT in</td><td>house schedule MQTT input</td><td>Subscribe to <code>home/&lt;name&gt;/schedule/wake-time/set</code> and <code>bed-time/set</code>.</td></tr>
+<tr><td>house schedule MQTT output</td><td>MQTT out</td><td>Its MQTT publications: the times, availability and Home Assistant discovery.</td></tr>
+</tbody></table></div>
+<ol class="step-list">
+<li><strong>Add the schedule from a room.</strong><p>Open a room lighting controller (<code>home-room-lighting-controller</code>) and set <strong>Schedule</strong>. Use the editor’s add button to create a house schedule, or pick one that already exists; the editor offers an existing schedule first for a new room.</p></li>
+<li><strong>Set the times once.</strong><p>Edit the house schedule’s <strong>Wake time</strong> and <strong>Bed time</strong>. Every room that uses it follows these times, not its own <strong>Wake time</strong> and <strong>Bed time</strong>.</p></li>
+<li><strong>Point the other rooms at it.</strong><p>Choose the same schedule as <strong>Schedule</strong> in each room that should share the times.</p></li>
+<li><strong>Add the MQTT node if you want it.</strong><p>Drag a house schedule MQTT node (<code>home-house-schedule-mqtt</code> in the palette) onto the canvas, choose the schedule as its <strong>Schedule</strong>, and wire it to the broker as in the table. Use one per schedule: two would share the same topics and entities, and deleting one clears them for both until the other next starts.</p></li>
+</ol>
+<p>The importable example <a href="https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/House%20schedule.json"><code>House schedule.json</code></a> shows two rooms sharing one schedule named <code>house</code>, with an Inject node that changes the wake time through the MQTT node.</p></section>
+<section id="changes"><h2>Change the times</h2>
+<p>Send changes to the <strong>house schedule MQTT</strong> node. It changes the shared schedule, and every room following it restyles. Give new times as <code>HH:MM</code>, either one alone:</p>
+<div class="code-block"><div class="code-label"><span>Function → house schedule MQTT · wake earlier</span></div><pre><code>msg.lighting = {kind: "schedule", wakeTime: "06:30"};
+return msg;</code></pre></div>
+<div class="code-block"><div class="code-label"><span>Function → house schedule MQTT · set both times</span></div><pre><code>msg.lighting = {kind: "schedule", wakeTime: "06:30", bedTime: "22:30"};
+return msg;</code></pre></div>
+<p>Times that are not valid <code>HH:MM</code>, or a wake time equal to the bed time, are ignored.</p>
+<p>From MQTT, a time on a set topic does the same. A message is read as <code>HH:MM</code> or <code>HH:MM:SS</code>; retained messages and anything but a time are ignored.</p>
+<div class="table-wrap" role="region" aria-label="House schedule topics; scroll horizontally on a phone" tabindex="0"><table><caption>House schedule topics (default name <code>house</code>)</caption><thead><tr><th scope="col">Topic</th><th scope="col">Direction</th><th scope="col">Payload</th></tr></thead><tbody>
+<tr><td><code>home/house/schedule/wake-time/set</code></td><td>In</td><td>A new wake time</td></tr>
+<tr><td><code>home/house/schedule/bed-time/set</code></td><td>In</td><td>A new bed time</td></tr>
+<tr><td><code>home/house/schedule/wake-time/state</code></td><td>Out, retained</td><td>The wake time in use, <code>HH:MM:SS</code></td></tr>
+<tr><td><code>home/house/schedule/bed-time/state</code></td><td>Out, retained</td><td>The bed time in use, <code>HH:MM:SS</code></td></tr>
+<tr><td><code>home/house/schedule/availability</code></td><td>Out, retained</td><td><code>online</code> after the flows start; <code>offline</code> as the node stops (see below)</td></tr>
+</tbody></table></div>
+<p>With <strong>Home Assistant discovery</strong> on (the editor’s default for a new node; an imported flow without the setting gets none), Home Assistant gets a <strong>Wake time</strong> and a <strong>Bed time</strong> entity under the <strong>Discovery prefix</strong> (<code>homeassistant</code>), named after the schedule so a replacement MQTT node keeps them. Changing one in Home Assistant sends it to the set topic, and the node acts on it. See <a href="guide-home-assistant.html">Home Assistant</a> for the rest of the setup.</p>
+<p>The node’s own <code>offline</code>, and the clearing of its retained topics and entities when you delete it, reach the broker only on a “Modified nodes” or “Modified flows” deploy. On a full deploy, a restart or a crash, Node-RED stops the MQTT out node at the same moment, so set the MQTT broker node’s <strong>Birth message</strong> to <code>online</code> and its <strong>Close message</strong> and <strong>Will message</strong> to <code>offline</code>, all retained, on the availability topic. See <a href="https://github.com/avantics-hq/node-red-home-automation#upgrading-from-2x">Upgrading from 2.x</a> in the README.</p>
+<p>To announce the times again, as after the broker reconnects, send the node <code>msg.source = "startup"</code>.</p>
+<aside class="callout"><strong>A changed time lasts until the setting changes.</strong><p>A time set by a message or from Home Assistant stays until a deploy gives the house schedule a different <strong>Wake time</strong> or <strong>Bed time</strong>; that setting then applies. Without a <a href="https://github.com/avantics-hq/node-red-home-automation#recommended-setup-a-file-context-store">file context store</a>, a restart or redeploy also returns the schedule to its settings.</p></aside></section>
+<section id="own-times"><h2>Give a room its own times</h2>
+<p>A room that needs different times (a child’s room, say) sets <strong>Schedule</strong> to none and keeps its own <strong>Wake time</strong> and <strong>Bed time</strong>.</p>
+<div class="table-wrap" role="region" aria-label="Following a schedule or not; scroll horizontally on a phone" tabindex="0"><table><caption>Following a schedule or not</caption><thead><tr><th scope="col">Room’s Schedule</th><th scope="col">Its times</th><th scope="col">Its own wake and bed time topics and entities</th></tr></thead><tbody>
+<tr><td>A house schedule</td><td>The schedule’s, at every change</td><td>Its <code>wake-time/set</code> and <code>bed-time/set</code> topics are ignored; its Home Assistant wake and bed time entities are cleared.</td></tr>
+<tr><td>None</td><td>Its own settings</td><td>With <strong>Publish state over MQTT</strong> on, published and changed under <code>home/&lt;area&gt;/wake-time</code> and <code>bed-time</code>, as in <a href="https://github.com/avantics-hq/node-red-home-automation#room-light-control">Room light control</a>.</td></tr>
+</tbody></table></div>
+<p>Sleep stays per room. A room’s sleep mode still overrides the schedule, so one room can go to its sleep settings while the others follow the house times.</p>
+<p>Deleting a house schedule in the editor sets its rooms to none, and they return to their own times rather than keeping the schedule’s last ones.</p></section>
+<section id="check"><h2>Check the result</h2>
+<div class="table-wrap" role="region" aria-label="Read the outcome; scroll horizontally on a phone" tabindex="0"><table><caption>Read the outcome</caption><thead><tr><th scope="col">What you see</th><th scope="col">What it means</th></tr></thead><tbody>
+<tr><td>house schedule MQTT status <code>wake 07:00 · bed 23:00</code></td><td>The times the schedule is using now. It updates at every change.</td></tr>
+<tr><td>Room status <code>circadian</code> or <code>sleep</code></td><td>The room is styling its lights by the times in use.</td></tr>
+<tr><td>Room status <code>schedule missing: own times</code></td><td>The room names a schedule that is not running, as when it was deleted from the flows file. It keeps its own times until you choose a schedule or none.</td></tr>
+<tr><td>Retained <code>home/&lt;name&gt;/schedule/wake-time/state</code> and <code>bed-time/state</code></td><td>The MQTT node published the times; watch them with an MQTT client or a Debug node on its output.</td></tr>
+</tbody></table></div>
+<p>A change restyles only the lights a room has been told about since it started. A light that nothing has named since a start with nothing saved can keep its start-time style; switch circadian lighting on, or let motion or a wall switch name it.</p>
+<p class="caption">Sources: README Room lighting, Room light control, Upgrading from 2.x and Recommended setup: a file context store; house schedule, house schedule MQTT and room lighting controller editor help and source; House schedule example flow.</p></section>
+<nav class="pager" aria-label="Adjacent pages"><a href="guide-wall-switches.html"><small>Previous</small>← Wall switches</a><a href="guide-covers.html"><small>Continue</small>Covers →</a></nav>

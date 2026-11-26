@@ -4,21 +4,21 @@
     "items": [
       {"label": "Introduction", "href": "index.html"},
       {"label": "Install", "href": "index.html#install"},
-      {"label": "Your first room", "href": "README#room-lighting"},
+      {"label": "Your first room", "href": "guide-room-lighting.html"},
       {"label": "Core ideas", "href": "index.html#core-ideas"}
     ]
   },
   {
     "label": "Guides",
     "items": [
-      {"label": "Room lighting", "href": "README#room-light-control"},
-      {"label": "Motion and occupancy", "href": "README#room-lighting"},
-      {"label": "Wall switches", "href": "README#room-lighting"},
-      {"label": "House schedule", "href": "README#room-lighting"},
+      {"label": "Room lighting", "href": "guide-room-lighting.html"},
+      {"label": "Motion and occupancy", "href": "guide-motion-occupancy.html"},
+      {"label": "Wall switches", "href": "guide-wall-switches.html"},
+      {"label": "House schedule", "href": "guide-house-schedule.html"},
       {"label": "Covers", "href": "guide-covers.html"},
       {"label": "Home theatre", "href": "home-theatre.html"},
-      {"label": "Home Assistant", "href": "index.html#home-assistant"},
-      {"label": "Device adapters", "href": "guide-covers.html#wiring"}
+      {"label": "Home Assistant", "href": "guide-home-assistant.html"},
+      {"label": "Device adapters", "href": "guide-device-adapters.html"}
     ]
   },
   {
@@ -27,17 +27,17 @@
       {
         "label": "Lighting",
         "items": [
-          {"label": "Room controller", "href": "README#room-light-control"},
-          {"label": "Motion policy", "href": "README#room-lighting"},
-          {"label": "Switch policy", "href": "README#room-lighting"}
+          {"label": "Room controller", "href": "guide-room-lighting.html#settings"},
+          {"label": "Motion policy", "href": "guide-motion-occupancy.html#settings"},
+          {"label": "Switch policy", "href": "guide-wall-switches.html#settings"}
         ]
       },
       {
         "label": "Sensors and schedule",
         "items": [
-          {"label": "Occupancy fusion", "href": "README#room-lighting"},
-          {"label": "House schedule", "href": "README#room-lighting"},
-          {"label": "House schedule MQTT", "href": "README#room-lighting"}
+          {"label": "Occupancy fusion", "href": "guide-motion-occupancy.html#wiring"},
+          {"label": "House schedule", "href": "guide-house-schedule.html#before"},
+          {"label": "House schedule MQTT", "href": "guide-house-schedule.html#changes"}
         ]
       },
       {
@@ -48,21 +48,10 @@
         ]
       },
       {
-        "label": "Home theatre",
-        "items": [
-          {"label": "AVR controller", "href": "README#receiver-volume-ownership"},
-          {"label": "Display mode", "href": "README#home-theatre-equipment"},
-          {"label": "Source capability", "href": "README#home-theatre-equipment"},
-          {"label": "Backlighting", "href": "README#home-theatre-equipment"},
-          {"label": "Activity controller", "href": "README#theatre-activities"},
-          {"label": "Activity lighting", "href": "README#room-light-control"},
-          {"label": "State contract", "href": "README#theatre-mqtt-contract"}
-        ]
-      },
-      {
         "label": "Adapters",
         "items": [
-          {"label": "Shelly cover", "href": "guide-covers.html#wiring"}
+          {"label": "Shelly cover", "href": "guide-device-adapters.html#shelly-cover"},
+          {"label": "Zigbee2MQTT cover", "href": "guide-device-adapters.html#zigbee2mqtt"}
         ]
       }
     ]
@@ -70,14 +59,12 @@
   {
     "label": "Contracts",
     "items": [
-      {"label": "Theatre MQTT topics", "href": "README#theatre-mqtt-contract"},
       {"label": "Contract examples", "href": "contract-examples.html"}
     ]
   },
   {
     "label": "Project",
     "items": [
-      {"label": "Releases and upgrading", "href": "README#install"},
       {"label": "Roadmap", "href": "roadmap.html"},
       {"label": "Contributing", "href": "https://github.com/avantics-hq/node-red-home-automation/blob/main/CONTRIBUTING.md"}
     ]

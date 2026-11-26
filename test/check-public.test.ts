@@ -33,7 +33,8 @@ const positives: Array<[string, string]> = ([
   ["{\"latitude\": 51.507|351}", "high-precision location coordinate"],
   ["{\"longitude\": -0.127|758}", "high-precision location coordinate"],
   ["addr 100.64.|12.34", "carrier-grade NAT address"],
-  ["addr 100.127.|255.1", "carrier-grade NAT address"]
+  ["addr 100.127.|255.1", "carrier-grade NAT address"],
+  ["topic zigbee2|mqtt/&lt;study_blind/set", "Zigbee2MQTT device topic"]
 ] as Array<[string, string]>).map(([line, rule]) => [line.replace("|", ""), rule]);
 
 // Look alike but name nothing private.
@@ -46,6 +47,7 @@ const negatives = [
   "service remote.send_command and light.turn_on",
   "host localhost and http://localhost:1880",
   "topic zigbee2mqtt/bridge/state and zigbee2mqtt/<device>",
+  "page <code>zigbee2mqtt/&lt;device&gt;/set</code> and zigbee2mqtt/&lt;your cover&gt;/availability",
   "public 100.63.0.1 and 100.128.0.1",
   "time 12:34:56 and version 1.2.3.4.5.6",
   "latitude: 51.5074 (four decimals)",

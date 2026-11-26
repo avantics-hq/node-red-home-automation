@@ -16,7 +16,12 @@ const read = (path) => readFileSync(new URL(path, root), "utf8");
 export const REPOSITORY = "https://github.com/avantics-hq/node-red-home-automation";
 
 // The pages, in reading order.
-export const PAGES = ["index", "guide-covers", "node-cover-controller", "home-theatre", "contract-examples", "roadmap"];
+export const PAGES = [
+  "index",
+  "guide-room-lighting", "guide-motion-occupancy", "guide-wall-switches", "guide-house-schedule",
+  "guide-covers", "home-theatre", "guide-home-assistant", "guide-device-adapters",
+  "node-cover-controller", "contract-examples", "roadmap"
+];
 
 const escapeHtml = (text) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
@@ -43,14 +48,17 @@ export function sections(content) {
     .map(([, id, heading, body]) => ({id, heading: plainText(heading), text: plainText(body)}));
 }
 
-// A menu link's address: README#anchor names a README section on GitHub.
-export function navHref(href) {
-  return href.startsWith("README#") ? `${REPOSITORY}#${href.slice("README#".length)}` : href;
-}
+// Menu entries open pages on this site. These are the only outside links the
+// site's chrome may carry: the source repository (top bar) and the contributing
+// guide (menu). test/docs-site.test.ts fails on any other menu entry that
+// leaves the site.
+export const OUTSIDE_LINKS = new Set([REPOSITORY, `${REPOSITORY}/blob/main/CONTRIBUTING.md`]);
+const isOutside = (href) => /^[a-z]+:/i.test(href);
 
 function navLink(item, current) {
   const here = item.href === current ? " aria-current=\"page\"" : "";
-  return `<a href="${escapeHtml(navHref(item.href))}"${here}>${escapeHtml(item.label)}</a>`;
+  const away = isOutside(item.href) ? " ↗" : "";
+  return `<a href="${escapeHtml(item.href)}"${here}>${escapeHtml(item.label)}${away}</a>`;
 }
 
 function renderNav(nav, current) {

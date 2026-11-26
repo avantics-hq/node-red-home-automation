@@ -177,8 +177,8 @@ and charging status are kept as reported facts and never acted on.
 
 Switched on, a cover node publishes its state (and position) under
 `home/<area>/cover/<name>/`, named by its **Name in topics** (no default: give
-each cover in a room its own), and announces a Home Assistant cover entity. Its open,
-close, stop and set position come back to the cover node on its own set topics
+each cover in a room its own), and announces a Home Assistant cover entity of that name. Its open,
+close and stop (and, for a position cover, set position) come back to the cover node on its own set topics
 as requests like any other, carried out and confirmed as above; nothing
 commands the device through Home Assistant. A cover group has no entity of its
 own: Home Assistant can group the covers' entities itself.
@@ -408,7 +408,8 @@ Version 3.0 changed some behaviour, and later versions added to it. Check these 
   the topics it publishes. A theatre state contract added from now on doesn't need one for Home Assistant
   discovery: its entity IDs then come from its display name. With an area, it suggests that area to Home Assistant,
   which creates it if no area of that name exists. One saved before needs an area for discovery, as before. A room
-  lighting controller with no area still controls its lights, but publishes no state or discovery.
+  lighting controller with no area still controls its lights only with state publishing and discovery both off;
+  with either on (or unset, as on a room saved before 3.0), it reports an invalid configuration.
 - **MQTT state publishing and Home Assistant discovery are opt-in** on the room lighting controller and the theatre
   state contract. New nodes start with them off. Nodes in a flow saved before 3.0 keep publishing until you untick
   the setting. Switching discovery off removes the entities from Home Assistant.
