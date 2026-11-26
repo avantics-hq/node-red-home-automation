@@ -77,9 +77,9 @@ export const contentRules = [
   },
   {
     // A placeholder after the slash (<device>, {device}, $device) names no
-    // device; HTML pages write "<" as "&lt;".
+    // device; HTML pages write it as &lt;device&gt;, which must be closed.
     name: "Zigbee2MQTT device topic",
-    pattern: /\bzigbee2mqtt\/(?!bridge\b|<|&lt;|\{|\$)[^\s"'`<>{}/]+/gi
+    pattern: /\bzigbee2mqtt\/(?!bridge\b|<|&lt;[^/&]*&gt;|\{|\$)[^\s"'`<>{}/]+/gi
   },
   {
     name: "Node-RED flow or node identifier",

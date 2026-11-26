@@ -12,7 +12,7 @@
 <li><strong>Publishing is opt-in, per node.</strong> Most publishing nodes have two settings: <strong>Publish state over MQTT</strong> and <strong>Home Assistant discovery</strong>, which needs Publish state. A new node starts with both off. Room lighting controllers and theatre state contracts saved before these settings existed keep publishing.</li>
 <li><strong>The theatre state contract</strong> always publishes its retained state; only <strong>Home Assistant discovery</strong> is a setting, off for a new node.</li>
 <li><strong>The house schedule MQTT node</strong> exists to publish, so it has only the <strong>Home Assistant discovery</strong> setting, ticked when you add it from the palette.</li>
-<li><strong>Give it an area.</strong> A node that publishes needs an <strong>Area</strong> where it names something, and the editor marks it invalid without one. A room lighting controller with no area still controls its lights, but publishes no state or discovery.</li>
+<li><strong>Give it an area.</strong> A node that publishes usually needs an <strong>Area</strong>, because its topics and IDs are named after it; without one the editor marks it invalid. The theatre state contract is the exception: with discovery off and a <strong>Base topic</strong> set, its area is optional. A room lighting controller with no area still controls its lights, but only with <strong>Publish state</strong> and <strong>Home Assistant discovery</strong> both off; with either on, or on a room saved before these settings existed (which counts as on), it fails as an invalid configuration.</li>
 </ul>
 <p>Topics and IDs use the area in lowercase, with each run of spaces or other characters (anything but letters, digits, <code>_</code> and <code>-</code>) as <code>_</code>. An area called “Upstairs Landing” publishes under <code>home/upstairs_landing/…</code>; “living-room” is unchanged. Names shown in Home Assistant keep the area as you typed it.</p>
 <aside class="callout neutral"><strong>Keep state across restarts.</strong><p>A node remembers what it published in its node context. With a <a href="https://github.com/avantics-hq/node-red-home-automation#recommended-setup-a-file-context-store">file context store</a> that record survives deploys and restarts, so old topics can be cleared reliably.</p></aside></section>
@@ -25,7 +25,7 @@
 <tr><td>occupancy fusion (<code>home-occupancy-fusion</code>)</td><td>Output 2. Output 1 still feeds the motion policy.</td><td>None: the occupancy sensor is read-only.</td></tr>
 <tr><td>motion policy (<code>home-motion-lighting-policy</code>)</td><td>Output 2. Output 1 carries lighting intents.</td><td><code>home/&lt;area&gt;/motion/+/set</code></td></tr>
 <tr><td>AVR controller (<code>home-avr-controller</code>)</td><td>Output 3, apart from receiver commands (1) and state and results (2).</td><td><code>home/&lt;area&gt;/receiver/volume/set</code></td></tr>
-<tr><td>cover controller (<code>home-cover-controller</code>)</td><td>Output 4.</td><td><code>home/&lt;area&gt;/cover/&lt;name&gt;/+</code> and <code>…/position/set</code></td></tr>
+<tr><td>cover controller (<code>home-cover-controller</code>)</td><td>Output 4.</td><td><code>home/&lt;area&gt;/cover/&lt;name&gt;/+</code> and, for a position cover, <code>…/position/set</code></td></tr>
 <tr><td>house schedule MQTT (<code>home-house-schedule-mqtt</code>)</td><td>Output 1, its only output.</td><td><code>home/&lt;name&gt;/schedule/wake-time/set</code> and <code>…/bed-time/set</code></td></tr>
 </tbody></table></div>
 <p>The room lighting controller watches each light’s command topic to tell its own commands from other people’s, so a function that rewrites its output on the way makes them look like someone else’s. Flows that filter that output by topic must pass the <code>/control</code> topics through.</p>
@@ -38,7 +38,7 @@
 <tr><td>occupancy fusion</td><td>An occupancy binary sensor.</td><td><code>home/&lt;area&gt;/occupancy/state</code>, retained <code>ON</code> or <code>OFF</code></td></tr>
 <tr><td>motion policy</td><td>A motion lighting switch and a vacancy delay number (in the device’s configuration).</td><td><code>home/&lt;area&gt;/motion/enabled/state</code>, <code>…/delay/state</code> in seconds</td></tr>
 <tr><td>AVR controller</td><td>Power and source sensors, and a volume number in dB between <strong>Minimum volume</strong> and <strong>Maximum volume</strong>.</td><td><code>home/&lt;area&gt;/receiver/power/state</code>, <code>…/source/state</code>, <code>…/volume/state</code></td></tr>
-<tr><td>cover controller</td><td>A cover entity, named after the node, with open, close, stop and set position.</td><td><code>home/&lt;area&gt;/cover/&lt;name&gt;/state</code> and, for a position cover, <code>…/position</code></td></tr>
+<tr><td>cover controller</td><td>A cover entity, named after its <strong>Name in topics</strong>, with open, close and stop; a position cover also gets set position and its reported position.</td><td><code>home/&lt;area&gt;/cover/&lt;name&gt;/state</code> and, for a position cover, <code>…/position</code></td></tr>
 <tr><td>house schedule MQTT</td><td>Wake and bed time entities, named after the schedule.</td><td><code>home/&lt;name&gt;/schedule/wake-time/state</code>, <code>…/bed-time/state</code></td></tr>
 <tr><td>cover group (<code>home-cover-group</code>)</td><td>None. Home Assistant can group the cover entities itself.</td><td>None</td></tr>
 </tbody></table></div>
@@ -54,7 +54,7 @@ return msg;</code></pre></div>
 <li><strong>Theatre state contract:</strong> the activity selector sends a request with its own request ID to <code>&lt;base&gt;/request</code>, like any other activity request. Retained requests are inert.</li>
 <li><strong>Motion policy:</strong> <code>ON</code>/<code>OFF</code> on <code>…/enabled/set</code> and a delay of 0 to 86400 seconds on <code>…/delay/set</code>, as its <code>area-enabled</code> and <code>delay</code> inputs do.</li>
 <li><strong>AVR controller:</strong> a volume in dB on <code>…/volume/set</code>. Sets within 0.3 seconds of each other are settled to the last, which becomes an ordinary absolute volume request. It waits for a power or source change in progress and is rejected with <code>receiver-not-ready</code> while the receiver is off.</li>
-<li><strong>Cover controller:</strong> <code>OPEN</code>, <code>CLOSE</code> or <code>STOP</code> on <code>…/set</code>, and a position on <code>…/position/set</code>, carried out and confirmed like any other request.</li>
+<li><strong>Cover controller:</strong> <code>OPEN</code>, <code>CLOSE</code> or <code>STOP</code> on <code>…/set</code>, and, for a position cover, a position on <code>…/position/set</code>, carried out and confirmed like any other request.</li>
 <li><strong>House schedule MQTT:</strong> a time on the wake or bed time set topic changes the schedule for every room that follows it. Retained messages and anything but a time are ignored.</li>
 </ul></section>
 <section id="discovery"><h2>Discovery prefix and entity names</h2>

@@ -55,7 +55,7 @@ return msg;</code></pre></div>
 <p>The policies send <code>msg.lighting</code> intents. You can send the same from an Inject or Function node to try the room before any sensor is wired.</p>
 <div class="code-block"><div class="code-label"><span>Inject → controller · switch the room’s light on</span></div><pre><code>msg.lighting = {kind: "intent", targets: ["main"], state: "ON", source: "motion"};
 return msg;</code></pre></div>
-<p><code>state</code> is <code>"ON"</code>, <code>"OFF"</code> or <code>"TOGGLE"</code>; without <code>targets</code>, the intent applies to every light. An ON intent without values gets the circadian style for this moment, with the <strong>Initial transition seconds</strong>.</p>
+<p><code>state</code> is <code>"ON"</code>, <code>"OFF"</code> or <code>"TOGGLE"</code>; without <code>targets</code>, the intent applies to every light. While circadian lighting is on and the light is <code>in-control</code>, an ON intent without values gets the circadian style for this moment, with the <strong>Initial transition seconds</strong>. Otherwise it sends a bare ON.</p>
 <p>To ask for a particular level, add <code>values</code> in the package’s own units:</p>
 <div class="code-block"><div class="code-label"><span>Function → controller · a set level</span></div><pre><code>msg.lighting = {
   kind: "intent",
@@ -64,7 +64,7 @@ return msg;</code></pre></div>
   values: {brightnessPct: 40, colorTempKelvin: 3000}
 };
 return msg;</code></pre></div>
-<p><code>brightnessPct</code> is 0–100 and <code>colorTempKelvin</code> is in kelvin; the controller converts them for a Zigbee2MQTT light to its 1–254 brightness and mireds. <code>brightnessPct: 0</code> is the dimmest the light goes, not off: send <code>state: "OFF"</code> to switch it off. An intent with values (other than from an activity) marks the light as set by a person, described next.</p>
+<p><code>brightnessPct</code> is 0–100 and <code>colorTempKelvin</code> is in kelvin; the controller converts them for a Zigbee2MQTT light to its 1–254 brightness and mireds. <code>brightnessPct: 0</code> is the dimmest the light goes, not off: send <code>state: "OFF"</code> to switch it off. An intent with values (other than from an activity) makes the light <code>manual</code>, described next.</p>
 </section>
 <section id="circadian"><h2>Circadian brightness and colour</h2>
 <p>Circadian lighting is on unless you switch it off. Its levels follow the controller’s <strong>Wake time</strong> and <strong>Bed time</strong> (24-hour <code>HH:MM</code>, default 07:00 and 23:00):</p>
@@ -88,7 +88,7 @@ return msg;</code></pre></div>
 <tr><td><code>overridden</code></td><td>Another owner, such as an activity or a scene, holds the light.</td><td>Its owner releases it, or the owner or a person switches it off.</td></tr>
 </tbody></table></div>
 <p>A held light ignores motion ON and OFF and owner-less values; it changes only for an intent with an <code>owner</code>, a person (<code>manual: true</code>, <code>person: true</code>, an external command, or a change seen at the light), or a release. The switch policy marks its presses with <code>person: true</code>, so a wall switch always reaches the light. A dashboard acting for a person should set one of these too.</p>
-<p>The controller also keeps a light a person set after the room went vacant: motion’s OFF doesn’t switch it straight off.</p>
+<p>The controller also keeps a light a person set after the room went vacant: motion’s OFF doesn’t switch it straight off. Here “a person” means an intent with <code>manual: true</code> or <code>person: true</code> (the switch policy sends <code>person: true</code> with every press), or someone else’s command seen on the light’s command topic. An intent that only carries values makes the light manual but does not protect it from motion’s OFF; a flow acting for a person should set <code>manual: true</code> or <code>person: true</code>.</p>
 <div class="code-block"><div class="code-label"><span>Function → controller · hold lights for an activity, then release them</span></div><pre><code>msg.lighting = {
   kind: "intent", targets: ["main"], state: "ON",
   source: "activity", owner: "film",
@@ -113,13 +113,13 @@ return msg;</code></pre></div>
 </tbody></table></div>
 </section>
 <section id="check"><h2>Check the result</h2>
-<p>The controller’s status shows the mode and the counts, for example <code>circadian · 1 on · 0 manual</code>.</p>
+<p>The controller’s status shows the mode and the counts, for example <code>circadian · 1 on · 0 manual</code>. The dot is yellow whenever a light is manual or the chosen house schedule is missing; otherwise it is green while circadian lighting is on and grey while it is off.</p>
 <div class="table-wrap" role="region" aria-label="Read the status; scroll horizontally on a phone" tabindex="0"><table><caption>Read the status</caption><thead><tr><th scope="col">What you see</th><th scope="col">What it means</th></tr></thead><tbody>
-<tr><td>Green dot, <code>circadian</code></td><td>Circadian lighting is on and no light is manual.</td></tr>
-<tr><td><code>sleep</code></td><td>Sleep mode holds the sleep settings.</td></tr>
-<tr><td>Yellow dot, <code>… 1 manual</code></td><td>A person set a light; the refresh leaves it alone.</td></tr>
+<tr><td><code>circadian</code></td><td>Circadian lighting is on.</td></tr>
+<tr><td><code>sleep</code></td><td>Circadian lighting is on and sleep mode holds the sleep settings.</td></tr>
+<tr><td><code>manual only</code></td><td>Circadian lighting is off.</td></tr>
+<tr><td><code>… 1 manual</code> (yellow dot)</td><td>A person set a light; the refresh leaves it alone.</td></tr>
 <tr><td><code>… 1 overridden</code></td><td>An owner such as an activity holds a light.</td></tr>
-<tr><td>Grey dot, <code>manual only</code></td><td>Circadian lighting is off.</td></tr>
 <tr><td><code>schedule missing: own times</code></td><td>The chosen house schedule wasn’t there at start; the room uses its own times.</td></tr>
 </tbody></table></div>
 <p>Wire a Debug node to the controller’s output, as the example does. Each command has the light’s command topic, a payload such as <code>{state: "ON", brightness, color_temp, transition}</code>, and <code>msg.lighting_command</code> naming the target and the source that asked for it.</p>

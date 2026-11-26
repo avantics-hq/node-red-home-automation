@@ -14,7 +14,7 @@
 <tr><td><code>"switch-action"</code></td><td><code>"single"</code> or <code>"double"</code>, or an object with that <code>action</code></td><td>A button that already reports which press it saw (pre-classified actions). Case does not matter.</td></tr>
 <tr><td><code>"switch-availability"</code></td><td><code>true</code>, <code>"online"</code>, <code>"available"</code> or <code>"on"</code>; <code>false</code>, <code>"offline"</code>, <code>"unavailable"</code> or <code>"off"</code></td><td>Whether the switch device is reachable.</td></tr>
 </tbody></table></div>
-<p>A raw switch report can carry the time it was observed in <code>msg.observedAt</code> or <code>payload.observedAt</code>. Without one, the policy uses the time the message arrived.</p>
+<p>A raw switch report can carry the time it was observed in <code>msg.observedAt</code> or <code>payload.observedAt</code>. Without one, the policy uses the time the message arrived; a retained report without one has no time, so the status shows stale with <code>age ?</code>.</p>
 <p>The policy commands nothing itself. The room controller sends the light commands, straight to the lights over MQTT. Home Assistant is not in this path.</p>
 </section>
 <section id="wiring"><h2>Wire the switch to the room</h2>
@@ -73,13 +73,15 @@ return msg;</code></pre></div>
 <p>The policy keeps the switch’s last known state (its baseline) in the node’s context, so a flip after a restart is still measured against it.</p>
 <ul>
 <li><strong>Retained reports are not presses.</strong> A raw report with <code>msg.retain = true</code> only re-baselines the state. A retained <code>switch-action</code> is ignored.</li>
-<li><strong>Mark a polled snapshot.</strong> Set <code>msg.baseline = true</code> on a report you asked the device for, so it updates the baseline without counting as a press.</li>
+<li><strong>Mark a first read and polled snapshots.</strong> Set <code>msg.baseline = true</code> on a report you asked the device for, so it updates the baseline without counting as a press.</li>
+<li><strong>With no baseline, the first report is a press.</strong> On a policy that does not yet know the switch’s state, the first report that is neither retained nor marked <code>baseline</code> counts as a change and sends a single-press <code>TOGGLE</code>. Mark a first read with <code>msg.baseline = true</code>.</li>
 <li><strong>Offline means start again.</strong> After the switch reports unavailable, its first report when it returns re-baselines instead of counting as a press.</li>
 </ul>
 <p>Node context is kept in memory unless you set up a context store, so a restart or redeploy clears the baseline, and the room controller forgets which lights a person set. See <a href="https://github.com/avantics-hq/node-red-home-automation#recommended-setup-a-file-context-store">Recommended setup: a file context store</a>.</p>
 </section>
 <section id="settings"><h2>Settings</h2>
 <div class="table-wrap" role="region" aria-label="switch policy settings; scroll horizontally on a phone" tabindex="0"><table><caption>switch policy settings</caption><thead><tr><th scope="col">Setting</th><th scope="col">Default</th><th scope="col">What it does</th></tr></thead><tbody>
+<tr><td><strong>Name</strong></td><td>empty</td><td>Names the node on the canvas; when empty, the label comes from the Area.</td></tr>
 <tr><td><strong>Area</strong></td><td>empty</td><td>Names the node on the canvas (“&lt;Area&gt; switch policy”).</td></tr>
 <tr><td><strong>Targets</strong></td><td><code>["main"]</code></td><td>The room controller targets a press controls. A non-empty JSON array of strings.</td></tr>
 <tr><td><strong>Raw-edge window ms</strong></td><td><code>500</code></td><td>How long after a change a second change counts as a double press. Zero or more.</td></tr>
@@ -93,7 +95,7 @@ return msg;</code></pre></div>
 <p>The policy’s status shows how much it trusts what it knows about the switch.</p>
 <div class="table-wrap" role="region" aria-label="Read the status; scroll horizontally on a phone" tabindex="0"><table><caption>Read the status</caption><thead><tr><th scope="col">What you see</th><th scope="col">What it means</th></tr></thead><tbody>
 <tr><td><code>switch fresh · &lt;age&gt;</code></td><td>The switch reported within the freshness time.</td></tr>
-<tr><td><code>switch stale · &lt;age&gt;</code></td><td>The last report is older than the freshness time, has no usable timestamp, or came before the flows started and nothing has confirmed it since.</td></tr>
+<tr><td><code>switch stale · &lt;age&gt;</code></td><td>The last report is older than the freshness time, has no usable timestamp (shown as <code>age ?</code>), or came before the flows started and nothing has confirmed it since.</td></tr>
 <tr><td><code>awaiting switch baseline</code></td><td>The policy does not yet know the switch’s state.</td></tr>
 <tr><td><code>switch unavailable</code></td><td>The switch was reported unavailable.</td></tr>
 </tbody></table></div>
