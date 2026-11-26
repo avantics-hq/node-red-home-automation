@@ -181,7 +181,8 @@ node subscribed to the device's `<prefix>/#` feeds the adapter, the
 controller's device commands go to it too, and its two outputs go to an MQTT
 out node and back to the controller. It speaks the device's own MQTT API, never
 Home Assistant: it sends `pos,<0-100>`, `stop`, and `status_update` (for a fresh
-reading) on `<prefix>/command/cover:<id>`, and turns the device's status and
+reading) on `<prefix>/command/cover:<id>` (the device's MQTT Control, on by
+default), and turns the device's status and
 change notifications into position and motion readings, and its online topic
 into availability. A cover that isn't calibrated, or has lost its position,
 fails the command in hand with the reason rather than reporting a position.

@@ -70,16 +70,16 @@ test("an uncalibrated cover, or one that doesn't know its position, fails the co
   assert.deepEqual(apply(undefined, status({state: "stopped", pos_control: false})).readings, []);
 });
 
-test("change notifications are laid over the last status, timed by the device", () => {
+test("change notifications are laid over the last status, timed when received", () => {
   let result = apply(undefined, status({state: "stopped", current_pos: 0}), 0);
   result = apply(result.state, notify({id: 0, state: "opening"}), 5);
-  assert.deepEqual(result.readings, [{cover: {kind: "observed", position: 0, motion: "opening", observedAt: "2026-11-26T10:00:05.000Z"}}]);
-  result = apply(result.state, notify({id: 0, current_pos: 40}, Date.parse("2026-11-26T10:00:06Z") / 1000), 6);
-  assert.deepEqual(result.readings, [{cover: {kind: "observed", position: 40, motion: "opening", observedAt: "2026-11-26T10:00:06.000Z"}}]);
+  assert.deepEqual(result.readings, [{cover: {kind: "observed", position: 0, motion: "opening", observedAt: at(5).toISOString()}}]);
+  result = apply(result.state, notify({id: 0, current_pos: 40}), 6);
+  assert.deepEqual(result.readings, [{cover: {kind: "observed", position: 40, motion: "opening", observedAt: at(6).toISOString()}}]);
   // Power and other updates mid-travel aren't new readings.
   assert.deepEqual(apply(result.state, notify({id: 0, apower: 120.5}), 6.5).readings, []);
   result = apply(result.state, notify({id: 0, state: "open", current_pos: 100, target_pos: null}), 10);
-  assert.deepEqual(result.readings[0]?.cover, {kind: "observed", position: 100, motion: "stopped", observedAt: "2026-11-26T10:00:05.000Z"});
+  assert.deepEqual(result.readings[0]?.cover, {kind: "observed", position: 100, motion: "stopped", observedAt: at(10).toISOString()});
   assert.equal(Object.hasOwn(result.state.status!, "target_pos"), false, "a key reported as null has gone");
   // Another cover's change, or another notification, is not this cover's.
   assert.deepEqual(apply(result.state, {topic: "shellyplus2pm-test/events/rpc", payload: {method: "NotifyStatus", params: {ts: 1, "cover:1": {current_pos: 3}}}}).readings, []);
@@ -116,22 +116,26 @@ test("the device's online topic is the cover's availability, as text, Buffer or 
 // A device in cover mode as its MQTT API behaves, enough for a round trip:
 // pos,N moves at 25 %/s with a notification each second; stop halts;
 // status_update publishes the full status.
-function shellyDevice() {
+function shellyDevice(clockBehindSeconds = 0) {
   const device = {state: "stopped", current_pos: 0, target: null as number | null};
+  const deviceTs = (seconds: number) => (at(seconds).getTime() / 1000) - clockBehindSeconds;
   const full = () => ({topic: "shellyplus2pm-test/status/cover:0", payload: JSON.stringify({id: 0, state: device.state, current_pos: device.current_pos, pos_control: true})});
   return {
     device,
-    receive(payload: string) {
+    receive(payload: string, seconds = 0) {
       if (payload === "status_update") return [full()];
       if (payload === "stop") {
         device.state = "stopped";
         device.target = null;
-        return [notify({id: 0, state: "stopped"})];
+        return [notify({id: 0, state: "stopped"}, deviceTs(seconds))];
       }
-      const position = Number(payload.split(",")[1]);
+      return this.move(Number(payload.split(",")[1]), seconds);
+    },
+    // A move, from a command or from the device's own wall switch.
+    move(position: number, seconds: number) {
       device.target = position;
       device.state = position > device.current_pos ? "opening" : "closing";
-      return [notify({id: 0, state: device.state, target_pos: position})];
+      return [notify({id: 0, state: device.state, target_pos: position}, deviceTs(seconds))];
     },
     second(seconds: number) {
       if (device.target === null) return [];
@@ -141,18 +145,21 @@ function shellyDevice() {
         device.state = device.current_pos === 100 ? "open" : device.current_pos === 0 ? "closed" : "stopped";
         device.target = null;
       }
-      return [notify({id: 0, state: device.state, current_pos: device.current_pos}, Date.parse(at(seconds).toISOString()) / 1000)];
+      return [notify({id: 0, state: device.state, current_pos: device.current_pos}, deviceTs(seconds))];
     }
   };
 }
 
-test("a round trip through the cover controller: a request moves the device and is confirmed from its own reports", () => {
+// The adapter between the real cover controller and a simulated device,
+// with messages delivered in order as Node-RED's wires would: startup, a
+// request to 60, then (if `wallSwitchAt`) someone closing the cover from its
+// own switch. The device's clock may be behind.
+function roundTrip({clockBehindSeconds = 0, wallSwitchAt = null as number | null} = {}) {
   const coverConfig = normaliseCoverConfig({travelTimeoutMs: 30000, pollMs: 1000, settleMs: 2000});
-  const {device, receive, second} = shellyDevice();
+  const shelly = shellyDevice(clockBehindSeconds);
   let cover: ReturnType<typeof transitionCover> | undefined;
   let adapter: ReturnType<typeof transitionShellyCover> | undefined;
   const results: string[] = [];
-  // Messages in flight, delivered in order as Node-RED's wires would.
   const queue: Array<{to: "cover" | "adapter" | "device"; message: unknown}> = [];
   const run = (seconds: number) => {
     while (queue.length) {
@@ -166,7 +173,7 @@ test("a round trip through the cover controller: a request moves the device and 
         for (const reading of adapter.readings) queue.push({to: "cover", message: reading.cover});
         for (const publication of adapter.publications) queue.push({to: "device", message: publication.payload});
       } else {
-        for (const reply of receive(message as string)) queue.push({to: "adapter", message: reply});
+        for (const reply of shelly.receive(message as string, seconds)) queue.push({to: "adapter", message: reply});
       }
     }
   };
@@ -174,13 +181,31 @@ test("a round trip through the cover controller: a request moves the device and 
   run(0);
   queue.push({to: "cover", message: {kind: "set_position", requestId: "evening", generation: 1, position: 60}});
   run(1);
-  for (let seconds = 2; seconds <= 12 && cover!.state.phase !== "ready"; seconds += 1) {
-    for (const message of second(seconds)) queue.push({to: "adapter", message});
+  for (let seconds = 2; seconds <= 40; seconds += 1) {
+    if (seconds === wallSwitchAt) for (const message of shelly.move(0, seconds)) queue.push({to: "adapter", message});
+    for (const message of shelly.second(seconds)) queue.push({to: "adapter", message});
     queue.push({to: "cover", message: {kind: "tick", generation: 1}});
     run(seconds);
+    if (wallSwitchAt === null && cover!.state.phase === "ready") break;
   }
+  return {cover: cover!.state, device: shelly.device, results};
+}
+
+test("a round trip through the cover controller: a request moves the device and is confirmed from its own reports", () => {
+  const {cover, device, results} = roundTrip();
   assert.equal(device.current_pos, 60);
-  assert.equal(cover!.state.phase, "ready", JSON.stringify(cover!.state));
-  assert.equal(cover!.state.observed?.position, 60);
+  assert.equal(cover.phase, "ready", JSON.stringify(cover));
+  assert.equal(cover.observed?.position, 60);
   assert.ok(!results.includes("failed"), results.join(","));
+});
+
+test("a device clock minutes behind changes nothing: moves are confirmed, and a person's move is seen", () => {
+  for (const clockBehindSeconds of [0, 300]) {
+    const confirmed = roundTrip({clockBehindSeconds});
+    assert.deepEqual([confirmed.cover.phase, confirmed.cover.observed?.position], ["ready", 60], `${clockBehindSeconds} s behind`);
+    // Closed from the wall switch after the move was confirmed.
+    const moved = roundTrip({clockBehindSeconds, wallSwitchAt: 20});
+    assert.equal(moved.device.current_pos, 0);
+    assert.deepEqual([moved.cover.phase, moved.cover.observed?.position], ["manual_override", 0], `${clockBehindSeconds} s behind`);
+  }
 });

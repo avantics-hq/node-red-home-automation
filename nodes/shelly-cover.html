@@ -38,7 +38,8 @@
     <li>This node's first output → an <b>MQTT out</b> node on the same broker, with no topic set.</li>
     <li>This node's second output → the cover controller.</li>
   </ol>
-  <p>On the device, MQTT must be on with <b>RPC status notifications</b> (the default), and with
+  <p>On the device, MQTT must be on with <b>Enable MQTT Control</b> (the default): without it the device ignores
+    the commands this node sends. <b>RPC status notifications</b> (also the default) report each change; with
     <b>Generic status update</b> it also reports a full status on every significant change. Calibrate the cover
     on the device first.</p>
   <h3>Settings</h3>

@@ -202,8 +202,11 @@ export function transitionShellyCover(
       }
       state.status = status;
       if (frame.method === "NotifyFullStatus") state.complete = true;
-      const ts = Number(frame.params.ts);
-      const observedAt = Number.isFinite(ts) ? new Date(ts * 1000).toISOString() : now.toISOString();
+      // Stamped when received, as a status reply is, never with the
+      // device's own ts: a Shelly whose clock is behind (no time server, a
+      // drifting clock) would have every change dropped as older than the
+      // last reading. MQTT's delay is far below what the controller resolves.
+      const observedAt = now.toISOString();
       // Only a change of position or movement is a new reading; a power or
       // temperature update mid-travel isn't.
       if (frame.method === "NotifyFullStatus" || Object.hasOwn(change, "current_pos") || Object.hasOwn(change, "state") ||
