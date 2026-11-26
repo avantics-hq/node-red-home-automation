@@ -16,7 +16,12 @@ const read = (path) => readFileSync(new URL(path, root), "utf8");
 export const REPOSITORY = "https://github.com/avantics-hq/node-red-home-automation";
 
 // The pages, in reading order.
-export const PAGES = ["index", "guide-covers", "node-cover-controller", "home-theatre", "contract-examples", "roadmap"];
+export const PAGES = [
+  "index",
+  "guide-room-lighting", "guide-motion-occupancy", "guide-wall-switches", "guide-house-schedule",
+  "guide-covers", "home-theatre", "guide-home-assistant", "guide-device-adapters",
+  "node-cover-controller", "contract-examples", "roadmap"
+];
 
 const escapeHtml = (text) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 

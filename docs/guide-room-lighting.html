@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Light your first room · Node-RED Home Automation</title>
+<meta name="description" content="">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar"><a class="brand" href="index.html"><span class="mark" aria-hidden="true">HA</span>Node-RED Home Automation</a><span class="version">5.0.0</span><button class="menu-button" id="menu-button" aria-controls="menu-drawer" aria-expanded="false">Menu</button><div class="search"><label class="sr-only" for="doc-search">Search the documentation</label><input id="doc-search" type="search" placeholder="Search the documentation…" autocomplete="off" aria-controls="search-results"><p class="sr-only" id="search-status" role="status"></p><div class="search-results" id="search-results" hidden></div></div><a class="source" href="https://github.com/avantics-hq/node-red-home-automation">Source ↗</a></header>
+<dialog id="menu-drawer" aria-labelledby="drawer-title"><div class="drawer-head"><strong id="drawer-title">Documentation</strong><button id="menu-close" autofocus>Close</button></div><nav class="doc-nav" aria-label="Documentation"><div class="nav-group"><p class="nav-label">Get started</p><a href="index.html">Introduction</a><a href="index.html#install">Install</a><a href="guide-room-lighting.html" aria-current="page">Your first room</a><a href="index.html#core-ideas">Core ideas</a></div><div class="nav-group"><p class="nav-label">Guides</p><a href="guide-room-lighting.html" aria-current="page">Room lighting</a><a href="guide-motion-occupancy.html">Motion and occupancy</a><a href="guide-wall-switches.html">Wall switches</a><a href="guide-house-schedule.html">House schedule</a><a href="guide-covers.html">Covers</a><a href="home-theatre.html">Home theatre</a><a href="guide-home-assistant.html">Home Assistant</a><a href="guide-device-adapters.html">Device adapters</a></div><div class="nav-group"><p class="nav-label">Node reference</p><details open><summary>Lighting</summary><a href="guide-room-lighting.html#settings">Room controller</a><a href="guide-motion-occupancy.html#settings">Motion policy</a><a href="guide-wall-switches.html#settings">Switch policy</a></details><details><summary>Sensors and schedule</summary><a href="guide-motion-occupancy.html#wiring">Occupancy fusion</a><a href="guide-house-schedule.html#before">House schedule</a><a href="guide-house-schedule.html#changes">House schedule MQTT</a></details><details><summary>Covers</summary><a href="node-cover-controller.html">Cover controller</a><a href="guide-covers.html#groups">Cover group</a></details><details><summary>Home theatre</summary><a href="https://github.com/avantics-hq/node-red-home-automation#receiver-volume-ownership">AVR controller</a><a href="https://github.com/avantics-hq/node-red-home-automation#home-theatre-equipment">Display mode</a><a href="https://github.com/avantics-hq/node-red-home-automation#home-theatre-equipment">Source capability</a><a href="https://github.com/avantics-hq/node-red-home-automation#home-theatre-equipment">Backlighting</a><a href="https://github.com/avantics-hq/node-red-home-automation#theatre-activities">Activity controller</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-light-control">Activity lighting</a><a href="https://github.com/avantics-hq/node-red-home-automation#theatre-mqtt-contract">State contract</a></details><details><summary>Adapters</summary><a href="guide-device-adapters.html#shelly-cover">Shelly cover</a><a href="guide-device-adapters.html#zigbee2mqtt">Zigbee2MQTT cover</a></details></div><div class="nav-group"><p class="nav-label">Contracts</p><a href="https://github.com/avantics-hq/node-red-home-automation#theatre-mqtt-contract">Theatre MQTT topics</a><a href="contract-examples.html">Contract examples</a></div><div class="nav-group"><p class="nav-label">Project</p><a href="https://github.com/avantics-hq/node-red-home-automation#install">Releases and upgrading</a><a href="roadmap.html">Roadmap</a><a href="https://github.com/avantics-hq/node-red-home-automation/blob/main/CONTRIBUTING.md">Contributing</a></div></nav></dialog>
+<div class="layout"><aside class="sidebar"><nav class="doc-nav" aria-label="Documentation"><div class="nav-group"><p class="nav-label">Get started</p><a href="index.html">Introduction</a><a href="index.html#install">Install</a><a href="guide-room-lighting.html" aria-current="page">Your first room</a><a href="index.html#core-ideas">Core ideas</a></div><div class="nav-group"><p class="nav-label">Guides</p><a href="guide-room-lighting.html" aria-current="page">Room lighting</a><a href="guide-motion-occupancy.html">Motion and occupancy</a><a href="guide-wall-switches.html">Wall switches</a><a href="guide-house-schedule.html">House schedule</a><a href="guide-covers.html">Covers</a><a href="home-theatre.html">Home theatre</a><a href="guide-home-assistant.html">Home Assistant</a><a href="guide-device-adapters.html">Device adapters</a></div><div class="nav-group"><p class="nav-label">Node reference</p><details open><summary>Lighting</summary><a href="guide-room-lighting.html#settings">Room controller</a><a href="guide-motion-occupancy.html#settings">Motion policy</a><a href="guide-wall-switches.html#settings">Switch policy</a></details><details><summary>Sensors and schedule</summary><a href="guide-motion-occupancy.html#wiring">Occupancy fusion</a><a href="guide-house-schedule.html#before">House schedule</a><a href="guide-house-schedule.html#changes">House schedule MQTT</a></details><details><summary>Covers</summary><a href="node-cover-controller.html">Cover controller</a><a href="guide-covers.html#groups">Cover group</a></details><details><summary>Home theatre</summary><a href="https://github.com/avantics-hq/node-red-home-automation#receiver-volume-ownership">AVR controller</a><a href="https://github.com/avantics-hq/node-red-home-automation#home-theatre-equipment">Display mode</a><a href="https://github.com/avantics-hq/node-red-home-automation#home-theatre-equipment">Source capability</a><a href="https://github.com/avantics-hq/node-red-home-automation#home-theatre-equipment">Backlighting</a><a href="https://github.com/avantics-hq/node-red-home-automation#theatre-activities">Activity controller</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-light-control">Activity lighting</a><a href="https://github.com/avantics-hq/node-red-home-automation#theatre-mqtt-contract">State contract</a></details><details><summary>Adapters</summary><a href="guide-device-adapters.html#shelly-cover">Shelly cover</a><a href="guide-device-adapters.html#zigbee2mqtt">Zigbee2MQTT cover</a></details></div><div class="nav-group"><p class="nav-label">Contracts</p><a href="https://github.com/avantics-hq/node-red-home-automation#theatre-mqtt-contract">Theatre MQTT topics</a><a href="contract-examples.html">Contract examples</a></div><div class="nav-group"><p class="nav-label">Project</p><a href="https://github.com/avantics-hq/node-red-home-automation#install">Releases and upgrading</a><a href="roadmap.html">Roadmap</a><a href="https://github.com/avantics-hq/node-red-home-automation/blob/main/CONTRIBUTING.md">Contributing</a></div></nav></aside><main id="main" tabindex="-1">
+<nav class="breadcrumb" aria-label="Breadcrumb"><a href="index.html">Docs</a><span aria-hidden="true">/</span><span>Guides / Room lighting</span></nav><p class="page-kind">Guides / Room lighting</p><h1>Light your first room</h1><p class="lead">Wire one room’s lights to the room lighting controller, let motion and wall switches ask it for light, and get circadian brightness and colour temperature that leave a person’s own change alone.</p>
+<details class="mobile-toc"><summary>On this page</summary><a href="#before">Before you wire it</a><a href="#wiring">Wire the room</a><a href="#intents">What the policies send</a><a href="#circadian">Circadian brightness and colour</a><a href="#manual">Leave a person’s change alone</a><a href="#settings">Settings that matter first</a><a href="#check">Check the result</a></details>
+<div class="meta"><span class="tag">Guide</span><span class="tag">Your first room</span><span class="tag">Lights over MQTT</span><a class="tag" href="https://github.com/avantics-hq/node-red-home-automation#room-light-control">README: Room light control →</a></div>
+<section id="before"><h2>Before you wire it</h2>
+<p>One room lighting controller owns one room’s lights. In the palette it is <strong>home-room-lighting-controller</strong>; on the canvas it shows as “lighting controller”, or “&lt;area&gt; lighting controller” once you give it an area. It is the only node that sends commands to those lights. The policies in front of it (motion, wall switches, activities) send it requests, called <em>intents</em>, and never command a light themselves.</p>
+<ul>
+<li><strong>Lights you reach over MQTT.</strong> Each light needs a topic it reports its state on and a topic it takes commands on, for example a Zigbee2MQTT light’s <code>zigbee2mqtt/&lt;device&gt;</code> and <code>zigbee2mqtt/&lt;device&gt;/set</code>, where <code>&lt;device&gt;</code> is the light’s name in Zigbee2MQTT. The controller speaks the Zigbee2MQTT light payload: <code>state</code> ON or OFF, with <code>brightness</code> and <code>color_temp</code>.</li>
+<li><strong>An MQTT broker node in Node-RED</strong> that reaches the same broker as your lights.</li>
+<li><strong>Node-RED 5.0.0 or newer and Node.js 22.9 or newer.</strong></li>
+<li><strong>A file context store (recommended).</strong> Without one, a restart or a redeploy makes the room forget which lights a person set, and a motion node counts the room as vacant from then.</li>
+</ul>
+<p>To add the file context store, set this in <code>settings.js</code> in your Node-RED user directory, then restart Node-RED:</p>
+<div class="code-block"><div class="code-label"><span>settings.js · keep node context on disk</span></div><pre><code>contextStorage: {
+    default: { module: "localfilesystem" }
+},</code></pre></div>
+<p>The file store writes changes to disk every 30 seconds by default, so a change made just before Node-RED stops can still be lost. The <a href="https://github.com/avantics-hq/node-red-home-automation#recommended-setup-a-file-context-store">README’s recommended setup</a> lists what each node forgets without it.</p>
+<aside class="callout neutral"><strong>Home Assistant is optional.</strong><p>The room works with no Home Assistant at all. If you use it, it is a view and a control panel: its switches send MQTT messages the controller acts on, and the controller still commands the lights directly. See <a href="guide-home-assistant.html">Home Assistant</a>.</p></aside>
+</section>
+<section id="wiring"><h2>Wire the room</h2>
+<p>Start from the example: in the Node-RED editor, <strong>Import → Examples</strong>, then <strong>Room lighting</strong>. It wires the policies into the controller, with inject nodes standing in for your sensors and a Debug node standing in for MQTT out. Replace those with your own inputs and broker.</p>
+<figure class="diagram"><div class="wiring-flow"><div class="flow-node">Motion and illuminance<small>occupancy → motion policy</small></div><span class="arrow" aria-hidden="true">+</span><div class="flow-node">Wall switch<small>switch policy</small></div><span class="arrow controller-arrow" aria-hidden="true">→</span><div class="flow-node owner controller">Room lighting controller<small>Intents in · light commands out</small></div><div class="return">Controller output → MQTT out → each light’s command topic</div><div class="flow-node broker-out" style="grid-column:1 / -1">MQTT in<small>Each light’s state topic, tagged as an observation, back to the controller</small></div></div><figcaption>Intents: both policies → controller, side by side. Commands: controller → MQTT out, unchanged. Observations: MQTT in → controller. The table below names every connection.</figcaption></figure>
+<div class="table-wrap" role="region" aria-label="Room connections; scroll horizontally on a phone" tabindex="0"><table><caption>Room connections</caption><thead><tr><th scope="col">From</th><th scope="col">Connect to</th><th scope="col">Why</th></tr></thead><tbody>
+<tr><td>occupancy fusion output 1</td><td>motion policy input</td><td>Occupancy becomes a lighting intent. Illuminance goes to the motion policy too.</td></tr>
+<tr><td>motion policy output 1</td><td>Controller input</td><td>Motion ON and OFF intents for the policy’s targets.</td></tr>
+<tr><td>switch policy output</td><td>Controller input</td><td>Wall-switch presses, marked as a person’s.</td></tr>
+<tr><td>Controller output</td><td>MQTT out</td><td>Light commands on each light’s command topic. Pass them through unchanged.</td></tr>
+<tr><td>MQTT in, each light’s state topic</td><td>Controller input</td><td>The light’s own reports, tagged <code>observed</code>, confirm what it did.</td></tr>
+<tr><td>MQTT in, each light’s command topic</td><td>Controller input</td><td>Commands from anyone else, tagged <code>command-observed</code>, show a person’s change.</td></tr>
+<tr><td>Inject, once after 3 seconds</td><td>Controller input</td><td><code>msg.lighting = {kind: "startup"}</code>, as in the example.</td></tr>
+</tbody></table></div>
+<p>The motion and switch inputs have their own guides: <a href="guide-motion-occupancy.html">Motion and occupancy</a> and <a href="guide-wall-switches.html">Wall switches</a>. In the example both policies light the target <code>main</code>; their target names must match the controller’s.</p>
+<ol class="step-list">
+<li><strong>Name the room’s lights.</strong><p>Set <strong>Targets JSON</strong> on the controller. Each light needs an <code>id</code> (the name the policies use), a <code>stateTopic</code> and a <code>commandTopic</code>; ids must be unique.</p></li>
+<li><strong>Send commands out unchanged.</strong><p>Wire the controller’s output straight to MQTT out on the same broker, with the MQTT out topic left empty so each command goes to its light’s command topic.</p></li>
+<li><strong>Feed the lights’ reports back.</strong><p>Add an MQTT in node on each light’s state topic and tag what it receives as an observation before it reaches the controller. The incoming topic must equal the target’s <code>stateTopic</code>.</p></li>
+<li><strong>Watch the command topics.</strong><p>Add an MQTT in node on each light’s command topic, tagged <code>command-observed</code>. This is how the controller tells its own commands from someone else’s.</p></li>
+<li><strong>Send a startup message.</strong><p>Keep the example’s “room startup” inject, which fires once 3 seconds after a deploy, so the MQTT broker node has usually connected first.</p></li>
+</ol>
+<div class="code-block"><div class="code-label"><span>MQTT in (state topic) → function → controller · tag a light report</span></div><pre><code>msg.lighting = {kind: "observed"};
+return msg;</code></pre></div>
+<div class="code-block"><div class="code-label"><span>MQTT in (command topic) → function → controller · tag a command</span></div><pre><code>msg.lighting = {kind: "command-observed"};
+return msg;</code></pre></div>
+<p>Retained messages on a command topic are ignored, so only a fresh command counts as someone’s change.</p>
+<div class="code-block"><div class="code-label"><span>Targets JSON · one Zigbee2MQTT light</span></div><pre><code>[{"id": "main",
+  "stateTopic": "zigbee2mqtt/&lt;device&gt;",
+  "commandTopic": "zigbee2mqtt/&lt;device&gt;/set"}]</code></pre></div>
+<aside class="callout"><strong>Don’t rewrite the controller’s commands on the way.</strong><p>The controller watches each command topic to tell its own commands from other people’s, so a function that changes them looks like someone else’s change. A bare ON or OFF that arrives within 5 seconds of one of its own commands with that power, before that command has come back, is taken as its own, and it restyles a light after someone else’s bare ON at most once every 5 seconds. Other rewrites can still be misread.</p></aside>
+</section>
+<section id="intents"><h2>What the policies send</h2>
+<p>The policies send <code>msg.lighting</code> intents. You can send the same from an Inject or Function node to try the room before any sensor is wired.</p>
+<div class="code-block"><div class="code-label"><span>Inject → controller · switch the room’s light on</span></div><pre><code>msg.lighting = {kind: "intent", targets: ["main"], state: "ON", source: "motion"};
+return msg;</code></pre></div>
+<p><code>state</code> is <code>"ON"</code>, <code>"OFF"</code> or <code>"TOGGLE"</code>; without <code>targets</code>, the intent applies to every light. An ON intent without values gets the circadian style for this moment, with the <strong>Initial transition seconds</strong>.</p>
+<p>To ask for a particular level, add <code>values</code> in the package’s own units:</p>
+<div class="code-block"><div class="code-label"><span>Function → controller · a set level</span></div><pre><code>msg.lighting = {
+  kind: "intent",
+  targets: ["main"],
+  state: "ON",
+  values: {brightnessPct: 40, colorTempKelvin: 3000}
+};
+return msg;</code></pre></div>
+<p><code>brightnessPct</code> is 0–100 and <code>colorTempKelvin</code> is in kelvin; the controller converts them for a Zigbee2MQTT light to its 1–254 brightness and mireds. <code>brightnessPct: 0</code> is the dimmest the light goes, not off: send <code>state: "OFF"</code> to switch it off. An intent with values (other than from an activity) marks the light as set by a person, described next.</p>
+</section>
+<section id="circadian"><h2>Circadian brightness and colour</h2>
+<p>Circadian lighting is on unless you switch it off. Its levels follow the controller’s <strong>Wake time</strong> and <strong>Bed time</strong> (24-hour <code>HH:MM</code>, default 07:00 and 23:00):</p>
+<ul>
+<li>they rise to the daytime level over the hour after waking;</li>
+<li>they stay at the daytime brightness and colour through the day;</li>
+<li>they wind down to the sleep settings over the three hours before bed, and stay there until you wake.</li>
+</ul>
+<p>A bed time after midnight, or a wake time later than the bed time, works. Times are the Node-RED host’s local time; Docker containers default to UTC, so set the container’s <code>TZ</code> if the host should follow a local timezone.</p>
+<p>Every <strong>Refresh interval seconds</strong>, the controller restyles lights that are on and under its control, over the <strong>Refresh transition seconds</strong>, and skips a light that already reports that style.</p>
+<div class="code-block"><div class="code-label"><span>Inject → controller · switch circadian lighting or sleep</span></div><pre><code>msg.lighting = {kind: "circadian", enabled: false};
+// or: msg.lighting = {kind: "sleep", enabled: true};
+return msg;</code></pre></div>
+<p>Sleep mode holds the lights at the sleep settings, whatever the time. To share one wake and bed time across rooms, choose a house schedule as the room’s <strong>Schedule</strong>; see <a href="guide-house-schedule.html">House schedule</a>.</p>
+</section>
+<section id="manual"><h2>Leave a person’s change alone</h2>
+<p>Each light has one control state, and the refresh only touches lights that are <code>in-control</code>:</p>
+<div class="table-wrap" role="region" aria-label="Control states; scroll horizontally on a phone" tabindex="0"><table><caption>Control states</caption><thead><tr><th scope="col">State</th><th scope="col">Means</th><th scope="col">Back to in-control when</th></tr></thead><tbody>
+<tr><td><code>in-control</code></td><td>Circadian lighting may style and refresh the light. The default.</td><td>—</td></tr>
+<tr><td><code>manual</code></td><td>A person changed the light: an intent with <code>manual: true</code>, an intent with values that isn’t from an activity, or a command with values seen on its command topic.</td><td>It is switched off, or circadian lighting is switched on.</td></tr>
+<tr><td><code>overridden</code></td><td>Another owner, such as an activity or a scene, holds the light.</td><td>Its owner releases it, or the owner or a person switches it off.</td></tr>
+</tbody></table></div>
+<p>A held light ignores motion ON and OFF and owner-less values; it changes only for an intent with an <code>owner</code>, a person (<code>manual: true</code>, <code>person: true</code>, an external command, or a change seen at the light), or a release. The switch policy marks its presses with <code>person: true</code>, so a wall switch always reaches the light. A dashboard acting for a person should set one of these too.</p>
+<p>The controller also keeps a light a person set after the room went vacant: motion’s OFF doesn’t switch it straight off.</p>
+<div class="code-block"><div class="code-label"><span>Function → controller · hold lights for an activity, then release them</span></div><pre><code>msg.lighting = {
+  kind: "intent", targets: ["main"], state: "ON",
+  source: "activity", owner: "film",
+  values: {brightnessPct: 25, colorTempKelvin: 2500},
+  preserveManual: true
+};
+// later:
+// msg.lighting = {kind: "release", targets: ["main"], owner: "film"};
+return msg;</code></pre></div>
+<p>With <code>preserveManual: true</code>, lights a person set are skipped. A release without <code>targets</code> releases all of that owner’s lights; released lights that are on are restyled as a refresh would. The activity lighting controller does this for you in a <a href="home-theatre.html">home theatre</a>.</p>
+</section>
+<section id="settings"><h2>Settings that matter first</h2>
+<div class="table-wrap" role="region" aria-label="First settings; scroll horizontally on a phone" tabindex="0"><table><caption>First settings</caption><thead><tr><th scope="col">Setting</th><th scope="col">Default</th><th scope="col">Set it to</th></tr></thead><tbody>
+<tr><td>Targets JSON</td><td><code>[]</code></td><td>Your lights’ ids and topics.</td></tr>
+<tr><td>Wake time / Bed time</td><td>07:00 / 23:00</td><td>When the room should start brightening and finish winding down. Or choose a <strong>Schedule</strong>.</td></tr>
+<tr><td>Daytime brightness % / Daytime kelvin</td><td>100 / 6500</td><td>The daytime level.</td></tr>
+<tr><td>Sleep brightness % / Sleep kelvin</td><td>1 / 2200</td><td>The night and sleep level.</td></tr>
+<tr><td>Initial transition seconds</td><td>1</td><td>How fast a light fades in when switched on.</td></tr>
+<tr><td>Refresh transition seconds / Refresh interval seconds</td><td>60 / 60</td><td>How gently and how often the room follows the circadian curve. The interval is at least 10 seconds.</td></tr>
+<tr><td>Initial sleep mode</td><td>Off</td><td>Whether the room starts in sleep mode.</td></tr>
+<tr><td>Area, Publish state over MQTT, Home Assistant discovery</td><td>Empty, off, off</td><td>Leave off for a first room. The area is needed only when publishing; see <a href="guide-home-assistant.html">Home Assistant</a>.</td></tr>
+</tbody></table></div>
+</section>
+<section id="check"><h2>Check the result</h2>
+<p>The controller’s status shows the mode and the counts, for example <code>circadian · 1 on · 0 manual</code>.</p>
+<div class="table-wrap" role="region" aria-label="Read the status; scroll horizontally on a phone" tabindex="0"><table><caption>Read the status</caption><thead><tr><th scope="col">What you see</th><th scope="col">What it means</th></tr></thead><tbody>
+<tr><td>Green dot, <code>circadian</code></td><td>Circadian lighting is on and no light is manual.</td></tr>
+<tr><td><code>sleep</code></td><td>Sleep mode holds the sleep settings.</td></tr>
+<tr><td>Yellow dot, <code>… 1 manual</code></td><td>A person set a light; the refresh leaves it alone.</td></tr>
+<tr><td><code>… 1 overridden</code></td><td>An owner such as an activity holds a light.</td></tr>
+<tr><td>Grey dot, <code>manual only</code></td><td>Circadian lighting is off.</td></tr>
+<tr><td><code>schedule missing: own times</code></td><td>The chosen house schedule wasn’t there at start; the room uses its own times.</td></tr>
+</tbody></table></div>
+<p>Wire a Debug node to the controller’s output, as the example does. Each command has the light’s command topic, a payload such as <code>{state: "ON", brightness, color_temp, transition}</code>, and <code>msg.lighting_command</code> naming the target and the source that asked for it.</p>
+<aside class="callout neutral"><strong>After a restart without a context store,</strong><p>the room leaves every light as it is: the refresh restyles a light only once an intent or release names it, someone switches it on with a bare ON, or circadian lighting is switched on. To bring a light that is on back into step, switch circadian lighting on, or let motion or a wall switch name it.</p></aside>
+<p class="caption">Sources: README Room lighting, Room light control and Recommended setup; room lighting controller editor settings and help; examples/Room lighting.json; observation tagging and status text from the room lighting controller source.</p>
+</section>
+<nav class="pager" aria-label="Adjacent pages"><a href="index.html"><small>Previous</small>← Introduction</a><a href="guide-motion-occupancy.html"><small>Continue</small>Motion and occupancy →</a></nav>
+<footer class="page-footer"><span>Package 5.0.0 · MIT</span><a href="https://github.com/avantics-hq/node-red-home-automation#readme">Read the README ↗</a></footer>
+</main><aside class="toc" aria-label="On this page"><p>On this page</p><a href="#before">Before you wire it</a><a href="#wiring">Wire the room</a><a href="#intents">What the policies send</a><a href="#circadian">Circadian brightness and colour</a><a href="#manual">Leave a person’s change alone</a><a href="#settings">Settings that matter first</a><a href="#check">Check the result</a></aside></div>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,101 @@
+<!--{
+ "title": "Light a room from motion",
+ "kind": "Guides / Motion and occupancy",
+ "lead": "Turn motion and presence sensors into room occupancy, and occupancy into lights that come on when the room is in use and dark enough, then go off once it has been empty for a while.",
+ "description": "",
+ "htmlTitle": "Light a room from motion · Node-RED Home Automation"
+}-->
+<div class="meta"><span class="tag">Guide</span><span class="tag">Occupancy fusion → motion policy → room controller</span><a class="tag" href="guide-room-lighting.html">Room lighting guide →</a></div>
+<section id="before"><h2>Before you wire it</h2>
+<p>Two nodes sit between your sensors and the room lighting controller. The <strong>occupancy fusion</strong> node (<strong>home-occupancy-fusion</strong> in the palette, shown on the canvas as “occupancy”) combines motion and optional presence into one occupied or vacant event. The <strong>motion lighting policy</strong> (<strong>home-motion-lighting-policy</strong>, shown as “motion policy”) turns occupancy and light level into lighting intents for the room lighting controller.</p>
+<p>Motion establishes occupancy. Presence, such as an mmWave sensor, can hold occupancy that motion established, but never establishes it by itself. Both nodes read the sensors’ own MQTT messages, for example from Zigbee2MQTT; Home Assistant is not in the path.</p>
+<p>Each message names its kind in <code>msg.source</code>. The payload can be a plain value or an object:</p>
+<div class="table-wrap" role="region" aria-label="Sensor messages; scroll horizontally on a phone" tabindex="0"><table><caption>Sensor messages</caption><thead><tr><th scope="col">Sensor</th><th scope="col">Send to</th><th scope="col"><code>msg.source</code></th><th scope="col"><code>msg.payload</code></th></tr></thead><tbody>
+<tr><td>Motion (PIR)</td><td>occupancy fusion</td><td><code>"motion"</code></td><td><code>true</code>/<code>false</code>; <code>"on"</code>, <code>"occupied"</code>, <code>"active"</code>, <code>"detected"</code> or their opposites <code>"off"</code>, <code>"clear"</code>, <code>"inactive"</code>, <code>"not_detected"</code>; or an object with a <code>motion</code>, <code>occupancy</code> or <code>active</code> field.</td></tr>
+<tr><td>Presence (optional)</td><td>occupancy fusion</td><td><code>"presence"</code></td><td>The same values, or an object with a <code>presence</code>, <code>occupancy</code> or <code>active</code> field. Ignored unless <strong>Presence sensor</strong> is set to hold.</td></tr>
+<tr><td>Light level (optional)</td><td>motion lighting policy</td><td><code>"illuminance"</code></td><td>A number in lux, or an object with an <code>illuminance</code> or <code>illuminanceLux</code> field.</td></tr>
+</tbody></table></div>
+<p>A value the node can’t read as on or off is ignored. Without any illuminance reading, the policy treats the room as dark enough. Wall switches go to the switch lighting policy, not here: see <a href="guide-wall-switches.html">Wall switches</a>.</p>
+</section>
+<section id="wiring"><h2>Wire sensors to the room controller</h2>
+<p>Occupancy flows one way: sensors into occupancy fusion, its events into the motion policy, and the policy’s intents into the room lighting controller, which owns the light commands.</p>
+<figure class="diagram"><div class="wiring-flow"><div class="flow-node">Occupancy fusion<small>Motion + presence → occupied</small></div><span class="arrow" aria-hidden="true">→</span><div class="flow-node">Motion lighting policy<small>Occupancy + lux → ON / OFF intents</small></div><span class="arrow controller-arrow" aria-hidden="true">→</span><div class="flow-node owner controller">Room lighting controller<small>Owns the light commands</small></div><div class="return">MQTT in (motion, presence) → occupancy fusion · MQTT in (illuminance) → motion policy</div><div class="flow-node broker-out" style="grid-column:1 / -1">MQTT out<small>Room controller commands · optional publishing from each node’s output 2</small></div></div><figcaption>Sensors feed occupancy fusion; occupancy and light level feed the motion policy; its intents feed the room controller. The table below names every port.</figcaption></figure>
+<div class="table-wrap" role="region" aria-label="Connections; scroll horizontally on a phone" tabindex="0"><table><caption>Connections</caption><thead><tr><th scope="col">From</th><th scope="col">Connect to</th><th scope="col">Why</th></tr></thead><tbody>
+<tr><td>Motion and presence sensors (MQTT in, with <code>msg.source</code> set)</td><td>occupancy fusion input</td><td>The raw readings to combine.</td></tr>
+<tr><td>occupancy fusion output 1</td><td>motion policy input</td><td>Occupancy events: <code>msg.source = "occupancy"</code> with <code>msg.payload.occupied</code>.</td></tr>
+<tr><td>Illuminance sensor (MQTT in, <code>msg.source = "illuminance"</code>)</td><td>motion policy input</td><td>Lights come on only when it is dark enough.</td></tr>
+<tr><td>motion policy output 1</td><td>room lighting controller input</td><td>Lighting intents in <code>msg.lighting</code>.</td></tr>
+<tr><td>occupancy fusion output 2</td><td>MQTT out (optional)</td><td>MQTT publications, only when publishing is on.</td></tr>
+<tr><td>motion policy output 2</td><td>MQTT out (optional)</td><td>MQTT publications, only when publishing is on.</td></tr>
+</tbody></table></div>
+<p>Occupancy fusion sends an event only when occupancy changes, so repeated motion reports while the room is already occupied don’t reach the policy.</p>
+<ol class="step-list">
+<li><strong>Choose the presence mode.</strong><p>On occupancy fusion, <strong>Presence sensor</strong> defaults to “None (PIR only)”. Choose “Hold occupancy (PIR + mmWave)” if you wire a presence sensor in.</p></li>
+<li><strong>Name the lights.</strong><p><strong>ON targets</strong> and <strong>OFF targets</strong> on the motion policy are JSON arrays of target ids from the room controller’s <strong>Targets JSON</strong>. Both default to <code>["main"]</code>, the target id in the example flow.</p></li>
+<li><strong>Set the vacancy time and lux cutoff.</strong><p>See <a href="#settings">Vacancy delay and other settings</a> below.</p></li>
+</ol>
+</section>
+<section id="settings"><h2>Vacancy delay and other settings</h2>
+<p>When occupancy turns on, the policy cancels any pending switch-off and, if motion lighting is enabled and the light level is at or below the cutoff, sends ON to the ON targets. When occupancy turns off, it starts a countdown of <strong>Vacancy seconds</strong>; when that runs out it sends OFF to the OFF targets.</p>
+<div class="table-wrap" role="region" aria-label="Motion policy settings; scroll horizontally on a phone" tabindex="0"><table><caption>Motion policy settings</caption><thead><tr><th scope="col">Setting</th><th scope="col">Default</th><th scope="col">What it does</th></tr></thead><tbody>
+<tr><td><strong>ON targets</strong></td><td><code>["main"]</code></td><td>Lights switched on when the room becomes occupied.</td></tr>
+<tr><td><strong>OFF targets</strong></td><td><code>["main"]</code></td><td>Lights switched off when the vacancy time runs out.</td></tr>
+<tr><td><strong>Vacancy seconds</strong></td><td>120</td><td>How long the room stays vacant before the OFF intent.</td></tr>
+<tr><td><strong>Lux cutoff</strong></td><td>10</td><td>The brightest light level, in lux, at which occupancy still switches lights on.</td></tr>
+<tr><td><strong>Maximum pause (s)</strong></td><td>600</td><td>How long a pause lasts unless sent again.</td></tr>
+</tbody></table></div>
+<p>Other flows can change the vacancy time and cutoff without opening the editor:</p>
+<div class="code-block"><div class="code-label"><span>Function → motion policy · change the vacancy time</span></div><pre><code>msg.source = "delay";
+msg.payload = 300; // seconds, the same unit as Vacancy seconds
+return msg;</code></pre></div>
+<div class="code-block"><div class="code-label"><span>Function → motion policy · change the lux cutoff</span></div><pre><code>msg.source = "illuminance-cut-off";
+msg.payload = 20;
+return msg;</code></pre></div>
+<p>A <code>delay</code> or <code>illuminance-cut-off</code> message overrides the setting until a deploy changes <strong>Vacancy seconds</strong> or <strong>Lux cutoff</strong> in the editor; the new setting then applies. Keeping the override across a restart or redeploy needs a <a href="https://github.com/avantics-hq/node-red-home-automation#recommended-setup-a-file-context-store">file context store</a>.</p>
+</section>
+<section id="enable-pause"><h2>Switch it off, or pause it</h2>
+<p>The motion policy has two ways to stop acting on occupancy. They look alike but belong to different people.</p>
+<div class="table-wrap" role="region" aria-label="Enable versus pause; scroll horizontally on a phone" tabindex="0"><table><caption>Enable versus pause</caption><thead><tr><th scope="col"><code>msg.source</code></th><th scope="col">Payload</th><th scope="col">Who it is for</th></tr></thead><tbody>
+<tr><td><code>"area-enabled"</code></td><td><code>"ON"</code> or <code>"OFF"</code></td><td>The user’s own switch for this node’s motion lighting. It stays as set, and is what the Home Assistant motion lighting switch shows and sets.</td></tr>
+<tr><td><code>"global-enabled"</code></td><td><code>"ON"</code> or <code>"OFF"</code></td><td>The user’s switch for every motion policy at once. It is not published.</td></tr>
+<tr><td><code>"pause"</code></td><td><code>true</code> pauses, <code>false</code> releases; <code>msg.owner</code> is required</td><td>Other flows, such as a moving cover. Each owner holds its own pause, and motion lighting resumes once every owner has released it or its pause has run out (<strong>Maximum pause</strong>, sent again to renew).</td></tr>
+</tbody></table></div>
+<p>Motion lighting acts only while both enables are on and no owner holds a pause. Switching it off or pausing it cancels a pending vacancy countdown.</p>
+<div class="code-block"><div class="code-label"><span>Cover controller output 3 → Function → motion policy · pause while moving</span></div><pre><code>msg.source = "pause";
+msg.owner = "study blind"; // a name of its own for each pauser
+return msg; // keep the boolean payload</code></pre></div>
+<aside class="callout neutral"><strong>Never pause with the enable.</strong>
+<p>A pause never changes the enables, which are the user’s own. A flow that sends <code>area-enabled</code> OFF to pause motion overwrites what the user chose, and can leave motion lighting off for good if the ON never comes. See <a href="guide-covers.html#manual">Wire a cover</a>.</p></aside>
+</section>
+<section id="manual"><h2>When a person changes a light</h2>
+<p>The OFF intent carries <code>vacantSince</code>, the time the room went vacant. The room lighting controller keeps on any light a person set after that time: they are using it, so motion doesn’t switch it straight off.</p>
+<ul class="rule-list">
+<li>A light a person set before the room went vacant is still switched off when the vacancy time runs out.</li>
+<li>A light another owner holds, such as an activity or a scene, is left alone by motion ON and OFF; its other targets are still handled.</li>
+<li>Switching a light from a wall switch goes through the switch policy, which marks the press as a person’s.</li>
+</ul>
+<p>The room controller’s control states are described in <a href="https://github.com/avantics-hq/node-red-home-automation#room-light-control">Room light control</a> in the README.</p>
+<aside class="callout"><strong>Without a context store, a restart forgets who is in the room.</strong>
+<p>A motion policy that starts with nothing saved (its first deploy, or a redeploy or restart without a context store) counts the room as vacant from then. Unless occupancy is reported within <strong>Vacancy seconds</strong>, it sends its OFF intent, so someone sitting still in a lit room has the lights switched off unless motion is seen. The room controller has also forgotten which lights a person set. A <a href="https://github.com/avantics-hq/node-red-home-automation#recommended-setup-a-file-context-store">file context store</a> keeps both; a running countdown then carries on.</p></aside>
+</section>
+<section id="publishing"><h2>Show it in Home Assistant (optional)</h2>
+<p>Both nodes can publish their state over MQTT on their second output. Publishing is off until you switch it on, and then the node needs an <strong>Area</strong>; topics use it in lowercase, with spaces and other characters as <code>_</code>. Wire output 2 to an MQTT out node.</p>
+<div class="table-wrap" role="region" aria-label="What each node publishes; scroll horizontally on a phone" tabindex="0"><table><caption>What each node publishes</caption><thead><tr><th scope="col">Node</th><th scope="col">Topics</th><th scope="col">With Home Assistant discovery</th></tr></thead><tbody>
+<tr><td>occupancy fusion</td><td>Retained <code>ON</code>/<code>OFF</code> on <code>home/&lt;area&gt;/occupancy/state</code>; <code>online</code>/<code>offline</code> on <code>home/&lt;area&gt;/occupancy/availability</code></td><td>An occupancy binary sensor</td></tr>
+<tr><td>motion policy</td><td>Retained <code>ON</code>/<code>OFF</code> on <code>home/&lt;area&gt;/motion/enabled/state</code>; the vacancy delay in seconds on <code>home/&lt;area&gt;/motion/delay/state</code>; <code>online</code>/<code>offline</code> on <code>home/&lt;area&gt;/motion/availability</code></td><td>A motion lighting switch and a vacancy delay number</td></tr>
+</tbody></table></div>
+<p>The motion policy also acts on <code>ON</code>/<code>OFF</code> sent to <code>home/&lt;area&gt;/motion/enabled/set</code> and a delay of 0 to 86400 seconds sent to <code>home/&lt;area&gt;/motion/delay/set</code>, as the <code>area-enabled</code> and <code>delay</code> inputs do. To let the Home Assistant switch and number control it, wire an MQTT in node subscribed to <code>home/&lt;area&gt;/motion/+/set</code> into the motion policy.</p>
+<p>The switch shows this node’s enable only, so motion lighting can still be off everywhere through <code>global-enabled</code> while it shows on. Discovery needs <strong>Publish state over MQTT</strong>, and the <strong>Discovery prefix</strong> defaults to <code>homeassistant</code>. Each node announces itself once the flows have started, and again when it receives <code>msg.source = "startup"</code>. More in <a href="guide-home-assistant.html">Home Assistant</a>.</p>
+</section>
+<section id="check"><h2>Check the result</h2>
+<p>Import the <a href="https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/Room%20lighting.json">Room lighting example</a> to try this without sensors: its “motion detected” Inject sends <code>{"motion":true}</code> with <code>msg.source = "motion"</code>, and “illuminance 5 lx” sends <code>5</code> with <code>msg.source = "illuminance"</code>. Then read the node status under each node:</p>
+<div class="table-wrap" role="region" aria-label="Read the node status; scroll horizontally on a phone" tabindex="0"><table><caption>Read the node status</caption><thead><tr><th scope="col">What you see</th><th scope="col">What it means</th></tr></thead><tbody>
+<tr><td>Occupancy: <code>occupied · pir on</code> (green)</td><td>Motion has established occupancy. With presence on hold, <code>presence on</code> or <code>off</code> is added once a presence reading arrives.</td></tr>
+<tr><td>Occupancy: <code>vacant · pir off</code> (grey)</td><td>Every source is inactive; if motion lighting is enabled, the motion policy starts its vacancy countdown.</td></tr>
+<tr><td>Motion policy: <code>enabled · 5 lux · 120s</code> (green)</td><td>Motion lighting is on, with the last light level and the vacancy time in use. <code>lux ?</code> means no illuminance has arrived yet.</td></tr>
+<tr><td>Motion policy: <code>paused</code> or <code>disabled</code> (grey)</td><td>An owner holds a pause, or an enable is off. Occupancy sends no ON.</td></tr>
+</tbody></table></div>
+<p>Connect a Debug node to the motion policy’s output 1 to see each intent: <code>msg.lighting</code> with <code>kind: "intent"</code>, the targets and <code>state: "ON"</code> or <code>"OFF"</code>. An OFF intent from the countdown also carries <code>vacantSince</code>. If occupancy turns on but no ON appears, check the light level against <strong>Lux cutoff</strong>.</p>
+<p class="caption">Sources: README Room lighting, Room light control and 4.0.0 notes; occupancy fusion and motion lighting policy editor help and defaults; Room lighting example flow.</p>
+</section>
+<nav class="pager" aria-label="Adjacent pages"><a href="guide-room-lighting.html"><small>Previous</small>← Room lighting</a><a href="guide-wall-switches.html"><small>Continue</small>Wall switches →</a></nav>

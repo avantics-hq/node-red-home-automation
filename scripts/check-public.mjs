@@ -76,8 +76,10 @@ export const contentRules = [
     allow: (match) => /\.(?:turn_on|turn_off|toggle|send_command|reload|select_option|press|set_[a-z_]+)$/.test(match)
   },
   {
+    // A placeholder after the slash (<device>, {device}, $device) names no
+    // device; HTML pages write "<" as "&lt;".
     name: "Zigbee2MQTT device topic",
-    pattern: /\bzigbee2mqtt\/(?!bridge\b|<|\{|\$)[^\s"'`<>{}/]+/gi
+    pattern: /\bzigbee2mqtt\/(?!bridge\b|<|&lt;|\{|\$)[^\s"'`<>{}/]+/gi
   },
   {
     name: "Node-RED flow or node identifier",

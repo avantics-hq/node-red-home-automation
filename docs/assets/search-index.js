@@ -25,7 +25,7 @@ window.DOCS_SEARCH = [
   "section": "Choose what you want to control",
   "description": "01 / LIGHTING Start with one room Combine motion and wall switches without taking control away from the person",
   "url": "index.html#choose",
-  "text": "01 / LIGHTING Start with one room Combine motion and wall switches without taking control away from the person. Room lighting in the README ↗ 02 / COVERS Wire a blind or curtain Connect a cover, set a position or preset, and confirm the motor has stopped. Follow the cover guide → 03 / HOME THEATRE Coordinate an activity Bring display, receiver, source and lighting together from one request. Read the theatre documentation → 04 / REFERENCE Look up a node Find its messages, output ports and exact configuration defaults. Explore the cover controller →"
+  "text": "01 / LIGHTING Start with one room Combine motion and wall switches without taking control away from the person. Follow the room lighting guide → 02 / COVERS Wire a blind or curtain Connect a cover, set a position or preset, and confirm the motor has stopped. Follow the cover guide → 03 / HOME THEATRE Coordinate an activity Bring display, receiver, source and lighting together from one request. Read the theatre documentation → 04 / REFERENCE Look up a node Find its messages, output ports and exact configuration defaults. Explore the cover controller →"
  },
  {
   "title": "Introduction",
@@ -37,9 +37,9 @@ window.DOCS_SEARCH = [
  {
   "title": "Introduction",
   "section": "Use Home Assistant as the panel",
-  "description": "Home Assistant is optional. Nodes that publish announce their entities to it through MQTT discovery and keep t",
+  "description": "Home Assistant is optional. Nodes you opt in publish their state over MQTT and announce their entities through",
   "url": "index.html#home-assistant",
-  "text": "Home Assistant is optional. Nodes that publish announce their entities to it through MQTT discovery and keep their state current. Its controls come back to the nodes as MQTT requests and are carried out like any other request. The devices are still commanded and observed directly, never through Home Assistant. Publishing is opt-in. A new node starts with state publishing and discovery off. Switch them on in its settings and wire the output it publishes on to an MQTT out node. The area names the topics. A node that publishes needs an area where it names something. Topics use the area in lowercase, with spaces as _ : an area called “Upstairs Landing” publishes under home/upstairs_landing/… . Discovery prefix. Each publishing node has a Discovery prefix setting, homeassistant by default, as in Home Assistant. Send a startup message. Send each publishing node a startup message once, a few seconds after the flows start, when the MQTT broker node has usually connected. The example flows use an Inject node that fires once after 3 seconds. Removing a node removes its entities on a “Modified nodes” or “Modified flows” deploy. A full deploy stops the MQTT out node at the same moment, so the clearing never reaches the broker; delete the device in Home Assistant instead. Covers get a cover entity; a cover group has none, since Home Assistant can group the cover entities itself. Rooms get circadian and sleep switches and wake and bed times. Occupancy, motion, the receiver and the house schedule have their own entities. Sources: README Covers and the 4.0.0 release notes, which hold the full detail on entities, availability and cleanup ."
+  "text": "Home Assistant is optional. Nodes you opt in publish their state over MQTT and announce their entities through MQTT discovery, and Home Assistant’s controls come back to the nodes as MQTT requests, carried out like any other request. The nodes still command and observe the devices directly, never through Home Assistant. Wire each publishing node’s output to an MQTT out node and send it a startup message once the broker has connected. The Home Assistant guide covers topics, entity names, availability and removing entities."
  },
  {
   "title": "Introduction",
@@ -47,6 +47,219 @@ window.DOCS_SEARCH = [
   "description": "See what is complete, next and planned on the public roadmap . Run the contract examples to explore the messag",
   "url": "index.html#project",
   "text": "See what is complete, next and planned on the public roadmap . Run the contract examples to explore the messages without a device. Sources: README and package metadata."
+ },
+ {
+  "title": "Light your first room",
+  "description": "Wire one room’s lights to the room lighting controller, let motion and wall switches ask it for light, and get circadian brightness and colour temperature that leave a person’s own change alone.",
+  "url": "guide-room-lighting.html",
+  "text": "Wire one room’s lights to the room lighting controller, let motion and wall switches ask it for light, and get circadian brightness and colour temperature that leave a person’s own change alone."
+ },
+ {
+  "title": "Light your first room",
+  "section": "Before you wire it",
+  "description": "One room lighting controller owns one room’s lights. In the palette it is home-room-lighting-controller ; on t",
+  "url": "guide-room-lighting.html#before",
+  "text": "One room lighting controller owns one room’s lights. In the palette it is home-room-lighting-controller ; on the canvas it shows as “lighting controller”, or “<area> lighting controller” once you give it an area. It is the only node that sends commands to those lights. The policies in front of it (motion, wall switches, activities) send it requests, called intents , and never command a light themselves. Lights you reach over MQTT. Each light needs a topic it reports its state on and a topic it takes commands on, for example a Zigbee2MQTT light’s zigbee2mqtt/<device> and zigbee2mqtt/<device>/set , where <device> is the light’s name in Zigbee2MQTT. The controller speaks the Zigbee2MQTT light payload: state ON or OFF, with brightness and color_temp . An MQTT broker node in Node-RED that reaches the same broker as your lights. Node-RED 5.0.0 or newer and Node.js 22.9 or newer. A file context store (recommended). Without one, a restart or a redeploy makes the room forget which lights a person set, and a motion node counts the room as vacant from then. To add the file context store, set this in settings.js in your Node-RED user directory, then restart Node-RED: settings.js · keep node context on disk contextStorage: { default: { module: \"localfilesystem\" } }, The file store writes changes to disk every 30 seconds by default, so a change made just before Node-RED stops can still be lost. The README’s recommended setup lists what each node forgets without it. Home Assistant is optional. The room works with no Home Assistant at all. If you use it, it is a view and a control panel: its switches send MQTT messages the controller acts on, and the controller still commands the lights directly. See Home Assistant ."
+ },
+ {
+  "title": "Light your first room",
+  "section": "Wire the room",
+  "description": "Start from the example: in the Node-RED editor, Import → Examples , then Room lighting . It wires the policies",
+  "url": "guide-room-lighting.html#wiring",
+  "text": "Start from the example: in the Node-RED editor, Import → Examples , then Room lighting . It wires the policies into the controller, with inject nodes standing in for your sensors and a Debug node standing in for MQTT out. Replace those with your own inputs and broker. Motion and illuminance occupancy → motion policy + Wall switch switch policy → Room lighting controller Intents in · light commands out Controller output → MQTT out → each light’s command topic MQTT in Each light’s state topic, tagged as an observation, back to the controller Intents: both policies → controller, side by side. Commands: controller → MQTT out, unchanged. Observations: MQTT in → controller. The table below names every connection. Room connections From Connect to Why occupancy fusion output 1 motion policy input Occupancy becomes a lighting intent. Illuminance goes to the motion policy too. motion policy output 1 Controller input Motion ON and OFF intents for the policy’s targets. switch policy output Controller input Wall-switch presses, marked as a person’s. Controller output MQTT out Light commands on each light’s command topic. Pass them through unchanged. MQTT in, each light’s state topic Controller input The light’s own reports, tagged observed , confirm what it did. MQTT in, each light’s command topic Controller input Commands from anyone else, tagged command-observed , show a person’s change. Inject, once after 3 seconds Controller input msg.lighting = {kind: \"startup\"} , as in the example. The motion and switch inputs have their own guides: Motion and occupancy and Wall switches . In the example both policies light the target main ; their target names must match the controller’s. Name the room’s lights. Set Targets JSON on the controller. Each light needs an id (the name the policies use), a stateTopic and a commandTopic ; ids must be unique. Send commands out unchanged. Wire the controller’s output straight to MQTT out on the same broker, with the MQTT out topic left empty so each command goes to its light’s command topic. Feed the lights’ reports back. Add an MQTT in node on each light’s state topic and tag what it receives as an observation before it reaches the controller. The incoming topic must equal the target’s stateTopic . Watch the command topics. Add an MQTT in node on each light’s command topic, tagged command-observed . This is how the controller tells its own commands from someone else’s. Send a startup message. Keep the example’s “room startup” inject, which fires once 3 seconds after a deploy, so the MQTT broker node has usually connected first. MQTT in (state topic) → function → controller · tag a light report msg.lighting = {kind: \"observed\"}; return msg; MQTT in (command topic) → function → controller · tag a command msg.lighting = {kind: \"command-observed\"}; return msg; Retained messages on a command topic are ignored, so only a fresh command counts as someone’s change. Targets JSON · one Zigbee2MQTT light [{\"id\": \"main\", \"stateTopic\": \"zigbee2mqtt/<device>\", \"commandTopic\": \"zigbee2mqtt/<device>/set\"}] Don’t rewrite the controller’s commands on the way. The controller watches each command topic to tell its own commands from other people’s, so a function that changes them looks like someone else’s change. A bare ON or OFF that arrives within 5 seconds of one of its own commands with that power, before that command has come back, is taken as its own, and it restyles a light after someone else’s bare ON at most once every 5 seconds. Other rewrites can still be misread."
+ },
+ {
+  "title": "Light your first room",
+  "section": "What the policies send",
+  "description": "The policies send msg.lighting intents. You can send the same from an Inject or Function node to try the room ",
+  "url": "guide-room-lighting.html#intents",
+  "text": "The policies send msg.lighting intents. You can send the same from an Inject or Function node to try the room before any sensor is wired. Inject → controller · switch the room’s light on msg.lighting = {kind: \"intent\", targets: [\"main\"], state: \"ON\", source: \"motion\"}; return msg; state is \"ON\" , \"OFF\" or \"TOGGLE\" ; without targets , the intent applies to every light. An ON intent without values gets the circadian style for this moment, with the Initial transition seconds . To ask for a particular level, add values in the package’s own units: Function → controller · a set level msg.lighting = { kind: \"intent\", targets: [\"main\"], state: \"ON\", values: {brightnessPct: 40, colorTempKelvin: 3000} }; return msg; brightnessPct is 0–100 and colorTempKelvin is in kelvin; the controller converts them for a Zigbee2MQTT light to its 1–254 brightness and mireds. brightnessPct: 0 is the dimmest the light goes, not off: send state: \"OFF\" to switch it off. An intent with values (other than from an activity) marks the light as set by a person, described next."
+ },
+ {
+  "title": "Light your first room",
+  "section": "Circadian brightness and colour",
+  "description": "Circadian lighting is on unless you switch it off. Its levels follow the controller’s Wake time and Bed time (",
+  "url": "guide-room-lighting.html#circadian",
+  "text": "Circadian lighting is on unless you switch it off. Its levels follow the controller’s Wake time and Bed time (24-hour HH:MM , default 07:00 and 23:00): they rise to the daytime level over the hour after waking; they stay at the daytime brightness and colour through the day; they wind down to the sleep settings over the three hours before bed, and stay there until you wake. A bed time after midnight, or a wake time later than the bed time, works. Times are the Node-RED host’s local time; Docker containers default to UTC, so set the container’s TZ if the host should follow a local timezone. Every Refresh interval seconds , the controller restyles lights that are on and under its control, over the Refresh transition seconds , and skips a light that already reports that style. Inject → controller · switch circadian lighting or sleep msg.lighting = {kind: \"circadian\", enabled: false}; // or: msg.lighting = {kind: \"sleep\", enabled: true}; return msg; Sleep mode holds the lights at the sleep settings, whatever the time. To share one wake and bed time across rooms, choose a house schedule as the room’s Schedule ; see House schedule ."
+ },
+ {
+  "title": "Light your first room",
+  "section": "Leave a person’s change alone",
+  "description": "Each light has one control state, and the refresh only touches lights that are in-control : Control states Sta",
+  "url": "guide-room-lighting.html#manual",
+  "text": "Each light has one control state, and the refresh only touches lights that are in-control : Control states State Means Back to in-control when in-control Circadian lighting may style and refresh the light. The default. — manual A person changed the light: an intent with manual: true , an intent with values that isn’t from an activity, or a command with values seen on its command topic. It is switched off, or circadian lighting is switched on. overridden Another owner, such as an activity or a scene, holds the light. Its owner releases it, or the owner or a person switches it off. A held light ignores motion ON and OFF and owner-less values; it changes only for an intent with an owner , a person ( manual: true , person: true , an external command, or a change seen at the light), or a release. The switch policy marks its presses with person: true , so a wall switch always reaches the light. A dashboard acting for a person should set one of these too. The controller also keeps a light a person set after the room went vacant: motion’s OFF doesn’t switch it straight off. Function → controller · hold lights for an activity, then release them msg.lighting = { kind: \"intent\", targets: [\"main\"], state: \"ON\", source: \"activity\", owner: \"film\", values: {brightnessPct: 25, colorTempKelvin: 2500}, preserveManual: true }; // later: // msg.lighting = {kind: \"release\", targets: [\"main\"], owner: \"film\"}; return msg; With preserveManual: true , lights a person set are skipped. A release without targets releases all of that owner’s lights; released lights that are on are restyled as a refresh would. The activity lighting controller does this for you in a home theatre ."
+ },
+ {
+  "title": "Light your first room",
+  "section": "Settings that matter first",
+  "description": "First settings Setting Default Set it to Targets JSON [] Your lights’ ids and topics. Wake time / Bed time 07:",
+  "url": "guide-room-lighting.html#settings",
+  "text": "First settings Setting Default Set it to Targets JSON [] Your lights’ ids and topics. Wake time / Bed time 07:00 / 23:00 When the room should start brightening and finish winding down. Or choose a Schedule . Daytime brightness % / Daytime kelvin 100 / 6500 The daytime level. Sleep brightness % / Sleep kelvin 1 / 2200 The night and sleep level. Initial transition seconds 1 How fast a light fades in when switched on. Refresh transition seconds / Refresh interval seconds 60 / 60 How gently and how often the room follows the circadian curve. The interval is at least 10 seconds. Initial sleep mode Off Whether the room starts in sleep mode. Area, Publish state over MQTT, Home Assistant discovery Empty, off, off Leave off for a first room. The area is needed only when publishing; see Home Assistant ."
+ },
+ {
+  "title": "Light your first room",
+  "section": "Check the result",
+  "description": "The controller’s status shows the mode and the counts, for example circadian · 1 on · 0 manual . Read the stat",
+  "url": "guide-room-lighting.html#check",
+  "text": "The controller’s status shows the mode and the counts, for example circadian · 1 on · 0 manual . Read the status What you see What it means Green dot, circadian Circadian lighting is on and no light is manual. sleep Sleep mode holds the sleep settings. Yellow dot, … 1 manual A person set a light; the refresh leaves it alone. … 1 overridden An owner such as an activity holds a light. Grey dot, manual only Circadian lighting is off. schedule missing: own times The chosen house schedule wasn’t there at start; the room uses its own times. Wire a Debug node to the controller’s output, as the example does. Each command has the light’s command topic, a payload such as {state: \"ON\", brightness, color_temp, transition} , and msg.lighting_command naming the target and the source that asked for it. After a restart without a context store, the room leaves every light as it is: the refresh restyles a light only once an intent or release names it, someone switches it on with a bare ON, or circadian lighting is switched on. To bring a light that is on back into step, switch circadian lighting on, or let motion or a wall switch name it. Sources: README Room lighting, Room light control and Recommended setup; room lighting controller editor settings and help; examples/Room lighting.json; observation tagging and status text from the room lighting controller source."
+ },
+ {
+  "title": "Light a room from motion",
+  "description": "Turn motion and presence sensors into room occupancy, and occupancy into lights that come on when the room is in use and dark enough, then go off once it has been empty for a while.",
+  "url": "guide-motion-occupancy.html",
+  "text": "Turn motion and presence sensors into room occupancy, and occupancy into lights that come on when the room is in use and dark enough, then go off once it has been empty for a while."
+ },
+ {
+  "title": "Light a room from motion",
+  "section": "Before you wire it",
+  "description": "Two nodes sit between your sensors and the room lighting controller. The occupancy fusion node ( home-occupanc",
+  "url": "guide-motion-occupancy.html#before",
+  "text": "Two nodes sit between your sensors and the room lighting controller. The occupancy fusion node ( home-occupancy-fusion in the palette, shown on the canvas as “occupancy”) combines motion and optional presence into one occupied or vacant event. The motion lighting policy ( home-motion-lighting-policy , shown as “motion policy”) turns occupancy and light level into lighting intents for the room lighting controller. Motion establishes occupancy. Presence, such as an mmWave sensor, can hold occupancy that motion established, but never establishes it by itself. Both nodes read the sensors’ own MQTT messages, for example from Zigbee2MQTT; Home Assistant is not in the path. Each message names its kind in msg.source . The payload can be a plain value or an object: Sensor messages Sensor Send to msg.source msg.payload Motion (PIR) occupancy fusion \"motion\" true / false ; \"on\" , \"occupied\" , \"active\" , \"detected\" or their opposites \"off\" , \"clear\" , \"inactive\" , \"not_detected\" ; or an object with a motion , occupancy or active field. Presence (optional) occupancy fusion \"presence\" The same values, or an object with a presence , occupancy or active field. Ignored unless Presence sensor is set to hold. Light level (optional) motion lighting policy \"illuminance\" A number in lux, or an object with an illuminance or illuminanceLux field. A value the node can’t read as on or off is ignored. Without any illuminance reading, the policy treats the room as dark enough. Wall switches go to the switch lighting policy, not here: see Wall switches ."
+ },
+ {
+  "title": "Light a room from motion",
+  "section": "Wire sensors to the room controller",
+  "description": "Occupancy flows one way: sensors into occupancy fusion, its events into the motion policy, and the policy’s in",
+  "url": "guide-motion-occupancy.html#wiring",
+  "text": "Occupancy flows one way: sensors into occupancy fusion, its events into the motion policy, and the policy’s intents into the room lighting controller, which owns the light commands. Occupancy fusion Motion + presence → occupied → Motion lighting policy Occupancy + lux → ON / OFF intents → Room lighting controller Owns the light commands MQTT in (motion, presence) → occupancy fusion · MQTT in (illuminance) → motion policy MQTT out Room controller commands · optional publishing from each node’s output 2 Sensors feed occupancy fusion; occupancy and light level feed the motion policy; its intents feed the room controller. The table below names every port. Connections From Connect to Why Motion and presence sensors (MQTT in, with msg.source set) occupancy fusion input The raw readings to combine. occupancy fusion output 1 motion policy input Occupancy events: msg.source = \"occupancy\" with msg.payload.occupied . Illuminance sensor (MQTT in, msg.source = \"illuminance\" ) motion policy input Lights come on only when it is dark enough. motion policy output 1 room lighting controller input Lighting intents in msg.lighting . occupancy fusion output 2 MQTT out (optional) MQTT publications, only when publishing is on. motion policy output 2 MQTT out (optional) MQTT publications, only when publishing is on. Occupancy fusion sends an event only when occupancy changes, so repeated motion reports while the room is already occupied don’t reach the policy. Choose the presence mode. On occupancy fusion, Presence sensor defaults to “None (PIR only)”. Choose “Hold occupancy (PIR + mmWave)” if you wire a presence sensor in. Name the lights. ON targets and OFF targets on the motion policy are JSON arrays of target ids from the room controller’s Targets JSON . Both default to [\"main\"] , the target id in the example flow. Set the vacancy time and lux cutoff. See Vacancy delay and other settings below."
+ },
+ {
+  "title": "Light a room from motion",
+  "section": "Vacancy delay and other settings",
+  "description": "When occupancy turns on, the policy cancels any pending switch-off and, if motion lighting is enabled and the ",
+  "url": "guide-motion-occupancy.html#settings",
+  "text": "When occupancy turns on, the policy cancels any pending switch-off and, if motion lighting is enabled and the light level is at or below the cutoff, sends ON to the ON targets. When occupancy turns off, it starts a countdown of Vacancy seconds ; when that runs out it sends OFF to the OFF targets. Motion policy settings Setting Default What it does ON targets [\"main\"] Lights switched on when the room becomes occupied. OFF targets [\"main\"] Lights switched off when the vacancy time runs out. Vacancy seconds 120 How long the room stays vacant before the OFF intent. Lux cutoff 10 The brightest light level, in lux, at which occupancy still switches lights on. Maximum pause (s) 600 How long a pause lasts unless sent again. Other flows can change the vacancy time and cutoff without opening the editor: Function → motion policy · change the vacancy time msg.source = \"delay\"; msg.payload = 300; // seconds, the same unit as Vacancy seconds return msg; Function → motion policy · change the lux cutoff msg.source = \"illuminance-cut-off\"; msg.payload = 20; return msg; A delay or illuminance-cut-off message overrides the setting until a deploy changes Vacancy seconds or Lux cutoff in the editor; the new setting then applies. Keeping the override across a restart or redeploy needs a file context store ."
+ },
+ {
+  "title": "Light a room from motion",
+  "section": "Switch it off, or pause it",
+  "description": "The motion policy has two ways to stop acting on occupancy. They look alike but belong to different people. En",
+  "url": "guide-motion-occupancy.html#enable-pause",
+  "text": "The motion policy has two ways to stop acting on occupancy. They look alike but belong to different people. Enable versus pause msg.source Payload Who it is for \"area-enabled\" \"ON\" or \"OFF\" The user’s own switch for this node’s motion lighting. It stays as set, and is what the Home Assistant motion lighting switch shows and sets. \"global-enabled\" \"ON\" or \"OFF\" The user’s switch for every motion policy at once. It is not published. \"pause\" true pauses, false releases; msg.owner is required Other flows, such as a moving cover. Each owner holds its own pause, and motion lighting resumes once every owner has released it or its pause has run out ( Maximum pause , sent again to renew). Motion lighting acts only while both enables are on and no owner holds a pause. Switching it off or pausing it cancels a pending vacancy countdown. Cover controller output 3 → Function → motion policy · pause while moving msg.source = \"pause\"; msg.owner = \"study blind\"; // a name of its own for each pauser return msg; // keep the boolean payload Never pause with the enable. A pause never changes the enables, which are the user’s own. A flow that sends area-enabled OFF to pause motion overwrites what the user chose, and can leave motion lighting off for good if the ON never comes. See Wire a cover ."
+ },
+ {
+  "title": "Light a room from motion",
+  "section": "When a person changes a light",
+  "description": "The OFF intent carries vacantSince , the time the room went vacant. The room lighting controller keeps on any ",
+  "url": "guide-motion-occupancy.html#manual",
+  "text": "The OFF intent carries vacantSince , the time the room went vacant. The room lighting controller keeps on any light a person set after that time: they are using it, so motion doesn’t switch it straight off. A light a person set before the room went vacant is still switched off when the vacancy time runs out. A light another owner holds, such as an activity or a scene, is left alone by motion ON and OFF; its other targets are still handled. Switching a light from a wall switch goes through the switch policy, which marks the press as a person’s. The room controller’s control states are described in Room light control in the README. Without a context store, a restart forgets who is in the room. A motion policy that starts with nothing saved (its first deploy, or a redeploy or restart without a context store) counts the room as vacant from then. Unless occupancy is reported within Vacancy seconds , it sends its OFF intent, so someone sitting still in a lit room has the lights switched off unless motion is seen. The room controller has also forgotten which lights a person set. A file context store keeps both; a running countdown then carries on."
+ },
+ {
+  "title": "Light a room from motion",
+  "section": "Show it in Home Assistant (optional)",
+  "description": "Both nodes can publish their state over MQTT on their second output. Publishing is off until you switch it on,",
+  "url": "guide-motion-occupancy.html#publishing",
+  "text": "Both nodes can publish their state over MQTT on their second output. Publishing is off until you switch it on, and then the node needs an Area ; topics use it in lowercase, with spaces and other characters as _ . Wire output 2 to an MQTT out node. What each node publishes Node Topics With Home Assistant discovery occupancy fusion Retained ON / OFF on home/<area>/occupancy/state ; online / offline on home/<area>/occupancy/availability An occupancy binary sensor motion policy Retained ON / OFF on home/<area>/motion/enabled/state ; the vacancy delay in seconds on home/<area>/motion/delay/state ; online / offline on home/<area>/motion/availability A motion lighting switch and a vacancy delay number The motion policy also acts on ON / OFF sent to home/<area>/motion/enabled/set and a delay of 0 to 86400 seconds sent to home/<area>/motion/delay/set , as the area-enabled and delay inputs do. To let the Home Assistant switch and number control it, wire an MQTT in node subscribed to home/<area>/motion/+/set into the motion policy. The switch shows this node’s enable only, so motion lighting can still be off everywhere through global-enabled while it shows on. Discovery needs Publish state over MQTT , and the Discovery prefix defaults to homeassistant . Each node announces itself once the flows have started, and again when it receives msg.source = \"startup\" . More in Home Assistant ."
+ },
+ {
+  "title": "Light a room from motion",
+  "section": "Check the result",
+  "description": "Import the Room lighting example to try this without sensors: its “motion detected” Inject sends {\"motion\":tru",
+  "url": "guide-motion-occupancy.html#check",
+  "text": "Import the Room lighting example to try this without sensors: its “motion detected” Inject sends {\"motion\":true} with msg.source = \"motion\" , and “illuminance 5 lx” sends 5 with msg.source = \"illuminance\" . Then read the node status under each node: Read the node status What you see What it means Occupancy: occupied · pir on (green) Motion has established occupancy. With presence on hold, presence on or off is added once a presence reading arrives. Occupancy: vacant · pir off (grey) Every source is inactive; if motion lighting is enabled, the motion policy starts its vacancy countdown. Motion policy: enabled · 5 lux · 120s (green) Motion lighting is on, with the last light level and the vacancy time in use. lux ? means no illuminance has arrived yet. Motion policy: paused or disabled (grey) An owner holds a pause, or an enable is off. Occupancy sends no ON. Connect a Debug node to the motion policy’s output 1 to see each intent: msg.lighting with kind: \"intent\" , the targets and state: \"ON\" or \"OFF\" . An OFF intent from the countdown also carries vacantSince . If occupancy turns on but no ON appears, check the light level against Lux cutoff . Sources: README Room lighting, Room light control and 4.0.0 notes; occupancy fusion and motion lighting policy editor help and defaults; Room lighting example flow."
+ },
+ {
+  "title": "Wire wall switches",
+  "description": "Turn wall switch flips and button presses into lighting requests through the switch lighting policy node. A single press toggles the room’s lights; a double press sets them to full brightness and marks them as set by a person.",
+  "url": "guide-wall-switches.html",
+  "text": "Turn wall switch flips and button presses into lighting requests through the switch lighting policy node. A single press toggles the room’s lights; a double press sets them to full brightness and marks them as set by a person."
+ },
+ {
+  "title": "Wire wall switches",
+  "section": "Before you wire it",
+  "description": "This guide adds a wall switch or button to a room that already has a room lighting controller ( home-room-ligh",
+  "url": "guide-wall-switches.html#before",
+  "text": "This guide adds a wall switch or button to a room that already has a room lighting controller ( home-room-lighting-controller ). The switch goes to its own node, the switch lighting policy ( home-switch-lighting-policy , shown on the canvas as switch policy ). It turns what the switch reports into msg.lighting intents for the room controller. It knows nothing about occupancy or motion. Every message names its kind in msg.source . The policy accepts three kinds: Switch messages the policy accepts msg.source msg.payload Use it for \"switch\" {state: true} or {state: false} A wall switch that reports its position (raw edges). The state must be a boolean; anything else is ignored. \"switch-action\" \"single\" or \"double\" , or an object with that action A button that already reports which press it saw (pre-classified actions). Case does not matter. \"switch-availability\" true , \"online\" , \"available\" or \"on\" ; false , \"offline\" , \"unavailable\" or \"off\" Whether the switch device is reachable. A raw switch report can carry the time it was observed in msg.observedAt or payload.observedAt . Without one, the policy uses the time the message arrived. The policy commands nothing itself. The room controller sends the light commands, straight to the lights over MQTT. Home Assistant is not in this path."
+ },
+ {
+  "title": "Wire wall switches",
+  "section": "Wire the switch to the room",
+  "description": "One switch policy feeds one room controller. Convert your switch’s reports into one of the messages above on t",
+  "url": "guide-wall-switches.html#wiring",
+  "text": "One switch policy feeds one room controller. Convert your switch’s reports into one of the messages above on the way in. MQTT in Switch reports → switch policy Presses → lighting intents → Room lighting controller Owns the light commands MQTT out Each light’s command topic, unchanged Connections From Connect to Why Switch reports, converted switch policy input msg.source = \"switch\" with a boolean state , or \"switch-action\" with the press. Switch availability, converted switch policy input msg.source = \"switch-availability\" , so the policy knows when the switch is offline. switch policy output Room lighting controller input The policy’s only output carries the msg.lighting intents. Room lighting controller output MQTT out Wire the commands unchanged: the controller tells its own commands from other people’s by watching each light’s command topic. A raw switch needs its report turned into a boolean. In a Function node between MQTT in and the policy: Function → switch policy · raw switch report msg.source = \"switch\"; msg.payload = {state: msg.payload.state === \"<your device’s on value>\"}; return msg; A button whose message already has an action of single or double needs only the source set: Function → switch policy · pre-classified button msg.source = \"switch-action\"; return msg; Match the targets. Set the policy’s Targets to the ids of the room controller targets the switch controls. The default is [\"main\"] . Keep the window short. Leave Raw-edge window ms at 500 unless two quick flips are not being seen as a double press. Try it without a switch. The Room lighting example has a “wall switch edge” Inject node that sends msg.source = \"switch\" with {\"state\":true} into a switch policy wired to a room controller."
+ },
+ {
+  "title": "Wire wall switches",
+  "section": "What each press requests",
+  "description": "With raw edges, the policy times changes of the switch’s state. A change starts the raw-edge window. A second ",
+  "url": "guide-wall-switches.html#presses",
+  "text": "With raw edges, the policy times changes of the switch’s state. A change starts the raw-edge window. A second change inside it is a double press; when the window ends with no second change, it is a single press. A report that repeats the current state is not a press. Presses and requests Press Raw switch Pre-classified action Intent sent Single One change, no second within the window \"single\" state: \"TOGGLE\" Double Two changes within the window \"double\" state: \"ON\" , manual: true , values: {brightnessPct: 100} Anything else, such as a hold — Other actions Nothing; traced as unsupported-action Every intent names the policy’s targets and carries source: \"wall\" and person: true . A double action on the default target sends: switch policy → room lighting controller · double press msg.lighting = { kind: \"intent\", targets: [\"main\"], state: \"ON\", source: \"wall\", person: true, manual: true, values: {brightnessPct: 100} }; The room controller resolves TOGGLE per light: off if it last set or saw the light on, otherwise on. A light switched on by a single press gets circadian styling when circadian lighting is on and the light is under the room’s control. A pre-classified action cancels a raw press still waiting for its window to end."
+ },
+ {
+  "title": "Wire wall switches",
+  "section": "Presses, motion and manual lights",
+  "description": "Because every press carries person: true , the room controller treats it as a person’s choice: Motion keeps it",
+  "url": "guide-wall-switches.html#ownership",
+  "text": "Because every press carries person: true , the room controller treats it as a person’s choice: Motion keeps its hands off. The motion policy’s vacancy OFF carries vacantSince . The room controller ignores it for a light a person set after the room went vacant (traced as person-set-after-vacancy ). Presses reach held lights. A light held by an owner, such as an activity, ignores owner-less intents like motion, but a press still reaches it. A double press makes the light manual. Circadian refresh then leaves it alone. Enabling circadian lighting returns manual lights to the room’s control. Switching off hands the light back. A light switched off by a person or its owner returns to in-control . Switches don’t go to the motion policy. Switch messages sent to the motion lighting policy are ignored. Wire switches only to the switch policy."
+ },
+ {
+  "title": "Wire wall switches",
+  "section": "Retained reports and restarts",
+  "description": "The policy keeps the switch’s last known state (its baseline) in the node’s context, so a flip after a restart",
+  "url": "guide-wall-switches.html#restart",
+  "text": "The policy keeps the switch’s last known state (its baseline) in the node’s context, so a flip after a restart is still measured against it. Retained reports are not presses. A raw report with msg.retain = true only re-baselines the state. A retained switch-action is ignored. Mark a polled snapshot. Set msg.baseline = true on a report you asked the device for, so it updates the baseline without counting as a press. Offline means start again. After the switch reports unavailable, its first report when it returns re-baselines instead of counting as a press. Node context is kept in memory unless you set up a context store, so a restart or redeploy clears the baseline, and the room controller forgets which lights a person set. See Recommended setup: a file context store ."
+ },
+ {
+  "title": "Wire wall switches",
+  "section": "Settings",
+  "description": "switch policy settings Setting Default What it does Area empty Names the node on the canvas (“<Area> switch po",
+  "url": "guide-wall-switches.html#settings",
+  "text": "switch policy settings Setting Default What it does Area empty Names the node on the canvas (“<Area> switch policy”). Targets [\"main\"] The room controller targets a press controls. A non-empty JSON array of strings. Raw-edge window ms 500 How long after a change a second change counts as a double press. Zero or more. Input freshness seconds 3600 How long since the last report before the switch shows as stale. Must be more than zero."
+ },
+ {
+  "title": "Wire wall switches",
+  "section": "Stop or open a cover from a button",
+  "description": "The switch policy only makes lighting intents. To make a button stop a moving cover, or open it otherwise, sen",
+  "url": "guide-wall-switches.html#covers",
+  "text": "The switch policy only makes lighting intents. To make a button stop a moving cover, or open it otherwise, send its request to the cover controller with msg.stopIfMoving = true . See Leave a person’s move alone in the covers guide."
+ },
+ {
+  "title": "Wire wall switches",
+  "section": "Check the result",
+  "description": "The policy’s status shows how much it trusts what it knows about the switch. Read the status What you see What",
+  "url": "guide-wall-switches.html#check",
+  "text": "The policy’s status shows how much it trusts what it knows about the switch. Read the status What you see What it means switch fresh · <age> The switch reported within the freshness time. switch stale · <age> The last report is older than the freshness time, has no usable timestamp, or came before the flows started and nothing has confirmed it since. awaiting switch baseline The policy does not yet know the switch’s state. switch unavailable The switch was reported unavailable. Connect a Debug node to the policy’s output and press the switch: a single press shows a TOGGLE intent; a double press shows the full-brightness ON intent. Then check the room controller’s commands reach the light."
+ },
+ {
+  "title": "Share a house schedule",
+  "description": "Give many rooms one wake time and one bed time. Each room lighting controller follows the house schedule without wires, and an optional MQTT node lets Home Assistant change the times.",
+  "url": "guide-house-schedule.html",
+  "text": "Give many rooms one wake time and one bed time. Each room lighting controller follows the house schedule without wires, and an optional MQTT node lets Home Assistant change the times."
+ },
+ {
+  "title": "Share a house schedule",
+  "section": "Before you wire it",
+  "description": "A room lighting controller styles its lights by a wake time and a bed time (default 07:00 and 23:00 ). Levels ",
+  "url": "guide-house-schedule.html#before",
+  "text": "A room lighting controller styles its lights by a wake time and a bed time (default 07:00 and 23:00 ). Levels rise to the daytime level over the hour after waking, stay at the daytime brightness and colour through the day, wind down to the sleep settings over the three hours before bed, and stay at the sleep settings until you wake. Without a schedule, every room keeps its own two times. The house schedule ( home-house-schedule ) holds one wake and bed time for every room that uses it. It is a configuration node , like an MQTT broker: it has no wires and does not sit on the canvas. You choose it in each room controller’s Schedule setting, and it appears with the editor’s other configuration nodes. You need at least one room lighting controller already wired to its lights. Times are 24-hour HH:MM in the Node-RED host’s local time. Docker containers default to UTC: set the container’s TZ if the host should follow a local timezone. The house schedule MQTT node is optional. Rooms follow the schedule without it; add it when you want the times on MQTT or in Home Assistant. House schedule settings Setting Default What it does Name house Labels the schedule and names its topics, home/<name>/schedule/... . Needs a letter or digit. Wake time 07:00 When the rooms start to brighten. Bed time 23:00 When the rooms reach the sleep settings. It must differ from the wake time. A bed time after midnight, or a wake time later than the bed time, works."
+ },
+ {
+  "title": "Share a house schedule",
+  "section": "Share one schedule between rooms",
+  "description": "Rooms reference the schedule; only the optional MQTT node has wires. Each room hears of every change as it hap",
+  "url": "guide-house-schedule.html#wiring",
+  "text": "Rooms reference the schedule; only the optional MQTT node has wires. Each room hears of every change as it happens. house schedule MQTT Publishes the times · takes changes ⇢ house schedule Configuration node · no wires ⇢ Room lighting controllers Schedule: house MQTT in → house schedule MQTT → MQTT out MQTT in and MQTT out Same broker · set topics in, retained times out The dashed arrows are settings that reference the house schedule, not wires. The only wires run between the house schedule MQTT node and the broker. What connects to what From Connect to Why Room controller Schedule setting house schedule The room takes its wake and bed times from it. No wire. house schedule MQTT Schedule setting house schedule Required. The node publishes and changes this schedule. No wire. MQTT in house schedule MQTT input Subscribe to home/<name>/schedule/wake-time/set and bed-time/set . house schedule MQTT output MQTT out Its MQTT publications: the times, availability and Home Assistant discovery. Add the schedule from a room. Open a room lighting controller ( home-room-lighting-controller ) and set Schedule . Use the editor’s add button to create a house schedule, or pick one that already exists; the editor offers an existing schedule first for a new room. Set the times once. Edit the house schedule’s Wake time and Bed time . Every room that uses it follows these times, not its own Wake time and Bed time . Point the other rooms at it. Choose the same schedule as Schedule in each room that should share the times. Add the MQTT node if you want it. Drag a house schedule MQTT node ( home-house-schedule-mqtt in the palette) onto the canvas, choose the schedule as its Schedule , and wire it to the broker as in the table. Use one per schedule: two would share the same topics and entities, and deleting one clears them for both until the other next starts. The importable example House schedule.json shows two rooms sharing one schedule named house , with an Inject node that changes the wake time through the MQTT node."
+ },
+ {
+  "title": "Share a house schedule",
+  "section": "Change the times",
+  "description": "Send changes to the house schedule MQTT node. It changes the shared schedule, and every room following it rest",
+  "url": "guide-house-schedule.html#changes",
+  "text": "Send changes to the house schedule MQTT node. It changes the shared schedule, and every room following it restyles. Give new times as HH:MM , either one alone: Inject → house schedule MQTT · wake earlier msg.lighting = {kind: \"schedule\", wakeTime: \"06:30\"}; return msg; Function → house schedule MQTT · set both times msg.lighting = {kind: \"schedule\", wakeTime: \"06:30\", bedTime: \"22:30\"}; return msg; Times that are not valid HH:MM , or a wake time equal to the bed time, are ignored. From MQTT, a time on a set topic does the same. A message is read as HH:MM or HH:MM:SS ; retained messages and anything but a time are ignored. House schedule topics (default name house ) Topic Direction Payload home/house/schedule/wake-time/set In A new wake time home/house/schedule/bed-time/set In A new bed time home/house/schedule/wake-time/state Out, retained The wake time in use, HH:MM:SS home/house/schedule/bed-time/state Out, retained The bed time in use, HH:MM:SS home/house/schedule/availability Out, retained online after the flows start, offline as the node stops With Home Assistant discovery on (the editor’s default for a new node; Discovery prefix homeassistant ), Home Assistant gets a Wake time and a Bed time entity, named after the schedule so a replacement MQTT node keeps them. Changing one in Home Assistant sends it to the set topic, and the node acts on it. See Home Assistant for the rest of the setup. To announce the times again, as after the broker reconnects, send the node msg.source = \"startup\" . A changed time lasts until the setting changes. A time set by a message or from Home Assistant stays until a deploy gives the house schedule a different Wake time or Bed time ; that setting then applies. Without a file context store , a restart or redeploy also returns the schedule to its settings."
+ },
+ {
+  "title": "Share a house schedule",
+  "section": "Give a room its own times",
+  "description": "A room that needs different times (a child’s room, say) sets Schedule to none and keeps its own Wake time and ",
+  "url": "guide-house-schedule.html#own-times",
+  "text": "A room that needs different times (a child’s room, say) sets Schedule to none and keeps its own Wake time and Bed time . Following a schedule or not Room’s Schedule Its times Its own wake and bed time topics and entities A house schedule The schedule’s, at every change Its wake-time/set and bed-time/set topics are ignored; its Home Assistant wake and bed time entities are cleared. None Its own settings With Publish state over MQTT on, published and changed under home/<area>/wake-time and bed-time , as in Room light control . Sleep stays per room. A room’s sleep mode still overrides the schedule, so one room can go to its sleep settings while the others follow the house times. Deleting a house schedule in the editor sets its rooms to none, and they return to their own times rather than keeping the schedule’s last ones."
+ },
+ {
+  "title": "Share a house schedule",
+  "section": "Check the result",
+  "description": "Read the outcome What you see What it means house schedule MQTT status wake 07:00 · bed 23:00 The times the sc",
+  "url": "guide-house-schedule.html#check",
+  "text": "Read the outcome What you see What it means house schedule MQTT status wake 07:00 · bed 23:00 The times the schedule is using now. It updates at every change. Room status circadian or sleep The room is styling its lights by the times in use. Room status schedule missing: own times The room names a schedule that is not running, as when it was deleted from the flows file. It keeps its own times until you choose a schedule or none. Retained home/<name>/schedule/wake-time/state and bed-time/state The MQTT node published the times; watch them with an MQTT client or a Debug node on its output. A change restyles only the lights a room has been told about since it started. A light that nothing has named since a start with nothing saved can keep its start-time style; switch circadian lighting on, or let motion or a wall switch name it. Sources: README Room lighting, Room light control and Recommended setup: a file context store; house schedule, house schedule MQTT and room lighting controller editor help; House schedule example flow."
  },
  {
   "title": "Wire a cover",
@@ -97,6 +310,171 @@ window.DOCS_SEARCH = [
   "text": "Read the outcome What you see What it means Moving, then ready Fresh reports confirm the cover has stopped at its target. not-calibrated / position-unknown The device cannot provide a usable position. Calibrate it or restore its position knowledge; do not invent a reading. unavailable The device is offline. No device command is sent; it is read again when it returns. For output messages, optional Home Assistant discovery and timing defaults, open the cover controller reference . Sources: README Covers; cover controller, cover group and shelly cover editor help."
  },
  {
+  "title": "Home theatre",
+  "description": "Activity orchestration across display, receiver, source, lighting and backlighting, with observed completion.",
+  "url": "home-theatre.html",
+  "text": "A reusable controller contract for coordinating target owners from explicit activity requests and fresh observations."
+ },
+ {
+  "title": "Home theatre",
+  "section": "Composed target owners",
+  "description": "The activity layer emits semantic intent. Each target controller retains its own safe sequencing, transport an",
+  "url": "home-theatre.html#targets",
+  "text": "The activity layer emits semantic intent. Each target controller retains its own safe sequencing, transport and confirmation policy. Display Mode and power intent Receiver Power, source and bounded volume ownership Media source Capability and readiness Room lighting Ownership-preserving style Backlighting Observed power state"
+ },
+ {
+  "title": "Home theatre",
+  "section": "Activity lifecycle",
+  "description": "Every request receives a monotonic generation. Delayed work from older generations cannot mutate current state",
+  "url": "home-theatre.html#lifecycle",
+  "text": "Every request receives a monotonic generation. Delayed work from older generations cannot mutate current state. Requested Validate identity and activity. Preparing Refresh target evidence. Transitioning Dispatch semantic target intent. Confirming Require fresh mandatory evidence. Terminal Report ready, waiting or failed."
+ },
+ {
+  "title": "Home theatre",
+  "section": "Behavioral guarantees",
+  "description": "Stale work is inert Timers, command results and observations carry generation identity and cannot complete a n",
+  "url": "home-theatre.html#guarantees",
+  "text": "Stale work is inert Timers, command results and observations carry generation identity and cannot complete a newer request. Readiness is honest Mandatory targets require fresh observations. Unsupported or unobservable capabilities remain explicit. Manual control is preserved Unsolicited target changes become ownership evidence rather than a reason to fight the user. Volume control has one owner Absolute and relative requests share receiver bounds, observed confirmation and an explicit release point for later manual adjustment. Recovery is bounded Restart refreshes observations without blindly replaying state-changing commands. Failure is actionable Retries, fallback use, target availability and transition latency remain visible through one state contract. Policies stay transport-neutral Activity profiles name semantic outcomes; adapters own protocol-specific operations."
+ },
+ {
+  "title": "Home theatre",
+  "section": "Public contract",
+  "description": "Node-RED adapters bridge the pure reducer to MQTT and Home Assistant without moving policy into flow wiring. P",
+  "url": "home-theatre.html#contract",
+  "text": "Node-RED adapters bridge the pure reducer to MQTT and Home Assistant without moving policy into flow wiring. Public contract Surface Contract Invariant Request Unique request ID, configured activity and timestamp Retained requests are inert Desired state Activity and generation One current request identity Target evidence Status, observation time, classification and failure Older evidence cannot overwrite newer evidence Outcome Current activity, phase, availability and failure Ready requires all mandatory targets Operations Latency, retries, fallbacks, outcomes and objective status Expected waiting does not become a false failure"
+ },
+ {
+  "title": "Home theatre",
+  "section": "Source-level proof",
+  "description": "The package test suite covers successful activities, optional degradation, mandatory failure, restart, superse",
+  "url": "home-theatre.html#proof",
+  "text": "The package test suite covers successful activities, optional degradation, mandatory failure, restart, supersession, stale results, manual ownership, recovery and rolling operational objectives. Privacy boundary This reference describes generalized code behavior only. It intentionally omits device models, room names, addresses, entity identifiers, flow exports, activity history and operational records."
+ },
+ {
+  "title": "Use Home Assistant as the panel",
+  "description": "Show the nodes’ state in Home Assistant and let its controls send requests back over MQTT. The nodes still command and observe the devices themselves; Home Assistant only sees and asks.",
+  "url": "guide-home-assistant.html",
+  "text": "Show the nodes’ state in Home Assistant and let its controls send requests back over MQTT. The nodes still command and observe the devices themselves; Home Assistant only sees and asks."
+ },
+ {
+  "title": "Use Home Assistant as the panel",
+  "section": "Before you wire it",
+  "description": "Home Assistant is optional. A node that publishes sends its state over MQTT and, with discovery on, announces ",
+  "url": "guide-home-assistant.html#before",
+  "text": "Home Assistant is optional. A node that publishes sends its state over MQTT and, with discovery on, announces its entities to Home Assistant. A control used in Home Assistant comes back to the node as an MQTT request on a /set topic, and the node carries it out like any other request. The devices are still commanded and observed directly, by the nodes, never through Home Assistant. Publishing is opt-in, per node. Most publishing nodes have two settings: Publish state over MQTT and Home Assistant discovery , which needs Publish state. A new node starts with both off. Room lighting controllers and theatre state contracts saved before these settings existed keep publishing. The theatre state contract always publishes its retained state; only Home Assistant discovery is a setting, off for a new node. The house schedule MQTT node exists to publish, so it has only the Home Assistant discovery setting, ticked when you add it from the palette. Give it an area. A node that publishes needs an Area where it names something, and the editor marks it invalid without one. A room lighting controller with no area still controls its lights, but publishes no state or discovery. Topics and IDs use the area in lowercase, with each run of spaces or other characters (anything but letters, digits, _ and - ) as _ . An area called “Upstairs Landing” publishes under home/upstairs_landing/… ; “living-room” is unchanged. Names shown in Home Assistant keep the area as you typed it. Keep state across restarts. A node remembers what it published in its node context. With a file context store that record survives deploys and restarts, so old topics can be cleared reliably."
+ },
+ {
+  "title": "Use Home Assistant as the panel",
+  "section": "Wire publications out and requests in",
+  "description": "Each publishing node has an output for its MQTT publications. Wire it to an MQTT out node. Where Home Assistan",
+  "url": "guide-home-assistant.html#wiring",
+  "text": "Each publishing node has an output for its MQTT publications. Wire it to an MQTT out node. Where Home Assistant can change something, wire an MQTT in node on the node’s /set topics back into the node’s input. MQTT in The node’s /set topics → Publishing node Carries out requests, publishes state → MQTT out State, availability, discovery The node still commands its devices directly, never through Home Assistant MQTT broker Home Assistant reads discovery and state · its controls publish to /set Requests: MQTT in → node. Publications: the node’s publications output → MQTT out. The table below names the port for each node. Ports per publishing node Node Publications output → MQTT out MQTT in → node input room lighting controller ( home-room-lighting-controller ) Output 1, shared with its light commands. Wire it to MQTT out unchanged. home/<area>/+/set covers circadian, sleep, wake time and bed time. theatre state contract ( home-theatre-state-contract ) Output 2, retained MQTT state and discovery. Output 1 carries activity requests to the activity controller. <base>/request , by default home/<area>/theatre/request . occupancy fusion ( home-occupancy-fusion ) Output 2. Output 1 still feeds the motion policy. None: the occupancy sensor is read-only. motion policy ( home-motion-lighting-policy ) Output 2. Output 1 carries lighting intents. home/<area>/motion/+/set AVR controller ( home-avr-controller ) Output 3, apart from receiver commands (1) and state and results (2). home/<area>/receiver/volume/set cover controller ( home-cover-controller ) Output 4. home/<area>/cover/<name>/+ and …/position/set house schedule MQTT ( home-house-schedule-mqtt ) Output 1, its only output. home/<name>/schedule/wake-time/set and …/bed-time/set The room lighting controller watches each light’s command topic to tell its own commands from other people’s, so a function that rewrites its output on the way makes them look like someone else’s. Flows that filter that output by topic must pass the /control topics through. For the cover controller, <name> is its Name in topics , which has no default: give each cover in a room its own. For the house schedule MQTT node, <name> is the house schedule’s Name , house by default. Use one house schedule MQTT node per schedule: two would share the same topics and entities."
+ },
+ {
+  "title": "Use Home Assistant as the panel",
+  "section": "Which nodes offer which entities",
+  "description": "With discovery on, each node announces its own entities, grouped under one Home Assistant device per node. Ent",
+  "url": "guide-home-assistant.html#entities",
+  "text": "With discovery on, each node announces its own entities, grouped under one Home Assistant device per node. Entities per node Node Entities in Home Assistant State topics room lighting controller A circadian switch, a sleep switch, wake and bed time entities (in the device’s configuration), and a diagnostic sensor per light showing its control state, with the owner as an attribute. home/<area>/circadian/state , …/sleep/state , …/wake-time/state , …/bed-time/state , home/<area>/lighting/<target>/control theatre state contract A Requested activity selector; Current activity and Phase sensors (the transition is the Phase sensor’s attributes); diagnostic Readiness, Failure, Transition latency, Operational SLO and Operational SLO breach entities; a health sensor per target. Under <base> : desired , current , phase , transition , failure , readiness , metrics , slo , health/<target> occupancy fusion An occupancy binary sensor. home/<area>/occupancy/state , retained ON or OFF motion policy A motion lighting switch and a vacancy delay number (in the device’s configuration). home/<area>/motion/enabled/state , …/delay/state in seconds AVR controller Power and source sensors, and a volume number in dB between Minimum volume and Maximum volume . home/<area>/receiver/power/state , …/source/state , …/volume/state cover controller A cover entity, named after the node, with open, close, stop and set position. home/<area>/cover/<name>/state and, for a position cover, …/position house schedule MQTT Wake and bed time entities, named after the schedule. home/<name>/schedule/wake-time/state , …/bed-time/state cover group ( home-cover-group ) None. Home Assistant can group the cover entities itself. None A room that follows a house schedule (its Schedule setting) has no wake and bed time entities of its own; they are cleared, and the house schedule MQTT node offers the shared times instead. The motion lighting switch shows this node’s enable only: the shared global-enabled is not published, so motion can still be off everywhere while the switch shows on."
+ },
+ {
+  "title": "Use Home Assistant as the panel",
+  "section": "What Home Assistant sends",
+  "description": "Home Assistant’s controls publish to the node’s /set topics. The node treats each one as a request: bounded, s",
+  "url": "guide-home-assistant.html#requests",
+  "text": "Home Assistant’s controls publish to the node’s /set topics. The node treats each one as a request: bounded, sent to the device by the node and confirmed from what the device reports. Nothing reaches the device from Home Assistant directly. You can test a set topic without Home Assistant. This Inject node, wired into a room lighting controller whose area is “Study”, does what the circadian switch does: Inject → room lighting controller · switch circadian lighting on msg.topic = \"home/study/circadian/set\"; msg.payload = \"ON\"; return msg; Room lighting controller: ON or OFF on circadian and sleep; a time ( HH:MM or HH:MM:SS ) on wake time and bed time. A time set this way lasts until you deploy the node with a different Wake time or Bed time . Set topics are read only while Publish state is on and the area is set; retained messages are ignored. Theatre state contract: the activity selector sends a request with its own request ID to <base>/request , like any other activity request. Retained requests are inert. Motion policy: ON / OFF on …/enabled/set and a delay of 0 to 86400 seconds on …/delay/set , as its area-enabled and delay inputs do. AVR controller: a volume in dB on …/volume/set . Sets within 0.3 seconds of each other are settled to the last, which becomes an ordinary absolute volume request. It waits for a power or source change in progress and is rejected with receiver-not-ready while the receiver is off. Cover controller: OPEN , CLOSE or STOP on …/set , and a position on …/position/set , carried out and confirmed like any other request. House schedule MQTT: a time on the wake or bed time set topic changes the schedule for every room that follows it. Retained messages and anything but a time are ignored."
+ },
+ {
+  "title": "Use Home Assistant as the panel",
+  "section": "Discovery prefix and entity names",
+  "description": "Each node with discovery has a Discovery prefix setting, homeassistant by default, as in Home Assistant. Chang",
+  "url": "guide-home-assistant.html#discovery",
+  "text": "Each node with discovery has a Discovery prefix setting, homeassistant by default, as in Home Assistant. Change it only if you changed the prefix in Home Assistant’s MQTT settings. Every discovery entry names this package and its version as its origin. How IDs are named Node Device, unique IDs and discovery topics Room lighting controller or theatre state contract added from the palette Named after its Node-RED node ID ( nrha_<node id>… ), so renaming its area or display name updates the same entities. Room lighting controller or theatre state contract saved before node IDs Named after the area, exactly as before, so nothing changes for it in Home Assistant. Occupancy fusion, motion policy, AVR controller, cover controller Named after the node ID; they have no older entities. House schedule MQTT Named after the house schedule, not this node, so a replacement node keeps the same entities. Either way, the entity ID Home Assistant first gives an entity comes from the area, with - as _ . Importing or pasting a node keeps its saved settings, including its ID scheme and publishing, so an older node restored from a backup keeps its area-named entities. Only a node added from the palette starts as new. A theatre state contract added since node IDs suggests its Area to Home Assistant for its device, and Home Assistant creates an area of that name if none exists. With no area, its entity IDs come from its Display name and no area is suggested. One saved before node IDs needs an area for discovery."
+ },
+ {
+  "title": "Use Home Assistant as the panel",
+  "section": "Availability and the startup message",
+  "description": "Each publishing node sends a retained online once the flows have started (and again at its startup message) an",
+  "url": "guide-home-assistant.html#availability",
+  "text": "Each publishing node sends a retained online once the flows have started (and again at its startup message) and offline when it stops. Its Home Assistant entities follow it. Availability topic and startup message per node Node Availability topic Startup message room lighting controller home/<area>/lighting/availability msg.lighting = {kind: \"startup\"} theatre state contract <base>/availability msg.theatreStateContract = {kind: \"startup\"} occupancy fusion home/<area>/occupancy/availability msg.source = \"startup\" motion policy home/<area>/motion/availability msg.source = \"startup\" AVR controller home/<area>/receiver/availability msg.avr = {kind: \"startup\"} cover controller home/<area>/cover/<name>/availability msg.cover = {kind: \"startup\"} house schedule MQTT home/<name>/schedule/availability msg.source = \"startup\" Send each publishing node a startup message once. Send it a few seconds after the flows start: by then the MQTT broker node has usually connected. A message sent before it connects is dropped, along with the discovery and state it carried. The example flows use an Inject node that fires once after 3 seconds. Set the broker node’s birth, close and will messages. The node’s own online and offline get through only when you deploy the node on its own (“Modified nodes” or “Modified flows”) while the MQTT connection stays up. On a full deploy, a restart or a shutdown, Node-RED stops the MQTT out node at the same moment and reconnects afterwards. So set the MQTT broker node’s Birth message to online , and its Close message and Will message (which covers crashes) to offline , all retained, on the same topic. With several publishing nodes, the broker can cover one of them. The startup message does more than announce. The AVR controller discards stale observations and queries the receiver; the cover controller reads the cover again rather than trusting old state. Availability is not readiness. The theatre’s readiness ( unknown , available , degraded or unavailable ) is on <base>/readiness , shown as the “Readiness” sensor. <base>/availability carries only online or offline ."
+ },
+ {
+  "title": "Use Home Assistant as the panel",
+  "section": "Remove entities",
+  "description": "Switch discovery off to remove a node’s entities from Home Assistant at its next start. Delete the node and de",
+  "url": "guide-home-assistant.html#removing",
+  "text": "Switch discovery off to remove a node’s entities from Home Assistant at its next start. Delete the node and deploy with “Modified nodes” or “Modified flows”: it clears its Home Assistant entities and retained state. A full deploy (the deploy button’s default) stops the MQTT out node at the same moment, so the clearing never reaches the broker. Disabling a node or its flow keeps its entities, so they come back unchanged when you enable it again. To remove a node’s entities after a full deploy, or the entities of a flow you copied to another Node-RED (the copy’s nodes have new IDs, so new entities), delete the device in Home Assistant: Settings → Devices & services → Devices , open the device, then Delete . Home Assistant then clears its retained discovery entry itself. Once the flows have started, and again at its startup message, a node clears any retained topic it published before and no longer does, for example after an area, base topic, discovery prefix or target change. It remembers what it published in its node context, which lasts across deploys and restarts only with a context store. Without that record, an occupancy, motion, receiver or house schedule MQTT node that publishes state still clears its own Home Assistant entities it no longer publishes, such as after you switch discovery off; it never clears topics another node could publish. Moving an area between older room nodes. A node that never gets a startup message keeps clearing its old topics at every start. To move an area from one older room node to another, send the old node a startup message, or delete it."
+ },
+ {
+  "title": "Use Home Assistant as the panel",
+  "section": "Check the result",
+  "description": "Read the outcome What you see What it means No entities appear Check that discovery and, where the node has it",
+  "url": "guide-home-assistant.html#check",
+  "text": "Read the outcome What you see What it means No entities appear Check that discovery and, where the node has it, Publish state are on, the publications output reaches MQTT out, and the discovery prefix matches Home Assistant’s. Send the startup message again: one sent before the broker connected was dropped. Entities show unavailable after a full deploy or restart The node’s own online could not get through. Set the broker node’s birth, close and will messages on its availability topic. A control in Home Assistant does nothing Wire an MQTT in node on the node’s set topics into its input. The room lighting controller reads them only while Publish state is on and the area is set. Entities remain after deleting a node It was removed with a full deploy. Delete the device in Home Assistant. A room has no wake and bed time entities It follows a house schedule. Use the house schedule MQTT node’s entities. To watch what a node publishes, connect its publications output to a Debug node as well as MQTT out. Sources: README 4.0.0 and Upgrading from 2.x notes, Covers , Room light control , Receiver volume ownership and Theatre MQTT contract ; the editor help of each publishing node; the example flows’ startup Inject nodes; lib/theatre-ha-discovery.ts and lib/ha-discovery.ts ."
+ },
+ {
+  "title": "Connect a cover device",
+  "description": "A device adapter sits between one cover motor and its cover controller. It turns the device’s own MQTT messages into the controller’s neutral readings, and the controller’s neutral commands into messages the device understands.",
+  "url": "guide-device-adapters.html",
+  "text": "A device adapter sits between one cover motor and its cover controller. It turns the device’s own MQTT messages into the controller’s neutral readings, and the controller’s neutral commands into messages the device understands."
+ },
+ {
+  "title": "Connect a cover device",
+  "section": "Before you wire it",
+  "description": "The cover controller ( home-cover-controller ) is device-neutral. It sends commands as msg.cover_command = {op",
+  "url": "guide-device-adapters.html#before",
+  "text": "The cover controller ( home-cover-controller ) is device-neutral. It sends commands as msg.cover_command = {operation, position, requestId, generation, attempt} , where operation is set_position , stop or observe (read the cover now). An Open, close and stop only cover sends open , close , stop or observe . It expects readings back as msg.cover = {kind: \"observed\", …} and {kind: \"availability\", online} . An adapter does the translation for one kind of device, so the controller never needs to know which device it drives. Each adapter has no broker connection of its own: device messages arrive from an MQTT in node, and its publications leave through an MQTT out node. Pick the adapter for your device: the shelly cover node ( home-shelly-cover ) or the zigbee2mqtt cover node ( home-z2m-cover ). Have a broker connection in Node-RED that both the MQTT in and MQTT out nodes use. Both adapters speak the device’s own MQTT messages. Neither commands the device through Home Assistant. Both adapters report 0 = closed and 100 = open . If your device runs the other way, set Invert positions on the controller."
+ },
+ {
+  "title": "Connect a cover device",
+  "section": "Wire any adapter the same way",
+  "description": "Both adapters have one input and two outputs. Output 1 goes to the device; output 2 goes to the cover controll",
+  "url": "guide-device-adapters.html#shape",
+  "text": "Both adapters have one input and two outputs. Output 1 goes to the device; output 2 goes to the cover controller. MQTT in The device’s topics → Adapter Device messages ↔ neutral messages ⇄ Cover controller Requests and confirmation Adapter output 1 → MQTT out → device MQTT out Same broker · leave its topic empty Reports: MQTT in → adapter → controller. Commands: controller output 1 → adapter → MQTT out. Four connections for any adapter From Connect to Why MQTT in (output: auto-detect) Adapter input The device’s reports and availability. Controller output 1 Adapter input Neutral device commands. Adapter output 1 MQTT out Same broker; leave the MQTT out topic empty, because each message carries its own topic. Adapter output 2 Controller input Readings and availability for the controller. Anything else that reaches an adapter’s input is ignored."
+ },
+ {
+  "title": "Connect a cover device",
+  "section": "Wire a shelly cover",
+  "description": "The shelly cover node connects a Gen2-or-later relay device in cover mode, over the device’s own MQTT API. The",
+  "url": "guide-device-adapters.html#shelly-cover",
+  "text": "The shelly cover node connects a Gen2-or-later relay device in cover mode, over the device’s own MQTT API. The covers guide walks through its full wiring; this is the summary. shelly cover settings Setting Default What to set MQTT topic prefix None: required The device’s topic prefix: its device ID unless a custom prefix is set on the device. It cannot contain + or # . Cover ID 0 0 , or 1 for a device’s second cover. Prepare the device. Calibrate the cover on the device. Turn MQTT on with Enable MQTT Control (the default); without it the device ignores the commands. Keep RPC status notifications on (also the default) so each change is reported. Subscribe to the whole prefix. One MQTT in node on <prefix>/# feeds the adapter. It reads <prefix>/status/cover:<id> , change notifications on <prefix>/events/rpc , and availability on <prefix>/online . Keep the controller as a position cover. Leave Cover as “Takes a position (0 to 100)”. The adapter translates set_position , stop and observe ; it does not translate the open and close commands of an Open, close and stop only cover. No position, no guess. A cover that is not calibrated, or does not know its position, has no position to report. The controller’s command in hand fails with reason not-calibrated or position-unknown , and no position is sent to an uncalibrated cover."
+ },
+ {
+  "title": "Connect a cover device",
+  "section": "Wire a zigbee2mqtt cover",
+  "description": "The zigbee2mqtt cover node connects a Zigbee2MQTT cover (a blind, shutter or curtain motor) over Zigbee2MQTT’s",
+  "url": "guide-device-adapters.html#zigbee2mqtt",
+  "text": "The zigbee2mqtt cover node connects a Zigbee2MQTT cover (a blind, shutter or curtain motor) over Zigbee2MQTT’s MQTT messages, with no function nodes. Newer than the shelly cover. If your palette has no zigbee2mqtt cover node, your version of the package does not include it yet. zigbee2mqtt cover settings Setting Default What to set Base topic zigbee2mqtt Zigbee2MQTT’s base topic, unless you changed it in Zigbee2MQTT’s settings. Friendly name None: required The device’s friendly name in Zigbee2MQTT (or its IEEE address if it has none). Neither setting can contain + or # . With no Name , the node is labelled with the friendly name. zigbee2mqtt cover topics Topic Direction Carries <base>/<friendly name> MQTT in → adapter The device’s whole state as JSON. <base>/<friendly name>/availability MQTT in → adapter {\"state\": \"online\"} or {\"state\": \"offline\"} , or plain online / offline . <base>/<friendly name>/set Adapter → MQTT out Position and open, close or stop commands. <base>/<friendly name>/get Adapter → MQTT out A request for a fresh reading. Add two MQTT in nodes. Subscribe one to <base>/<friendly name> and another to <base>/<friendly name>/availability , both with output auto-detect, and wire both to the adapter. The base is zigbee2mqtt unless you changed it. Turn on availability in Zigbee2MQTT. Availability needs Zigbee2MQTT’s availability setting. Without it, the cover is taken as available. Wire the loop. Controller output 1 to the adapter, adapter output 1 to an MQTT out node with no topic, adapter output 2 back to the controller. Choose the controller’s cover type. See which cover type fits below. The adapter reads each state report like this: Position comes from position , 0 closed and 100 open as Zigbee2MQTT reports by default. If yours runs the other way, set Invert positions on the controller, or the device’s invert_cover option. Motion comes from motor_state ( opening , closing , stopped ; a pause reads as stopped), from moving ( UP , DOWN , STOP ), or from running when it is false . A cover that reports none is confirmed by the controller’s Settle time . End state , for a cover with no position, comes from Zigbee2MQTT’s OPEN or CLOSE , but only once its motion says it has stopped: before that, the state can show where it is going rather than where it is. Time : observedAt is when the report arrived, never a time the device gives. Battery and charging status are passed on as reported facts; the controller never acts on them."
+ },
+ {
+  "title": "Connect a cover device",
+  "section": "Choose the controller’s cover type",
+  "description": "The controller’s Cover setting must match what the device reports. Which cover type fits The device Set Cover ",
+  "url": "guide-device-adapters.html#cover-type",
+  "text": "The controller’s Cover setting must match what the device reports. Which cover type fits The device Set Cover to How a move is confirmed Reports a position (any shelly cover; a zigbee2mqtt cover that reports position ) Takes a position (0 to 100) A stopped report at the target, or the same position for the settle time. Reports no position (a zigbee2mqtt cover with only OPEN / CLOSE ) Open, close and stop only A reported end state, or a move that ran for its Full travel time . With no motion reports either, it cannot be confirmed, and the controller says so. If a position cover receives a reading with no position, the controller’s error says to set Cover to Open, close and stop only ."
+ },
+ {
+  "title": "Connect a cover device",
+  "section": "What each adapter sends",
+  "description": "You send requests such as \"open\" , 60 or \"stop\" to the controller, as in the covers guide . The controller tur",
+  "url": "guide-device-adapters.html#commands",
+  "text": "You send requests such as \"open\" , 60 or \"stop\" to the controller, as in the covers guide . The controller turns them into neutral commands, and the adapter sends these: Neutral command to device message Controller command shelly cover, on <prefix>/command/cover:<id> zigbee2mqtt cover set_position pos,<0-100> {\"position\": <0-100>} on …/set open / close Not translated {\"state\": \"OPEN\"} / {\"state\": \"CLOSE\"} on …/set stop stop {\"state\": \"STOP\"} on …/set observe status_update : the device reports a fresh status {\"position\": \"\"} on …/get , or {\"state\": \"\"} for a cover with no position Some Zigbee2MQTT devices cannot be read through …/get ; they still report their position whenever it changes. Inject → cover controller · read the cover after a deploy msg.cover = {kind: \"startup\"}; return msg; On startup the controller reads the cover again rather than trusting old state, so the adapter sends its observe message."
+ },
+ {
+  "title": "Connect a cover device",
+  "section": "Choose an adapter",
+  "description": "shelly cover A Gen2-or-later relay device in cover mode, calibrated on the device. Position covers only. One M",
+  "url": "guide-device-adapters.html#choose",
+  "text": "shelly cover A Gen2-or-later relay device in cover mode, calibrated on the device. Position covers only. One MQTT in node on <prefix>/# . zigbee2mqtt cover A Zigbee cover paired with Zigbee2MQTT. Position covers, or open, close and stop only. Two MQTT in nodes: the device topic and its availability. For any other device, the controller’s neutral commands and readings are the contract to map to."
+ },
+ {
+  "title": "Connect a cover device",
+  "section": "Check the result",
+  "description": "Wire controller output 2 to a Debug node, then watch the adapter’s node status as well. Read the outcome What ",
+  "url": "guide-device-adapters.html#check",
+  "text": "Wire controller output 2 to a Debug node, then watch the adapter’s node status as well. Read the outcome What you see What it means Adapter status “waiting for the device” No device message has arrived yet. Check the MQTT in topics and the broker. zigbee2mqtt cover status as a position (such as 60% ), an end state, or a motion with a position Reports are arriving and being read. zigbee2mqtt cover status “online” / “offline” The last message was an availability report. shelly cover status The cover’s last state and position. Controller result not-calibrated / position-unknown A shelly cover cannot provide a usable position. Calibrate it on the device. Controller result unavailable The device is offline. No command is sent; it is read again when it returns. No command reaches the device Check that the MQTT out node has no topic set and uses the same broker. For a shelly cover, check Enable MQTT Control . Importable examples are in the package’s examples folder ( Import → Examples in the editor): Shelly cover.json and Cover control.json (a Zigbee2MQTT cover). In each, injects stand in for the MQTT in nodes and a Debug node stands in for MQTT out. See also the README Covers section and the cover controller reference . Sources: README Covers; shelly cover, zigbee2mqtt cover and cover controller editor help; the Shelly cover and Cover control example flows."
+ },
+ {
   "title": "Cover controller",
   "description": "Message shapes, output ports and settings for one blind, shutter or curtain. Position-aware confirmation without fighting manual moves.",
   "url": "node-cover-controller.html",
@@ -143,47 +521,6 @@ window.DOCS_SEARCH = [
   "description": "For a motor without a reliable position, set Cover to “Open, close and stop only”. Positions and presets are i",
   "url": "node-cover-controller.html#open-close",
   "text": "For a motor without a reliable position, set Cover to “Open, close and stop only”. Positions and presets are ignored. Commands on output 1 become open , close , stop or observe . Report msg.cover = {kind: \"observed\", motion, state, observedAt} . A reported end state ( open or closed ) confirms the move. Otherwise, a move in the requested direction that stops after the full travel time is explicitly judged by travel time . Stopping early or moving the other way is treated as a person’s move. If the motor reports nothing, the result stays unconfirmed and fails with no-reports after the retry limit. Source: cover-controller editor defaults and help; README Covers. The shelly cover wiring is in the cover guide ."
- },
- {
-  "title": "Home theatre",
-  "description": "Activity orchestration across display, receiver, source, lighting and backlighting, with observed completion.",
-  "url": "home-theatre.html",
-  "text": "A reusable controller contract for coordinating target owners from explicit activity requests and fresh observations."
- },
- {
-  "title": "Home theatre",
-  "section": "Composed target owners",
-  "description": "The activity layer emits semantic intent. Each target controller retains its own safe sequencing, transport an",
-  "url": "home-theatre.html#targets",
-  "text": "The activity layer emits semantic intent. Each target controller retains its own safe sequencing, transport and confirmation policy. Display Mode and power intent Receiver Power, source and bounded volume ownership Media source Capability and readiness Room lighting Ownership-preserving style Backlighting Observed power state"
- },
- {
-  "title": "Home theatre",
-  "section": "Activity lifecycle",
-  "description": "Every request receives a monotonic generation. Delayed work from older generations cannot mutate current state",
-  "url": "home-theatre.html#lifecycle",
-  "text": "Every request receives a monotonic generation. Delayed work from older generations cannot mutate current state. Requested Validate identity and activity. Preparing Refresh target evidence. Transitioning Dispatch semantic target intent. Confirming Require fresh mandatory evidence. Terminal Report ready, waiting or failed."
- },
- {
-  "title": "Home theatre",
-  "section": "Behavioral guarantees",
-  "description": "Stale work is inert Timers, command results and observations carry generation identity and cannot complete a n",
-  "url": "home-theatre.html#guarantees",
-  "text": "Stale work is inert Timers, command results and observations carry generation identity and cannot complete a newer request. Readiness is honest Mandatory targets require fresh observations. Unsupported or unobservable capabilities remain explicit. Manual control is preserved Unsolicited target changes become ownership evidence rather than a reason to fight the user. Volume control has one owner Absolute and relative requests share receiver bounds, observed confirmation and an explicit release point for later manual adjustment. Recovery is bounded Restart refreshes observations without blindly replaying state-changing commands. Failure is actionable Retries, fallback use, target availability and transition latency remain visible through one state contract. Policies stay transport-neutral Activity profiles name semantic outcomes; adapters own protocol-specific operations."
- },
- {
-  "title": "Home theatre",
-  "section": "Public contract",
-  "description": "Node-RED adapters bridge the pure reducer to MQTT and Home Assistant without moving policy into flow wiring. P",
-  "url": "home-theatre.html#contract",
-  "text": "Node-RED adapters bridge the pure reducer to MQTT and Home Assistant without moving policy into flow wiring. Public contract Surface Contract Invariant Request Unique request ID, configured activity and timestamp Retained requests are inert Desired state Activity and generation One current request identity Target evidence Status, observation time, classification and failure Older evidence cannot overwrite newer evidence Outcome Current activity, phase, availability and failure Ready requires all mandatory targets Operations Latency, retries, fallbacks, outcomes and objective status Expected waiting does not become a false failure"
- },
- {
-  "title": "Home theatre",
-  "section": "Source-level proof",
-  "description": "The package test suite covers successful activities, optional degradation, mandatory failure, restart, superse",
-  "url": "home-theatre.html#proof",
-  "text": "The package test suite covers successful activities, optional degradation, mandatory failure, restart, supersession, stale results, manual ownership, recovery and rolling operational objectives. Privacy boundary This reference describes generalized code behavior only. It intentionally omits device models, room names, addresses, entity identifiers, flow exports, activity history and operational records."
  },
  {
   "title": "Contract examples",

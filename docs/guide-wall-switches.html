@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Wire wall switches · Node-RED Home Automation</title>
+<meta name="description" content="">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar"><a class="brand" href="index.html"><span class="mark" aria-hidden="true">HA</span>Node-RED Home Automation</a><span class="version">5.0.0</span><button class="menu-button" id="menu-button" aria-controls="menu-drawer" aria-expanded="false">Menu</button><div class="search"><label class="sr-only" for="doc-search">Search the documentation</label><input id="doc-search" type="search" placeholder="Search the documentation…" autocomplete="off" aria-controls="search-results"><p class="sr-only" id="search-status" role="status"></p><div class="search-results" id="search-results" hidden></div></div><a class="source" href="https://github.com/avantics-hq/node-red-home-automation">Source ↗</a></header>
+<dialog id="menu-drawer" aria-labelledby="drawer-title"><div class="drawer-head"><strong id="drawer-title">Documentation</strong><button id="menu-close" autofocus>Close</button></div><nav class="doc-nav" aria-label="Documentation"><div class="nav-group"><p class="nav-label">Get started</p><a href="index.html">Introduction</a><a href="index.html#install">Install</a><a href="guide-room-lighting.html">Your first room</a><a href="index.html#core-ideas">Core ideas</a></div><div class="nav-group"><p class="nav-label">Guides</p><a href="guide-room-lighting.html">Room lighting</a><a href="guide-motion-occupancy.html">Motion and occupancy</a><a href="guide-wall-switches.html" aria-current="page">Wall switches</a><a href="guide-house-schedule.html">House schedule</a><a href="guide-covers.html">Covers</a><a href="home-theatre.html">Home theatre</a><a href="guide-home-assistant.html">Home Assistant</a><a href="guide-device-adapters.html">Device adapters</a></div><div class="nav-group"><p class="nav-label">Node reference</p><details open><summary>Lighting</summary><a href="guide-room-lighting.html#settings">Room controller</a><a href="guide-motion-occupancy.html#settings">Motion policy</a><a href="guide-wall-switches.html#settings">Switch policy</a></details><details><summary>Sensors and schedule</summary><a href="guide-motion-occupancy.html#wiring">Occupancy fusion</a><a href="guide-house-schedule.html#before">House schedule</a><a href="guide-house-schedule.html#changes">House schedule MQTT</a></details><details><summary>Covers</summary><a href="node-cover-controller.html">Cover controller</a><a href="guide-covers.html#groups">Cover group</a></details><details><summary>Home theatre</summary><a href="https://github.com/avantics-hq/node-red-home-automation#receiver-volume-ownership">AVR controller</a><a href="https://github.com/avantics-hq/node-red-home-automation#home-theatre-equipment">Display mode</a><a href="https://github.com/avantics-hq/node-red-home-automation#home-theatre-equipment">Source capability</a><a href="https://github.com/avantics-hq/node-red-home-automation#home-theatre-equipment">Backlighting</a><a href="https://github.com/avantics-hq/node-red-home-automation#theatre-activities">Activity controller</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-light-control">Activity lighting</a><a href="https://github.com/avantics-hq/node-red-home-automation#theatre-mqtt-contract">State contract</a></details><details><summary>Adapters</summary><a href="guide-device-adapters.html#shelly-cover">Shelly cover</a><a href="guide-device-adapters.html#zigbee2mqtt">Zigbee2MQTT cover</a></details></div><div class="nav-group"><p class="nav-label">Contracts</p><a href="https://github.com/avantics-hq/node-red-home-automation#theatre-mqtt-contract">Theatre MQTT topics</a><a href="contract-examples.html">Contract examples</a></div><div class="nav-group"><p class="nav-label">Project</p><a href="https://github.com/avantics-hq/node-red-home-automation#install">Releases and upgrading</a><a href="roadmap.html">Roadmap</a><a href="https://github.com/avantics-hq/node-red-home-automation/blob/main/CONTRIBUTING.md">Contributing</a></div></nav></dialog>
+<div class="layout"><aside class="sidebar"><nav class="doc-nav" aria-label="Documentation"><div class="nav-group"><p class="nav-label">Get started</p><a href="index.html">Introduction</a><a href="index.html#install">Install</a><a href="guide-room-lighting.html">Your first room</a><a href="index.html#core-ideas">Core ideas</a></div><div class="nav-group"><p class="nav-label">Guides</p><a href="guide-room-lighting.html">Room lighting</a><a href="guide-motion-occupancy.html">Motion and occupancy</a><a href="guide-wall-switches.html" aria-current="page">Wall switches</a><a href="guide-house-schedule.html">House schedule</a><a href="guide-covers.html">Covers</a><a href="home-theatre.html">Home theatre</a><a href="guide-home-assistant.html">Home Assistant</a><a href="guide-device-adapters.html">Device adapters</a></div><div class="nav-group"><p class="nav-label">Node reference</p><details open><summary>Lighting</summary><a href="guide-room-lighting.html#settings">Room controller</a><a href="guide-motion-occupancy.html#settings">Motion policy</a><a href="guide-wall-switches.html#settings">Switch policy</a></details><details><summary>Sensors and schedule</summary><a href="guide-motion-occupancy.html#wiring">Occupancy fusion</a><a href="guide-house-schedule.html#before">House schedule</a><a href="guide-house-schedule.html#changes">House schedule MQTT</a></details><details><summary>Covers</summary><a href="node-cover-controller.html">Cover controller</a><a href="guide-covers.html#groups">Cover group</a></details><details><summary>Home theatre</summary><a href="https://github.com/avantics-hq/node-red-home-automation#receiver-volume-ownership">AVR controller</a><a href="https://github.com/avantics-hq/node-red-home-automation#home-theatre-equipment">Display mode</a><a href="https://github.com/avantics-hq/node-red-home-automation#home-theatre-equipment">Source capability</a><a href="https://github.com/avantics-hq/node-red-home-automation#home-theatre-equipment">Backlighting</a><a href="https://github.com/avantics-hq/node-red-home-automation#theatre-activities">Activity controller</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-light-control">Activity lighting</a><a href="https://github.com/avantics-hq/node-red-home-automation#theatre-mqtt-contract">State contract</a></details><details><summary>Adapters</summary><a href="guide-device-adapters.html#shelly-cover">Shelly cover</a><a href="guide-device-adapters.html#zigbee2mqtt">Zigbee2MQTT cover</a></details></div><div class="nav-group"><p class="nav-label">Contracts</p><a href="https://github.com/avantics-hq/node-red-home-automation#theatre-mqtt-contract">Theatre MQTT topics</a><a href="contract-examples.html">Contract examples</a></div><div class="nav-group"><p class="nav-label">Project</p><a href="https://github.com/avantics-hq/node-red-home-automation#install">Releases and upgrading</a><a href="roadmap.html">Roadmap</a><a href="https://github.com/avantics-hq/node-red-home-automation/blob/main/CONTRIBUTING.md">Contributing</a></div></nav></aside><main id="main" tabindex="-1">
+<nav class="breadcrumb" aria-label="Breadcrumb"><a href="index.html">Docs</a><span aria-hidden="true">/</span><span>Guides / Wall switches</span></nav><p class="page-kind">Guides / Wall switches</p><h1>Wire wall switches</h1><p class="lead">Turn wall switch flips and button presses into lighting requests through the switch lighting policy node. A single press toggles the room’s lights; a double press sets them to full brightness and marks them as set by a person.</p>
+<details class="mobile-toc"><summary>On this page</summary><a href="#before">Before you wire it</a><a href="#wiring">Wire the switch to the room</a><a href="#presses">What each press requests</a><a href="#ownership">Presses, motion and manual lights</a><a href="#restart">Retained reports and restarts</a><a href="#settings">Settings</a><a href="#covers">Stop or open a cover from a button</a><a href="#check">Check the result</a></details>
+<div class="meta"><span class="tag">Guide</span><span class="tag">Single and double presses</span><a class="tag" href="guide-room-lighting.html">Room lighting guide →</a></div>
+<section id="before"><h2>Before you wire it</h2>
+<p>This guide adds a wall switch or button to a room that already has a <strong>room lighting controller</strong> (<code>home-room-lighting-controller</code>). The switch goes to its own node, the switch lighting policy (<code>home-switch-lighting-policy</code>, shown on the canvas as <strong>switch policy</strong>). It turns what the switch reports into <code>msg.lighting</code> intents for the room controller. It knows nothing about occupancy or motion.</p>
+<p>Every message names its kind in <code>msg.source</code>. The policy accepts three kinds:</p>
+<div class="table-wrap" role="region" aria-label="Switch messages the policy accepts; scroll horizontally on a phone" tabindex="0"><table><caption>Switch messages the policy accepts</caption><thead><tr><th scope="col"><code>msg.source</code></th><th scope="col"><code>msg.payload</code></th><th scope="col">Use it for</th></tr></thead><tbody>
+<tr><td><code>"switch"</code></td><td><code>{state: true}</code> or <code>{state: false}</code></td><td>A wall switch that reports its position (raw edges). The state must be a boolean; anything else is ignored.</td></tr>
+<tr><td><code>"switch-action"</code></td><td><code>"single"</code> or <code>"double"</code>, or an object with that <code>action</code></td><td>A button that already reports which press it saw (pre-classified actions). Case does not matter.</td></tr>
+<tr><td><code>"switch-availability"</code></td><td><code>true</code>, <code>"online"</code>, <code>"available"</code> or <code>"on"</code>; <code>false</code>, <code>"offline"</code>, <code>"unavailable"</code> or <code>"off"</code></td><td>Whether the switch device is reachable.</td></tr>
+</tbody></table></div>
+<p>A raw switch report can carry the time it was observed in <code>msg.observedAt</code> or <code>payload.observedAt</code>. Without one, the policy uses the time the message arrived.</p>
+<p>The policy commands nothing itself. The room controller sends the light commands, straight to the lights over MQTT. Home Assistant is not in this path.</p>
+</section>
+<section id="wiring"><h2>Wire the switch to the room</h2>
+<p>One switch policy feeds one room controller. Convert your switch’s reports into one of the messages above on the way in.</p>
+<figure class="diagram"><div class="wiring-flow"><div class="flow-node">MQTT in<small>Switch reports</small></div><span class="arrow" aria-hidden="true">→</span><div class="flow-node">switch policy<small>Presses → lighting intents</small></div><span class="arrow" aria-hidden="true">→</span><div class="flow-node owner controller">Room lighting controller<small>Owns the light commands</small></div><div class="flow-node broker-out" style="grid-column:1 / -1">MQTT out<small>Each light’s command topic, unchanged</small></div></div></figure>
+<div class="table-wrap" role="region" aria-label="Connections; scroll horizontally on a phone" tabindex="0"><table><caption>Connections</caption><thead><tr><th scope="col">From</th><th scope="col">Connect to</th><th scope="col">Why</th></tr></thead><tbody>
+<tr><td>Switch reports, converted</td><td>switch policy input</td><td><code>msg.source = "switch"</code> with a boolean <code>state</code>, or <code>"switch-action"</code> with the press.</td></tr>
+<tr><td>Switch availability, converted</td><td>switch policy input</td><td><code>msg.source = "switch-availability"</code>, so the policy knows when the switch is offline.</td></tr>
+<tr><td>switch policy output</td><td>Room lighting controller input</td><td>The policy’s only output carries the <code>msg.lighting</code> intents.</td></tr>
+<tr><td>Room lighting controller output</td><td>MQTT out</td><td>Wire the commands unchanged: the controller tells its own commands from other people’s by watching each light’s command topic.</td></tr>
+</tbody></table></div>
+<p>A raw switch needs its report turned into a boolean. In a Function node between MQTT in and the policy:</p>
+<div class="code-block"><div class="code-label"><span>Function → switch policy · raw switch report</span></div><pre><code>msg.source = "switch";
+msg.payload = {state: msg.payload.state === "&lt;your device’s on value&gt;"};
+return msg;</code></pre></div>
+<p>A button whose message already has an <code>action</code> of <code>single</code> or <code>double</code> needs only the source set:</p>
+<div class="code-block"><div class="code-label"><span>Function → switch policy · pre-classified button</span></div><pre><code>msg.source = "switch-action";
+return msg;</code></pre></div>
+<ol class="step-list">
+<li><strong>Match the targets.</strong><p>Set the policy’s <strong>Targets</strong> to the ids of the room controller targets the switch controls. The default is <code>["main"]</code>.</p></li>
+<li><strong>Keep the window short.</strong><p>Leave <strong>Raw-edge window ms</strong> at <code>500</code> unless two quick flips are not being seen as a double press.</p></li>
+<li><strong>Try it without a switch.</strong><p>The <a href="https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/Room%20lighting.json">Room lighting example</a> has a “wall switch edge” Inject node that sends <code>msg.source = "switch"</code> with <code>{"state":true}</code> into a switch policy wired to a room controller.</p></li>
+</ol>
+</section>
+<section id="presses"><h2>What each press requests</h2>
+<p>With raw edges, the policy times changes of the switch’s state. A change starts the raw-edge window. A second change inside it is a double press; when the window ends with no second change, it is a single press. A report that repeats the current state is not a press.</p>
+<div class="table-wrap" role="region" aria-label="Presses and requests; scroll horizontally on a phone" tabindex="0"><table><caption>Presses and requests</caption><thead><tr><th scope="col">Press</th><th scope="col">Raw switch</th><th scope="col">Pre-classified action</th><th scope="col">Intent sent</th></tr></thead><tbody>
+<tr><td>Single</td><td>One change, no second within the window</td><td><code>"single"</code></td><td><code>state: "TOGGLE"</code></td></tr>
+<tr><td>Double</td><td>Two changes within the window</td><td><code>"double"</code></td><td><code>state: "ON"</code>, <code>manual: true</code>, <code>values: {brightnessPct: 100}</code></td></tr>
+<tr><td>Anything else, such as a hold</td><td>—</td><td>Other actions</td><td>Nothing; traced as <code>unsupported-action</code></td></tr>
+</tbody></table></div>
+<p>Every intent names the policy’s targets and carries <code>source: "wall"</code> and <code>person: true</code>. A double action on the default target sends:</p>
+<div class="code-block"><div class="code-label"><span>switch policy → room lighting controller · double press</span></div><pre><code>msg.lighting = {
+  kind: "intent",
+  targets: ["main"],
+  state: "ON",
+  source: "wall",
+  person: true,
+  manual: true,
+  values: {brightnessPct: 100}
+};</code></pre></div>
+<p>The room controller resolves <code>TOGGLE</code> per light: off if it last set or saw the light on, otherwise on. A light switched on by a single press gets circadian styling when circadian lighting is on and the light is under the room’s control.</p>
+<p>A pre-classified action cancels a raw press still waiting for its window to end.</p>
+</section>
+<section id="ownership"><h2>Presses, motion and manual lights</h2>
+<p>Because every press carries <code>person: true</code>, the room controller treats it as a person’s choice:</p>
+<ul class="rule-list">
+<li><strong>Motion keeps its hands off.</strong> The motion policy’s vacancy OFF carries <code>vacantSince</code>. The room controller ignores it for a light a person set after the room went vacant (traced as <code>person-set-after-vacancy</code>).</li>
+<li><strong>Presses reach held lights.</strong> A light held by an owner, such as an activity, ignores owner-less intents like motion, but a press still reaches it.</li>
+<li><strong>A double press makes the light manual.</strong> Circadian refresh then leaves it alone. Enabling circadian lighting returns manual lights to the room’s control.</li>
+<li><strong>Switching off hands the light back.</strong> A light switched off by a person or its owner returns to <code>in-control</code>.</li>
+</ul>
+<aside class="callout neutral"><strong>Switches don’t go to the motion policy.</strong><p>Switch messages sent to the motion lighting policy are ignored. Wire switches only to the switch policy.</p></aside>
+</section>
+<section id="restart"><h2>Retained reports and restarts</h2>
+<p>The policy keeps the switch’s last known state (its baseline) in the node’s context, so a flip after a restart is still measured against it.</p>
+<ul>
+<li><strong>Retained reports are not presses.</strong> A raw report with <code>msg.retain = true</code> only re-baselines the state. A retained <code>switch-action</code> is ignored.</li>
+<li><strong>Mark a polled snapshot.</strong> Set <code>msg.baseline = true</code> on a report you asked the device for, so it updates the baseline without counting as a press.</li>
+<li><strong>Offline means start again.</strong> After the switch reports unavailable, its first report when it returns re-baselines instead of counting as a press.</li>
+</ul>
+<p>Node context is kept in memory unless you set up a context store, so a restart or redeploy clears the baseline, and the room controller forgets which lights a person set. See <a href="https://github.com/avantics-hq/node-red-home-automation#recommended-setup-a-file-context-store">Recommended setup: a file context store</a>.</p>
+</section>
+<section id="settings"><h2>Settings</h2>
+<div class="table-wrap" role="region" aria-label="switch policy settings; scroll horizontally on a phone" tabindex="0"><table><caption>switch policy settings</caption><thead><tr><th scope="col">Setting</th><th scope="col">Default</th><th scope="col">What it does</th></tr></thead><tbody>
+<tr><td><strong>Area</strong></td><td>empty</td><td>Names the node on the canvas (“&lt;Area&gt; switch policy”).</td></tr>
+<tr><td><strong>Targets</strong></td><td><code>["main"]</code></td><td>The room controller targets a press controls. A non-empty JSON array of strings.</td></tr>
+<tr><td><strong>Raw-edge window ms</strong></td><td><code>500</code></td><td>How long after a change a second change counts as a double press. Zero or more.</td></tr>
+<tr><td><strong>Input freshness seconds</strong></td><td><code>3600</code></td><td>How long since the last report before the switch shows as stale. Must be more than zero.</td></tr>
+</tbody></table></div>
+</section>
+<section id="covers"><h2>Stop or open a cover from a button</h2>
+<p>The switch policy only makes lighting intents. To make a button stop a moving cover, or open it otherwise, send its request to the cover controller with <code>msg.stopIfMoving = true</code>. See <a href="guide-covers.html#manual">Leave a person’s move alone</a> in the covers guide.</p>
+</section>
+<section id="check"><h2>Check the result</h2>
+<p>The policy’s status shows how much it trusts what it knows about the switch.</p>
+<div class="table-wrap" role="region" aria-label="Read the status; scroll horizontally on a phone" tabindex="0"><table><caption>Read the status</caption><thead><tr><th scope="col">What you see</th><th scope="col">What it means</th></tr></thead><tbody>
+<tr><td><code>switch fresh · &lt;age&gt;</code></td><td>The switch reported within the freshness time.</td></tr>
+<tr><td><code>switch stale · &lt;age&gt;</code></td><td>The last report is older than the freshness time, has no usable timestamp, or came before the flows started and nothing has confirmed it since.</td></tr>
+<tr><td><code>awaiting switch baseline</code></td><td>The policy does not yet know the switch’s state.</td></tr>
+<tr><td><code>switch unavailable</code></td><td>The switch was reported unavailable.</td></tr>
+</tbody></table></div>
+<p>Connect a Debug node to the policy’s output and press the switch: a single press shows a <code>TOGGLE</code> intent; a double press shows the full-brightness <code>ON</code> intent. Then check the room controller’s commands reach the light.</p>
+</section>
+<p class="caption">Sources: README “Room lighting” and “Room light control”; the switch lighting policy, motion lighting policy, room lighting controller and cover controller help; <code>contract-examples/switch-gestures.mjs</code>; <code>examples/Room lighting.json</code>.</p>
+<nav class="pager" aria-label="Adjacent pages"><a href="guide-motion-occupancy.html"><small>Previous</small>← Motion and occupancy</a><a href="guide-house-schedule.html"><small>Continue</small>House schedule →</a></nav>
+<footer class="page-footer"><span>Package 5.0.0 · MIT</span><a href="https://github.com/avantics-hq/node-red-home-automation#readme">Read the README ↗</a></footer>
+</main><aside class="toc" aria-label="On this page"><p>On this page</p><a href="#before">Before you wire it</a><a href="#wiring">Wire the switch to the room</a><a href="#presses">What each press requests</a><a href="#ownership">Presses, motion and manual lights</a><a href="#restart">Retained reports and restarts</a><a href="#settings">Settings</a><a href="#covers">Stop or open a cover from a button</a><a href="#check">Check the result</a></aside></div>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

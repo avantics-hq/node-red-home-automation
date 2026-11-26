@@ -46,6 +46,7 @@ const negatives = [
   "service remote.send_command and light.turn_on",
   "host localhost and http://localhost:1880",
   "topic zigbee2mqtt/bridge/state and zigbee2mqtt/<device>",
+  "page <code>zigbee2mqtt/&lt;device&gt;/set</code>",
   "public 100.63.0.1 and 100.128.0.1",
   "time 12:34:56 and version 1.2.3.4.5.6",
   "latitude: 51.5074 (four decimals)",
