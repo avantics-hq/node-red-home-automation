@@ -261,3 +261,20 @@ test("a display node saved before 5.0 keeps its meter host through the editor, a
   definition.oneditsave!.call(node);
   assert.equal(node.projectorMeterHost, "");
 });
+
+test("a receiver saved before 5.0 keeps its volume bounds through the editor, isn't invalid, and saving moves them to dB", () => {
+  const $ = dialog();
+  const definition = editorDefinition("avr-controller.html", $);
+  const node = asLoaded(definition, {type: "home-avr-controller", minVolume: 10, maxVolume: 50, publishState: false});
+  assert.deepEqual([node.minVolume, node.maxVolume], [10, 50], "kept as loaded, so the runtime still reads them");
+  const valid = (key: string) => definition.defaults[key]!.required !== true && definition.defaults[key]!.validate!.call(node, node[key]);
+  assert.deepEqual([valid("minVolumeDb"), valid("maxVolumeDb")], [true, true]);
+  definition.oneditprepare!.call(node);
+  assert.deepEqual([$.values["#node-input-minVolumeDb"], $.values["#node-input-maxVolumeDb"]], [-70, -30]);
+  definition.oneditsave!.call(node);
+  assert.deepEqual([node.minVolume, node.maxVolume], ["", ""]);
+  // Neither form, or a non-number, is invalid.
+  assert.equal(definition.defaults.minVolumeDb!.validate!.call({minVolume: ""}, ""), false);
+  assert.equal(definition.defaults.minVolumeDb!.validate!.call({}, "quiet"), false);
+  assert.equal(definition.defaults.minVolumeDb!.validate!.call({}, -60), true);
+});

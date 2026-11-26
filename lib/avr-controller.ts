@@ -5,17 +5,20 @@ import type {TraceEntry} from "./bounded-trace";
 import {numberSetting} from "./settings";
 import {asTargetStatus, targetStateEvent, type TargetStateEvent} from "./target-state";
 import {
+  formatVolumeCommand,
+  legacyVolumeDb,
+  parseAvrLine,
+  parseSourceCodes,
   POWER_ON,
   POWER_STANDBY,
   QUERY_COMMAND,
-  ZONE_ON,
-  formatVolumeCommand,
-  parseAvrLine,
-  parseSourceCodes,
   roundVolume,
   selectSource,
   type AvrPower,
-  type MainZone
+  type MainZone,
+  VOLUME_MAX_DB,
+  VOLUME_MIN_DB,
+  ZONE_ON
 } from "./denon-protocol";
 
 export {
@@ -33,9 +36,14 @@ export interface AvrConfig {
   sources: Record<string, string>;
   retryMs: number;
   maxAttempts: number;
-  minVolume: number;
-  maxVolume: number;
+  // The volume bounds, in dB.
+  minVolumeDb: number;
+  maxVolumeDb: number;
 }
+
+// Traced when a volume request gives `value` in the receiver's own units
+// rather than `valueDb`: still read during 5.x, and the node warns.
+export const LEGACY_VOLUME_UNITS = "legacy-volume-units";
 
 export interface AvrObserved {
   power: AvrPower | null;
@@ -104,6 +112,9 @@ export interface AvrState {
   lastAttempt: number;
   // The generation adopted from a refresh (see adopted-request.ts).
   adoptedGeneration: number | null;
+  // Volumes here are in dB. A state saved before 5.0 has none of this and
+  // its volumes in the receiver's own 0-98, converted as it is restored.
+  volumeUnits: "dB";
 }
 
 export type AvrInputEvent =
@@ -122,7 +133,10 @@ export type AvrInputEvent =
     kind: "volume";
     requestId: string;
     mode: AvrVolumeMode;
-    value: number;
+    // In dB: absolute, or a change for "relative". A numeric string counts.
+    valueDb?: number | string;
+    // Before 5.0: the receiver's own 0-98 for "absolute".
+    value?: number | string;
   }
   | {kind: "tick"};
 
@@ -159,6 +173,12 @@ function observedTime(value: unknown): string | null {
   return typeof value === "string" && Number.isFinite(Date.parse(value)) ? value : null;
 }
 
+// A number, or a finite numeric string, as a number; null otherwise.
+function numberValue(value: unknown): number | null {
+  const number = typeof value === "number" ? value : typeof value === "string" && value.trim() !== "" ? Number(value) : NaN;
+  return Number.isFinite(number) ? number : null;
+}
+
 export function createAvrState(
   _config: AvrConfig,
   saved: Partial<AvrState> = {}
@@ -169,13 +189,19 @@ export function createAvrState(
     ? saved.volumeRequest
     : null;
   const volumeMetrics = saved.volumeMetrics || {} as Partial<AvrVolumeMetrics>;
+  // A state saved before 5.0, from a context store, holds volumes in the
+  // receiver's units; a relative request's `requested` is a change, the same
+  // in both.
+  const savedInReceiverUnits = Object.keys(saved).length > 0 && saved.volumeUnits !== "dB";
+  const db = (value: number) => (savedInReceiverUnits ? legacyVolumeDb(value, "absolute") : value);
   return {
+    volumeUnits: "dB",
     observed: {
       power: observed.power === "on" || observed.power === "standby" ? observed.power : null,
       mainZone: observed.mainZone === "on" || observed.mainZone === "off" ? observed.mainZone : null,
       source: typeof observed.source === "string" ? observed.source : null,
       sourceCode: typeof observed.sourceCode === "string" ? observed.sourceCode : null,
-      volume: Number.isFinite(observed.volume) ? observed.volume! : null,
+      volume: Number.isFinite(observed.volume) ? db(observed.volume!) : null,
       at: typeof observed.at === "string" ? observed.at : null
     },
     fieldObservedAt: {
@@ -203,8 +229,10 @@ export function createAvrState(
       ? {
         requestId: volumeRequest.requestId,
         mode: volumeRequest.mode,
-        requested: Number(volumeRequest.requested) || 0,
-        target: Number.isFinite(volumeRequest.target) ? volumeRequest.target : null,
+        requested: volumeRequest.mode === "absolute" && Number.isFinite(volumeRequest.requested)
+          ? db(volumeRequest.requested)
+          : Number(volumeRequest.requested) || 0,
+        target: Number.isFinite(volumeRequest.target) ? db(volumeRequest.target!) : null,
         bounded: volumeRequest.bounded === true
       }
       : null,
@@ -236,16 +264,23 @@ function sameVolume(left: number | null, right: number | null): boolean {
 // failing every message.
 // Settings may be editor strings. Missing or unusable numbers take their
 // defaults: retry 2000 ms (at least 250), 3 attempts (at least 1) and volume
-// bounds 0 to 60.
-export function normaliseAvrConfig(rawConfig: {[K in keyof AvrConfig]?: unknown}): AvrConfig {
-  const rawMinVolume = numberSetting(rawConfig.minVolume, "minimum volume", 0);
-  const rawMaxVolume = numberSetting(rawConfig.maxVolume, "maximum volume", 60);
+// bounds -80 to -20 dB. A flow saved before 5.0 has minVolume and maxVolume
+// in the receiver's own 0-98, read when the dB settings are missing.
+export function normaliseAvrConfig(rawConfig: {[K in keyof AvrConfig]?: unknown} & {minVolume?: unknown; maxVolume?: unknown}): AvrConfig {
+  // The editor keeps the old keys, empty once the dialog saves dB ones.
+  const given = (value: unknown) => value !== undefined && value !== null && String(value).trim() !== "";
+  const bound = (db: unknown, legacy: unknown, label: string, fallback: number) =>
+    !given(db) && given(legacy)
+      ? legacyVolumeDb(numberSetting(legacy, label, fallback - VOLUME_MIN_DB), "absolute")
+      : numberSetting(db, label, fallback);
+  const rawMinVolume = bound(rawConfig.minVolumeDb, rawConfig.minVolume, "minimum volume", -80);
+  const rawMaxVolume = bound(rawConfig.maxVolumeDb, rawConfig.maxVolume, "maximum volume", -20);
   const minVolume = roundVolume(rawMinVolume);
   const maxVolume = roundVolume(rawMaxVolume);
   if (!Number.isFinite(rawMinVolume) || !Number.isFinite(rawMaxVolume) ||
       Math.abs(rawMinVolume - minVolume) > 0.001 || Math.abs(rawMaxVolume - maxVolume) > 0.001 ||
-      minVolume < 0 || maxVolume > 98 || minVolume >= maxVolume) {
-    throw new Error("volume bounds must be half-step values between 0 and 98 with minimum below maximum");
+      minVolume < VOLUME_MIN_DB || maxVolume > VOLUME_MAX_DB || minVolume >= maxVolume) {
+    throw new Error("volume bounds must be half-step values between -80 and 18 dB with minimum below maximum");
   }
   return {
     // Optional: an empty area means none.
@@ -253,8 +288,8 @@ export function normaliseAvrConfig(rawConfig: {[K in keyof AvrConfig]?: unknown}
     sources: parseSourceCodes(rawConfig.sources),
     retryMs: Math.max(250, numberSetting(rawConfig.retryMs, "retry interval", 2000)),
     maxAttempts: Math.max(1, Math.floor(numberSetting(rawConfig.maxAttempts, "max attempts", 3))),
-    minVolume,
-    maxVolume
+    minVolumeDb: minVolume,
+    maxVolumeDb: maxVolume
   };
 }
 
@@ -399,7 +434,7 @@ export function transitionAvr(
   }
   function clampVolume(value: number): {value: number; bounded: boolean} {
     const rounded = roundVolume(value);
-    const bounded = Math.max(config.minVolume, Math.min(config.maxVolume, rounded));
+    const bounded = Math.max(config.minVolumeDb, Math.min(config.maxVolumeDb, rounded));
     return {value: bounded, bounded: Math.abs(bounded - value) > 0.001};
   }
 
@@ -793,7 +828,20 @@ export function transitionAvr(
     }
     forceStateEvent = true;
   } else if (event.kind === "volume") {
-    const reason = validateVolumeIntent(event);
+    // In dB; a finite numeric string counts. `value` from before 5.0 is in
+    // the receiver's own units, still read during 5.x and traced so the
+    // node can warn; given with a usable valueDb, it is ignored and traced.
+    const valueDb = numberValue(event.valueDb);
+    const value = numberValue(event.value);
+    const legacyUnits = valueDb === null && event.value !== undefined;
+    const volume = {...event, value: valueDb !== null ? valueDb
+      : value !== null && (event.mode === "absolute" || event.mode === "relative") ? legacyVolumeDb(value, event.mode)
+        : value ?? NaN};
+    if (legacyUnits) trace("volume", "accepted", LEGACY_VOLUME_UNITS, {requestId: event.requestId, value: event.value});
+    if (valueDb !== null && event.value !== undefined) {
+      trace("volume", "accepted", "legacy-volume-units-ignored", {requestId: event.requestId, value: event.value});
+    }
+    const reason = validateVolumeIntent(volume);
     if (reason) {
       events.push({
         avr: {
@@ -810,30 +858,30 @@ export function transitionAvr(
     } else {
       const existing = state.volumeRequest;
       let mode = event.mode;
-      let requested = event.value;
+      let requested = volume.value;
       let target: number | null = null;
       let bounded = false;
       let boundedThisIntent = false;
 
       if (event.mode === "absolute") {
-        const resolved = clampVolume(event.value);
+        const resolved = clampVolume(volume.value);
         target = resolved.value;
         bounded = resolved.bounded;
         boundedThisIntent = resolved.bounded;
       } else if (existing?.target !== null && existing?.target !== undefined) {
-        const unresolvedTarget = existing.target + event.value;
+        const unresolvedTarget = existing.target + volume.value;
         const resolved = clampVolume(unresolvedTarget);
         mode = existing.mode;
         requested = existing.mode === "relative"
-          ? existing.requested + event.value
+          ? existing.requested + volume.value
           : unresolvedTarget;
         target = resolved.value;
         bounded = existing.bounded || resolved.bounded;
         boundedThisIntent = resolved.bounded;
       } else if (existing?.mode === "relative") {
-        requested = existing.requested + event.value;
+        requested = existing.requested + volume.value;
       } else if (state.seen.volume && state.observed.volume !== null) {
-        const resolved = clampVolume(state.observed.volume + event.value);
+        const resolved = clampVolume(state.observed.volume + volume.value);
         target = resolved.value;
         bounded = resolved.bounded;
         boundedThisIntent = resolved.bounded;
@@ -858,7 +906,7 @@ export function transitionAvr(
       trace("volume", "accepted", null, {
         requestId: event.requestId,
         mode: event.mode,
-        value: event.value,
+        value: volume.value,
         target,
         bounded
       });
@@ -956,7 +1004,7 @@ export function transitionAvr(
       classification: state.classification,
       volume: {
         request: state.volumeRequest ? {...state.volumeRequest} : null,
-        bounds: {minimum: config.minVolume, maximum: config.maxVolume},
+        bounds: {minimum: config.minVolumeDb, maximum: config.maxVolumeDb},
         metrics: {...state.volumeMetrics}
       },
       metrics: {

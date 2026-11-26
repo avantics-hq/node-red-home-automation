@@ -5,8 +5,9 @@
 // and a volume number. All of it is opt-in (see publishing-node.ts); the
 // receiver controller only commands and observes the receiver.
 
+import {VOLUME_STEP_DB} from "./denon-protocol";
 import type {AvrObserved} from "./avr-controller";
-import {areaId} from "./topic-names";
+import {homeTopic} from "./topic-names";
 import {
   discoveryEntry,
   publishesState,
@@ -18,8 +19,9 @@ import {
 
 export interface AvrPublishingConfig extends OptInPublishingConfig {
   // The configured volume bounds, which the volume number offers.
-  minVolume: number;
-  maxVolume: number;
+  // In dB.
+  minVolumeDb: number;
+  maxVolumeDb: number;
 }
 
 export type AvrPublication = RetainedText;
@@ -30,7 +32,7 @@ const FIELDS: Field[] = ["power", "source", "volume"];
 const DEVICE = {kind: "receiver", label: "Receiver", model: "AV receiver controller"};
 
 export function receiverTopic(area: string, name: string): string {
-  return "home/" + areaId(area) + "/receiver/" + name;
+  return homeTopic(area, "receiver", name);
 }
 
 // A field's state as published, or null while it isn't known.
@@ -53,9 +55,10 @@ export function avrDiscovery(config: AvrPublishingConfig): AvrPublication[] {
       icon: "mdi:volume-high",
       state_topic: receiverTopic(config.area, "volume/state"),
       command_topic: receiverTopic(config.area, "volume/set"),
-      min: config.minVolume,
-      max: config.maxVolume,
-      step: 0.5,
+      min: config.minVolumeDb,
+      max: config.maxVolumeDb,
+      step: VOLUME_STEP_DB,
+      unit_of_measurement: "dB",
       mode: "slider"
     })
   ];
@@ -73,12 +76,12 @@ export const VOLUME_SET_SETTLE_MS = 300;
 export function avrVolumeRequest(
   msg: {topic?: unknown; payload?: unknown; retain?: unknown},
   config: AvrPublishingConfig
-): {value: number} | {ignored: string; payload: string} | null {
+): {valueDb: number} | {ignored: string; payload: string} | null {
   if (!publishesState(config) || msg.topic !== receiverTopic(config.area, "volume/set")) return null;
   const text = typeof msg.payload === "string" ? msg.payload.trim() : typeof msg.payload === "number" ? String(msg.payload) : "";
   if (msg.retain === true) return {ignored: "retained-message", payload: text};
   const value = text === "" ? NaN : Number(text);
-  return Number.isFinite(value) ? {value} : {ignored: "not-a-number", payload: text};
+  return Number.isFinite(value) ? {valueDb: value} : {ignored: "not-a-number", payload: text};
 }
 
 // The observed fields that changed since `before` (all known fields when

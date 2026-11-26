@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {scheduledLighting, type CircadianLighting} from "../lib/circadian";
-import {alreadyStyled} from "../lib/z2m-light";
+import {alreadyStyled, lightCommand} from "../lib/z2m-light";
 import {DEFAULT_BED_TIME, DEFAULT_WAKE_TIME, clockMinutes, resolveSchedule, scheduleLevel} from "../lib/circadian-schedule";
 import {styleAtLevel, type LightLevels} from "../lib/light-styling";
 import {type RoomConfig} from "../lib/room-controller";
@@ -27,16 +27,20 @@ test("schedule: clock times, defaults and validation", () => {
 });
 
 test("styling: level 0 is the sleep settings, level 1 the daytime ones, colour even in mireds", () => {
-  assert.deepEqual(styleAtLevel(0, levels), {brightness: 3, color_temp: Math.round(1_000_000 / 2200)});
-  assert.deepEqual(styleAtLevel(1, levels), {brightness: 254, color_temp: Math.round(1_000_000 / 6500)});
-  assert.equal(styleAtLevel(0.5, levels).color_temp, Math.round((1_000_000 / 2200 + 1_000_000 / 6500) / 2));
+  // The style is in percent and kelvin; a Zigbee2MQTT light gets 1-254 and mireds.
+  const device = (level: number, settings = levels) => lightCommand("ON", styleAtLevel(level, settings), 0);
+  assert.deepEqual([styleAtLevel(0, levels).brightnessPct, Math.round(styleAtLevel(0, levels).colorTempKelvin)], [levels.sleepBrightnessPct, 2200]);
+  assert.deepEqual([device(0).brightness, device(0).color_temp], [3, Math.round(1_000_000 / 2200)]);
+  assert.deepEqual([device(1).brightness, device(1).color_temp], [254, Math.round(1_000_000 / 6500)]);
+  assert.equal(device(0.5).color_temp, Math.round((1_000_000 / 2200 + 1_000_000 / 6500) / 2));
   // Brightness stays on the 1-254 scale.
-  assert.equal(styleAtLevel(0, {...levels, sleepBrightnessPct: 0}).brightness, 1);
-  assert.equal(styleAtLevel(1, {...levels, maxBrightnessPct: 150}).brightness, 254);
+  assert.equal(device(0, {...levels, sleepBrightnessPct: 0}).brightness, 1);
+  assert.equal(device(1, {...levels, maxBrightnessPct: 150}).brightness, 254);
 });
 
 test("refresh rule: only a light that reports the exact style is skipped", () => {
-  const style = {brightness: 128, color_temp: 300};
+  // 128 and 300 mireds on a Zigbee2MQTT light.
+  const style = {brightnessPct: 128 * 100 / 254, colorTempKelvin: 1_000_000 / 300};
   assert.equal(alreadyStyled(style, {on: true, brightness: 128, color_temp: 300}), true);
   assert.equal(alreadyStyled(style, {on: true, brightness: "128", color_temp: "300"}), true);
   assert.equal(alreadyStyled(style, {on: true, brightness: 127, color_temp: 300}), false);
@@ -54,7 +58,7 @@ test("scheduled lighting holds the sleep settings in sleep mode", () => {
 test("the room controller uses whatever circadian lighting it is given", () => {
   // A different curve is a different implementation, not an edit to the controller.
   const fixed: CircadianLighting = {
-    styleAt: () => ({brightness: 77, color_temp: 333}),
+    styleAt: () => ({brightnessPct: 77 * 100 / 254, colorTempKelvin: 1_000_000 / 333}),
     withSchedule() { return fixed; }
   };
   const config: RoomConfig = {

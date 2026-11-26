@@ -18,13 +18,13 @@ import {
   type OptInPublishingConfig,
   type RetainedText
 } from "./publishing-node";
-import {areaId} from "./topic-names";
+import {homeTopic} from "./topic-names";
 
 type ScheduleTime = "wake-time" | "bed-time";
 
 // The one place a house schedule topic is named.
 function houseTopic(name: string, path: string): string {
-  return "home/" + areaId(name) + "/schedule/" + path;
+  return homeTopic(name, "schedule", path);
 }
 
 export const houseStateTopic = (name: string, which: ScheduleTime) => houseTopic(name, which + "/state");

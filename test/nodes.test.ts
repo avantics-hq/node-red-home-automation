@@ -46,6 +46,8 @@ interface RuntimeNode {
   statuses: unknown[];
   send(message: unknown): void;
   error(error: unknown, msg?: unknown): void;
+  warnings: unknown[];
+  warn(warning: unknown): void;
   status(status: unknown): void;
   context(): RuntimeContext;
   // What Node-RED does to the node's context once it has closed.
@@ -114,6 +116,10 @@ function runtime(
         };
         node.error = (error: unknown) => {
           node.errors.push(error);
+        };
+        node.warnings = [];
+        node.warn = (warning: unknown) => {
+          node.warnings.push(warning);
         };
         node.status = (status: unknown) => {
           node.statuses.push(status);
@@ -236,7 +242,7 @@ test("switch adapter emits gestures without motion state", async (t) => {
   });
   assert.equal(sent.length, 1);
   assert.equal(sent[0]?.lighting?.state, "ON");
-  assert.deepEqual(sent[0]?.lighting?.values, {brightness: 254});
+  assert.deepEqual(sent[0]?.lighting?.values, {brightnessPct: 100});
   assert.equal(traces(node).at(-1)?.component, "switch-policy");
   assert.equal(node.errors.length, 0);
 });
@@ -943,7 +949,7 @@ test("wired contract and activity controller never lose a request to a recovery 
 test("AVR adapter rejects a configuration the reducer would reject, at deploy", () => {
   for (const [label, overrides, reason] of [
     ["lowercase source code", {sources: "{\"shield\":\"sat/cbl\"}"}, /Denon source codes/],
-    ["minimum volume above maximum", {minVolume: 70, maxVolume: 60}, /volume bounds/]
+    ["minimum volume above maximum", {minVolumeDb: -10, maxVolumeDb: -20}, /volume bounds/]
   ] as const) {
     const {Constructor} = runtime(registerAvr);
     const node = new Constructor({
@@ -1820,11 +1826,11 @@ test("receiver publishing: off unless switched on; then power, source and volume
   assert.deepEqual(first.flatMap((envelope) => envelope[2] ?? []).map(({topic, payload}) => [topic, payload]), [
     ["home/den/receiver/power/state", "ON"],
     ["home/den/receiver/source/state", "shield"],
-    ["home/den/receiver/volume/state", "31"]
-  ]);
+    ["home/den/receiver/volume/state", "-49"]
+  ], "in dB");
   const louder = await receive<SendEnvelope>(node, {avr: {kind: "observed", line: "MV315\r"}});
   assert.deepEqual(louder.flatMap((envelope) => envelope[2] ?? []).map(({topic, payload}) => [topic, payload]),
-    [["home/den/receiver/volume/state", "31.5"]], "only what changed");
+    [["home/den/receiver/volume/state", "-48.5"]], "only what changed");
   const same = await receive<SendEnvelope>(node, {avr: {kind: "observed", line: "MV315\r"}});
   assert.deepEqual(same.flatMap((envelope) => envelope[2] ?? []), []);
   const entry = JSON.parse(String(started[0]?.payload)) as Record<string, unknown>;
@@ -1834,18 +1840,18 @@ test("receiver publishing: off unless switched on; then power, source and volume
 test("receiver volume number: a set from Home Assistant takes the receiver's own bounded, confirmed volume path", async (t) => {
   const avrRuntime = runtime(registerAvr);
   const sources = JSON.stringify({shield: "SAT/CBL"});
-  const node = new avrRuntime.Constructor({id: "a2", area: "den", sources, minVolume: 10, maxVolume: 50, publishState: true, discovery: true});
+  const node = new avrRuntime.Constructor({id: "a2", area: "den", sources, minVolumeDb: -70, maxVolumeDb: -30, publishState: true, discovery: true});
   t.after(() => close(node));
   avrRuntime.events.emit("flows:started");
   const number = ((node.sent[0] as SendEnvelope)[2] ?? []).find(({topic}) => topic === "homeassistant/number/nrha_a2_receiver_volume/config");
   const entry = JSON.parse(String(number?.payload)) as Record<string, unknown>;
-  assert.deepEqual([entry.command_topic, entry.state_topic, entry.min, entry.max, entry.step],
-    ["home/den/receiver/volume/set", "home/den/receiver/volume/state", 10, 50, 0.5]);
+  assert.deepEqual([entry.command_topic, entry.state_topic, entry.min, entry.max, entry.step, entry.unit_of_measurement],
+    ["home/den/receiver/volume/set", "home/den/receiver/volume/state", -70, -30, 0.5, "dB"]);
 
   await receive(node, {avr: {kind: "observed", line: "PWON\rZMON\rSISAT/CBL\rMV31\r"}});
   const settled = () => new Promise((resolve) => setTimeout(resolve, 350));
   let sentBefore = node.sent.length;
-  assert.deepEqual(await receive(node, {topic: "home/den/receiver/volume/set", payload: "35.0"}), [], "held while newer sets may come");
+  assert.deepEqual(await receive(node, {topic: "home/den/receiver/volume/set", payload: "-45.0"}), [], "held while newer sets may come");
   await settled();
   const commands = (node.sent.slice(sentBefore) as SendEnvelope[]).flatMap((envelope) => envelope[0] ?? []).map(({payload}) => String(payload));
   assert.deepEqual(commands, ["MV35\r"], "sent to the receiver as any volume request is");
@@ -1853,11 +1859,11 @@ test("receiver volume number: a set from Home Assistant takes the receiver's own
   const results = confirmed.flatMap((envelope) => envelope[1] ?? []).map((message) => (message as {avr?: {kind: string}}).avr?.kind);
   assert.ok(results.includes("volume_ready"), JSON.stringify(results));
   assert.deepEqual(confirmed.flatMap((envelope) => envelope[2] ?? []).map(({topic, payload}) => [topic, payload]),
-    [["home/den/receiver/volume/state", "35"]], "Home Assistant sees the confirmed volume");
+    [["home/den/receiver/volume/state", "-45"]], "Home Assistant sees the confirmed volume");
 
   for (const [msg, reason] of [
     [{topic: "home/den/receiver/volume/set", payload: "loud"}, "not-a-number"],
-    [{topic: "home/den/receiver/volume/set", payload: "20", retain: true}, "retained-message"]
+    [{topic: "home/den/receiver/volume/set", payload: "-60", retain: true}, "retained-message"]
   ] as const) {
     assert.deepEqual(await receive(node, msg), [], reason);
     assert.equal(traces(node).at(-1)?.reason, reason);
@@ -1866,10 +1872,43 @@ test("receiver volume number: a set from Home Assistant takes the receiver's own
   // With the receiver off, the request is rejected the usual way.
   await receive(node, {avr: {kind: "observed", line: "PWSTANDBY\r"}});
   sentBefore = node.sent.length;
-  await receive(node, {topic: "home/den/receiver/volume/set", payload: "20"});
+  await receive(node, {topic: "home/den/receiver/volume/set", payload: "-60"});
   await settled();
   const rejected = (node.sent.slice(sentBefore) as SendEnvelope[]).flatMap((envelope) => envelope[1] ?? []).map((message) => (message as {avr?: {kind: string; reason?: string}}).avr);
   assert.ok(rejected.some((avr) => avr?.kind === "volume_rejected" && avr.reason === "receiver-not-ready"), JSON.stringify(rejected));
+});
+
+test("receiver node: volume bounds and requests saved before 5.0 still work, with one warning", async (t) => {
+  const avrRuntime = runtime(registerAvr);
+  // Bounds in the receiver's own 0-98, as an older flow saved them.
+  const node = new avrRuntime.Constructor({id: "a4", area: "den", sources: JSON.stringify({shield: "SAT/CBL"}), minVolume: 10, maxVolume: 50,
+    publishState: true, discovery: true});
+  t.after(() => close(node));
+  avrRuntime.events.emit("flows:started");
+  const number = ((node.sent[0] as SendEnvelope)[2] ?? []).find(({topic}) => topic === "homeassistant/number/nrha_a4_receiver_volume/config");
+  const entry = JSON.parse(String(number?.payload)) as Record<string, unknown>;
+  assert.deepEqual([entry.min, entry.max], [-70, -30]);
+  await receive(node, {avr: {kind: "observed", line: "PWON\rZMON\rSISAT/CBL\rMV31\r"}});
+  const send = async (requestId: string, value: number) => (await receive<SendEnvelope>(node, {avr: {kind: "volume", requestId, mode: "absolute", value}}))
+    .flatMap((envelope) => envelope[0] ?? []).map(({payload}) => String(payload));
+  assert.deepEqual(await send("old-1", 60), ["MV50\r"], "bounded by the old maximum");
+  await send("old-2", 40);
+  assert.equal(node.warnings.length, 1, "once per deploy");
+  assert.match(String(node.warnings[0]), /valueDb/);
+});
+
+test("receiver node: a volume saved before 5.0 by a context store is published in dB as it starts", async (t) => {
+  const avrRuntime = runtime(registerAvr, {}, STORE);
+  const config = {id: "a5", area: "den", sources: JSON.stringify({shield: "SAT/CBL"}), publishState: true};
+  const before = new avrRuntime.Constructor(config);
+  // As 4.x saved it: the receiver's own 31, no units marker.
+  before.context().set("state", {observed: {power: "on", mainZone: "on", source: "shield", sourceCode: "SAT/CBL", volume: 31, at: null}});
+  await close(before);
+  const node = new avrRuntime.Constructor(config);
+  t.after(() => close(node));
+  avrRuntime.events.emit("flows:started");
+  const started = (node.sent.at(-1) as SendEnvelope)[2] ?? [];
+  assert.deepEqual(started.filter(({topic}) => String(topic).endsWith("volume/state")).map(({payload}) => payload), ["-49"]);
 });
 
 test("receiver volume number: a burst of sets becomes one request for the last value", async (t) => {
@@ -1879,7 +1918,7 @@ test("receiver volume number: a burst of sets becomes one request for the last v
   await receive(node, {avr: {kind: "observed", line: "PWON\rZMON\rSISAT/CBL\rMV31\r"}});
   const before = node.sent.length;
   for (let step = 0; step < 10; step += 1) {
-    await receive(node, {topic: "home/den/receiver/volume/set", payload: String(32 + step)});
+    await receive(node, {topic: "home/den/receiver/volume/set", payload: String(-48 + step)});
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   await new Promise((resolve) => setTimeout(resolve, 350));
@@ -2225,4 +2264,26 @@ test("cover node publishing: a Home Assistant cover entity, its state as it chan
   // Anything else on its set topics is ignored, with a trace.
   assert.deepEqual(await receive(node, {topic: "home/bedroom/cover/left/set", payload: "SIDEWAYS"}), []);
   assert.equal(traces(node).at(-1)?.reason, "not-open-close-or-stop");
+});
+
+test("room node: lighting values in Zigbee2MQTT's units still work during 5.x, with one warning", async (t) => {
+  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
+  const node = new (runtime(registerRoom).Constructor)({id: "legacy-units", targets, area: "", publishState: false, discovery: false});
+  t.after(() => close(node));
+  const send = async (values: Record<string, unknown>) => ((await receive<SendEnvelope>(node, {lighting: {kind: "intent", state: "ON", manual: true, values}}))[0]?.[0] ?? [])
+    .map((message) => message.payload);
+  // The package's own units, converted for the light.
+  assert.deepEqual(await send({brightnessPct: 50, colorTempKelvin: 2500}), [{state: "ON", brightness: 127, color_temp: 400, transition: 1}]);
+  assert.deepEqual(node.warnings, []);
+  // Zigbee2MQTT's units, passed on as they are, and one warning however often.
+  assert.deepEqual(await send({brightness: 64, color_temp: 400}), [{state: "ON", brightness: 64, color_temp: 400, transition: 1}]);
+  await send({brightness: 64});
+  assert.equal(node.warnings.length, 1);
+  assert.match(String(node.warnings[0]), /brightnessPct .* colorTempKelvin/);
+  // Both forms: the new one wins, and an unusable value is left out with one more warning.
+  assert.deepEqual(await send({brightness: 10, brightnessPct: 50}), [{state: "ON", brightness: 127, transition: 1}]);
+  assert.deepEqual(await send({brightnessPct: "lots", colorTempKelvin: 2500}), [{state: "ON", color_temp: 400, transition: 1}]);
+  await send({colorTempKelvin: 0});
+  assert.equal(node.warnings.length, 2);
+  assert.match(String(node.warnings[1]), /left out/);
 });

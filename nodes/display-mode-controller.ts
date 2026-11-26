@@ -15,7 +15,7 @@ import {
   type DisplayMessage,
   type DisplayState
 } from "../lib/display-mode-controller";
-import {DisplayTransport} from "../lib/display-transport";
+import {DisplayTransport} from "../lib/transports/display-transport";
 import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
 import {numberSetting, textSetting} from "../lib/settings";
 

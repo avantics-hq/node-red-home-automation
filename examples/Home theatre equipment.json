@@ -40,8 +40,8 @@
     "sources": "{\"shield\":\"SAT/CBL\",\"playstation\":\"GAME\"}",
     "retryMs": 2000,
     "maxAttempts": 3,
-    "minVolume": 0,
-    "maxVolume": 60,
+    "minVolumeDb": -80,
+    "maxVolumeDb": -20,
     "x": 420,
     "y": 100,
     "wires": [

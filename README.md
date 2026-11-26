@@ -200,10 +200,29 @@ also attaches the package tarball and its SHA-256 checksum. Install a downloaded
 tarball through **Manage palette → Install → Upload module**, or with:
 
 ```sh
-npm install /path/to/avantics-node-red-home-automation-4.0.1.tgz
+npm install /path/to/avantics-node-red-home-automation-4.0.3.tgz
 ```
 
 Add the installed nodes from the **home automation** section of the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.
+
+### 4.0.3
+
+Fixes the theatre state flapping on every scheduled refresh: with an activity
+settled and ready, backlighting and room lighting reported themselves as
+confirming while they re-read their devices, so the theatre published
+`unknown` and back, and counted drift each time. A refresh of a ready target
+now re-reads it without leaving ready, as the display, receiver and source
+already did. A target that really changes on its own still counts as drift.
+
+### 4.0.2
+
+Fixes the display controller switching the TV off before the projector was
+ready: with a source playing, there was sound but no picture while the screen
+opened and the projector warmed up. Projector mode now starts the projector and
+waits for its warm-up, opens the screen, then puts the TV in standby, so the
+picture stays up and the TV stays on if the projector fails to start. A request
+made while the projector is warming up or cooling down now waits for that to
+finish, so the lamp is no longer left on or toggled mid-warm-up.
 
 ### 4.0.1
 
@@ -458,10 +477,20 @@ msg.lighting = {
   state: "ON",
   source: "activity",
   owner: "theatre",
-  values: {brightness: 64, color_temp: 400},
+  values: {brightnessPct: 25, colorTempKelvin: 2500},
   preserveManual: true
 };
 ```
+
+An intent's `values` use the package's own units: `brightnessPct` (0-100) and
+`colorTempKelvin`. The room controller converts them for the light (for a
+Zigbee2MQTT light, to its 1-254 brightness and mireds); other fields, such as
+`effect`, are passed on as they are. `brightnessPct: 0` is the dimmest the
+light goes, not off: send `state: "OFF"` to switch it off. A value that isn't a
+number (a numeric string such as `"50"` counts), or a colour temperature of 0
+or less, is left out with a warning in the log. During 5.x, `brightness` and `color_temp`
+in Zigbee2MQTT's own units are still accepted and passed on unchanged, and the
+room controller logs a warning once per deploy; they stop working in 6.0.
 
 `home-activity-lighting-controller` does this itself: while a profile is active
 it overrides that profile's lights under its configured owner (default
@@ -519,9 +548,17 @@ msg.avr = {
   kind: "volume",
   requestId: "volume-control-1",
   mode: "relative",
-  value: 1
+  valueDb: 1
 };
 ```
+
+Volume is in dB: `valueDb` is the volume for `absolute`, or the change for
+`relative`, and the bounds, results, published state and Home Assistant
+number are in dB too. The controller converts for the receiver (for a Denon,
+whose 0-98 has 80 at 0 dB, -80 to +18 dB in half steps). During 5.x, a request
+with `value` in the receiver's own 0-98, and bounds saved before 5.0 as
+**minVolume** and **maxVolume**, are still read, and the node logs a warning
+once per deploy for such requests; they stop working in 6.0.
 
 `mode` may be `absolute` or `relative`. The controller resolves relative input
 from fresh observed volume, accumulates rapid requests against the pending

@@ -78,6 +78,11 @@
 
 <script type="text/html" data-help-name="home-display-mode-controller">
   <p>Owns Bravia power, projector lamp power and projector-screen position for <code>off</code>, <code>tv</code> and <code>projector</code> modes.</p>
+  <p>Switching between the TV and the projector is make before break, so a source that is already playing keeps a
+    picture: for the projector, the lamp starts and warms up, then the screen opens, and the TV goes to standby last;
+    for the TV, it comes on before the projector shuts down and the screen closes. If the projector fails to start, the
+    TV is left on. A projector warming up or cooling down finishes before a newer request changes it; if it doesn't finish in time, the
+    newer request carries on from what the projector then reports.</p>
   <p>Send <code>msg.display = {kind: "intent", requestId, generation, mode}</code>. Send <code>kind: "startup"</code> after deployment to query every owned device and reconcile persisted intent. Send <code>kind: "refresh"</code> to re-confirm a settled display from fresh readings.</p>
   <p>Each device is reached directly over its LAN API. The <b>TV host</b> is a Sony Bravia with IP control and a
     pre-shared key. The <b>Screen controller host</b> is a Shelly Gen2 cover (its <code>Cover</code> RPC). The
