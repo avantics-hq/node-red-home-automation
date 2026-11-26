@@ -65,7 +65,8 @@ interface ScreenObservation extends DeviceObservation {
 }
 
 interface ProjectorObservation extends DeviceObservation {
-  watts: number;
+  // Null when the reading gave the power state rather than a meter's watts.
+  watts: number | null;
   power: PowerReading;
 }
 
@@ -117,6 +118,9 @@ export interface DisplayState {
   fallbackUsed: boolean;
   // The generation adopted from a refresh (see adopted-request.ts).
   adoptedGeneration: number | null;
+  // While discovering: when to re-query a device that hasn't reported, and
+  // after maxAttempts, fail naming it. Absent otherwise.
+  discovery?: {attempt: number; nextAt: number};
 }
 
 export type DisplayInputEvent =
@@ -174,7 +178,8 @@ function initialState(saved: Partial<DisplayState> = {}): DisplayState {
       ? saved.lastAttempt!
       : 0,
     fallbackUsed: saved.fallbackUsed === true,
-    adoptedGeneration: savedAdoptedGeneration(saved)
+    adoptedGeneration: savedAdoptedGeneration(saved),
+    ...(saved.discovery && Number.isFinite(saved.discovery.nextAt) ? {discovery: {...saved.discovery}} : {})
   };
 }
 
@@ -188,6 +193,35 @@ export function classifyProjectorPower(
     onWatts: Number(config.projectorOnWatts ?? 20),
     offWatts: Number(config.projectorOffWatts ?? 10)
   });
+}
+
+// What a projector power reading says: a meter's watts, classified against
+// the on and standby watts, or the state itself from any adapter. A
+// "transitioning" lamp is read as a reading between the two would be: it
+// keeps its last settled state, or is transitioning if it has none. Given
+// both, the state wins and the watts are kept for reporting.
+const PROJECTOR_POWER_STATES = ["on", "standby", "transitioning"];
+
+function projectorReading(
+  event: {power?: unknown; watts?: unknown},
+  previous: ProjectorObservation["power"],
+  config: DisplayConfig
+): {watts: number | null; power: ProjectorObservation["power"]} {
+  const watts = event.watts === undefined ? null : Number(event.watts);
+  if (watts !== null && (!Number.isFinite(watts) || watts < 0)) throw new Error("invalid projector power observation");
+  if (event.power === undefined) {
+    if (watts === null) throw new Error("invalid projector power observation");
+    return {watts, power: classifyProjectorPower(watts, previous, config)};
+  }
+  // Lower case only. A smart plug's own ON and OFF are its relay, not the
+  // lamp: a projector in standby on a switched-on plug would read as on, and
+  // a request for TV mode would then toggle it on. So they fail as invalid.
+  const power = typeof event.power === "string" ? event.power.trim() : "";
+  if (!PROJECTOR_POWER_STATES.includes(power)) {
+    throw new Error("projector power must be on, standby or transitioning");
+  }
+  const settled = previous === "on" || previous === "standby" ? previous : "transitioning";
+  return {watts, power: power === "transitioning" ? settled : power as ProjectorObservation["power"]};
 }
 
 function statusFor(state: DisplayState) {
@@ -343,6 +377,7 @@ export function transitionDisplay(
 
   function fail(device: DisplayDevice, operation: string, reason: string) {
     state.pending = null;
+    delete state.discovery;
     state.phase = "failed";
     state.blockedGeneration = state.desired?.generation || state.generation;
     state.failure = {device, operation, reason, occurredAt: iso(now)};
@@ -420,6 +455,7 @@ export function transitionDisplay(
 
   function beginDiscovery() {
     state.phase = "discovering";
+    if (!state.discovery) state.discovery = {attempt: 1, nextAt: now.getTime() + config.queryTimeoutMs};
     for (const device of DEVICES) {
       if (!state.seen[device] && !state.querying[device]) {
         state.querying[device] = true;
@@ -537,15 +573,8 @@ export function transitionDisplay(
       if (!Number.isFinite(position) || position < 0 || position > 100) throw new Error("invalid screen position");
       state.observed.screen = {position, state: event.state || "unknown", observedAt, source};
     } else {
-      const watts = Number(event.watts);
-      if (!Number.isFinite(watts) || watts < 0) throw new Error("invalid projector power observation");
       const previous = state.observed.projector?.power || "unknown";
-      state.observed.projector = {
-        watts,
-        power: classifyProjectorPower(watts, previous, config),
-        observedAt,
-        source
-      };
+      state.observed.projector = {...projectorReading(event, previous, config), observedAt, source};
     }
     state.seen[device] = true;
     observationAccepted = true;
@@ -581,7 +610,36 @@ export function transitionDisplay(
     }
   }
 
+  // A device that hasn't reported by the query timeout is asked again, up to
+  // maxAttempts in all; then the request fails naming it, rather than
+  // waiting in discovering for a reading that may never come.
+  function discoveryDue(event: Extract<DisplayInputEvent, {kind: "tick"}>): boolean {
+    const discovery = state.discovery;
+    if (!discovery || now.getTime() < discovery.nextAt) return false;
+    if (Number.isInteger(event.generation) && state.desired && event.generation !== state.desired.generation) return false;
+    const unseen = DEVICES.filter((device) => !state.seen[device]);
+    if (unseen.length === 0) {
+      delete state.discovery;
+      return false;
+    }
+    if (discovery.attempt < config.maxAttempts) {
+      discovery.attempt += 1;
+      discovery.nextAt = now.getTime() + config.queryTimeoutMs;
+      for (const device of unseen) commands.push({...queryFor(state, device), attempt: discovery.attempt});
+      trace("discovery", "retried", "no-reading", {devices: unseen, attempt: discovery.attempt});
+      return false;
+    }
+    if (state.desired) {
+      fail(unseen[0]!, "discovery", "no-reading");
+    } else {
+      delete state.discovery;
+      trace("discovery", "unanswered", "no-reading", {devices: unseen});
+    }
+    return true;
+  }
+
   function handleTick(event: Extract<DisplayInputEvent, {kind: "tick"}>) {
+    if (discoveryDue(event)) return;
     const pending = state.pending;
     if (!pending) return reconcile();
     if (Number.isInteger(event.generation) && state.desired && event.generation !== state.desired.generation) {
@@ -653,6 +711,7 @@ export function transitionDisplay(
     state.pending = null;
     state.seen = {tv: false, screen: false, projector: false};
     state.querying = {tv: false, screen: false, projector: false};
+    delete state.discovery;
     beginDiscovery();
     if (inFlight) {
       const deadlineAt = Math.max(inFlight.deadlineAt, now.getTime() + config.queryTimeoutMs);
@@ -692,6 +751,7 @@ export function transitionDisplay(
       state.pending = state.pending && !state.pending.retryable ? state.pending : null;
       state.seen = {tv: false, screen: false, projector: false};
       state.querying = {tv: false, screen: false, projector: false};
+      delete state.discovery;
       beginDiscovery();
       trace("intent", "accepted", null, {mode: event.mode});
     }
@@ -735,6 +795,9 @@ export function transitionDisplay(
   // fresh as its least recent confirmation.
   // An adopted request only reads the device (see adopted-request.ts): a
   // power, toggle or screen command means the display isn't as wanted.
+  // Discovery is over once every device has reported.
+  if (allSeen(state)) delete state.discovery;
+
   const held = readsOnly(state, commands, (command) => command.operation.startsWith("query"));
   if (held.mismatch) {
     commands.splice(0, commands.length, ...held.commands);

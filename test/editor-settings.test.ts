@@ -220,14 +220,12 @@ test("a cover starts with publishing off, named after the node, and has a fourth
   assert.deepEqual(cover.outputLabels, ["device commands", "state and results", "moving", "MQTT publications"]);
 });
 
-test("a display node saved before 5.0, with only projectorMeterHost, isn't shown as invalid", () => {
-  const {projectorPowerMeterHost: setting} = editorDefinition("display-mode-controller.html").defaults;
-  assert.equal(setting!.required, undefined, "required would mark it invalid whatever validate says");
-  const valid = (node: Record<string, unknown>) => setting!.validate!.call(node, node.projectorPowerMeterHost);
-  assert.equal(valid({projectorMeterHost: "meter.example"}), true, "as loaded: the old key only");
-  assert.equal(valid({projectorPowerMeterHost: "meter.example"}), true);
-  assert.equal(valid({projectorPowerMeterHost: "", projectorMeterHost: ""}), false, "neither");
-  assert.equal(valid({}), false);
+test("a display node's projector power meter host is optional, so no display node is shown invalid for it", () => {
+  const definition = editorDefinition("display-mode-controller.html");
+  const {projectorPowerMeterHost: setting} = definition.defaults;
+  assert.deepEqual([setting!.required, setting!.validate], [undefined, undefined]);
+  assert.equal(definition.outputs, 3);
+  assert.deepEqual(definition.outputLabels, ["projector IR fallback", "state and results", "projector power queries"]);
 });
 
 // A saved node as the editor holds it: only the properties its defaults
@@ -260,6 +258,13 @@ test("a display node saved before 5.0 keeps its meter host through the editor, a
   assert.equal($.values["#node-input-projectorPowerMeterHost"], "meter.example");
   definition.oneditsave!.call(node);
   assert.equal(node.projectorMeterHost, "");
+  // Clearing the filled-in host and saving leaves none: the node then reads
+  // the projector's power from the flow.
+  const migrated = asLoaded(definition, {type: "home-display-mode-controller", projectorMeterHost: "meter.example"});
+  definition.oneditprepare!.call(migrated);
+  $.values["#node-input-projectorPowerMeterHost"] = "";
+  definition.oneditsave!.call(migrated);
+  assert.equal(migrated.projectorMeterHost, "");
 });
 
 test("a receiver saved before 5.0 keeps its volume bounds through the editor, isn't invalid, and saving moves them to dB", () => {
