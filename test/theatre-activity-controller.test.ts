@@ -756,7 +756,9 @@ test("a refresh carries the activity's wanted values, so a target node with noth
 // goes through the backlighting controller itself, and what it reports goes
 // back to the theatre. The device answers each observe unless `silent` says
 // it doesn't at that time. Returns what was seen at each tick.
-function backlightingRefreshRounds(until: number, silent: (seconds: number) => boolean = () => false) {
+// `repeatIntent`: the node also gets its request again after each refresh,
+// as a repeated intent would, with nothing new read.
+function backlightingRefreshRounds(until: number, silent: (seconds: number) => boolean = () => false, repeatIntent = false) {
   let theatre = confirmActivity("off", 1);
   const backlightingConfig = {pollMs: 1000, confirmationTimeoutMs: 5000, maxAttempts: 2};
   const backlighting = (state: Partial<BacklightingState> | undefined, event: Record<string, unknown>, seconds: number) =>
@@ -779,6 +781,10 @@ function backlightingRefreshRounds(until: number, silent: (seconds: number) => b
       const answers = [...lights.events];
       if (lights.commands.some(({operation}) => operation === "observe") && !silent(seconds)) {
         lights = backlighting(lights.state, {kind: "observed", generation: 1, power: "off", observedAt: at(seconds + 0.04).toISOString()}, seconds + 0.04);
+        answers.push(...lights.events);
+      }
+      if (repeatIntent) {
+        lights = backlighting(lights.state, {kind: "intent", requestId: "off-1", generation: 1, power: "off", requestedAt: at(0).toISOString()}, seconds + 0.02);
         answers.push(...lights.events);
       }
       for (const {theatre: event} of answers) {
@@ -932,4 +938,12 @@ test("after a recovery, a device that really differs is a manual override once, 
   assert.equal(outcome.theatre.targets.backlighting?.classification, "manual_override");
   assert.equal(outcome.theatre.phase, "manual_override");
   assert.deepEqual(outcome.actuated, []);
+});
+
+test("a silent backlighting device is still reported when its node gets its request again with nothing new read", () => {
+  const {rounds} = backlightingRefreshRounds(400, (seconds) => seconds >= 60 && seconds < 300, true);
+  assert.ok(rounds.every(({phase}) => phase === "ready"), "the activity is held ready");
+  assert.ok(rounds.some(({seconds, degraded}) => seconds < 300 && degraded !== null), JSON.stringify(rounds));
+  const last = rounds.at(-1)!;
+  assert.deepEqual([last.status, last.degraded], ["ready", null], "recovers once the device answers");
 });
