@@ -35,7 +35,8 @@
     "scan:public": "node scripts/check-public.mjs",
     "hooks:install": "git config core.hooksPath .githooks",
     "prepack": "npm run build",
-    "diagrams": "node scripts/render-diagrams.mjs"
+    "diagrams": "node scripts/render-diagrams.mjs",
+    "docs": "node scripts/build-docs.mjs"
   },
   "engines": {
     "node": ">=22.9"

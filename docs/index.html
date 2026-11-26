@@ -1,233 +1,30 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light dark">
-  <meta name="description" content="Reusable deterministic Node-RED home-automation components and their public package roadmap.">
-  <link rel="canonical" href="https://avantics-hq.github.io/node-red-home-automation/">
-  <title>Node-RED Home Automation Components</title>
-  <style>
-    :root {
-      --bg: #f4f6f8;
-      --surface: #ffffff;
-      --raised: #f8fafc;
-      --text: #17202a;
-      --muted: #5d6975;
-      --border: #d8dee5;
-      --accent: #315efb;
-      --accent-soft: #e9efff;
-      --success: #18794e;
-      --success-soft: #e7f6ee;
-      --planned: #6e56cf;
-      --planned-soft: #f0edff;
-      --shadow: 0 18px 45px rgba(34, 46, 62, 0.1);
-    }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #101419;
-        --surface: #171d24;
-        --raised: #1d2530;
-        --text: #edf2f7;
-        --muted: #aab5c2;
-        --border: #303a47;
-        --accent: #8aa4ff;
-        --accent-soft: #202d58;
-        --success: #72d6a4;
-        --success-soft: #153b2b;
-        --planned: #b7a7ff;
-        --planned-soft: #302957;
-        --shadow: 0 18px 45px rgba(0, 0, 0, 0.28);
-      }
-    }
-    * { box-sizing: border-box; }
-    html { scroll-behavior: smooth; }
-    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    a { color: var(--accent); }
-    h1, h2, h3, p { margin-top: 0; }
-    h1 { max-width: 860px; margin-bottom: 18px; font-size: clamp(2.6rem, 6vw, 5.3rem); line-height: 0.98; letter-spacing: -0.055em; }
-    h2 { margin-bottom: 10px; font-size: clamp(1.65rem, 3vw, 2.35rem); line-height: 1.15; letter-spacing: -0.025em; }
-    h3 { margin-bottom: 7px; font-size: 1.04rem; line-height: 1.3; }
-    .shell { width: min(1120px, calc(100% - 40px)); margin: 0 auto; }
-    header, footer { background: var(--surface); }
-    header { border-bottom: 1px solid var(--border); }
-    .site-nav { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 22px 0; }
-    .brand { color: var(--text); font-weight: 760; text-decoration: none; }
-    .nav-links { display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.9rem; }
-    .nav-links a { color: var(--muted); text-decoration: none; }
-    .nav-links a:hover { color: var(--text); }
-    .hero { padding: 76px 0 82px; }
-    .eyebrow { margin-bottom: 14px; color: var(--accent); font-size: 0.77rem; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase; }
-    .lead { max-width: 780px; margin-bottom: 26px; color: var(--muted); font-size: clamp(1.05rem, 2vw, 1.28rem); }
-    .pills { display: flex; flex-wrap: wrap; gap: 9px; }
-    .pill, .status { display: inline-flex; width: fit-content; border: 1px solid var(--border); border-radius: 999px; font-size: 0.76rem; font-weight: 750; line-height: 1; }
-    .pill { padding: 9px 12px; background: var(--raised); color: var(--muted); }
-    .status { padding: 7px 10px; }
-    .status.complete, .status.released { border-color: color-mix(in srgb, var(--success) 35%, var(--border)); background: var(--success-soft); color: var(--success); }
-    .status.available { border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); background: var(--accent-soft); color: var(--accent); }
-    .status.planned { border-color: color-mix(in srgb, var(--planned) 35%, var(--border)); background: var(--planned-soft); color: var(--planned); }
-    main { padding: 62px 0 80px; }
-    section + section { margin-top: 68px; }
-    .section-intro { max-width: 760px; margin-bottom: 24px; color: var(--muted); }
-    .metrics, .components, .roadmap, .principles { display: grid; gap: 14px; }
-    .metrics { grid-template-columns: repeat(4, 1fr); }
-    .components { grid-template-columns: repeat(2, 1fr); }
-    .roadmap { grid-template-columns: repeat(3, 1fr); }
-    .principles { grid-template-columns: repeat(4, 1fr); }
-    .metric, .component, .roadmap-card, .principle, .boundary { border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
-    .metric { padding: 21px; }
-    .metric strong { display: block; font-size: 1.7rem; line-height: 1.1; }
-    .metric span { display: block; margin-top: 7px; color: var(--muted); font-size: 0.86rem; }
-    .component { display: flex; flex-direction: column; min-height: 225px; padding: 24px; }
-    .component.feature { box-shadow: var(--shadow); }
-    .component-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
-    .component p, .component li, .roadmap-card p, .roadmap-card li, .principle p { color: var(--muted); font-size: 0.9rem; }
-    .component ul, .roadmap-card ul { margin: 8px 0 0; padding-left: 20px; }
-    .component-link { margin-top: auto; padding-top: 18px; font-weight: 700; }
-    .roadmap-card, .principle { padding: 22px; }
-    .roadmap-card .status { margin-bottom: 14px; }
-    .principle p { margin-bottom: 0; }
-    .boundary { margin-top: 18px; padding: 22px 24px; background: var(--raised); }
-    .boundary p { margin-bottom: 0; color: var(--muted); }
-    footer { border-top: 1px solid var(--border); }
-    footer .shell { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 18px; padding: 28px 0; color: var(--muted); font-size: 0.86rem; }
-    footer nav { display: flex; flex-wrap: wrap; gap: 16px; }
-    @media (max-width: 920px) {
-      .metrics, .principles { grid-template-columns: repeat(2, 1fr); }
-      .roadmap { grid-template-columns: 1fr; }
-    }
-    @media (max-width: 700px) {
-      .site-nav { align-items: flex-start; flex-direction: column; }
-      .hero { padding: 52px 0 60px; }
-      .components { grid-template-columns: 1fr; }
-    }
-    @media (max-width: 520px) {
-      .shell { width: min(100% - 28px, 1120px); }
-      .metrics, .principles { grid-template-columns: 1fr; }
-      .component-head { flex-direction: column; }
-    }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Introduction · Node-RED Home Automation</title>
+<meta name="description" content="">
+<link rel="stylesheet" href="assets/site.css">
 </head>
 <body>
-  <header>
-    <div class="shell">
-      <nav class="site-nav" aria-label="Primary navigation">
-        <a class="brand" href="./">Node-RED Home Automation</a>
-        <div class="nav-links">
-          <a href="#components">Components</a>
-          <a href="contract-examples.html">Contract examples</a>
-          <a href="#roadmap">Roadmap</a>
-          <a href="home-theatre.html">Home-theatre capability</a>
-          <a href="https://github.com/avantics-hq/node-red-home-automation">GitHub</a>
-        </div>
-      </nav>
-      <div class="hero">
-        <p class="eyebrow">Reusable control library</p>
-        <h1>State-aware automation without hidden ownership.</h1>
-        <p class="lead">Deterministic TypeScript policies and thin Node-RED adapters for lighting, occupancy and coordinated media activities. This site documents package capabilities only.</p>
-        <div class="pills">
-          <span class="pill">Package 5.0.0</span>
-          <span class="pill">473 tests passing</span>
-          <span class="pill">15 reusable nodes</span>
-          <span class="pill">MIT licensed</span>
-        </div>
-      </div>
-    </div>
-  </header>
-
-  <main class="shell">
-    <section aria-labelledby="status-title">
-      <h2 id="status-title">Package at a glance</h2>
-      <p class="section-intro">The public project tracks reusable behavior, test evidence and source-level milestones. It intentionally contains no installation inventory or private automation topology.</p>
-      <div class="metrics">
-        <div class="metric"><strong>11</strong><span>Node-RED node types</span></div>
-        <div class="metric"><strong>174</strong><span>Behavior-focused tests</span></div>
-        <div class="metric"><strong>5</strong><span>Home-theatre target classes</span></div>
-        <div class="metric"><strong>7</strong><span>Executable contract examples</span></div>
-      </div>
-    </section>
-
-    <section id="components" aria-labelledby="components-title">
-      <h2 id="components-title">Component portfolio</h2>
-      <p class="section-intro">Portfolio badges show whether a capability is released in the package. Roadmap badges show delivery state. Components share explicit ownership, semantic commands, observed completion and bounded recovery.</p>
-      <div class="components">
-        <article class="component feature">
-          <div class="component-head"><div><p class="eyebrow">Capability milestone</p><h3>Home-theatre orchestration</h3></div><span class="status released">Released</span></div>
-          <p>A latest-request-wins activity controller coordinates display, receiver, source, lighting and backlighting target owners without embedding transport-specific commands.</p>
-          <ul><li>Fresh observations gate completion</li><li>Stale generations are inert</li><li>Recovery and manual ownership are explicit</li></ul>
-          <a class="component-link" href="home-theatre.html">Read the capability reference →</a>
-        </article>
-        <article class="component">
-          <div class="component-head"><div><p class="eyebrow">Source policy</p><h3>Media-player readiness</h3></div><span class="status released">Released</span></div>
-          <p>Gate source completion on fresh availability, active-device, application or playback evidence without moving transport logic into orchestration.</p>
-          <ul><li>Configurable readiness depth</li><li>Application and playback evidence</li><li>Honest waiting and unavailable outcomes</li></ul>
-        </article>
-        <article class="component">
-          <div class="component-head"><div><p class="eyebrow">Receiver policy</p><h3>Volume ownership</h3></div><span class="status released">Released</span></div>
-          <p>One AVR controller coordinates bounded absolute and relative volume requests without fighting later physical adjustments.</p>
-          <ul><li>Rapid relative input accumulates</li><li>Configured half-step safety bounds</li><li>Fresh observation confirms and releases ownership</li></ul>
-        </article>
-        <article class="component">
-          <div class="component-head"><div><p class="eyebrow">Consumer reference</p><h3>Contract examples</h3></div><span class="status released">Released</span></div>
-          <p>Run deterministic, transport-neutral examples for occupancy, lighting, switch gestures, source readiness, volume ownership and coordinated activities.</p>
-          <ul><li>Real reducer execution</li><li>Synthetic configuration</li><li>Asserted consumer-visible invariants</li></ul>
-          <a class="component-link" href="contract-examples.html">Explore the executable contracts →</a>
-        </article>
-        <article class="component">
-          <div class="component-head"><div><p class="eyebrow">Lighting policies</p><h3>Room lighting control</h3></div><span class="status released">Released</span></div>
-          <p>One room controller owns adaptive output while independent switch, motion, schedule and activity policies emit semantic intent.</p>
-          <ul><li>Circadian brightness and colour temperature</li><li>Per-target manual ownership</li><li>Reducer-owned duplicate and retained-state handling</li><li>Restart baseline, freshness and availability evidence</li><li>Independent switch gestures and occupancy policy</li></ul>
-        </article>
-        <article class="component">
-          <div class="component-head"><div><p class="eyebrow">Sensor policy</p><h3>Occupancy fusion</h3></div><span class="status released">Released</span></div>
-          <p>Combine motion triggers with optional presence hold while preserving unknown sensor states and preventing one source from clearing another.</p>
-        </article>
-        <article class="component">
-          <div class="component-head"><div><p class="eyebrow">Operational evidence</p><h3>Metrics, traces and objectives</h3></div><span class="status released">Released</span></div>
-          <p>Bounded traces and rolling outcome evaluation expose transition latency, retries, fallbacks, target availability and actionable failure.</p>
-        </article>
-      </div>
-    </section>
-
-    <section aria-labelledby="principles-title">
-      <h2 id="principles-title">Design rules</h2>
-      <div class="principles">
-        <article class="principle"><h3>One owner</h3><p>Every controlled target has one normal command owner.</p></article>
-        <article class="principle"><h3>Semantic intent</h3><p>Policies request outcomes rather than transport operations.</p></article>
-        <article class="principle"><h3>Observed completion</h3><p>A command acknowledgement never substitutes for target state.</p></article>
-        <article class="principle"><h3>Bounded recovery</h3><p>Retries, timers, traces and failure paths remain finite.</p></article>
-      </div>
-    </section>
-
-    <section id="roadmap" aria-labelledby="roadmap-title">
-      <h2 id="roadmap-title">Component roadmap</h2>
-      <p class="section-intro">Milestone badges report delivery progress, independently of the release badges in the portfolio above. Candidate components keep transport, policy, observed state and recovery explicit before joining the package.</p>
-      <div class="roadmap">
-        <article class="roadmap-card"><span class="status complete">Milestone complete</span><h3>Contract examples</h3><p>Transport-neutral examples cover room lighting, occupancy, switch gestures, source readiness, volume ownership and coordinated activities.</p></article>
-        <article class="roadmap-card"><span class="status complete">Milestone complete</span><h3>Volume ownership</h3><p>Absolute and relative requests share one bounded command owner, confirm from fresh evidence and preserve external adjustments.</p></article>
-        <article class="roadmap-card"><span class="status complete">Milestone complete</span><h3>Switch-state observability</h3><p>Wall-input reducers preserve restart baselines, distinguish retained replay, refresh duplicate evidence and expose freshness or explicit unavailability.</p></article>
-        <article class="roadmap-card"><span class="status complete">Milestone complete</span><h3>Home Assistant integration</h3><p>Home Assistant is an optional view and control panel: each node can publish its state and announce entities, and Home Assistant controls send MQTT messages that the nodes act on, never commands to devices. Entities report availability, keep stable identifiers through renames, and are cleaned up when their node is removed. Rooms expose circadian and sleep switches and wake and bed times; occupancy, motion, receiver volume and covers have their own entities.</p></article>
-        <article class="roadmap-card"><span class="status complete">Milestone complete</span><h3>Blind and cover control</h3><p>Covers have their own nodes. A cover controller owns one blind, shutter or curtain motor: positions and named presets, open/close-only motors judged honestly from what they report, a moving signal other policies can react to, and a person's move left where they put it. A cover group moves several covers as one and says which confirmed. Each cover can also appear in Home Assistant as a cover entity, whose controls come back to the cover node as requests.</p></article>
-        <article class="roadmap-card"><span class="status available">Next</span><h3>Device-agnostic core</h3><p>Separate decision logic from devices. Policies and controllers speak a neutral vocabulary of targets, intents and observations; a translation layer maps them to specific protocols, vendors and dashboards. Each part stays usable on its own, defaults name no rooms or devices, and powered devices are modelled from observed power.</p></article>
-        <article class="roadmap-card"><span class="status planned">Planned</span><h3>Device adapters</h3><p>Small device nodes that connect the controllers to real devices over MQTT, so a relay module in cover mode or a Zigbee2MQTT cover wires straight in without function nodes. Each adapter knows one kind of device, and the controllers stay device-neutral.</p></article>
-        <article class="roadmap-card"><span class="status planned">Planned</span><h3>Adaptive covers</h3><p>A policy that decides when covers move, from window contacts, a schedule, an enable switch and readings such as sun or temperature, and asks the cover nodes to move them. A person's move is respected, restarts and repeated messages are handled, and a cover never closes onto an open window.</p></article>
-        <article class="roadmap-card"><span class="status planned">Planned</span><h3>Scenes with restore</h3><p>A scene temporarily owns a set of targets, such as lights or motion enablement, and records their observed state. Ending it, by request, a safety timer or a configured trigger, restores every target. Overlapping scenes stack: the newest owns shared targets and hands them back to the one beneath.</p></article>
-        <article class="roadmap-card"><span class="status planned">Queued</span><h3>Grouped audio</h3><p>Model membership, synchronization and partial failure without hiding which players are unavailable.</p></article>
-        <article class="roadmap-card"><span class="status planned">Planned</span><h3>Water irrigation</h3><p>Run garden zones from schedules and soil or rain evidence, one valve owner per zone. Each run is bounded, confirmed from the valve's observed state, and skipped or cut short when rain or moisture says it isn't needed. A person's manual run takes over until it ends.</p></article>
-        <article class="roadmap-card"><span class="status planned">Planned</span><h3>Heating and climate</h3><p>Hold each room at a scheduled temperature from observed temperature and valve state. A person's manual change wins until the next schedule step, and an open window pauses heating instead of fighting it.</p></article>
-        <article class="roadmap-card"><span class="status planned">Planned</span><h3>Humidity-driven ventilation</h3><p>Run extractor fans in bathrooms and kitchens from a rise in humidity and stop them once it falls back, with a bounded run time, a manual boost and a short overrun.</p></article>
-        <article class="roadmap-card"><span class="status planned">Planned</span><h3>Water leak protection</h3><p>Close a main water valve when a leak sensor trips and confirm it closed from the valve's observed state. The alarm stays latched until a person clears it, and an unconfirmed close is reported, never assumed.</p></article>
-        <article class="roadmap-card"><span class="status planned">Planned</span><h3>Energy-aware scheduling</h3><p>Run deferrable loads, such as a dishwasher, water heating or vehicle charging, in the cheapest or greenest window from tariff or solar data, finishing before a deadline the user sets.</p></article>
-      </div>
-      <div class="boundary"><h3>Public boundary</h3><p>Pages and repository documentation describe source code and generalized behavior only. Credentials, addresses, coordinates, entity identifiers, flow exports, installation inventory and operational records remain outside this repository.</p></div>
-    </section>
-  </main>
-
-  <footer>
-    <div class="shell">
-      <span>Package 5.0.0 · public capability documentation</span>
-      <nav aria-label="Footer navigation"><a href="contract-examples.html">Contract examples</a><a href="home-theatre.html">Home-theatre capability</a><a href="https://github.com/avantics-hq/node-red-home-automation#readme">Package overview</a><a href="https://github.com/avantics-hq/node-red-home-automation">Source</a></nav>
-    </div>
-  </footer>
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar"><a class="brand" href="index.html"><span class="mark" aria-hidden="true">HA</span>Node-RED Home Automation</a><span class="version">5.0.0</span><button class="menu-button" id="menu-button" aria-controls="menu-drawer" aria-expanded="false">Menu</button><div class="search"><label class="sr-only" for="doc-search">Search the documentation</label><input id="doc-search" type="search" placeholder="Search the documentation…" autocomplete="off" aria-controls="search-results"><div class="search-results" id="search-results" hidden></div></div><a class="source" href="https://github.com/avantics-hq/node-red-home-automation">Source ↗</a></header>
+<dialog id="menu-drawer" aria-labelledby="drawer-title"><div class="drawer-head"><strong id="drawer-title">Documentation</strong><button id="menu-close" autofocus>Close</button></div><nav class="doc-nav" aria-label="Documentation"><div class="nav-group"><p class="nav-label">Get started</p><a href="index.html" aria-current="page">Introduction</a><a href="index.html#install">Install</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">Your first room</a><a href="index.html#core-ideas">Core ideas</a></div><div class="nav-group"><p class="nav-label">Guides</p><a href="https://github.com/avantics-hq/node-red-home-automation#room-light-control">Room lighting</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">Motion and occupancy</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">Wall switches</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">House schedule</a><a href="guide-covers.html">Covers</a><a href="home-theatre.html">Home theatre</a><a href="https://github.com/avantics-hq/node-red-home-automation#400">Home Assistant</a><a href="guide-covers.html#wiring">Device adapters</a></div><div class="nav-group"><p class="nav-label">Node reference</p><details><summary>Lighting</summary><a href="https://github.com/avantics-hq/node-red-home-automation#room-light-control">Room controller</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">Motion policy</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">Switch policy</a></details><details><summary>Sensors and schedule</summary><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">Occupancy fusion</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">House schedule</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">House schedule MQTT</a></details><details><summary>Covers</summary><a href="node-cover-controller.html">Cover controller</a><a href="guide-covers.html#groups">Cover group</a></details><details><summary>Home theatre</summary><a href="https://github.com/avantics-hq/node-red-home-automation#receiver-volume-ownership">AVR controller</a><a href="https://github.com/avantics-hq/node-red-home-automation#home-theatre-equipment">Display mode</a><a href="https://github.com/avantics-hq/node-red-home-automation#home-theatre-equipment">Source capability</a><a href="https://github.com/avantics-hq/node-red-home-automation#home-theatre-equipment">Backlighting</a><a href="https://github.com/avantics-hq/node-red-home-automation#theatre-activities">Activity controller</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-light-control">Activity lighting</a><a href="https://github.com/avantics-hq/node-red-home-automation#theatre-mqtt-contract">State contract</a></details><details><summary>Adapters</summary><a href="guide-covers.html#wiring">Relay cover adapter</a></details></div><div class="nav-group"><p class="nav-label">Contracts</p><a href="https://github.com/avantics-hq/node-red-home-automation#theatre-mqtt-contract">Theatre MQTT topics</a><a href="contract-examples.html">Contract examples</a></div><div class="nav-group"><p class="nav-label">Project</p><a href="https://github.com/avantics-hq/node-red-home-automation#install">Releases and upgrading</a><a href="roadmap.html">Roadmap</a><a href="https://github.com/avantics-hq/node-red-home-automation/blob/main/CONTRIBUTING.md">Contributing</a></div></nav></dialog>
+<div class="layout"><aside class="sidebar"><nav class="doc-nav" aria-label="Documentation"><div class="nav-group"><p class="nav-label">Get started</p><a href="index.html" aria-current="page">Introduction</a><a href="index.html#install">Install</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">Your first room</a><a href="index.html#core-ideas">Core ideas</a></div><div class="nav-group"><p class="nav-label">Guides</p><a href="https://github.com/avantics-hq/node-red-home-automation#room-light-control">Room lighting</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">Motion and occupancy</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">Wall switches</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">House schedule</a><a href="guide-covers.html">Covers</a><a href="home-theatre.html">Home theatre</a><a href="https://github.com/avantics-hq/node-red-home-automation#400">Home Assistant</a><a href="guide-covers.html#wiring">Device adapters</a></div><div class="nav-group"><p class="nav-label">Node reference</p><details><summary>Lighting</summary><a href="https://github.com/avantics-hq/node-red-home-automation#room-light-control">Room controller</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">Motion policy</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">Switch policy</a></details><details><summary>Sensors and schedule</summary><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">Occupancy fusion</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">House schedule</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">House schedule MQTT</a></details><details><summary>Covers</summary><a href="node-cover-controller.html">Cover controller</a><a href="guide-covers.html#groups">Cover group</a></details><details><summary>Home theatre</summary><a href="https://github.com/avantics-hq/node-red-home-automation#receiver-volume-ownership">AVR controller</a><a href="https://github.com/avantics-hq/node-red-home-automation#home-theatre-equipment">Display mode</a><a href="https://github.com/avantics-hq/node-red-home-automation#home-theatre-equipment">Source capability</a><a href="https://github.com/avantics-hq/node-red-home-automation#home-theatre-equipment">Backlighting</a><a href="https://github.com/avantics-hq/node-red-home-automation#theatre-activities">Activity controller</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-light-control">Activity lighting</a><a href="https://github.com/avantics-hq/node-red-home-automation#theatre-mqtt-contract">State contract</a></details><details><summary>Adapters</summary><a href="guide-covers.html#wiring">Relay cover adapter</a></details></div><div class="nav-group"><p class="nav-label">Contracts</p><a href="https://github.com/avantics-hq/node-red-home-automation#theatre-mqtt-contract">Theatre MQTT topics</a><a href="contract-examples.html">Contract examples</a></div><div class="nav-group"><p class="nav-label">Project</p><a href="https://github.com/avantics-hq/node-red-home-automation#install">Releases and upgrading</a><a href="roadmap.html">Roadmap</a><a href="https://github.com/avantics-hq/node-red-home-automation/blob/main/CONTRIBUTING.md">Contributing</a></div></nav></aside><main id="main" tabindex="-1">
+<nav class="breadcrumb" aria-label="Breadcrumb"><a href="index.html">Docs</a><span aria-hidden="true">/</span><span>Get started</span></nav><p class="page-kind">Get started</p><h1>Introduction</h1><p class="lead">State-aware controllers for Node-RED. Clear wiring, observed results, and manual control that stays yours.</p>
+<details class="mobile-toc"><summary>On this page</summary><a href="#overview">Automation that checks the result.</a><a href="#install">Get the package</a><a href="#choose">Choose what you want to control</a><a href="#core-ideas">A few ideas carry through every flow</a><a href="#project">Follow the project</a></details>
+<div class="meta"><span class="tag">Node-RED ≥ 5.0.0</span><span class="tag">Node.js ≥ 22.9</span><span class="tag">MQTT · Local device APIs</span></div>
+<section id="overview"><h2>Automation that checks the result.</h2><p>Build lighting, cover and home-theatre flows that know the difference between a command being sent and a device doing what you asked.</p><p>Each controller tracks the wanted and observed state, preserves a person’s manual changes, and retries only a bounded number of times.</p><figure class="diagram"><div class="flow"><div class="flow-node">Your request<small>Motion, switch or activity</small></div><span class="arrow" aria-hidden="true">→</span><div class="flow-node owner">Controller<small>One command owner</small></div><span class="arrow" aria-hidden="true">→</span><div class="flow-node">Device<small>MQTT or local API</small></div></div><figcaption>Device observations return to the controller. Only fresh evidence confirms the requested result.</figcaption></figure></section>
+<section id="install"><h2>Get the package</h2><p>In Node-RED, choose <strong>Manage palette → Install</strong> and search for <code>@avantics/node-red-home-automation</code>.</p><p>Or run this from your Node-RED user directory, then restart Node-RED:</p><div class="code-block"><div class="code-label"><span>Terminal</span></div><pre><code>npm install @avantics/node-red-home-automation</code></pre></div><p>Find the nodes in the <strong>home automation</strong> palette category. Import a wiring example from <strong>Import → Examples</strong>.</p><aside class="callout neutral"><strong>Check before updating</strong><p>This package is under active development. Pin the version you use, read the release notes and check your flows after an update.</p></aside></section>
+<section id="choose"><h2>Choose what you want to control</h2><div class="cards"><a class="card" href="https://github.com/avantics-hq/node-red-home-automation#room-lighting"><span class="number">01 / LIGHTING</span><h3>Start with one room</h3><p>Combine motion and wall switches without taking control away from the person.</p><span class="go">Room lighting in the README ↗</span></a><a class="card" href="guide-covers.html"><span class="number">02 / COVERS</span><h3>Wire a blind or curtain</h3><p>Connect a cover, set a position or preset, and confirm the motor has stopped.</p><span class="go">Follow the cover guide →</span></a><a class="card" href="home-theatre.html"><span class="number">03 / HOME THEATRE</span><h3>Coordinate an activity</h3><p>Bring display, receiver, source and lighting together from one request.</p><span class="go">Read the theatre documentation →</span></a><a class="card" href="node-cover-controller.html"><span class="number">04 / REFERENCE</span><h3>Look up a node</h3><p>Find its messages, output ports and exact configuration defaults.</p><span class="go">Explore the cover controller →</span></a></div></section>
+<section id="core-ideas"><h2>A few ideas carry through every flow</h2><ul class="rule-list"><li><strong>One command owner</strong><p>Policies ask for an outcome. A controller owns the device commands, so two parts of your flow do not fight over the same target.</p></li><li><strong>Requests describe the result</strong><p>Send “open”, a position, or a lighting intent. The device path translates the controller’s commands into its protocol.</p></li><li><strong>Evidence before completion</strong><p>Sending a command is not success. The controller waits for fresh observations; retries and failure paths have limits.</p></li><li><strong>Recovery stays bounded</strong><p>Retries, timers, traces and failure paths remain finite, and a restart re-reads the devices rather than replaying commands.</p></li><li><strong>Manual control stays yours</strong><p>A person’s change becomes ownership evidence, not something to correct immediately. The cover guide shows how automatic requests respect it.</p></li></ul><aside class="callout"><strong>Home Assistant is the panel, not the device path.</strong><p>It can display state and send requests over MQTT. Controllers command and observe the devices directly, not through Home Assistant.</p></aside></section>
+<section id="project"><h2>Follow the project</h2><p>See what is complete, next and planned on the <a href="roadmap.html">public roadmap</a>. Run the <a href="contract-examples.html">contract examples</a> to explore the messages without a device.</p><p class="caption">Sources: <a href="https://github.com/avantics-hq/node-red-home-automation#readme">README</a> and package metadata.</p></section>
+<nav class="pager" aria-label="Adjacent pages"><a href="guide-covers.html"><small>Continue</small>Wire a cover →</a></nav>
+<footer class="page-footer"><span>Package 5.0.0 · MIT</span><a href="https://github.com/avantics-hq/node-red-home-automation#readme">Read the README ↗</a></footer>
+</main><aside class="toc" aria-label="On this page"><p>On this page</p><a href="#overview">Automation that checks the result.</a><a href="#install">Get the package</a><a href="#choose">Choose what you want to control</a><a href="#core-ideas">A few ideas carry through every flow</a><a href="#project">Follow the project</a></aside></div>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
 </body>
 </html>
