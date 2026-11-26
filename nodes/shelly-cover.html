@@ -1,0 +1,65 @@
+<script type="text/javascript">
+  RED.nodes.registerType("home-shelly-cover", {
+    category: "home automation",
+    color: "#e2d96e",
+    defaults: {
+      name: {value: ""},
+      // No default: it names the user's own device.
+      topicPrefix: {value: "", required: true, validate: function (v) {
+        var prefix = String(v || "").trim().replace(/^\/+|\/+$/g, "");
+        return prefix !== "" && !/[+#]/.test(prefix);
+      }},
+      channel: {value: 0, required: true, validate: function (v) {
+        return /^\d+$/.test(String(v).trim());
+      }}
+    },
+    inputs: 1,
+    outputs: 2,
+    outputLabels: ["to the device (MQTT out)", "to the cover controller"],
+    icon: "font-awesome/fa-exchange",
+    label: function () { return this.name || "shelly cover"; },
+    paletteLabel: "shelly cover"
+  });
+</script>
+
+<script type="text/html" data-template-name="home-shelly-cover">
+  <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
+  <div class="form-row"><label for="node-input-topicPrefix">MQTT topic prefix</label><input type="text" id="node-input-topicPrefix" placeholder="the device's ID, e.g. shellyplus2pm-a8032ab12345"></div>
+  <div class="form-row"><label for="node-input-channel">Cover ID</label><input type="number" min="0" step="1" id="node-input-channel"></div>
+</script>
+
+<script type="text/html" data-help-name="home-shelly-cover">
+  <p>Connects a Shelly Gen2 or later device in cover mode to a <b>home cover controller</b>, over the device's own
+    MQTT API: no function nodes, no Home Assistant and no HTTP.</p>
+  <h3>Wiring</h3>
+  <ol>
+    <li>An <b>MQTT in</b> node subscribed to <code>&lt;prefix&gt;/#</code> (output: auto-detect) → this node.</li>
+    <li>The cover controller's first output (its device commands) → this node.</li>
+    <li>This node's first output → an <b>MQTT out</b> node on the same broker, with no topic set.</li>
+    <li>This node's second output → the cover controller.</li>
+  </ol>
+  <p>On the device, MQTT must be on with <b>Enable MQTT Control</b> (the default): without it the device ignores
+    the commands this node sends. <b>RPC status notifications</b> (also the default) report each change; with
+    <b>Generic status update</b> it also reports a full status on every significant change. Calibrate the cover
+    on the device first.</p>
+  <h3>Settings</h3>
+  <dl class="message-properties">
+    <dt>MQTT topic prefix</dt><dd>the device's topic prefix: its device ID (such as
+      <code>shellyplus2pm-a8032ab12345</code>) unless a custom one is set on the device.</dd>
+    <dt>Cover ID</dt><dd><code>0</code>, or <code>1</code> for a device's second cover.</dd>
+  </dl>
+  <h3>What it does</h3>
+  <ul>
+    <li><code>set_position</code> is sent as <code>pos,&lt;0-100&gt;</code>, <code>stop</code> as <code>stop</code>,
+      and <code>observe</code> as <code>status_update</code>, which makes the device report a fresh status, on
+      <code>&lt;prefix&gt;/command/cover:&lt;id&gt;</code>.</li>
+    <li>The device's status, from <code>&lt;prefix&gt;/status/cover:&lt;id&gt;</code> and its change notifications on
+      <code>&lt;prefix&gt;/events/rpc</code>, becomes <code>msg.cover = {kind: "observed", position, motion,
+      observedAt}</code>, with 0 closed and 100 open (set <b>invert</b> on the controller if yours runs the other
+      way). <code>&lt;prefix&gt;/online</code> becomes <code>{kind: "availability", online}</code>.</li>
+    <li>A cover that isn't calibrated, or doesn't know its position, has no position to report: the controller's
+      command in hand fails with reason <code>not-calibrated</code> or <code>position-unknown</code>, and a
+      position isn't sent to an uncalibrated cover, which would refuse it.</li>
+    <li>Anything else on the input is ignored. The node's status shows the cover's last state and position.</li>
+  </ul>
+</script>
