@@ -5,7 +5,7 @@
 // may send ON/OFF on the command topic, which the room controller acts on.
 
 import {DISCOVERY_ORIGIN, OFFLINE, ONLINE, discoveryDevice, discoveryEntity, type DiscoveryOwner} from "./ha-discovery";
-import {areaId} from "./topic-names";
+import {homeTopic} from "./topic-names";
 import type {DaySchedule} from "./circadian-schedule";
 
 export interface DiscoveryMessage {
@@ -16,7 +16,7 @@ export interface DiscoveryMessage {
 
 // The one place a room topic is named: home/<area ID>/<name>.
 export function roomTopic(area: string, name: string): string {
-  return "home/" + areaId(area) + "/" + name;
+  return homeTopic(area, name);
 }
 
 export function circadianStateTopic(area: string): string {

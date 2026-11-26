@@ -16,6 +16,13 @@ export function areaId(area: string): string {
   return area.toLowerCase().replace(/[^a-z0-9_-]+/g, "_").replace(/^[_-]+|[_-]+$/g, "");
 }
 
+// The one place a home/<area ID>/... topic is named, for every node that
+// publishes under its area (or, for the house schedule, its name): the rest
+// of the path follows as given.
+export function homeTopic(area: string, ...path: string[]): string {
+  return ["home", areaId(area), ...path].join("/");
+}
+
 // The area of a node that publishes under it, as typed. `needed` says
 // whether this node's publishing needs one at all.
 export function publishingArea(area: string, needed: boolean): string {

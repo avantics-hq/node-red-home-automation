@@ -5,7 +5,7 @@
 // All of it is opt-in (see publishing-node.ts); the fusion itself only
 // decides occupancy.
 
-import {areaId} from "./topic-names";
+import {homeTopic} from "./topic-names";
 import {
   discoveryEntry,
   publishesState,
@@ -19,7 +19,7 @@ export type OccupancyPublishingConfig = OptInPublishingConfig;
 export type OccupancyPublication = RetainedText;
 
 function occupancyTopic(area: string, name: string): string {
-  return "home/" + areaId(area) + "/occupancy/" + name;
+  return homeTopic(area, "occupancy", name);
 }
 
 export function occupancyStateTopic(area: string): string {

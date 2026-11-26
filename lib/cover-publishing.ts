@@ -20,7 +20,7 @@ import {
   type OptInPublishingConfig,
   type RetainedText
 } from "./publishing-node";
-import {areaId} from "./topic-names";
+import {areaId, homeTopic} from "./topic-names";
 
 export interface CoverPublishingConfig extends OptInPublishingConfig {
   // This cover's name in its topics, such as "left".
@@ -30,7 +30,7 @@ export interface CoverPublishingConfig extends OptInPublishingConfig {
 }
 
 function coverTopic(config: {area: string; name: string}, path: string): string {
-  return "home/" + areaId(config.area) + "/cover/" + areaId(config.name) + "/" + path;
+  return homeTopic(config.area, "cover", areaId(config.name), path);
 }
 
 export const coverStateTopic = (config: {area: string; name: string}) => coverTopic(config, "state");
