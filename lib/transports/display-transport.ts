@@ -82,6 +82,15 @@ async function responseJson(response: Response, allowNull = false): Promise<Devi
   return body;
 }
 
+// The Shelly cover's states, as the display reads a screen.
+const SCREEN_STATES: Record<string, string> = {
+  open: "open",
+  closed: "closed",
+  opening: "opening",
+  closing: "closing",
+  stopped: "stopped"
+};
+
 export class DisplayTransport {
   readonly tvHost: string;
   readonly tvPsk: string;
@@ -160,8 +169,15 @@ export class DisplayTransport {
       }
       if (command.device === "screen" && command.operation === "query_position") {
         const body = await this.shellyGet(this.screenHost, "Cover.GetStatus?id=0");
-        const position = body.current_pos;
-        if (typeof position !== "number" || !Number.isFinite(position) || position < 0 || position > 100) {
+        const position = typeof body.current_pos === "number" && Number.isFinite(body.current_pos) &&
+          body.current_pos >= 0 && body.current_pos <= 100 ? body.current_pos : null;
+        // Normalised to open, closed, opening, closing or stopped. A screen
+        // that doesn't know its position (not calibrated) still says whether
+        // it is fully open or closed, or neither: enough for a screen opened
+        // by its own command, even one left part-way, which is then sent
+        // open or closed. A position out of range is no reading at all.
+        const state = SCREEN_STATES[String(body.state)] ?? "stopped";
+        if (body.current_pos !== undefined && body.current_pos !== null && position === null) {
           const error = new Error("Shelly cover reported no usable position") as CodedError;
           error.code = "invalid_screen_position";
           throw error;
@@ -171,14 +187,20 @@ export class DisplayTransport {
             kind: "observed",
             device: "screen",
             position,
-            state: String(body.state || "unknown"),
+            state,
             source: "shelly-cover",
             ...common
           }
         };
       }
-      if (command.device === "screen" && command.operation === "set_position") {
-        await this.shellyPost(this.screenHost, "Cover.GoToPosition", {id: 0, pos: command.position});
+      // Open or close: to the position the command carries, or with none,
+      // by the screen's own open and close.
+      if (command.device === "screen" && (command.operation === "open" || command.operation === "close")) {
+        if (typeof command.position === "number") {
+          await this.shellyPost(this.screenHost, "Cover.GoToPosition", {id: 0, pos: command.position});
+        } else {
+          await this.shellyPost(this.screenHost, command.operation === "open" ? "Cover.Open" : "Cover.Close", {id: 0});
+        }
         return null;
       }
       if (command.device === "projector" && command.operation === "query_power" && this.projectorMeterHost) {
