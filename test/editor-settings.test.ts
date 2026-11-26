@@ -217,3 +217,12 @@ test("a cover starts with publishing off, named after the node, and has a fourth
   assert.equal(newNode(cover).idScheme, "node");
   assert.deepEqual(cover.outputLabels, ["device commands", "state and results", "moving", "MQTT publications"]);
 });
+
+test("the shelly cover adapter has no default device and two labelled outputs", () => {
+  const definition = editorDefinition("shelly-cover.html");
+  assert.deepEqual([definition.defaults.topicPrefix!.value, definition.defaults.channel!.value], ["", 0]);
+  const valid = (key: string, value: unknown) => definition.defaults[key]!.validate!.call({}, value);
+  assert.deepEqual([valid("topicPrefix", ""), valid("topicPrefix", "shellyplus2pm-a8032ab12345"), valid("topicPrefix", "a/#")], [false, true, false]);
+  assert.deepEqual([valid("channel", 1), valid("channel", "-1"), valid("channel", "1.5")], [true, false, false]);
+  assert.deepEqual([definition.outputs, definition.outputLabels], [2, ["to the device (MQTT out)", "to the cover controller"]]);
+});

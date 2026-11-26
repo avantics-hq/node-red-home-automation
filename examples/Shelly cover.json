@@ -1,0 +1,252 @@
+[
+  {
+    "id": "example-shelly-cover-comment",
+    "type": "comment",
+    "name": "Shelly cover example",
+    "info": "A Shelly Gen2 device in cover mode, owned by the cover controller, with no function nodes. In your flow, replace the injects marked 'from the device' with an MQTT in node subscribed to <prefix>/# (output: auto-detect), and the debug node with an MQTT out node, both on your broker. Set the adapter's MQTT topic prefix to your device's (its device ID unless you set one). The controller's device commands go to the adapter, which sends them to the device as its MQTT control commands; the device's status, change notifications and online state come back through the adapter as the controller's readings.",
+    "x": 150,
+    "y": 40,
+    "wires": []
+  },
+  {
+    "id": "example-shelly-cover-startup",
+    "type": "inject",
+    "name": "startup",
+    "props": [
+      {
+        "p": "cover",
+        "v": "{\"kind\":\"startup\"}",
+        "vt": "json"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": true,
+    "onceDelay": 3,
+    "topic": "",
+    "x": 130,
+    "y": 100,
+    "wires": [
+      [
+        "example-shelly-cover-cover"
+      ]
+    ]
+  },
+  {
+    "id": "example-shelly-cover-open",
+    "type": "inject",
+    "name": "open",
+    "props": [
+      {
+        "p": "payload",
+        "v": "open",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 120,
+    "y": 140,
+    "wires": [
+      [
+        "example-shelly-cover-cover"
+      ]
+    ]
+  },
+  {
+    "id": "example-shelly-cover-close",
+    "type": "inject",
+    "name": "close",
+    "props": [
+      {
+        "p": "payload",
+        "v": "close",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 120,
+    "y": 180,
+    "wires": [
+      [
+        "example-shelly-cover-cover"
+      ]
+    ]
+  },
+  {
+    "id": "example-shelly-cover-position",
+    "type": "inject",
+    "name": "set position 60",
+    "props": [
+      {
+        "p": "payload",
+        "v": "60",
+        "vt": "num"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 140,
+    "y": 220,
+    "wires": [
+      [
+        "example-shelly-cover-cover"
+      ]
+    ]
+  },
+  {
+    "id": "example-shelly-cover-cover",
+    "type": "home-cover-controller",
+    "name": "",
+    "area": "",
+    "presets": "{}",
+    "positionTolerance": 2,
+    "invert": false,
+    "travelTimeoutMs": 90000,
+    "maxAttempts": 2,
+    "pollMs": 5000,
+    "settleMs": 5000,
+    "x": 380,
+    "y": 160,
+    "wires": [
+      [
+        "example-shelly-cover-adapter"
+      ],
+      [
+        "example-shelly-cover-state"
+      ],
+      []
+    ]
+  },
+  {
+    "id": "example-shelly-cover-adapter",
+    "type": "home-shelly-cover",
+    "name": "",
+    "topicPrefix": "shellyplus2pm-a8032ab12345",
+    "channel": 0,
+    "x": 640,
+    "y": 160,
+    "wires": [
+      [
+        "example-shelly-cover-to-device"
+      ],
+      [
+        "example-shelly-cover-cover"
+      ]
+    ]
+  },
+  {
+    "id": "example-shelly-cover-to-device",
+    "type": "debug",
+    "name": "to the MQTT out node",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 880,
+    "y": 140,
+    "wires": []
+  },
+  {
+    "id": "example-shelly-cover-state",
+    "type": "debug",
+    "name": "state and results",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 640,
+    "y": 240,
+    "wires": []
+  },
+  {
+    "id": "example-shelly-cover-online",
+    "type": "inject",
+    "name": "online, from the device",
+    "props": [
+      {
+        "p": "payload",
+        "v": "true",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "shellyplus2pm-a8032ab12345/online",
+    "x": 180,
+    "y": 300,
+    "wires": [
+      [
+        "example-shelly-cover-adapter"
+      ]
+    ]
+  },
+  {
+    "id": "example-shelly-cover-status",
+    "type": "inject",
+    "name": "cover status, from the device",
+    "props": [
+      {
+        "p": "payload",
+        "v": "{\"id\":0,\"state\":\"stopped\",\"current_pos\":40,\"pos_control\":true}",
+        "vt": "json"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "shellyplus2pm-a8032ab12345/status/cover:0",
+    "x": 190,
+    "y": 340,
+    "wires": [
+      [
+        "example-shelly-cover-adapter"
+      ]
+    ]
+  },
+  {
+    "id": "example-shelly-cover-notify",
+    "type": "inject",
+    "name": "change notification, from the device",
+    "props": [
+      {
+        "p": "payload",
+        "v": "{\"src\":\"shellyplus2pm-a8032ab12345\",\"dst\":\"shellyplus2pm-a8032ab12345/events\",\"method\":\"NotifyStatus\",\"params\":{\"ts\":1764151200,\"cover:0\":{\"id\":0,\"state\":\"open\",\"current_pos\":100}}}",
+        "vt": "json"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "shellyplus2pm-a8032ab12345/events/rpc",
+    "x": 210,
+    "y": 380,
+    "wires": [
+      [
+        "example-shelly-cover-adapter"
+      ]
+    ]
+  }
+]
