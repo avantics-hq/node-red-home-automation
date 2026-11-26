@@ -172,11 +172,12 @@ export class DisplayTransport {
         const position = typeof body.current_pos === "number" && Number.isFinite(body.current_pos) &&
           body.current_pos >= 0 && body.current_pos <= 100 ? body.current_pos : null;
         // Normalised to open, closed, opening, closing or stopped. A screen
-        // that doesn't know its position (not calibrated) can still say it is
-        // fully open or closed, which is all a screen opened by its own
-        // command needs.
+        // that doesn't know its position (not calibrated) still says whether
+        // it is fully open or closed, or neither: enough for a screen opened
+        // by its own command, even one left part-way, which is then sent
+        // open or closed. A position out of range is no reading at all.
         const state = SCREEN_STATES[String(body.state)] ?? "stopped";
-        if (position === null && state !== "open" && state !== "closed") {
+        if (body.current_pos !== undefined && body.current_pos !== null && position === null) {
           const error = new Error("Shelly cover reported no usable position") as CodedError;
           error.code = "invalid_screen_position";
           throw error;

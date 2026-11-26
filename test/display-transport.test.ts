@@ -99,7 +99,7 @@ test("transport failures are classified without leaking credentials or response 
 });
 
 test("unusable Shelly replies are transport failures, never position 0 or NaN", async () => {
-  const replies: Record<string, unknown> = {cover: {current_pos: null, state: "stopped"}, power: {}};
+  const replies: Record<string, unknown> = {cover: {current_pos: "half", state: "stopped"}, power: {}};
   const display = transport(fakeFetch(async (request) => {
     const url = new URL(request.url);
     if (url.pathname.endsWith("Cover.GetStatus")) return json(replies.cover);
@@ -115,6 +115,10 @@ test("unusable Shelly replies are transport failures, never position 0 or NaN", 
   replies.cover = {current_pos: 101};
   const outOfRange = await display.execute({...base, device: "screen", operation: "query_position"});
   assert.equal(outOfRange?.display?.kind, "transport_failed");
+  // An unknown position (null) is a reading with no position, never 0.
+  replies.cover = {current_pos: null, state: "stopped"};
+  const unknown = await display.execute({...base, device: "screen", operation: "query_position"});
+  assert.deepEqual(unknown?.display?.kind === "observed" && [unknown.display.position, unknown.display.state], [null, "stopped"]);
 });
 
 test("a screen opens and closes by position when the command carries one, and by its own open and close otherwise", async () => {
@@ -144,7 +148,9 @@ test("a screen opens and closes by position when the command carries one, and by
   assert.deepEqual(await reading(), [null, "open"]);
   status = {state: "closed", pos_control: false};
   assert.deepEqual(await reading(), [null, "closed"]);
-  // Moving with no position says nothing usable.
+  // Part-way with no position is still a reading: neither open nor closed.
+  status = {state: "stopped"};
+  assert.deepEqual(await reading(), [null, "stopped"]);
   status = {state: "opening"};
-  assert.equal((await display.execute({...base, device: "screen", operation: "query_position"}))?.display?.kind, "transport_failed");
+  assert.deepEqual(await reading(), [null, "opening"]);
 });

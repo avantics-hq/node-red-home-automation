@@ -594,10 +594,10 @@ export function transitionDisplay(
       if (event.power !== "on" && event.power !== "standby") throw new Error("invalid TV power observation");
       state.observed.tv = {power: event.power, observedAt, source};
     } else if (device === "screen") {
-      // A position, or with none, a state that says open or closed.
+      // A position, or none (a screen that doesn't know it): then only its
+      // state says whether it is open or closed.
       const position = event.position === undefined || event.position === null ? null : Number(event.position);
-      if (position === null ? event.state !== "open" && event.state !== "closed"
-        : !Number.isFinite(position) || position < 0 || position > 100) throw new Error("invalid screen position");
+      if (position !== null && (!Number.isFinite(position) || position < 0 || position > 100)) throw new Error("invalid screen position");
       state.observed.screen = {position, state: event.state || "unknown", observedAt, source};
     } else {
       const previous = state.observed.projector?.power || "unknown";

@@ -780,3 +780,17 @@ test("a screen that doesn't open fails the request; a newer request mid-move sen
   moving = ownObserve(moving.state, "screen", {position: null, state: "closed"}, 8, 4);
   assert.equal(moving.state.phase, "ready");
 });
+
+test("an uncalibrated screen left part-way is read, and opened or closed by its own command", () => {
+  let result = own(undefined, {kind: "intent", requestId: "tv-1", generation: 1, mode: "tv"}, 0);
+  result = ownObserve(result.state, "tv", {power: "on"}, 0.1);
+  result = ownObserve(result.state, "screen", {position: null, state: "stopped"}, 0.2);
+  result = ownObserve(result.state, "projector", {watts: 2.1}, 0.3);
+  const close = command(result, "screen", "close");
+  assert.ok(close, "discovered part-way, so it is closed");
+  assert.equal(Object.hasOwn(close, "position"), false);
+  result = ownObserve(result.state, "screen", {position: null, state: "closing"}, 2);
+  assert.notEqual(result.state.phase, "ready", "still moving");
+  result = ownObserve(result.state, "screen", {position: null, state: "closed"}, 5);
+  assert.equal(result.state.phase, "ready");
+});
