@@ -29,6 +29,25 @@ privately, as described in [SECURITY.md](SECURITY.md), not in a public issue.
 
 4. Open a pull request against `main` and fill in the template.
 
+### Writing a pull request
+
+The template has the shape; these keep it useful:
+
+- **Open with what it does and why,** in a sentence or two, and link the issue
+  it fixes.
+- **What changes** is what a user, a flow, an MQTT consumer or a saved node will
+  notice, in short plain bullets. Name what is deliberately unchanged where a
+  reader might wonder, such as device commands staying the same.
+- **Checks** name the commit, the command and what you saw. Include reviewers'
+  findings and simulations where they prove something, and say what you couldn't
+  run.
+- **Keep it to the change and its evidence.** Leave out steps for whoever merges
+  it, such as what to do after merging, merge order, tags or releases.
+- **Keep it true.** When the change changes, update the description. If a claim
+  in it turns out wrong, correct it and say it was wrong.
+- **A release pull request** says which version and which merged pull requests
+  it contains; the README's release notes carry the detail.
+
 ### Code origin
 
 Write your own code. Don't copy or port code from other projects, whatever
