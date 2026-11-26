@@ -1,6 +1,6 @@
 "use strict";
 
-import {ADOPTED_MISMATCH, adoptableRefresh, readsOnly, savedAdoptedGeneration} from "./adopted-request";
+import {ADOPTED_MISMATCH, adoptableRefresh, readsOnly, savedAdoptedGeneration, adoptionReason} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {booleanSetting, numberSetting} from "./settings";
 
@@ -694,13 +694,25 @@ export function transitionDisplay(
   // A refresh with the activity's wanted values, reaching a node with
   // nothing desired (it started with nothing saved): adopt them, and
   // rediscover below as at startup (see adopted-request.ts).
+  let replacedRequest = false;
   const adoptable = event.kind === "refresh" ? adoptableRefresh(event, state) : null;
   const adopted = adoptable !== null && event.kind === "refresh" && typeof event.mode === "string" && Object.hasOwn(MODES, event.mode);
   if (adopted) {
+    const reason = adoptionReason(state.desired);
+    // Replacing a request the theatre already counts as ready, it answers
+    // from its reading, not with an interim state the theatre would take as
+    // drift.
+    replacedRequest = reason === "newer-generation";
+    // A request it replaces takes its classification and failure with it.
+    state.failure = null;
+    state.blockedGeneration = null;
+    state.classification = null;
+    state.lastAttempt = 0;
+    state.fallbackUsed = false;
     state.desired = {...adoptable, mode: event.mode as DisplayMode};
     state.generation = adoptable.generation;
     state.adoptedGeneration = adoptable.generation;
-    trace("refresh", "adopted", "nothing-desired", {mode: event.mode, generation: adoptable.generation});
+    trace("refresh", "adopted", reason, {mode: event.mode, generation: adoptable.generation});
   }
 
   if (event.kind === "startup" || adopted) {
@@ -808,7 +820,7 @@ export function transitionDisplay(
     trace("command", "withheld", ADOPTED_MISMATCH);
   }
 
-  if (state.desired) {
+  if (state.desired && !replacedRequest) {
     const readings = DEVICES.map((device) => parseObservedAt(state.observed[device]?.observedAt));
     const confirmedMs = readings.every((ms): ms is number => ms !== null) ? Math.min(...readings) : null;
     const status = state.phase === "manual_override"

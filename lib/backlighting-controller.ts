@@ -1,6 +1,6 @@
 "use strict";
 
-import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration} from "./adopted-request";
+import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration, adoptionReason} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {numberSetting} from "./settings";
 
@@ -284,10 +284,20 @@ export function transitionBacklighting(
   let answerWithReading = false;
   const adoptable = event.kind === "refresh" ? adoptableRefresh(event, state) : null;
   if (adoptable && event.kind === "refresh" && typeof event.power === "string" && Object.hasOwn(POWERS, event.power)) {
+    const reason = adoptionReason(state.desired);
+    // Replacing a request the theatre already counts as ready, it answers
+    // from its reading, not with an interim state the theatre would take as
+    // drift.
+    answerWithReading = reason === "newer-generation";
+    // A request it replaces takes its classification and failure with it.
+    state.failure = null;
+    state.blockedGeneration = null;
+    state.classification = null;
+    state.lastAttempt = 0;
     state.desired = {...adoptable, power: event.power as BacklightingPower, requestedAt: now.toISOString()};
     state.generation = adoptable.generation;
     state.adoptedGeneration = adoptable.generation;
-    trace("refresh", "adopted", "nothing-desired", {power: event.power, generation: adoptable.generation});
+    trace("refresh", "adopted", reason, {power: event.power, generation: adoptable.generation});
   }
 
   if (event.kind === "intent") {

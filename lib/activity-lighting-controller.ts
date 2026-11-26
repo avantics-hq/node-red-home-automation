@@ -1,7 +1,7 @@
 "use strict";
 
 import {lightValues} from "./z2m-light";
-import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration} from "./adopted-request";
+import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration, adoptionReason} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {numberSetting, textSetting} from "./settings";
 
@@ -462,11 +462,19 @@ export function transitionActivityLighting(
   const adoptable = event.kind === "refresh" ? adoptableRefresh(event, state) : null;
   const adopted = adoptable !== null && event.kind === "refresh" && typeof event.profile === "string" && Object.hasOwn(config.profiles, event.profile);
   if (adopted && event.kind === "refresh") {
+    const reason = adoptionReason(state.desired);
+    // Replacing a request the theatre already counts as ready, it answers
+    // from its reading, not with an interim state the theatre would take as
+    // drift.
+    answerWithReading = reason === "newer-generation";
+    // A request it replaces takes its failure with it.
+    state.failure = null;
+    state.blockedGeneration = null;
     state.desired = {...adoptable, profile: event.profile as string, requestedAt: now.toISOString()};
     state.generation = adoptable.generation;
     state.adoptedGeneration = adoptable.generation;
     state.applied = {profile: event.profile as string, targets: null};
-    trace("refresh", "adopted", "nothing-desired", {profile: event.profile, generation: adoptable.generation});
+    trace("refresh", "adopted", reason, {profile: event.profile, generation: adoptable.generation});
   }
 
   if (event.kind === "intent") {

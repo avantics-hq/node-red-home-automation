@@ -158,10 +158,15 @@ test("a node with nothing saved adopts a refresh's wanted power and observes, ne
   // A new explicit request is commanded as usual.
   assert.deepEqual(intent(other.state, "on", 9, 11).commands.map(({operation}) => operation), ["set_power"]);
 
-  // A refresh with no values, or for a node that has a request, changes nothing.
+  // A refresh with no values, or for a node whose request is as new, changes nothing.
   assert.equal(apply(undefined, {kind: "refresh"}, 0).state.desired, null);
   const busy = intent(undefined, "off", 3);
-  assert.equal(apply(busy.state, {kind: "refresh", requestId: "activity-9", generation: 9, power: "on"}, 1).state.desired?.requestId, "backlighting-3");
+  assert.equal(apply(busy.state, {kind: "refresh", requestId: "activity-3", generation: 3, power: "on"}, 1).state.desired?.requestId, "backlighting-3");
+  assert.equal(apply(busy.state, {kind: "refresh", requestId: "activity-2", generation: 2, power: "on"}, 1).state.desired?.requestId, "backlighting-3");
+  // A newer one is adopted, read-only, as for a node with nothing saved.
+  const replaced = apply(busy.state, {kind: "refresh", requestId: "activity-9", generation: 9, power: "on"}, 1);
+  assert.equal(replaced.state.desired?.requestId, "activity-9");
+  assert.deepEqual(replaced.commands.map(({operation}) => operation), ["observe"]);
 });
 
 function readyOn() {
