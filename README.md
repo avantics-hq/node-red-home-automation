@@ -183,10 +183,24 @@ curtain: it sends each member the request on that member's own output, labelled
 from its Members setting, and reports ready only when every member confirms,
 or, if only some do, which did what.
 
+A Shelly Gen2 or later device in cover mode wires straight to a cover
+controller through the Shelly cover adapter, with no function nodes: an MQTT in
+node subscribed to the device's `<prefix>/#` feeds the adapter, the
+controller's device commands go to it too, and its two outputs go to an MQTT
+out node and back to the controller. It speaks the device's own MQTT API, never
+Home Assistant: it sends `pos,<0-100>`, `stop`, and `status_update` (for a fresh
+reading) on `<prefix>/command/cover:<id>` (the device's MQTT Control, on by
+default), and turns the device's status and
+change notifications into position and motion readings, and its online topic
+into availability. A cover that isn't calibrated, or has lost its position,
+fails the command in hand with the reason rather than reporting a position.
+Example: [`Shelly cover.json`](https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/Shelly%20cover.json).
+
 | Node | Purpose |
 |---|---|
 | `home-cover-controller` | Owns one cover's moves (a position cover, or open, close and stop only), confirmed from what it reports, with presets, manual ownership and a moving signal. |
 | `home-cover-group` | Moves several covers as one, with an honest result when only some confirm. |
+| `home-shelly-cover` | Connects a Shelly Gen2+ cover to a cover controller over the device's own MQTT API. |
 
 ## Requirements
 

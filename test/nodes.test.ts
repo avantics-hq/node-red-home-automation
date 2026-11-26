@@ -20,6 +20,7 @@ import registerOccupancy from "../nodes/occupancy-fusion";
 import registerRoom from "../nodes/room-controller";
 import registerHouse from "../nodes/house-schedule";
 import registerHouseMqtt from "../nodes/house-schedule-mqtt";
+import registerShellyCover from "../nodes/shelly-cover";
 import type {SharedSchedule} from "../lib/house-schedule";
 import registerSource from "../nodes/source-capability-controller";
 import type {TraceRecord} from "../lib/bounded-trace";
@@ -2289,6 +2290,24 @@ test("cover node publishing: a Home Assistant cover entity, its state as it chan
   // Anything else on its set topics is ignored, with a trace.
   assert.deepEqual(await receive(node, {topic: "home/bedroom/cover/left/set", payload: "SIDEWAYS"}), []);
   assert.equal(traces(node).at(-1)?.reason, "not-open-close-or-stop");
+});
+
+// The adapter has no timers, so nothing to close.
+test("shelly cover node: device messages become cover readings, and cover commands MQTT publications", async () => {
+  const node = new (runtime(registerShellyCover).Constructor)({id: "s1", topicPrefix: "shellyplus2pm-test", channel: "0"});
+  assert.deepEqual(node.errors, []);
+  const status = await receive<SendEnvelope>(node, {topic: "shellyplus2pm-test/status/cover:0", payload: {id: 0, state: "stopped", current_pos: 30, pos_control: true}});
+  const reading = status[0]?.[1] as Array<{cover?: {kind: string; position: number; motion: string}}> | undefined;
+  assert.deepEqual([status[0]?.[0], reading?.map(({cover}) => [cover?.kind, cover?.position, cover?.motion])], [null, [["observed", 30, "stopped"]]]);
+  assert.equal((node.statuses.at(-1) as {text?: string}).text, "stopped · 30%");
+  const observe = await receive<SendEnvelope>(node, {cover_command: {operation: "observe", requestId: "r", generation: 1, attempt: 1}});
+  assert.deepEqual((observe[0]?.[0] as Array<{topic: string; payload: string}>).map(({topic, payload}) => [topic, payload]),
+    [["shellyplus2pm-test/command/cover:0", "status_update"]]);
+  // An unrelated message, such as its own command echoed back, sends nothing.
+  assert.deepEqual(await receive(node, {topic: "shellyplus2pm-test/command/cover:0", payload: "stop"}), []);
+  // No device prefix: invalid configuration, not a guess.
+  const unset = new (runtime(registerShellyCover).Constructor)({id: "s2"});
+  assert.equal((unset.statuses.at(-1) as {text?: string}).text, "invalid configuration");
 });
 
 test("room node: lighting values in Zigbee2MQTT's units still work during 5.x, with one warning", async (t) => {
