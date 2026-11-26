@@ -5,6 +5,7 @@ import type {TraceEntry} from "./bounded-trace";
 import {booleanSetting, numberSetting} from "./settings";
 
 import {boundObservedAt, isOutOfOrder, parseObservedAt} from "./observation-time";
+import {classifyPower, type PowerReading} from "./power-reading";
 import {asTargetStatus, targetStateEvent, type TargetStateEvent} from "./target-state";
 
 export type DisplayMode = "off" | "tv" | "projector";
@@ -52,7 +53,7 @@ interface ScreenObservation extends DeviceObservation {
 
 interface ProjectorObservation extends DeviceObservation {
   watts: number;
-  power: "unknown" | "on" | "standby" | "transitioning";
+  power: PowerReading;
 }
 
 interface DisplayObserved {
@@ -164,17 +165,16 @@ function initialState(saved: Partial<DisplayState> = {}): DisplayState {
   };
 }
 
+// The projector's power from its meter, with the display's own bands.
 export function classifyProjectorPower(
   watts: number,
   previous: ProjectorObservation["power"] = "unknown",
   config: Partial<DisplayConfig> = {}
 ): ProjectorObservation["power"] {
-  const onWatts = Number(config.projectorOnWatts ?? 20);
-  const offWatts = Number(config.projectorOffWatts ?? 10);
-  if (!Number.isFinite(watts) || watts < 0) return "unknown";
-  if (watts >= onWatts) return "on";
-  if (watts <= offWatts) return "standby";
-  return previous === "on" || previous === "standby" ? previous : "transitioning";
+  return classifyPower(watts, previous, {
+    onWatts: Number(config.projectorOnWatts ?? 20),
+    offWatts: Number(config.projectorOffWatts ?? 10)
+  });
 }
 
 function statusFor(state: DisplayState) {
