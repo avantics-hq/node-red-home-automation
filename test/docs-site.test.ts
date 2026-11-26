@@ -10,6 +10,7 @@ interface DocsBuild {
   buildDocs(): Map<string, string>;
   PAGES: string[];
   REPOSITORY: string;
+  OUTSIDE_LINKS: Set<string>;
 }
 
 const root = resolve(__dirname, "../..");
@@ -81,5 +82,19 @@ test("search covers every page and its sections", async () => {
   for (const page of PAGES) {
     assert.ok(entries.some(({url, section}) => url === `${page}.html` && !section), page);
     assert.ok(entries.some(({url, section}) => url.startsWith(`${page}.html#`) && section), `${page} sections`);
+  }
+});
+
+test("every menu entry opens a page on this site, apart from the listed outside links", async () => {
+  const {PAGES, OUTSIDE_LINKS} = await build();
+  type Item = {label: string; href: string};
+  const nav = JSON.parse(readFileSync(resolve(root, "docs-src/nav.json"), "utf8")) as Array<{items?: Item[]; families?: Array<{items: Item[]}>}>;
+  const items = nav.flatMap((group) => group.families ? group.families.flatMap((family) => family.items) : group.items!);
+  for (const {label, href} of items) {
+    if (/^[a-z]+:/i.test(href)) {
+      assert.ok(OUTSIDE_LINKS.has(href), `${label} leaves the site (${href}): give it a page, or remove it from the menu`);
+    } else {
+      assert.ok(PAGES.includes(href.split("#")[0]!.replace(/\.html$/, "")), `${label} (${href}) names no page on the site`);
+    }
   }
 });

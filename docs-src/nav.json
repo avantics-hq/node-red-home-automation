@@ -48,18 +48,6 @@
         ]
       },
       {
-        "label": "Home theatre",
-        "items": [
-          {"label": "AVR controller", "href": "README#receiver-volume-ownership"},
-          {"label": "Display mode", "href": "README#home-theatre-equipment"},
-          {"label": "Source capability", "href": "README#home-theatre-equipment"},
-          {"label": "Backlighting", "href": "README#home-theatre-equipment"},
-          {"label": "Activity controller", "href": "README#theatre-activities"},
-          {"label": "Activity lighting", "href": "README#room-light-control"},
-          {"label": "State contract", "href": "README#theatre-mqtt-contract"}
-        ]
-      },
-      {
         "label": "Adapters",
         "items": [
           {"label": "Shelly cover", "href": "guide-device-adapters.html#shelly-cover"},
@@ -71,14 +59,12 @@
   {
     "label": "Contracts",
     "items": [
-      {"label": "Theatre MQTT topics", "href": "README#theatre-mqtt-contract"},
       {"label": "Contract examples", "href": "contract-examples.html"}
     ]
   },
   {
     "label": "Project",
     "items": [
-      {"label": "Releases and upgrading", "href": "README#install"},
       {"label": "Roadmap", "href": "roadmap.html"},
       {"label": "Contributing", "href": "https://github.com/avantics-hq/node-red-home-automation/blob/main/CONTRIBUTING.md"}
     ]
