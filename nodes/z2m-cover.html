@@ -1,0 +1,68 @@
+<script type="text/javascript">
+  RED.nodes.registerType("home-z2m-cover", {
+    category: "home automation",
+    color: "#e2d96e",
+    defaults: {
+      name: {value: ""},
+      baseTopic: {value: "zigbee2mqtt", required: true, validate: function (v) {
+        var base = String(v || "").trim().replace(/^\/+|\/+$/g, "");
+        return base !== "" && !/[+#]/.test(base);
+      }},
+      // No default: it names the user's own device.
+      friendlyName: {value: "", required: true, validate: function (v) {
+        var name = String(v || "").trim().replace(/^\/+|\/+$/g, "");
+        return name !== "" && !/[+#]/.test(name);
+      }}
+    },
+    inputs: 1,
+    outputs: 2,
+    outputLabels: ["to the device (MQTT out)", "to the cover controller"],
+    icon: "font-awesome/fa-exchange",
+    label: function () { return this.name || this.friendlyName || "zigbee2mqtt cover"; },
+    paletteLabel: "zigbee2mqtt cover"
+  });
+</script>
+
+<script type="text/html" data-template-name="home-z2m-cover">
+  <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
+  <div class="form-row"><label for="node-input-baseTopic">Base topic</label><input type="text" id="node-input-baseTopic"></div>
+  <div class="form-row"><label for="node-input-friendlyName">Friendly name</label><input type="text" id="node-input-friendlyName" placeholder="the device's name in Zigbee2MQTT"></div>
+</script>
+
+<script type="text/html" data-help-name="home-z2m-cover">
+  <p>Connects a Zigbee2MQTT cover (a blind, shutter or curtain motor) to a <b>home cover controller</b>, over
+    Zigbee2MQTT's MQTT messages: no function nodes, and never Home Assistant.</p>
+  <h3>Wiring</h3>
+  <ol>
+    <li>An <b>MQTT in</b> node subscribed to <code>&lt;base&gt;/&lt;friendly name&gt;</code> and another to
+      <code>&lt;base&gt;/&lt;friendly name&gt;/availability</code> (output: auto-detect) → this node.</li>
+    <li>The cover controller's first output (its device commands) → this node.</li>
+    <li>This node's first output → an <b>MQTT out</b> node on the same broker, with no topic set.</li>
+    <li>This node's second output → the cover controller.</li>
+  </ol>
+  <p>Availability needs Zigbee2MQTT's <b>availability</b> setting on; without it the cover is taken as available.</p>
+  <h3>Settings</h3>
+  <dl class="message-properties">
+    <dt>Base topic</dt><dd>Zigbee2MQTT's base topic: <code>zigbee2mqtt</code> unless changed in its settings.</dd>
+    <dt>Friendly name</dt><dd>the device's friendly name in Zigbee2MQTT (or its IEEE address if it has none).</dd>
+  </dl>
+  <h3>What it does</h3>
+  <ul>
+    <li><code>set_position</code> is sent as <code>{"position": 0-100}</code>; <code>open</code>, <code>close</code> and
+      <code>stop</code> as <code>{"state": "OPEN"}</code>, <code>"CLOSE"</code> or <code>"STOP"</code>, on
+      <code>&lt;base&gt;/&lt;friendly name&gt;/set</code>. <code>observe</code> asks the device to read its position (or,
+      for a cover with no position, its state) on <code>…/get</code>, so the answer is fresh. Some devices can't be read
+      this way; they still report their position whenever it changes.</li>
+    <li>Each state report becomes <code>msg.cover = {kind: "observed", position, motion, observedAt}</code>, with
+      0 closed and 100 open as Zigbee2MQTT reports by default (set <b>invert</b> on the controller, or the device's
+      <code>invert_cover</code> option, if yours runs the other way). Motion comes from <code>motor_state</code> or
+      <code>moving</code> where the device reports one; a cover that reports none is confirmed by the controller's
+      settle time. <code>observedAt</code> is when the report arrived. Battery and charging status are passed on.</li>
+    <li>A cover with no position (open, close and stop only) reports its end state from Zigbee2MQTT's
+      <code>OPEN</code> or <code>CLOSE</code> once its motion says it has stopped: before that, the state can show
+      where it is going rather than where it is. Set the cover controller's type to <i>open, close and stop only</i>.
+      Such a cover that reports no motion either can't be confirmed, and the controller says so.</li>
+    <li><code>…/availability</code> (<code>{"state": "online"}</code>, or plain <code>online</code>) becomes
+      <code>{kind: "availability", online}</code>.</li>
+  </ul>
+</script>
