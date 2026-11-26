@@ -18,16 +18,8 @@ export interface RoomTarget {
 export interface RoomConfig {
   area: string;
   displayName: string;
-  // Where Home Assistant listens for discovery. Absent means its default.
-  discoveryPrefix?: string;
   targets: RoomTarget[];
   initialSleep: boolean;
-  // Publish each light's control state and the circadian state over MQTT,
-  // and the circadian switch's Home Assistant discovery (which needs the
-  // state). Both are named after the area. Unset means on, as before these
-  // settings existed.
-  publishState?: boolean;
-  discovery?: boolean;
   refreshTransitionSeconds: number;
   initialTransitionSeconds: number;
   // How a light should look at a given moment; the node builds it from its

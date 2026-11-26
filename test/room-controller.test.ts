@@ -13,7 +13,7 @@ import {
   type RoomOutput,
   type RoomState
 } from "../lib/room-controller";
-import {publishRoom} from "../lib/room-publishing";
+import {publishRoom, type RoomPublishingConfig} from "../lib/room-publishing";
 
 const levels: LightLevels = {
   maxBrightnessPct: 100,
@@ -687,7 +687,7 @@ test("a confirmed OFF leaves control as the OFF intent set it", () => {
 });
 
 test("publish settings: state and discovery each switch on and off, and unset means on", () => {
-  const startupTopics = (settings: Partial<RoomConfig>) =>
+  const startupTopics = (settings: Partial<RoomConfig & RoomPublishingConfig>) =>
     publishRoom(undefined, {lighting: {kind: "startup"}}, {...config, ...settings}, now).outputs.map(({topic, payload}) => [topic, payload]);
   const discoveryTopic = "homeassistant/switch/kitchen_circadian_lighting/config";
   const controlTopic = "home/kitchen/lighting/cooking/control";
@@ -712,14 +712,14 @@ test("publish settings: state and discovery each switch on and off, and unset me
   assert.deepEqual(startupTopics({publishState: false, discovery: false}), off);
 
   // Circadian changes publish their state only with state on.
-  const circadian = (settings: Partial<RoomConfig>) =>
+  const circadian = (settings: Partial<RoomConfig & RoomPublishingConfig>) =>
     publishRoom(undefined, {lighting: {kind: "circadian", enabled: false}}, {...config, ...settings}, now).outputs.map(({topic}) => topic);
   assert.deepEqual(circadian({publishState: true}), ["home/kitchen/circadian/state"]);
   assert.deepEqual(circadian({publishState: false}), []);
 });
 
 test("the circadian set topic switches circadian lighting on and off", () => {
-  const set = (state: RoomState | undefined, payload: unknown, extra: Record<string, unknown> = {}, settings: Partial<RoomConfig> = {}) =>
+  const set = (state: RoomState | undefined, payload: unknown, extra: Record<string, unknown> = {}, settings: Partial<RoomConfig & RoomPublishingConfig> = {}) =>
     publishRoom(state, {topic: "home/kitchen/circadian/set", payload, ...extra}, {...config, ...settings}, now);
   const lit = publishRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, now).state as RoomState;
 

@@ -50,6 +50,14 @@ export interface RoomPublishingConfig {
   nodeId?: string;
   idScheme?: IdScheme;
   timesFrom?: TimesFrom;
+  // Where Home Assistant listens for discovery. Absent means its default.
+  discoveryPrefix?: string;
+  // Publish each light's control state and the circadian state over MQTT,
+  // and the circadian switch's Home Assistant discovery (which needs the
+  // state). Both are named after the area. Unset means on, as before these
+  // settings existed.
+  publishState?: boolean;
+  discovery?: boolean;
 }
 
 type PublishingRoomConfig = RoomConfig & RoomPublishingConfig;
