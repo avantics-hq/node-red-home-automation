@@ -229,6 +229,15 @@ test("the shelly cover adapter has no default device and two labelled outputs", 
   assert.deepEqual([definition.outputs, definition.outputLabels], [2, ["to the device (MQTT out)", "to the cover controller"]]);
 });
 
+test("the zigbee2mqtt cover adapter defaults the base topic, has no default device, and two labelled outputs", () => {
+  const definition = editorDefinition("z2m-cover.html");
+  assert.deepEqual([definition.defaults.baseTopic!.value, definition.defaults.friendlyName!.value], ["zigbee2mqtt", ""]);
+  const valid = (key: string, value: unknown) => definition.defaults[key]!.validate!.call({}, value);
+  assert.deepEqual([valid("friendlyName", ""), valid("friendlyName", "garden/blind"), valid("friendlyName", "a+b")], [false, true, false]);
+  assert.deepEqual([valid("baseTopic", ""), valid("baseTopic", "z2m"), valid("baseTopic", "z2m/#")], [false, true, false]);
+  assert.deepEqual([definition.outputs, definition.outputLabels], [2, ["to the device (MQTT out)", "to the cover controller"]]);
+});
+
 test("a display node's projector power meter host is optional, so no display node is shown invalid for it", () => {
   const definition = editorDefinition("display-mode-controller.html");
   const {projectorPowerMeterHost: setting} = definition.defaults;

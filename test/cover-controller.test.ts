@@ -508,3 +508,11 @@ test("a cover that reports once on arrival, and doesn't answer polls, is confirm
   echoed = apply(echoed.state, {kind: "tick", generation: 1}, 7);
   assert.equal(echoed.state.phase, "moving", "not settled on the echo");
 });
+
+test("a reading with no position says which cover type fits, rather than only that the position is missing", () => {
+  const ready = apply(undefined, {kind: "startup"}, 0);
+  assert.throws(() => apply(ready.state, {kind: "observed", state: "open", motion: "stopped", observedAt: at(1).toISOString()} as unknown as CoverEvent, 1),
+    /no position: for a cover that reports none, set the cover node's Cover to "Open, close and stop only"/);
+  // A position that is there but unusable is still reported as such.
+  assert.throws(() => apply(ready.state, {kind: "observed", position: 140, observedAt: at(1).toISOString()}, 1), /must be a number from 0 to 100/);
+});

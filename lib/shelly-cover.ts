@@ -20,6 +20,9 @@
 
 import type {TraceEntry} from "./bounded-trace";
 import type {CoverCommand, CoverEvent, CoverMotion} from "./cover-controller";
+import {isObject, parsedPayload as parsed, type MqttPublication} from "./mqtt-message";
+
+export type {MqttPublication} from "./mqtt-message";
 
 export interface ShellyCoverConfig {
   // The device's MQTT topic prefix: its device ID unless one is set on the device.
@@ -43,11 +46,6 @@ export interface ShellyCoverMessage {
   topic?: unknown;
   payload?: unknown;
   cover_command?: CoverCommand;
-}
-
-export interface MqttPublication {
-  topic: string;
-  payload: string;
 }
 
 // Settings may be editor strings. The prefix names the user's own device,
@@ -79,21 +77,6 @@ const MOTIONS: Record<string, CoverMotion> = {
   closed: "stopped",
   stopped: "stopped"
 };
-
-// An MQTT in node may hand over a parsed object, a string or a Buffer.
-function parsed(payload: unknown): unknown {
-  const text = Buffer.isBuffer(payload) ? payload.toString("utf8") : payload;
-  if (typeof text !== "string") return text;
-  try {
-    return JSON.parse(text);
-  } catch {
-    return text;
-  }
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
 
 export function transitionShellyCover(
   saved: Partial<ShellyCoverState> | undefined,

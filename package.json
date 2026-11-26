@@ -59,7 +59,8 @@
       "home-cover-controller": "dist/nodes/cover-controller.js",
       "home-cover-group": "dist/nodes/cover-group.js",
       "home-house-schedule-mqtt": "dist/nodes/house-schedule-mqtt.js",
-      "home-shelly-cover": "dist/nodes/shelly-cover.js"
+      "home-shelly-cover": "dist/nodes/shelly-cover.js",
+      "home-z2m-cover": "dist/nodes/z2m-cover.js"
     }
   },
   "devDependencies": {
