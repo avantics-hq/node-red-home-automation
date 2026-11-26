@@ -241,7 +241,7 @@
     "tvHost": "",
     "screenHost": "",
     "projectorPowerMeterHost": "",
-    "screenOpenPosition": 82,
+    "screenOpenPosition": "",
     "screenTolerance": 2,
     "pollMs": 2000,
     "queryTimeoutMs": 5000,

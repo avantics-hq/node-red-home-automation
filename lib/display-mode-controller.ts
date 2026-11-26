@@ -28,7 +28,9 @@ const MODES: Record<DisplayMode, true> = {off: true, tv: true, projector: true};
 const DEVICES = ["tv", "screen", "projector"] as const;
 
 export interface DisplayConfig {
-  screenOpenPosition: number;
+  // Where projector mode opens the screen, as a percentage of its travel; null
+  // to use the screen's own open command and its fully open state.
+  screenOpenPosition: number | null;
   screenTolerance: number;
   pollMs: number;
   queryTimeoutMs: number;
@@ -60,7 +62,9 @@ interface TvObservation extends DeviceObservation {
 }
 
 interface ScreenObservation extends DeviceObservation {
-  position: number;
+  // Null when the screen reports only that it is open or closed.
+  position: number | null;
+  // open, closed, opening, closing or stopped, as the transport normalises it.
   state: string;
 }
 
@@ -135,7 +139,7 @@ export type DisplayInputEvent =
     observedAt?: string;
     source?: string;
     power?: string;
-    position?: number;
+    position?: number | null;
     state?: string;
     watts?: number;
   }
@@ -282,9 +286,21 @@ function screenAtPosition(
   target: number,
   tolerance: number
 ): boolean {
-  if (!observed || !Number.isFinite(observed.position)) return false;
+  if (!observed || observed.position === null || !Number.isFinite(observed.position)) return false;
   if (observed.state === "opening" || observed.state === "closing") return false;
   return Math.abs(observed.position - target) <= tolerance;
+}
+
+// Closed: at 0, or reported closed.
+function screenClosed(observed: ScreenObservation | null, config: DisplayConfig): boolean {
+  return observed?.state === "closed" || screenAtPosition(observed, 0, config.screenTolerance);
+}
+
+// Open for projector mode: at the configured position, or with none
+// configured, reported fully open (or stopped at the top).
+function screenOpen(observed: ScreenObservation | null, config: DisplayConfig): boolean {
+  if (config.screenOpenPosition !== null) return screenAtPosition(observed, config.screenOpenPosition, config.screenTolerance);
+  return observed?.state === "open" || screenAtPosition(observed, 100, config.screenTolerance);
 }
 
 function operationSatisfied(
@@ -295,22 +311,27 @@ function operationSatisfied(
   switch (operation) {
     case "tv_on": return observed.tv?.power === "on";
     case "tv_standby": return observed.tv?.power === "standby";
-    case "screen_open": return screenAtPosition(observed.screen, config.screenOpenPosition, config.screenTolerance);
-    case "screen_close": return screenAtPosition(observed.screen, 0, config.screenTolerance);
+    case "screen_open": return screenOpen(observed.screen, config);
+    case "screen_close": return screenClosed(observed.screen, config);
     default: return togglePowerSatisfied(operation, observed.projector?.power) ?? false;
   }
 }
 
-// The screen position, as a percentage of its travel, that the projector
-// mode opens it to when the setting is missing: most screens want a value of
-// their own, set in the editor.
-export const DEFAULT_SCREEN_OPEN_POSITION = 82;
+// Where projector mode opens the screen: a percentage above 0, or nothing
+// (empty, missing) for the screen's own open command. There is no default
+// position: each screen has its own.
+function screenOpenPositionSetting(value: unknown): number | null {
+  if (value === undefined || value === null || (typeof value === "string" && value.trim() === "")) return null;
+  const position = numberSetting(value, "screen open position", NaN);
+  if (!(position > 0 && position <= 100)) throw new Error("screen open position must be above 0 and at most 100, or empty");
+  return position;
+}
 
 // Settings may be editor strings; missing or unusable numbers take defaults.
 export function normaliseConfig(config: {[K in keyof DisplayConfig]?: unknown} = {}): DisplayConfig {
   const projectorWarmupMs = Math.max(1000, numberSetting(config.projectorWarmupMs, "projector warm-up", 60000));
   return {
-    screenOpenPosition: numberSetting(config.screenOpenPosition, "screen open position", DEFAULT_SCREEN_OPEN_POSITION),
+    screenOpenPosition: screenOpenPositionSetting(config.screenOpenPosition),
     screenTolerance: Math.max(0, numberSetting(config.screenTolerance, "screen tolerance", 2)),
     pollMs: Math.max(250, numberSetting(config.pollMs, "poll interval", 2000)),
     queryTimeoutMs: Math.max(1000, numberSetting(config.queryTimeoutMs, "query timeout", 5000)),
@@ -335,16 +356,16 @@ function modeSatisfied(state: DisplayState, config: DisplayConfig): boolean {
   if (state.desired.mode === "tv") {
     return state.observed.tv?.power === "on" &&
       state.observed.projector?.power === "standby" &&
-      screenAtPosition(state.observed.screen, 0, config.screenTolerance);
+      screenClosed(state.observed.screen, config);
   }
   if (state.desired.mode === "projector") {
     return state.observed.tv?.power === "standby" &&
       state.observed.projector?.power === "on" &&
-      screenAtPosition(state.observed.screen, config.screenOpenPosition, config.screenTolerance);
+      screenOpen(state.observed.screen, config);
   }
   return state.observed.tv?.power === "standby" &&
     state.observed.projector?.power === "standby" &&
-    screenAtPosition(state.observed.screen, 0, config.screenTolerance);
+    screenClosed(state.observed.screen, config);
 }
 
 export function transitionDisplay(
@@ -429,9 +450,13 @@ export function transitionDisplay(
     issue("tv", operation, commandFor(state, "tv", "set_power", {power}), config.tvTimeoutMs);
   }
 
-  function issueScreen(position: number) {
-    const operation = position === 0 ? "screen_close" : "screen_open";
-    issue("screen", operation, commandFor(state, "screen", "set_position", {position}), config.screenTimeoutMs);
+  // The screen open or closed. Opening with an open position configured, the
+  // command carries the position; otherwise the transport uses the screen's
+  // own open or close. Closing always runs to the end, which also restores a
+  // position the screen has lost.
+  function issueScreen(open: boolean) {
+    const position = open && config.screenOpenPosition !== null ? {position: config.screenOpenPosition} : {};
+    issue("screen", open ? "screen_open" : "screen_close", commandFor(state, "screen", open ? "open" : "close", position), config.screenTimeoutMs);
   }
 
   function issueProjectorStart() {
@@ -520,7 +545,7 @@ export function transitionDisplay(
         if (state.observed.projector?.power === "on") return issueProjectorShutdown();
         return awaitProjectorPower();
       }
-      if (!screenAtPosition(state.observed.screen, 0, config.screenTolerance)) return issueScreen(0);
+      if (!screenClosed(state.observed.screen, config)) return issueScreen(false);
       return markReady();
     }
 
@@ -532,8 +557,15 @@ export function transitionDisplay(
         if (state.observed.projector?.power === "standby") return issueProjectorStart();
         return awaitProjectorPower();
       }
-      if (!screenAtPosition(state.observed.screen, config.screenOpenPosition, config.screenTolerance)) {
-        return issueScreen(config.screenOpenPosition);
+      if (!screenOpen(state.observed.screen, config)) {
+        // A position to go to needs a screen that knows where it is: close it
+        // first, which restores a lost position; one still without a
+        // position once closed isn't calibrated for positions.
+        if (config.screenOpenPosition !== null && state.observed.screen?.position === null) {
+          if (!screenClosed(state.observed.screen, config)) return issueScreen(false);
+          return fail("screen", "screen_open", "screen-not-calibrated");
+        }
+        return issueScreen(true);
       }
       if (state.observed.tv?.power !== "standby") return issueTv("standby");
       return markReady();
@@ -544,7 +576,7 @@ export function transitionDisplay(
       if (state.observed.projector?.power === "on") return issueProjectorShutdown();
       return awaitProjectorPower();
     }
-    if (!screenAtPosition(state.observed.screen, 0, config.screenTolerance)) return issueScreen(0);
+    if (!screenClosed(state.observed.screen, config)) return issueScreen(false);
     return markReady();
   }
 
@@ -572,8 +604,10 @@ export function transitionDisplay(
       if (event.power !== "on" && event.power !== "standby") throw new Error("invalid TV power observation");
       state.observed.tv = {power: event.power, observedAt, source};
     } else if (device === "screen") {
-      const position = Number(event.position);
-      if (!Number.isFinite(position) || position < 0 || position > 100) throw new Error("invalid screen position");
+      // A position, or none (a screen that doesn't know it): then only its
+      // state says whether it is open or closed.
+      const position = event.position === undefined || event.position === null ? null : Number(event.position);
+      if (position !== null && (!Number.isFinite(position) || position < 0 || position > 100)) throw new Error("invalid screen position");
       state.observed.screen = {position, state: event.state || "unknown", observedAt, source};
     } else {
       const previous = state.observed.projector?.power || "unknown";

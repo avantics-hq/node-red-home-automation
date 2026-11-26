@@ -292,3 +292,16 @@ test("a receiver saved before 5.0 keeps its volume bounds through the editor, is
   assert.equal(definition.defaults.minVolumeDb!.validate!.call({}, "quiet"), false);
   assert.equal(definition.defaults.minVolumeDb!.validate!.call({}, -60), true);
 });
+
+test("the screen viewing position has no default: empty uses the screen's own open, and a saved position is kept", () => {
+  const definition = editorDefinition("display-mode-controller.html");
+  const setting = definition.defaults.screenOpenPosition!;
+  assert.deepEqual([setting.value, setting.required], ["", undefined]);
+  const valid = (value: unknown) => setting.validate!.call({}, value);
+  assert.deepEqual([valid(""), valid(82), valid("82"), valid(100), valid(0), valid(101), valid("wide")], [true, true, true, true, false, false, false]);
+  // A node saved before 5.0 with 82 keeps it as loaded, and it is valid; a
+  // hand-written node without the key stays without it (the screen's own open).
+  const saved = asLoaded(definition, {type: "home-display-mode-controller", screenOpenPosition: 82});
+  assert.deepEqual([saved.screenOpenPosition, valid(saved.screenOpenPosition)], [82, true]);
+  assert.equal(Object.hasOwn(asLoaded(definition, {type: "home-display-mode-controller"}), "screenOpenPosition"), false);
+});
