@@ -1,6 +1,6 @@
 "use strict";
 
-import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration} from "./adopted-request";
+import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration, adoptionReason, carryOn, answersRequest, savedCarried, type Carried} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {numberSetting} from "./settings";
 
@@ -103,6 +103,8 @@ export interface SourceState {
   refreshAsked: boolean;
   // The generation adopted from a refresh (see adopted-request.ts).
   adoptedGeneration: number | null;
+  // The generation a request carried on from (see carryOn).
+  carried?: Carried | null;
 }
 
 export type SourceEvent =
@@ -218,7 +220,8 @@ function initialState(
       : 0,
     fallbackUsed: saved.fallbackUsed === true,
     refreshAsked: saved.refreshAsked === true,
-    adoptedGeneration: savedAdoptedGeneration(saved)
+    adoptedGeneration: savedAdoptedGeneration(saved),
+    carried: savedCarried(saved)
   };
 }
 
@@ -515,7 +518,7 @@ export function transitionSource(
     if (!Object.hasOwn(OBSERVATION_STATUSES, event.status)) throw new Error("unknown source observation status");
     const parsedAt = parseObservedAt(event.observedAt);
     if (parsedAt === null || typeof event.observedAt !== "string") throw new Error("source observedAt must be an ISO timestamp");
-    if (!state.desired || event.generation !== state.generation || event.sourceId !== state.desired.sourceId) {
+    if (!state.desired || !answersRequest(state.carried, state.generation, event.generation) || event.sourceId !== state.desired.sourceId) {
       trace("observation", "ignored", "stale-generation", {generation: event.generation});
       return;
     }
@@ -548,7 +551,7 @@ export function transitionSource(
   }
 
   function acceptCommandResult(event: Extract<SourceEvent, {kind: "command_result"}>) {
-    if (!state.desired || event.generation !== state.generation ||
+    if (!state.desired || !answersRequest(state.carried, state.generation, event.generation) ||
       event.sourceId !== state.desired.sourceId || !state.pending) {
       trace("command-result", "ignored", "stale-generation");
       return;
@@ -595,14 +598,34 @@ export function transitionSource(
   // A refresh with the activity's wanted values, reaching a node with
   // nothing desired (it started with nothing saved): adopt them, and observe
   // below as at startup (see adopted-request.ts).
+  let replacedRequest = false;
   const adoptable = event.kind === "refresh" ? adoptableRefresh(event, state) : null;
-  if (adoptable && event.kind === "refresh" && typeof event.action === "string" && Object.hasOwn(ACTIONS, event.action) &&
+  // The same wanted values as the work in hand: carry on under the new
+  // request rather than adopting it read-only (see carryOn).
+  const carried = event.kind === "refresh" && carryOn(state, adoptable,
+    event.action === state.desired?.action && (event.sourceId || null) === (state.desired?.sourceId ?? null),
+    state.classification === "manual_override" || state.phase === "failed");
+  if (carried) trace("refresh", "continued", "same-request", {generation: state.generation});
+  if (!carried && adoptable && event.kind === "refresh" && typeof event.action === "string" && Object.hasOwn(ACTIONS, event.action) &&
     ((typeof event.sourceId === "string" && Object.hasOwn(config.sources, event.sourceId)) ||
       (!event.sourceId && event.action === "deactivate"))) {
+    const reason = adoptionReason(state.desired);
+    // Replacing a request the theatre already counts as ready, it answers
+    // from its reading, not with an interim state the theatre would take as
+    // drift.
+    replacedRequest = reason === "newer-generation";
+    // A request it replaces takes its classification, failure and work with
+    // it, and the source is read afresh below rather than kept ready.
+    state.failure = null;
+    state.classification = null;
+    state.lastAttempt = 0;
+    state.fallbackUsed = false;
+    state.pending = null;
+    if (reason === "newer-generation") state.phase = "idle";
     state.desired = {...adoptable, sourceId: event.sourceId || null, action: event.action as SourceAction};
     state.generation = adoptable.generation;
     state.adoptedGeneration = adoptable.generation;
-    trace("refresh", "adopted", "nothing-desired", {sourceId: event.sourceId || null, action: event.action, generation: adoptable.generation});
+    trace("refresh", "adopted", reason, {sourceId: event.sourceId || null, action: event.action, generation: adoptable.generation});
   }
 
   if (event.kind === "intent") {
@@ -657,7 +680,7 @@ export function transitionSource(
     trace("command", "withheld", ADOPTED_MISMATCH);
   }
 
-  const outputEvent = event.kind === "refresh" && state.refreshAsked ? null : targetEvent(state, now, config.sources);
+  const outputEvent = (event.kind === "refresh" && state.refreshAsked) || replacedRequest ? null : targetEvent(state, now, config.sources);
   if (outputEvent) events.push(outputEvent);
   return {state, commands, events, traces, status: statusFor(state)};
 }

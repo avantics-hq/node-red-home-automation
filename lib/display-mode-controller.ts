@@ -1,6 +1,6 @@
 "use strict";
 
-import {ADOPTED_MISMATCH, adoptableRefresh, readsOnly, savedAdoptedGeneration} from "./adopted-request";
+import {ADOPTED_MISMATCH, adoptableRefresh, readsOnly, savedAdoptedGeneration, adoptionReason, carryOn, answersRequest, savedCarried, type Carried} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {booleanSetting, numberSetting} from "./settings";
 
@@ -118,6 +118,8 @@ export interface DisplayState {
   fallbackUsed: boolean;
   // The generation adopted from a refresh (see adopted-request.ts).
   adoptedGeneration: number | null;
+  // The generation a request carried on from (see carryOn).
+  carried?: Carried | null;
   // While discovering: when to re-query a device that hasn't reported, and
   // after maxAttempts, fail naming it. Absent otherwise.
   discovery?: {attempt: number; nextAt: number};
@@ -179,6 +181,7 @@ function initialState(saved: Partial<DisplayState> = {}): DisplayState {
       : 0,
     fallbackUsed: saved.fallbackUsed === true,
     adoptedGeneration: savedAdoptedGeneration(saved),
+    carried: savedCarried(saved),
     ...(saved.discovery && Number.isFinite(saved.discovery.nextAt) ? {discovery: {...saved.discovery}} : {})
   };
 }
@@ -548,7 +551,7 @@ export function transitionDisplay(
   function acceptObservation(event: Extract<DisplayInputEvent, {kind: "observed"}>) {
     const device = event.device;
     if (!DEVICES.includes(device)) throw new Error("unknown display observation device");
-    if (Number.isInteger(event.generation) && state.desired && event.generation !== state.desired.generation) {
+    if (Number.isInteger(event.generation) && state.desired && !answersRequest(state.carried, state.desired.generation, event.generation)) {
       trace("observation", "ignored", "stale-generation", {device, generation: event.generation});
       return;
     }
@@ -694,13 +697,30 @@ export function transitionDisplay(
   // A refresh with the activity's wanted values, reaching a node with
   // nothing desired (it started with nothing saved): adopt them, and
   // rediscover below as at startup (see adopted-request.ts).
+  let replacedRequest = false;
   const adoptable = event.kind === "refresh" ? adoptableRefresh(event, state) : null;
-  const adopted = adoptable !== null && event.kind === "refresh" && typeof event.mode === "string" && Object.hasOwn(MODES, event.mode);
+  // The same wanted values as the work in hand: carry on under the new
+  // request rather than adopting it read-only (see carryOn).
+  const carried = event.kind === "refresh" && carryOn(state, adoptable, event.mode === state.desired?.mode,
+    state.classification === "manual_override" || state.phase === "failed" || state.blockedGeneration === state.desired?.generation);
+  if (carried) trace("refresh", "continued", "same-request", {generation: state.generation});
+  const adopted = !carried && adoptable !== null && event.kind === "refresh" && typeof event.mode === "string" && Object.hasOwn(MODES, event.mode);
   if (adopted) {
+    const reason = adoptionReason(state.desired);
+    // Replacing a request the theatre already counts as ready, it answers
+    // from its reading, not with an interim state the theatre would take as
+    // drift.
+    replacedRequest = reason === "newer-generation";
+    // A request it replaces takes its classification and failure with it.
+    state.failure = null;
+    state.blockedGeneration = null;
+    state.classification = null;
+    state.lastAttempt = 0;
+    state.fallbackUsed = false;
     state.desired = {...adoptable, mode: event.mode as DisplayMode};
     state.generation = adoptable.generation;
     state.adoptedGeneration = adoptable.generation;
-    trace("refresh", "adopted", "nothing-desired", {mode: event.mode, generation: adoptable.generation});
+    trace("refresh", "adopted", reason, {mode: event.mode, generation: adoptable.generation});
   }
 
   if (event.kind === "startup" || adopted) {
@@ -758,7 +778,7 @@ export function transitionDisplay(
   } else if (event.kind === "observed") {
     acceptObservation(event);
   } else if (event.kind === "transport_failed") {
-    if (Number.isInteger(event.generation) && state.desired && event.generation !== state.desired.generation) {
+    if (Number.isInteger(event.generation) && state.desired && !answersRequest(state.carried, state.desired.generation, event.generation)) {
       trace("transport", "ignored", "stale-generation", {device: event.device});
     } else if (state.querying[event.device]) {
       state.querying[event.device] = false;
@@ -808,7 +828,7 @@ export function transitionDisplay(
     trace("command", "withheld", ADOPTED_MISMATCH);
   }
 
-  if (state.desired) {
+  if (state.desired && !replacedRequest) {
     const readings = DEVICES.map((device) => parseObservedAt(state.observed[device]?.observedAt));
     const confirmedMs = readings.every((ms): ms is number => ms !== null) ? Math.min(...readings) : null;
     const status = state.phase === "manual_override"

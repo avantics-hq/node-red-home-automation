@@ -1,6 +1,6 @@
 "use strict";
 
-import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration} from "./adopted-request";
+import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration, adoptionReason, carryOn, answersRequest, savedCarried, type Carried} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {numberSetting} from "./settings";
 
@@ -54,6 +54,8 @@ export interface BacklightingState {
   lastAttempt: number;
   // The generation adopted from a refresh (see adopted-request.ts).
   adoptedGeneration: number | null;
+  // The generation a request carried on from (see carryOn).
+  carried?: Carried | null;
 }
 
 export type BacklightingEvent =
@@ -118,7 +120,8 @@ function initialState(saved: Partial<BacklightingState> = {}): BacklightingState
     lastAttempt: Number.isInteger(saved.lastAttempt) && (saved.lastAttempt ?? -1) >= 0
       ? saved.lastAttempt!
       : 0,
-    adoptedGeneration: savedAdoptedGeneration(saved)
+    adoptedGeneration: savedAdoptedGeneration(saved),
+    carried: savedCarried(saved)
   };
 }
 
@@ -233,7 +236,7 @@ export function transitionBacklighting(
     if (parsedAt === null || typeof observation.observedAt !== "string") {
       throw new Error("backlighting observedAt must be an ISO timestamp");
     }
-    if (!state.desired || observation.generation !== state.generation) {
+    if (!state.desired || !answersRequest(state.carried, state.generation, observation.generation)) {
       trace("observation", "ignored", "stale-generation");
       return;
     }
@@ -283,11 +286,26 @@ export function transitionBacklighting(
   // below as at startup (see adopted-request.ts).
   let answerWithReading = false;
   const adoptable = event.kind === "refresh" ? adoptableRefresh(event, state) : null;
-  if (adoptable && event.kind === "refresh" && typeof event.power === "string" && Object.hasOwn(POWERS, event.power)) {
+  // The same wanted values as the work in hand: carry on under the new
+  // request rather than adopting it read-only (see carryOn).
+  const carried = event.kind === "refresh" && carryOn(state, adoptable, event.power === state.desired?.power,
+    state.classification === "manual_override" || state.phase === "failed" || state.blockedGeneration === state.desired?.generation);
+  if (carried) trace("refresh", "continued", "same-request", {generation: state.generation});
+  if (!carried && adoptable && event.kind === "refresh" && typeof event.power === "string" && Object.hasOwn(POWERS, event.power)) {
+    const reason = adoptionReason(state.desired);
+    // Replacing a request the theatre already counts as ready, it answers
+    // from its reading, not with an interim state the theatre would take as
+    // drift.
+    answerWithReading = reason === "newer-generation";
+    // A request it replaces takes its classification and failure with it.
+    state.failure = null;
+    state.blockedGeneration = null;
+    state.classification = null;
+    state.lastAttempt = 0;
     state.desired = {...adoptable, power: event.power as BacklightingPower, requestedAt: now.toISOString()};
     state.generation = adoptable.generation;
     state.adoptedGeneration = adoptable.generation;
-    trace("refresh", "adopted", "nothing-desired", {power: event.power, generation: adoptable.generation});
+    trace("refresh", "adopted", reason, {power: event.power, generation: adoptable.generation});
   }
 
   if (event.kind === "intent") {
@@ -295,7 +313,7 @@ export function transitionBacklighting(
   } else if (event.kind === "observed") {
     acceptObservation(event);
   } else if (event.kind === "command_result") {
-    if (!state.desired || event.generation !== state.generation || !state.pending) {
+    if (!state.desired || !answersRequest(state.carried, state.generation, event.generation) || !state.pending) {
       trace("command-result", "ignored", "stale-generation");
     } else if (event.ok === true) {
       state.phase = "confirming";

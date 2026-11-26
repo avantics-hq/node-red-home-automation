@@ -158,10 +158,15 @@ test("a node with nothing saved adopts a refresh's wanted power and observes, ne
   // A new explicit request is commanded as usual.
   assert.deepEqual(intent(other.state, "on", 9, 11).commands.map(({operation}) => operation), ["set_power"]);
 
-  // A refresh with no values, or for a node that has a request, changes nothing.
+  // A refresh with no values, or for a node whose request is as new, changes nothing.
   assert.equal(apply(undefined, {kind: "refresh"}, 0).state.desired, null);
   const busy = intent(undefined, "off", 3);
-  assert.equal(apply(busy.state, {kind: "refresh", requestId: "activity-9", generation: 9, power: "on"}, 1).state.desired?.requestId, "backlighting-3");
+  assert.equal(apply(busy.state, {kind: "refresh", requestId: "activity-3", generation: 3, power: "on"}, 1).state.desired?.requestId, "backlighting-3");
+  assert.equal(apply(busy.state, {kind: "refresh", requestId: "activity-2", generation: 2, power: "on"}, 1).state.desired?.requestId, "backlighting-3");
+  // A newer one is adopted, read-only, as for a node with nothing saved.
+  const replaced = apply(busy.state, {kind: "refresh", requestId: "activity-9", generation: 9, power: "on"}, 1);
+  assert.equal(replaced.state.desired?.requestId, "activity-9");
+  assert.deepEqual(replaced.commands.map(({operation}) => operation), ["observe"]);
 });
 
 function readyOn() {
@@ -198,4 +203,19 @@ test("a refresh of backlighting that isn't ready, and a startup, still re-observ
   assert.deepEqual([refreshed.state.phase, refreshed.state.pending?.operation, refreshed.events[0]?.theatre.status], ["confirming", "observe", "confirming"]);
   const started = apply(readyOn().state, {kind: "startup"}, 30);
   assert.deepEqual([started.state.phase, started.state.pending?.operation, started.state.observed], ["confirming", "observe", null]);
+});
+
+test("after carrying on, the command result and reading for the replaced generation still count", () => {
+  let result = intent(undefined, "on", 1);
+  result = apply(result.state, {kind: "refresh", requestId: "recovery-2", generation: 2, power: "on"}, 0.1);
+  assert.deepEqual([result.state.generation, result.state.adoptedGeneration], [2, null], "carried on, not adopted");
+  result = apply(result.state, {kind: "command_result", generation: 1, ok: true}, 0.2);
+  assert.equal(result.traces.at(-1)?.outcome, "accepted");
+  result = apply(result.state, {kind: "observed", generation: 1, power: "on", observedAt: at(0.3).toISOString()}, 0.3);
+  assert.equal(result.state.phase, "ready");
+  assert.deepEqual([result.events[0]?.theatre.status, result.events[0]?.theatre.generation], ["ready", 2]);
+  // After a later request, they're stale.
+  result = intent(result.state, "off", 3, 1);
+  result = apply(result.state, {kind: "observed", generation: 1, power: "on", observedAt: at(1.1).toISOString()}, 1.1);
+  assert.equal(result.traces.at(-1)?.reason, "stale-generation");
 });

@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {evaluateTheatreSlo, type TheatreSloState} from "../lib/theatre-slo";
+import {transitionAvr, type AvrState} from "../lib/avr-controller";
 import {transitionBacklighting, type BacklightingState} from "../lib/backlighting-controller";
 import {
   normaliseActivityProfiles,
@@ -813,4 +814,122 @@ test("off and ready: unanswered backlighting refreshes end as no-response with t
   const last = rounds.at(-1)!;
   assert.deepEqual([last.status, last.pending, last.degraded], ["ready", null, null], "recovers once the device answers");
   assert.equal(drift, 0);
+});
+
+// tv_shield running, then the receiver switched to the PlayStation by hand:
+// a manual override, and the recovery flow adopts tv_ps5 from what the devices
+// show. The receiver and backlighting are their real controllers; the display
+// and source answer each command ready for the theatre's generation. After
+// recovery the backlighting reports `afterRecovery`. Refresh cycles follow.
+function recoveryRoundTrip(afterRecovery: "on" | "off") {
+  const avrConfig = {area: "lounge", sources: {shield: "SAT/CBL", playstation: "GAME"}, retryMs: 1000, maxAttempts: 3, minVolume: 0, maxVolume: 60};
+  const backlightingConfig = {pollMs: 1000, confirmationTimeoutMs: 5000, maxAttempts: 2};
+  let theatre: ReturnType<typeof transitionTheatre> | undefined;
+  let avr: ReturnType<typeof transitionAvr> | undefined;
+  let lights: ReturnType<typeof transitionBacklighting> | undefined;
+  let receiverSource = "SAT/CBL";
+  let lightsPower: "on" | "off" = "on";
+  const sent: Array<[number, string, string]> = [];
+  const reports: Array<[number, string, number, string, string | null]> = [];
+  const queue: Array<{to: string; event: Record<string, unknown>}> = [];
+  const run = (seconds: number) => {
+    while (queue.length) {
+      const {to, event} = queue.shift()!;
+      if (to === "theatre") {
+        theatre = transitionTheatre(theatre?.state, {theatre: event as TheatreInputEvent}, config, at(seconds));
+        for (const {target: name, ...command} of theatre.commands) {
+          if (name === "avr" || name === "backlighting") queue.push({to: name, event: command});
+          else if (name !== "lighting") {
+            queue.push({to: "theatre", event: {kind: "target_state", target: name, status: "ready", generation: command.generation, observedAt: at(seconds).toISOString()}});
+          }
+        }
+      } else if (to === "avr") {
+        avr = transitionAvr(avr?.state as Partial<AvrState> | undefined, {avr: event as never}, avrConfig, at(seconds));
+        for (const {avrCommand, payload} of avr.commands) {
+          sent.push([seconds, "avr", avrCommand.operation]);
+          if (avrCommand.operation === "query") queue.push({to: "avr", event: {kind: "observed", line: `PWON\rZMON\rSI${receiverSource}\rMV30\r`}});
+          else if (payload.startsWith("SI")) receiverSource = payload.slice(2).trim();
+        }
+        for (const {theatre: state} of avr.targetStates) {
+          reports.push([seconds, "avr", state.generation, state.status, state.classification ?? null]);
+          queue.push({to: "theatre", event: state as unknown as Record<string, unknown>});
+        }
+      } else {
+        lights = transitionBacklighting(lights?.state as Partial<BacklightingState> | undefined, {backlighting: event as never}, backlightingConfig, at(seconds));
+        for (const command of lights.commands) {
+          sent.push([seconds, "backlighting", command.operation]);
+          if (command.operation === "set_power") {
+            lightsPower = command.power as "on" | "off";
+            queue.push({to: "backlighting", event: {kind: "command_result", generation: command.generation, ok: true}});
+          }
+          queue.push({to: "backlighting", event: {kind: "observed", generation: command.generation, power: lightsPower, observedAt: at(seconds).toISOString()}});
+        }
+        for (const {theatre: state} of lights.events) {
+          reports.push([seconds, "backlighting", state.generation, state.status, state.classification ?? null]);
+          queue.push({to: "theatre", event: state as unknown as Record<string, unknown>});
+        }
+      }
+    }
+  };
+  queue.push({to: "theatre", event: {kind: "intent", requestId: "tv_shield-1", generation: 1, activity: "tv_shield"}});
+  run(0);
+  queue.push({to: "theatre", event: {kind: "target_state", target: "source", status: "ready", generation: 1, observedAt: at(0.5).toISOString()}});
+  run(0.5);
+  assert.equal(theatre!.state.phase, "ready");
+  // By hand: the receiver to the PlayStation.
+  receiverSource = "GAME";
+  queue.push({to: "avr", event: {kind: "observed", line: "SIGAME"}});
+  run(5);
+  assert.equal(theatre!.state.phase, "manual_override");
+  const fresh = at(6).toISOString();
+  queue.push({to: "theatre", event: {kind: "recover", reason: "manual_override", observations: {
+    display: {values: {mode: "tv"}, observedAt: fresh},
+    avr: {values: {power: "on", source: "playstation"}, observedAt: fresh},
+    source: {values: {action: "activate", sourceId: "playstation"}, observedAt: fresh},
+    backlighting: {values: {power: "on"}, observedAt: fresh}
+  }}});
+  run(6);
+  assert.deepEqual([theatre!.state.phase, theatre!.state.generation, theatre!.state.currentActivity], ["ready", 2, "tv_ps5"]);
+  const overridesAtRecovery = theatre!.state.metrics.manualOverrides;
+  const driftAtRecovery = theatre!.state.metrics.driftEvents;
+  const sentBefore = sent.length;
+  lightsPower = afterRecovery;
+  const phases: string[] = [];
+  for (let seconds = 15; seconds <= 120; seconds += 15) {
+    queue.push({to: "theatre", event: {kind: "tick", generation: theatre!.state.generation}});
+    run(seconds);
+    phases.push(theatre!.state.phase);
+  }
+  return {
+    theatre: theatre!.state,
+    phases,
+    overridesSinceRecovery: theatre!.state.metrics.manualOverrides - overridesAtRecovery,
+    driftSinceRecovery: theatre!.state.metrics.driftEvents - driftAtRecovery,
+    actuated: sent.slice(sentBefore).filter(([, , operation]) => operation !== "query" && operation !== "observe"),
+    reports: reports.filter(([seconds]) => seconds > 6)
+  };
+}
+
+test("after a recovery, unchanged devices take the new request: refreshes stay ready, with no second override and nothing commanded", () => {
+  const outcome = recoveryRoundTrip("on");
+  assert.ok(outcome.phases.every((phase) => phase === "ready"), outcome.phases.join(","));
+  assert.equal(outcome.overridesSinceRecovery, 0);
+  assert.equal(outcome.driftSinceRecovery, 0, "no drift while the devices catch up");
+  assert.equal(outcome.theatre.metrics.recoveriesAdopted, 1, "no second recovery");
+  assert.deepEqual(outcome.actuated, [], "nothing sent to devices that already match");
+  // Both answer under the recovered request, ready.
+  for (const name of ["avr", "backlighting"]) {
+    const theirs = outcome.reports.filter(([, target]) => target === name);
+    assert.ok(theirs.length > 0, name);
+    assert.ok(theirs.every(([, , generation, status, classification]) => generation === 2 && status === "ready" && classification === null), `${name}: ${JSON.stringify(theirs)}`);
+    assert.ok(!outcome.theatre.degraded.some(({target}) => target === name), name);
+  }
+});
+
+test("after a recovery, a device that really differs is a manual override once, and is never commanded", () => {
+  const outcome = recoveryRoundTrip("off");
+  assert.equal(outcome.overridesSinceRecovery, 1, "once, however many refreshes follow");
+  assert.equal(outcome.theatre.targets.backlighting?.classification, "manual_override");
+  assert.equal(outcome.theatre.phase, "manual_override");
+  assert.deepEqual(outcome.actuated, []);
 });

@@ -1,7 +1,7 @@
 "use strict";
 
 import {lightValues} from "./z2m-light";
-import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration} from "./adopted-request";
+import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration, adoptionReason, carryOn, answersRequest, savedCarried, type Carried} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {numberSetting, textSetting} from "./settings";
 
@@ -74,6 +74,8 @@ export interface ActivityLightingState {
   blockedGeneration: number | null;
   // The generation adopted from a refresh (see adopted-request.ts).
   adoptedGeneration: number | null;
+  // The generation a request carried on from (see carryOn).
+  carried?: Carried | null;
 }
 
 export type ActivityLightingEvent =
@@ -220,7 +222,8 @@ function initialState(
     pending: saved.pending && typeof saved.pending === "object" ? {...saved.pending} : null,
     failure: saved.failure && typeof saved.failure === "object" ? {...saved.failure} : null,
     blockedGeneration: Number.isInteger(saved.blockedGeneration) ? saved.blockedGeneration! : null,
-    adoptedGeneration: savedAdoptedGeneration(saved)
+    adoptedGeneration: savedAdoptedGeneration(saved),
+    carried: savedCarried(saved)
   };
 }
 
@@ -423,7 +426,7 @@ export function transitionActivityLighting(
     if (parsedAt === null || typeof observation.observedAt !== "string") {
       throw new Error("activity lighting observedAt must be an ISO timestamp");
     }
-    if (!state.desired || observation.generation !== state.generation) {
+    if (!state.desired || !answersRequest(state.carried, state.generation, observation.generation)) {
       trace("observation", "ignored", "stale-generation");
       return;
     }
@@ -460,13 +463,26 @@ export function transitionActivityLighting(
   // unknown, so the next activity releases every light it holds.
   let answerWithReading = false;
   const adoptable = event.kind === "refresh" ? adoptableRefresh(event, state) : null;
-  const adopted = adoptable !== null && event.kind === "refresh" && typeof event.profile === "string" && Object.hasOwn(config.profiles, event.profile);
+  // The same wanted values as the work in hand: carry on under the new
+  // request rather than adopting it read-only (see carryOn).
+  const carried = event.kind === "refresh" && carryOn(state, adoptable, event.profile === state.desired?.profile,
+    state.phase === "manual_override" || state.phase === "failed" || state.blockedGeneration === state.desired?.generation);
+  if (carried) trace("refresh", "continued", "same-request", {generation: state.generation});
+  const adopted = !carried && adoptable !== null && event.kind === "refresh" && typeof event.profile === "string" && Object.hasOwn(config.profiles, event.profile);
   if (adopted && event.kind === "refresh") {
+    const reason = adoptionReason(state.desired);
+    // Replacing a request the theatre already counts as ready, it answers
+    // from its reading, not with an interim state the theatre would take as
+    // drift.
+    answerWithReading = reason === "newer-generation";
+    // A request it replaces takes its failure with it.
+    state.failure = null;
+    state.blockedGeneration = null;
     state.desired = {...adoptable, profile: event.profile as string, requestedAt: now.toISOString()};
     state.generation = adoptable.generation;
     state.adoptedGeneration = adoptable.generation;
     state.applied = {profile: event.profile as string, targets: null};
-    trace("refresh", "adopted", "nothing-desired", {profile: event.profile, generation: adoptable.generation});
+    trace("refresh", "adopted", reason, {profile: event.profile, generation: adoptable.generation});
   }
 
   if (event.kind === "intent") {
@@ -474,7 +490,7 @@ export function transitionActivityLighting(
   } else if (event.kind === "observed") {
     acceptObservation(event);
   } else if (event.kind === "command_result") {
-    if (!state.desired || event.generation !== state.generation || !state.pending) {
+    if (!state.desired || !answersRequest(state.carried, state.generation, event.generation) || !state.pending) {
       trace("command-result", "ignored", "stale-generation");
     } else if (event.ok === true) {
       state.phase = "confirming";

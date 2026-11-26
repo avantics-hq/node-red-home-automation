@@ -1,6 +1,6 @@
 "use strict";
 
-import {ADOPTED_MISMATCH, adoptableRefresh, readsOnly, savedAdoptedGeneration} from "./adopted-request";
+import {ADOPTED_MISMATCH, adoptableRefresh, readsOnly, savedAdoptedGeneration, adoptionReason, carryOn} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {numberSetting} from "./settings";
 import {asTargetStatus, targetStateEvent, type TargetStateEvent} from "./target-state";
@@ -629,14 +629,31 @@ export function transitionAvr(
   // A refresh with the activity's wanted values, reaching a node with
   // nothing desired (it started with nothing saved): adopt them, and
   // rediscover below as at startup (see adopted-request.ts).
+  let replacedRequest = false;
   const adoptable = event.kind === "refresh" ? adoptableRefresh(event, state) : null;
-  const adopted = adoptable !== null && event.kind === "refresh" &&
+  // The same wanted values as the work in hand: carry on under the new
+  // request rather than adopting it read-only (see carryOn).
+  const carried = event.kind === "refresh" && carryOn(state, adoptable,
+    event.power === state.desired?.power && (event.source || null) === (state.desired?.source ?? null),
+    state.classification === "manual_override" || state.phase === "failed" || state.blockedGeneration === state.desired?.generation);
+  if (carried) trace("refresh", "continued", "same-request", {generation: state.generation});
+  const adopted = !carried && adoptable !== null && event.kind === "refresh" &&
     validateIntent({kind: "intent", ...adoptable, power: event.power as AvrPower, source: event.source ?? null}) === null;
   if (adopted && event.kind === "refresh") {
+    const reason = adoptionReason(state.desired);
+    // Replacing a request the theatre already counts as ready, it answers
+    // from its reading, not with an interim state the theatre would take as
+    // drift.
+    replacedRequest = reason === "newer-generation";
+    // A request it replaces takes its classification and failure with it.
+    state.failure = null;
+    state.blockedGeneration = null;
+    state.classification = null;
+    state.lastAttempt = 0;
     state.desired = {...adoptable, power: event.power as AvrPower, source: event.source || null};
     state.generation = adoptable.generation;
     state.adoptedGeneration = adoptable.generation;
-    trace("refresh", "adopted", "nothing-desired", {power: event.power, source: event.source || null, generation: adoptable.generation});
+    trace("refresh", "adopted", reason, {power: event.power, source: event.source || null, generation: adoptable.generation});
   }
 
   if (event.kind === "refresh" && !adopted) {
@@ -1038,7 +1055,7 @@ export function transitionAvr(
   // with the oldest report among the fields the request needs, so it is only
   // as fresh as its least recent confirmation, and is re-sent only when the
   // receiver reports one of those fields.
-  if (state.desired) {
+  if (state.desired && !replacedRequest) {
     const fields = requiredFields();
     const status = state.phase === "manual_override"
       ? "transitioning"

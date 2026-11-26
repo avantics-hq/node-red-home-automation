@@ -369,3 +369,13 @@ test("a refresh of room lighting that isn't ready, and a startup, still re-obser
   const started = apply(readyTv().state, {kind: "startup"}, 30);
   assert.deepEqual([started.state.phase, started.state.observed, started.state.pending?.attempt], ["confirming", {}, 0]);
 });
+
+test("after carrying on, readings for the replaced generation still count", () => {
+  let result = intent(undefined, "tv", 1);
+  result = apply(result.state, {kind: "refresh", requestId: "recovery-2", generation: 2, profile: "tv"}, 0.1);
+  assert.deepEqual([result.state.generation, result.state.adoptedGeneration], [2, null]);
+  for (const [seconds, target] of [[1, "wall"], [1.1, "lamp"]] as const) {
+    result = apply(result.state, {kind: "observed", generation: 1, target, on: true, values: {brightness: 64, color_temp: 400}, observedAt: at(seconds).toISOString()}, seconds);
+  }
+  assert.deepEqual([result.state.phase, result.events[0]?.theatre.generation], ["ready", 2]);
+});
