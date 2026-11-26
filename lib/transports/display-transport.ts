@@ -1,5 +1,9 @@
 "use strict";
-import type {DisplayDevice, DisplayMessage} from "./display-mode-controller";
+
+// The display's device I/O: the TV, screen and projector meter over HTTP.
+// Kept apart from lib/'s pure reducers; it depends on the display
+// reducer's types, never the reverse, and is used by the display node.
+import type {DisplayDevice, DisplayMessage} from "../display-mode-controller";
 
 
 interface CodedError extends Error {
