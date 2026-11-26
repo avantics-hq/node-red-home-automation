@@ -1,6 +1,6 @@
 "use strict";
 
-import {ADOPTED_MISMATCH, adoptableRefresh, readsOnly, savedAdoptedGeneration, adoptionReason, carryOn} from "./adopted-request";
+import {ADOPTED_MISMATCH, adoptableRefresh, readsOnly, savedAdoptedGeneration, adoptionReason, carryOn, answersRequest, savedCarried, type Carried} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {booleanSetting, numberSetting} from "./settings";
 
@@ -118,6 +118,8 @@ export interface DisplayState {
   fallbackUsed: boolean;
   // The generation adopted from a refresh (see adopted-request.ts).
   adoptedGeneration: number | null;
+  // The generation a request carried on from (see carryOn).
+  carried?: Carried | null;
   // While discovering: when to re-query a device that hasn't reported, and
   // after maxAttempts, fail naming it. Absent otherwise.
   discovery?: {attempt: number; nextAt: number};
@@ -179,6 +181,7 @@ function initialState(saved: Partial<DisplayState> = {}): DisplayState {
       : 0,
     fallbackUsed: saved.fallbackUsed === true,
     adoptedGeneration: savedAdoptedGeneration(saved),
+    carried: savedCarried(saved),
     ...(saved.discovery && Number.isFinite(saved.discovery.nextAt) ? {discovery: {...saved.discovery}} : {})
   };
 }
@@ -548,7 +551,7 @@ export function transitionDisplay(
   function acceptObservation(event: Extract<DisplayInputEvent, {kind: "observed"}>) {
     const device = event.device;
     if (!DEVICES.includes(device)) throw new Error("unknown display observation device");
-    if (Number.isInteger(event.generation) && state.desired && event.generation !== state.desired.generation) {
+    if (Number.isInteger(event.generation) && state.desired && !answersRequest(state.carried, state.desired.generation, event.generation)) {
       trace("observation", "ignored", "stale-generation", {device, generation: event.generation});
       return;
     }
@@ -775,7 +778,7 @@ export function transitionDisplay(
   } else if (event.kind === "observed") {
     acceptObservation(event);
   } else if (event.kind === "transport_failed") {
-    if (Number.isInteger(event.generation) && state.desired && event.generation !== state.desired.generation) {
+    if (Number.isInteger(event.generation) && state.desired && !answersRequest(state.carried, state.desired.generation, event.generation)) {
       trace("transport", "ignored", "stale-generation", {device: event.device});
     } else if (state.querying[event.device]) {
       state.querying[event.device] = false;

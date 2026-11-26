@@ -42,13 +42,16 @@ export function adoptableRefresh(
 // afresh by adopting. An adopted request stays read-only under the new
 // generation. Returns whether it carried on.
 export function carryOn(
-  state: {desired: AdoptedRequest | null; generation: number; adoptedGeneration: number | null; phase: string; pending?: unknown},
+  state: {desired: AdoptedRequest | null; generation: number; adoptedGeneration: number | null; phase: string; pending?: unknown; carried?: Carried | null},
   adoptable: AdoptedRequest | null,
   wantsSame: boolean,
   held: boolean
 ): boolean {
   if (!adoptable || !state.desired || !wantsSame || held) return false;
   const adopted = isAdopted(state);
+  // Answers to commands already sent are tagged with the generation it
+  // carries on from (see answersRequest).
+  state.carried = {from: state.desired.generation, to: adoptable.generation};
   state.desired.requestId = adoptable.requestId;
   state.desired.generation = adoptable.generation;
   state.generation = adoptable.generation;
@@ -60,6 +63,25 @@ export function carryOn(
     command.requestId = adoptable.requestId;
   }
   return true;
+}
+
+// The generation a request carried on from, and the one it now has.
+export interface Carried {
+  from: number;
+  to: number;
+}
+
+export function savedCarried(saved: {carried?: unknown}): Carried | null {
+  const carried = saved.carried as Partial<Carried> | null | undefined;
+  return carried && Number.isInteger(carried.from) && Number.isInteger(carried.to) ? {from: carried.from!, to: carried.to!} : null;
+}
+
+// Whether a reading or command result tagged `generation` answers the
+// request `current`: its own generation, or the one it carried on from, for
+// a command sent before it did. Once a later request replaces it, only that
+// request's generation counts.
+export function answersRequest(carried: Carried | null | undefined, current: number, generation: unknown): boolean {
+  return generation === current || (Boolean(carried) && carried!.to === current && generation === carried!.from);
 }
 
 // The trace reason for an adoption: a node with nothing saved, or one whose

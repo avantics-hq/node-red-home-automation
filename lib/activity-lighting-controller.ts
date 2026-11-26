@@ -1,7 +1,7 @@
 "use strict";
 
 import {lightValues} from "./z2m-light";
-import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration, adoptionReason, carryOn} from "./adopted-request";
+import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration, adoptionReason, carryOn, answersRequest, savedCarried, type Carried} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {numberSetting, textSetting} from "./settings";
 
@@ -74,6 +74,8 @@ export interface ActivityLightingState {
   blockedGeneration: number | null;
   // The generation adopted from a refresh (see adopted-request.ts).
   adoptedGeneration: number | null;
+  // The generation a request carried on from (see carryOn).
+  carried?: Carried | null;
 }
 
 export type ActivityLightingEvent =
@@ -220,7 +222,8 @@ function initialState(
     pending: saved.pending && typeof saved.pending === "object" ? {...saved.pending} : null,
     failure: saved.failure && typeof saved.failure === "object" ? {...saved.failure} : null,
     blockedGeneration: Number.isInteger(saved.blockedGeneration) ? saved.blockedGeneration! : null,
-    adoptedGeneration: savedAdoptedGeneration(saved)
+    adoptedGeneration: savedAdoptedGeneration(saved),
+    carried: savedCarried(saved)
   };
 }
 
@@ -423,7 +426,7 @@ export function transitionActivityLighting(
     if (parsedAt === null || typeof observation.observedAt !== "string") {
       throw new Error("activity lighting observedAt must be an ISO timestamp");
     }
-    if (!state.desired || observation.generation !== state.generation) {
+    if (!state.desired || !answersRequest(state.carried, state.generation, observation.generation)) {
       trace("observation", "ignored", "stale-generation");
       return;
     }
@@ -487,7 +490,7 @@ export function transitionActivityLighting(
   } else if (event.kind === "observed") {
     acceptObservation(event);
   } else if (event.kind === "command_result") {
-    if (!state.desired || event.generation !== state.generation || !state.pending) {
+    if (!state.desired || !answersRequest(state.carried, state.generation, event.generation) || !state.pending) {
       trace("command-result", "ignored", "stale-generation");
     } else if (event.ok === true) {
       state.phase = "confirming";

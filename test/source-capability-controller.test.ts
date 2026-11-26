@@ -406,3 +406,12 @@ test("a newer refresh that wants the source already being switched to carries on
   assert.deepEqual([other.state.desired?.sourceId, other.state.adoptedGeneration], ["player", 3]);
   assert.deepEqual(other.commands.filter(({operation}) => operation === "activate"), []);
 });
+
+test("after carrying on, the activation's result and reading for the replaced generation still count", () => {
+  let result = intent(undefined, "streamer");
+  result = apply(result.state, {kind: "refresh", requestId: "recovery-2", generation: 2, sourceId: "streamer", action: "activate"}, 0.1);
+  result = apply(result.state, {kind: "command_result", sourceId: "streamer", generation: 1, ok: true}, 0.2);
+  assert.equal(result.state.phase, "confirming");
+  result = observed(result.state, "streamer", "active", 1, 0.3);
+  assert.deepEqual([result.state.phase, theatreState(result).generation], ["ready", 2]);
+});

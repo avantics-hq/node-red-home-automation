@@ -1,6 +1,6 @@
 "use strict";
 
-import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration, adoptionReason, carryOn} from "./adopted-request";
+import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration, adoptionReason, carryOn, answersRequest, savedCarried, type Carried} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {numberSetting} from "./settings";
 
@@ -54,6 +54,8 @@ export interface BacklightingState {
   lastAttempt: number;
   // The generation adopted from a refresh (see adopted-request.ts).
   adoptedGeneration: number | null;
+  // The generation a request carried on from (see carryOn).
+  carried?: Carried | null;
 }
 
 export type BacklightingEvent =
@@ -118,7 +120,8 @@ function initialState(saved: Partial<BacklightingState> = {}): BacklightingState
     lastAttempt: Number.isInteger(saved.lastAttempt) && (saved.lastAttempt ?? -1) >= 0
       ? saved.lastAttempt!
       : 0,
-    adoptedGeneration: savedAdoptedGeneration(saved)
+    adoptedGeneration: savedAdoptedGeneration(saved),
+    carried: savedCarried(saved)
   };
 }
 
@@ -233,7 +236,7 @@ export function transitionBacklighting(
     if (parsedAt === null || typeof observation.observedAt !== "string") {
       throw new Error("backlighting observedAt must be an ISO timestamp");
     }
-    if (!state.desired || observation.generation !== state.generation) {
+    if (!state.desired || !answersRequest(state.carried, state.generation, observation.generation)) {
       trace("observation", "ignored", "stale-generation");
       return;
     }
@@ -310,7 +313,7 @@ export function transitionBacklighting(
   } else if (event.kind === "observed") {
     acceptObservation(event);
   } else if (event.kind === "command_result") {
-    if (!state.desired || event.generation !== state.generation || !state.pending) {
+    if (!state.desired || !answersRequest(state.carried, state.generation, event.generation) || !state.pending) {
       trace("command-result", "ignored", "stale-generation");
     } else if (event.ok === true) {
       state.phase = "confirming";

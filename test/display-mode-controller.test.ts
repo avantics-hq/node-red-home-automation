@@ -690,3 +690,24 @@ test("a newer refresh that wants the projector mode already warming up carries o
   assert.equal(other.state.adoptedGeneration, 3);
   assert.deepEqual(other.commands.filter(({operation}) => !operation.startsWith("query")), []);
 });
+
+test("after carrying on, answers to queries sent under the replaced generation still count; after a later request they don't", () => {
+  const strict = {...config, maxAttempts: 1};
+  let result = transitionDisplay(undefined, {display: {kind: "intent", requestId: "p-1", generation: 1, mode: "projector"}}, strict, at(0));
+  const queries = result.commands;
+  assert.deepEqual(queries.map(({generation}) => generation), [1, 1, 1]);
+  // The same mode, newer, before the discovery queries are answered.
+  result = transitionDisplay(result.state, {display: {kind: "refresh", requestId: "recovery-2", generation: 2, mode: "projector"}}, strict, at(0.1));
+  assert.equal(result.state.generation, 2);
+  for (const [device, values] of [["tv", {power: "on"}], ["screen", {position: 0, state: "closed"}], ["projector", {watts: 2.1}]] as const) {
+    result = transitionDisplay(result.state, {display: {kind: "observed", device, generation: 1, source: "transport", ...values}}, strict, at(0.2));
+    assert.ok(!result.traces.some(({reason}) => reason === "stale-generation"), device);
+  }
+  // All three answered: the warm-up starts, under the new request.
+  assert.deepEqual(command(result, "projector", "power_toggle") && [command(result, "projector", "power_toggle")!.reason, command(result, "projector", "power_toggle")!.generation], ["start", 2]);
+
+  // A later request: an answer tagged 1 is stale again.
+  result = transitionDisplay(result.state, {display: {kind: "intent", requestId: "tv-3", generation: 3, mode: "tv"}}, strict, at(1));
+  result = transitionDisplay(result.state, {display: {kind: "observed", device: "tv", generation: 1, source: "transport", power: "on"}}, strict, at(1.1));
+  assert.ok(result.traces.some(({reason}) => reason === "stale-generation"));
+});

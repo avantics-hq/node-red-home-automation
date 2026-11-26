@@ -1,6 +1,6 @@
 "use strict";
 
-import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration, adoptionReason, carryOn} from "./adopted-request";
+import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration, adoptionReason, carryOn, answersRequest, savedCarried, type Carried} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {numberSetting} from "./settings";
 
@@ -103,6 +103,8 @@ export interface SourceState {
   refreshAsked: boolean;
   // The generation adopted from a refresh (see adopted-request.ts).
   adoptedGeneration: number | null;
+  // The generation a request carried on from (see carryOn).
+  carried?: Carried | null;
 }
 
 export type SourceEvent =
@@ -218,7 +220,8 @@ function initialState(
       : 0,
     fallbackUsed: saved.fallbackUsed === true,
     refreshAsked: saved.refreshAsked === true,
-    adoptedGeneration: savedAdoptedGeneration(saved)
+    adoptedGeneration: savedAdoptedGeneration(saved),
+    carried: savedCarried(saved)
   };
 }
 
@@ -515,7 +518,7 @@ export function transitionSource(
     if (!Object.hasOwn(OBSERVATION_STATUSES, event.status)) throw new Error("unknown source observation status");
     const parsedAt = parseObservedAt(event.observedAt);
     if (parsedAt === null || typeof event.observedAt !== "string") throw new Error("source observedAt must be an ISO timestamp");
-    if (!state.desired || event.generation !== state.generation || event.sourceId !== state.desired.sourceId) {
+    if (!state.desired || !answersRequest(state.carried, state.generation, event.generation) || event.sourceId !== state.desired.sourceId) {
       trace("observation", "ignored", "stale-generation", {generation: event.generation});
       return;
     }
@@ -548,7 +551,7 @@ export function transitionSource(
   }
 
   function acceptCommandResult(event: Extract<SourceEvent, {kind: "command_result"}>) {
-    if (!state.desired || event.generation !== state.generation ||
+    if (!state.desired || !answersRequest(state.carried, state.generation, event.generation) ||
       event.sourceId !== state.desired.sourceId || !state.pending) {
       trace("command-result", "ignored", "stale-generation");
       return;
