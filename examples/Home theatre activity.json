@@ -240,7 +240,7 @@
     "area": "",
     "tvHost": "",
     "screenHost": "",
-    "projectorMeterHost": "",
+    "projectorPowerMeterHost": "",
     "screenOpenPosition": 82,
     "screenTolerance": 2,
     "pollMs": 2000,

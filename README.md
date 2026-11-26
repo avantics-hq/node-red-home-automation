@@ -603,7 +603,7 @@ Each example uses synthetic identifiers and configuration, asserts its central i
 
 The repository contains no home-network addresses, deployment coordinates, or live credentials. Device hosts and room coordinates are required configuration where applicable.
 
-The display controller stores its Bravia PSK as a Node-RED credential. Keep credentials in Node-RED's encrypted credential store rather than flow fields or repository files.
+The display controller stores its TV pre-shared key as a Node-RED credential. Keep credentials in Node-RED's encrypted credential store rather than flow fields or repository files.
 
 Report suspected vulnerabilities privately using the process in
 [`SECURITY.md`](https://github.com/avantics-hq/node-red-home-automation/blob/main/SECURITY.md), not through a public issue.

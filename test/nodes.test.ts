@@ -744,7 +744,7 @@ const displayConfig = {
   area: "lounge",
   tvHost: "tv.invalid",
   screenHost: "screen.invalid",
-  projectorMeterHost: "projector.invalid",
+  projectorPowerMeterHost: "projector.invalid",
   screenOpenPosition: 100
 };
 
@@ -752,6 +752,37 @@ function powerToggles(node: RuntimeNode): number {
   return (node.sent as Array<Array<Record<string, unknown> | null>>)
     .filter((envelope) => envelope[0]?.payload === "power").length;
 }
+
+test("display node: a projector power meter host saved before 5.0 is still read, and the new setting wins", async (t) => {
+  const realFetch = globalThis.fetch;
+  const asked: string[] = [];
+  globalThis.fetch = (async (url: string | URL | Request) => {
+    const key = String(url instanceof Request ? url.url : url);
+    asked.push(key);
+    const body = key.includes("sony") ? {result: [{status: "standby"}], id: 50}
+      : key.includes("Cover.GetStatus") ? {current_pos: 100, state: "stopped"} : {apower: 2};
+    return new Response(JSON.stringify(body), {status: 200});
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = realFetch;
+  });
+  const {projectorPowerMeterHost: _new, ...base} = displayConfig;
+  for (const [config, host] of [
+    [{...base, projectorMeterHost: "old-meter.invalid"}, "old-meter.invalid"],
+    [{...base, projectorPowerMeterHost: "", projectorMeterHost: "old-meter.invalid"}, "old-meter.invalid"],
+    [{...base, projectorPowerMeterHost: "   ", projectorMeterHost: "old-meter.invalid"}, "old-meter.invalid"],
+    [{...base, projectorPowerMeterHost: "new-meter.invalid", projectorMeterHost: "old-meter.invalid"}, "new-meter.invalid"]
+  ] as const) {
+    asked.length = 0;
+    const node = new (runtime(registerDisplay, {tvPsk: "synthetic"}).Constructor)(config);
+    assert.deepEqual(node.errors, [], JSON.stringify(config));
+    await receive(node, {display: {kind: "startup"}});
+    await wait(50);
+    assert.ok(asked.some((url) => url.includes(host) && url.includes("Switch.GetStatus")), `${host}: ${asked.join(" ")}`);
+    assert.ok(!asked.some((url) => url.includes("meter.invalid") && !url.includes(host)), asked.join(" "));
+    await close(node);
+  }
+});
 
 async function displayStartingProjector(t: {after(fn: () => void): void}) {
   const devices = fakeDisplayDevices(t);
@@ -998,7 +1029,7 @@ test("the example theatre flow reaches ready with no translation and stays ready
     if (!register) continue;
     // What the example leaves for the user to fill in.
     const config = entry.type === "home-display-mode-controller"
-      ? {...entry, tvHost: "tv.example", screenHost: "screen.example", projectorMeterHost: "meter.example"}
+      ? {...entry, tvHost: "tv.example", screenHost: "screen.example", projectorPowerMeterHost: "meter.example"}
       : entry.type === "home-theatre-state-contract"
         ? {...entry, area: "lounge"}
         : entry;

@@ -264,11 +264,16 @@ function operationSatisfied(
   }
 }
 
+// The screen position, as a percentage of its travel, that the projector
+// mode opens it to when the setting is missing: most screens want a value of
+// their own, set in the editor.
+export const DEFAULT_SCREEN_OPEN_POSITION = 82;
+
 // Settings may be editor strings; missing or unusable numbers take defaults.
 export function normaliseConfig(config: {[K in keyof DisplayConfig]?: unknown} = {}): DisplayConfig {
   const projectorWarmupMs = Math.max(1000, numberSetting(config.projectorWarmupMs, "projector warm-up", 60000));
   return {
-    screenOpenPosition: numberSetting(config.screenOpenPosition, "screen open position", 82),
+    screenOpenPosition: numberSetting(config.screenOpenPosition, "screen open position", DEFAULT_SCREEN_OPEN_POSITION),
     screenTolerance: Math.max(0, numberSetting(config.screenTolerance, "screen tolerance", 2)),
     pollMs: Math.max(250, numberSetting(config.pollMs, "poll interval", 2000)),
     queryTimeoutMs: Math.max(1000, numberSetting(config.queryTimeoutMs, "query timeout", 5000)),
