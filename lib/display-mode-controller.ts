@@ -5,6 +5,20 @@ import type {TraceEntry} from "./bounded-trace";
 import {booleanSetting, numberSetting} from "./settings";
 
 import {boundObservedAt, isOutOfOrder, parseObservedAt} from "./observation-time";
+import {classifyPower, type PowerReading} from "./power-reading";
+import {
+  TOGGLE_SETTLE,
+  TOGGLE_SHUTDOWN_OBSERVE,
+  TOGGLE_START,
+  beginShutdownConfirm,
+  cooldownPending,
+  holdForWarmup,
+  needsShutdownConfirm,
+  shutdownRequestPending,
+  startReadyAt,
+  togglePowerSatisfied,
+  type TogglePowerTiming
+} from "./toggle-power";
 import {asTargetStatus, targetStateEvent, type TargetStateEvent} from "./target-state";
 
 export type DisplayMode = "off" | "tv" | "projector";
@@ -51,8 +65,9 @@ interface ScreenObservation extends DeviceObservation {
 }
 
 interface ProjectorObservation extends DeviceObservation {
-  watts: number;
-  power: "unknown" | "on" | "standby" | "transitioning";
+  // Null when the reading gave the power state rather than a meter's watts.
+  watts: number | null;
+  power: PowerReading;
 }
 
 interface DisplayObserved {
@@ -103,6 +118,9 @@ export interface DisplayState {
   fallbackUsed: boolean;
   // The generation adopted from a refresh (see adopted-request.ts).
   adoptedGeneration: number | null;
+  // While discovering: when to re-query a device that hasn't reported, and
+  // after maxAttempts, fail naming it. Absent otherwise.
+  discovery?: {attempt: number; nextAt: number};
 }
 
 export type DisplayInputEvent =
@@ -160,21 +178,50 @@ function initialState(saved: Partial<DisplayState> = {}): DisplayState {
       ? saved.lastAttempt!
       : 0,
     fallbackUsed: saved.fallbackUsed === true,
-    adoptedGeneration: savedAdoptedGeneration(saved)
+    adoptedGeneration: savedAdoptedGeneration(saved),
+    ...(saved.discovery && Number.isFinite(saved.discovery.nextAt) ? {discovery: {...saved.discovery}} : {})
   };
 }
 
+// The projector's power from its meter, with the display's own bands.
 export function classifyProjectorPower(
   watts: number,
   previous: ProjectorObservation["power"] = "unknown",
   config: Partial<DisplayConfig> = {}
 ): ProjectorObservation["power"] {
-  const onWatts = Number(config.projectorOnWatts ?? 20);
-  const offWatts = Number(config.projectorOffWatts ?? 10);
-  if (!Number.isFinite(watts) || watts < 0) return "unknown";
-  if (watts >= onWatts) return "on";
-  if (watts <= offWatts) return "standby";
-  return previous === "on" || previous === "standby" ? previous : "transitioning";
+  return classifyPower(watts, previous, {
+    onWatts: Number(config.projectorOnWatts ?? 20),
+    offWatts: Number(config.projectorOffWatts ?? 10)
+  });
+}
+
+// What a projector power reading says: a meter's watts, classified against
+// the on and standby watts, or the state itself from any adapter. A
+// "transitioning" lamp is read as a reading between the two would be: it
+// keeps its last settled state, or is transitioning if it has none. Given
+// both, the state wins and the watts are kept for reporting.
+const PROJECTOR_POWER_STATES = ["on", "standby", "transitioning"];
+
+function projectorReading(
+  event: {power?: unknown; watts?: unknown},
+  previous: ProjectorObservation["power"],
+  config: DisplayConfig
+): {watts: number | null; power: ProjectorObservation["power"]} {
+  const watts = event.watts === undefined ? null : Number(event.watts);
+  if (watts !== null && (!Number.isFinite(watts) || watts < 0)) throw new Error("invalid projector power observation");
+  if (event.power === undefined) {
+    if (watts === null) throw new Error("invalid projector power observation");
+    return {watts, power: classifyProjectorPower(watts, previous, config)};
+  }
+  // Lower case only. A smart plug's own ON and OFF are its relay, not the
+  // lamp: a projector in standby on a switched-on plug would read as on, and
+  // a request for TV mode would then toggle it on. So they fail as invalid.
+  const power = typeof event.power === "string" ? event.power.trim() : "";
+  if (!PROJECTOR_POWER_STATES.includes(power)) {
+    throw new Error("projector power must be on, standby or transitioning");
+  }
+  const settled = previous === "on" || previous === "standby" ? previous : "transitioning";
+  return {watts, power: power === "transitioning" ? settled : power as ProjectorObservation["power"]};
 }
 
 function statusFor(state: DisplayState) {
@@ -247,20 +294,20 @@ function operationSatisfied(
     case "tv_standby": return observed.tv?.power === "standby";
     case "screen_open": return screenAtPosition(observed.screen, config.screenOpenPosition, config.screenTolerance);
     case "screen_close": return screenAtPosition(observed.screen, 0, config.screenTolerance);
-    case "projector_start": return observed.projector?.power === "on";
-    case "projector_settle": return observed.projector?.power === "on" || observed.projector?.power === "standby";
-    case "projector_shutdown_observe":
-    case "projector_shutdown_confirm":
-    case "projector_cooldown": return observed.projector?.power === "standby";
-    default: return false;
+    default: return togglePowerSatisfied(operation, observed.projector?.power) ?? false;
   }
 }
+
+// The screen position, as a percentage of its travel, that the projector
+// mode opens it to when the setting is missing: most screens want a value of
+// their own, set in the editor.
+export const DEFAULT_SCREEN_OPEN_POSITION = 82;
 
 // Settings may be editor strings; missing or unusable numbers take defaults.
 export function normaliseConfig(config: {[K in keyof DisplayConfig]?: unknown} = {}): DisplayConfig {
   const projectorWarmupMs = Math.max(1000, numberSetting(config.projectorWarmupMs, "projector warm-up", 60000));
   return {
-    screenOpenPosition: numberSetting(config.screenOpenPosition, "screen open position", 82),
+    screenOpenPosition: numberSetting(config.screenOpenPosition, "screen open position", DEFAULT_SCREEN_OPEN_POSITION),
     screenTolerance: Math.max(0, numberSetting(config.screenTolerance, "screen tolerance", 2)),
     pollMs: Math.max(250, numberSetting(config.pollMs, "poll interval", 2000)),
     queryTimeoutMs: Math.max(1000, numberSetting(config.queryTimeoutMs, "query timeout", 5000)),
@@ -304,6 +351,15 @@ export function transitionDisplay(
   now = new Date()
 ) {
   const config = normaliseConfig(suppliedConfig);
+  // The projector's toggle-only power, with the display's own timings.
+  const toggleTiming: TogglePowerTiming = {
+    pollMs: config.pollMs,
+    queryTimeoutMs: config.queryTimeoutMs,
+    warmupMs: config.projectorWarmupMs,
+    minimumWarmupMs: config.projectorMinimumWarmupMs,
+    shutdownConfirmMs: config.projectorShutdownConfirmMs,
+    cooldownMs: config.projectorCooldownMs
+  };
   const state = initialState(saved);
   const previousPhase = state.phase;
   // Set when a device reading is stored: only then may a settled display
@@ -321,6 +377,7 @@ export function transitionDisplay(
 
   function fail(device: DisplayDevice, operation: string, reason: string) {
     state.pending = null;
+    delete state.discovery;
     state.phase = "failed";
     state.blockedGeneration = state.desired?.generation || state.generation;
     state.failure = {device, operation, reason, occurredAt: iso(now)};
@@ -377,26 +434,18 @@ export function transitionDisplay(
   function issueProjectorStart() {
     issue(
       "projector",
-      "projector_start",
+      TOGGLE_START,
       commandFor(state, "projector", "power_toggle", {reason: "start"}),
-      config.projectorWarmupMs,
+      toggleTiming.warmupMs,
       false
     );
     if (!state.pending) throw new Error("projector start did not create pending state");
-    state.pending.readyAt = now.getTime() + config.projectorMinimumWarmupMs;
+    state.pending.readyAt = startReadyAt(now.getTime(), toggleTiming);
   }
 
   function issueProjectorShutdown() {
     const command = commandFor(state, "projector", "power_toggle", {reason: "shutdown-request"});
-    state.pending = {
-      device: "projector",
-      operation: "projector_shutdown_observe",
-      command,
-      attempt: 1,
-      retryable: false,
-      deadlineAt: now.getTime() + config.projectorShutdownConfirmMs + config.queryTimeoutMs,
-      nextAt: now.getTime() + config.projectorShutdownConfirmMs
-    };
+    state.pending = shutdownRequestPending("projector", command, now.getTime(), toggleTiming);
     state.phase = "transitioning";
     commands.push(command);
     trace("command", "emitted", null, {device: "projector", operation: "shutdown-request", attempt: 1});
@@ -406,6 +455,7 @@ export function transitionDisplay(
 
   function beginDiscovery() {
     state.phase = "discovering";
+    if (!state.discovery) state.discovery = {attempt: 1, nextAt: now.getTime() + config.queryTimeoutMs};
     for (const device of DEVICES) {
       if (!state.seen[device] && !state.querying[device]) {
         state.querying[device] = true;
@@ -420,7 +470,7 @@ export function transitionDisplay(
   function awaitProjectorPower() {
     state.pending = {
       device: "projector",
-      operation: "projector_settle",
+      operation: TOGGLE_SETTLE,
       command: queryFor(state, "projector"),
       attempt: 1,
       retryable: false,
@@ -523,15 +573,8 @@ export function transitionDisplay(
       if (!Number.isFinite(position) || position < 0 || position > 100) throw new Error("invalid screen position");
       state.observed.screen = {position, state: event.state || "unknown", observedAt, source};
     } else {
-      const watts = Number(event.watts);
-      if (!Number.isFinite(watts) || watts < 0) throw new Error("invalid projector power observation");
       const previous = state.observed.projector?.power || "unknown";
-      state.observed.projector = {
-        watts,
-        power: classifyProjectorPower(watts, previous, config),
-        observedAt,
-        source
-      };
+      state.observed.projector = {...projectorReading(event, previous, config), observedAt, source};
     }
     state.seen[device] = true;
     observationAccepted = true;
@@ -548,37 +591,55 @@ export function transitionDisplay(
     }
 
     if (!state.pending || state.pending.device !== device) return reconcile();
-    if (state.pending.operation === "projector_start" &&
-      state.pending.readyAt !== undefined &&
-      state.observed.projector?.power === "on" && now.getTime() < state.pending.readyAt) {
-      state.pending.nextAt = Math.min(state.pending.deadlineAt, state.pending.readyAt);
+    const warming = holdForWarmup(state.pending, state.observed.projector?.power, now.getTime());
+    if (warming !== null) {
+      state.pending.nextAt = warming;
       return;
     }
     if (operationSatisfied(state.pending.operation, state.observed, config)) {
       state.pending = null;
       return reconcile();
     }
-    if (state.pending.operation === "projector_shutdown_confirm" && device === "projector") {
-      if (state.observed.projector?.power === "on") {
-        const command = commandFor(state, "projector", "power_toggle", {reason: "shutdown-confirm"});
-        commands.push(command);
-        state.pending = {
-          device: "projector",
-          operation: "projector_cooldown",
-          command,
-          attempt: 1,
-          retryable: false,
-          deadlineAt: now.getTime() + config.projectorCooldownMs,
-          nextAt: now.getTime() + config.pollMs
-        };
-        trace("command", "emitted", null, {device: "projector", operation: "shutdown-confirm", attempt: 1});
-        state.lastAttempt = Math.max(state.lastAttempt, 1);
-        if (config.projectorPowerFallback) state.fallbackUsed = true;
-      }
+    if (device === "projector" && needsShutdownConfirm(state.pending, state.observed.projector?.power)) {
+      const command = commandFor(state, "projector", "power_toggle", {reason: "shutdown-confirm"});
+      commands.push(command);
+      state.pending = cooldownPending("projector", command, now.getTime(), toggleTiming);
+      trace("command", "emitted", null, {device: "projector", operation: "shutdown-confirm", attempt: 1});
+      state.lastAttempt = Math.max(state.lastAttempt, 1);
+      if (config.projectorPowerFallback) state.fallbackUsed = true;
     }
   }
 
+  // A device that hasn't reported by the query timeout is asked again, up to
+  // maxAttempts in all; then the request fails naming it, rather than
+  // waiting in discovering for a reading that may never come.
+  function discoveryDue(event: Extract<DisplayInputEvent, {kind: "tick"}>): boolean {
+    const discovery = state.discovery;
+    if (!discovery || now.getTime() < discovery.nextAt) return false;
+    if (Number.isInteger(event.generation) && state.desired && event.generation !== state.desired.generation) return false;
+    const unseen = DEVICES.filter((device) => !state.seen[device]);
+    if (unseen.length === 0) {
+      delete state.discovery;
+      return false;
+    }
+    if (discovery.attempt < config.maxAttempts) {
+      discovery.attempt += 1;
+      discovery.nextAt = now.getTime() + config.queryTimeoutMs;
+      for (const device of unseen) commands.push({...queryFor(state, device), attempt: discovery.attempt});
+      trace("discovery", "retried", "no-reading", {devices: unseen, attempt: discovery.attempt});
+      return false;
+    }
+    if (state.desired) {
+      fail(unseen[0]!, "discovery", "no-reading");
+    } else {
+      delete state.discovery;
+      trace("discovery", "unanswered", "no-reading", {devices: unseen});
+    }
+    return true;
+  }
+
   function handleTick(event: Extract<DisplayInputEvent, {kind: "tick"}>) {
+    if (discoveryDue(event)) return;
     const pending = state.pending;
     if (!pending) return reconcile();
     if (Number.isInteger(event.generation) && state.desired && event.generation !== state.desired.generation) {
@@ -587,11 +648,9 @@ export function transitionDisplay(
     }
     if (now.getTime() < pending.nextAt) return;
 
-    if (pending.operation === "projector_shutdown_observe") {
+    if (pending.operation === TOGGLE_SHUTDOWN_OBSERVE) {
       commands.push(queryFor(state, "projector"));
-      pending.operation = "projector_shutdown_confirm";
-      pending.nextAt = now.getTime() + config.queryTimeoutMs;
-      pending.deadlineAt = pending.nextAt;
+      beginShutdownConfirm(pending, now.getTime(), toggleTiming);
       trace("command", "emitted", null, {device: "projector", operation: "query-before-confirm", attempt: 1});
       return;
     }
@@ -621,7 +680,7 @@ export function transitionDisplay(
       return fail(
         pending.device,
         pending.operation,
-        pending.operation === "projector_settle" ? "projector-power-unsettled" : "confirmation-timeout"
+        pending.operation === TOGGLE_SETTLE ? "projector-power-unsettled" : "confirmation-timeout"
       );
     }
 
@@ -652,6 +711,7 @@ export function transitionDisplay(
     state.pending = null;
     state.seen = {tv: false, screen: false, projector: false};
     state.querying = {tv: false, screen: false, projector: false};
+    delete state.discovery;
     beginDiscovery();
     if (inFlight) {
       const deadlineAt = Math.max(inFlight.deadlineAt, now.getTime() + config.queryTimeoutMs);
@@ -691,6 +751,7 @@ export function transitionDisplay(
       state.pending = state.pending && !state.pending.retryable ? state.pending : null;
       state.seen = {tv: false, screen: false, projector: false};
       state.querying = {tv: false, screen: false, projector: false};
+      delete state.discovery;
       beginDiscovery();
       trace("intent", "accepted", null, {mode: event.mode});
     }
@@ -734,6 +795,9 @@ export function transitionDisplay(
   // fresh as its least recent confirmation.
   // An adopted request only reads the device (see adopted-request.ts): a
   // power, toggle or screen command means the display isn't as wanted.
+  // Discovery is over once every device has reported.
+  if (allSeen(state)) delete state.discovery;
+
   const held = readsOnly(state, commands, (command) => command.operation.startsWith("query"));
   if (held.mismatch) {
     commands.splice(0, commands.length, ...held.commands);

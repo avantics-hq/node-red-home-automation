@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {normaliseAvrConfig} from "../lib/avr-controller";
-import {normaliseConfig as normaliseDisplayConfig} from "../lib/display-mode-controller";
+import {DEFAULT_SCREEN_OPEN_POSITION, normaliseConfig as normaliseDisplayConfig} from "../lib/display-mode-controller";
 import {booleanSetting, jsonSetting, keptOverride, numberSetting, optionalBooleanSetting, optionalChoiceSetting, textSetting} from "../lib/settings";
 import {normaliseConfig as normaliseSourceConfig} from "../lib/source-capability-controller";
 
@@ -19,23 +19,29 @@ test("a number setting is a number, or its default only when absent from an olde
 
 test("the receiver's settings are read from editor strings with its deployed defaults", () => {
   const sources = {shield: "SAT/CBL"};
-  assert.deepEqual(normaliseAvrConfig({sources}), {area: "", sources, retryMs: 2000, maxAttempts: 3, minVolume: 0, maxVolume: 60});
-  assert.deepEqual(normaliseAvrConfig({area: "area-a", sources, retryMs: "100", maxAttempts: "2.7", minVolume: "10", maxVolume: "40.5"}),
-    {area: "area-a", sources, retryMs: 250, maxAttempts: 2, minVolume: 10, maxVolume: 40.5});
+  assert.deepEqual(normaliseAvrConfig({sources}), {area: "", sources, retryMs: 2000, maxAttempts: 3, minVolumeDb: -80, maxVolumeDb: -20});
+  assert.deepEqual(normaliseAvrConfig({area: "area-a", sources, retryMs: "100", maxAttempts: "2.7", minVolumeDb: "-70", maxVolumeDb: "-39.5"}),
+    {area: "area-a", sources, retryMs: 250, maxAttempts: 2, minVolumeDb: -70, maxVolumeDb: -39.5});
+  // A flow saved before 5.0 has the bounds in the receiver's own 0-98, read
+  // when the dB ones are missing; a dB one given wins.
+  assert.deepEqual(normaliseAvrConfig({sources, minVolume: "10", maxVolume: 40.5}), normaliseAvrConfig({sources, minVolumeDb: -70, maxVolumeDb: -39.5}));
+  assert.deepEqual(normaliseAvrConfig({sources, minVolume: 10, minVolumeDb: -60, maxVolumeDb: -30}), normaliseAvrConfig({sources, minVolumeDb: -60, maxVolumeDb: -30}));
+  assert.throws(() => normaliseAvrConfig({sources, maxVolumeDb: 18.5}), /between -80 and 18 dB/);
   // An emptied or non-numeric field is an error naming the setting.
   assert.throws(() => normaliseAvrConfig({sources, retryMs: ""}), /retry interval must be a number/);
   assert.throws(() => normaliseAvrConfig({sources, maxAttempts: "abc"}), /max attempts must be a number/);
-  assert.throws(() => normaliseAvrConfig({sources, maxVolume: ""}), /maximum volume must be a number/);
+  assert.throws(() => normaliseAvrConfig({sources, maxVolumeDb: ""}), /maximum volume must be a number/);
   // A typed 0 is kept, then raised to the minimum.
   assert.equal(normaliseAvrConfig({sources, retryMs: "0"}).retryMs, 250);
-  assert.throws(() => normaliseAvrConfig({sources, minVolume: "50", maxVolume: "40"}), /volume bounds/);
+  assert.throws(() => normaliseAvrConfig({sources, minVolumeDb: "-30", maxVolumeDb: "-40"}), /volume bounds/);
 });
 
 test("display and source settings are read from editor strings", () => {
   const display = normaliseDisplayConfig({pollMs: "100", tvTimeoutMs: "45000", projectorPowerFallback: true});
   assert.equal(display.pollMs, 250);
   assert.equal(display.tvTimeoutMs, 45000);
-  assert.equal(display.screenOpenPosition, 82);
+  assert.equal(display.screenOpenPosition, DEFAULT_SCREEN_OPEN_POSITION);
+  assert.equal(DEFAULT_SCREEN_OPEN_POSITION, 82);
   assert.equal(display.projectorPowerFallback, true);
   const sources = {streamer: {activation: "command", deactivation: "command", confirmation: "active"}};
   const source = normaliseSourceConfig({sources, pollMs: "500"});

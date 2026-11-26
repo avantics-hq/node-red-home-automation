@@ -9,13 +9,14 @@ export function run() {
     sources: {streamer: "MEDIA"},
     retryMs: 1000,
     maxAttempts: 2,
-    minVolume: 10,
-    maxVolume: 45
+    // In dB; the receiver's 80 is 0 dB.
+    minVolumeDb: -70,
+    maxVolumeDb: -35
   };
   const inputs = [
     {kind: "observed", line: "PWON\rZMON\rSIMEDIA\rMV30\r"},
-    {kind: "volume", requestId: "volume-1", mode: "relative", value: 1},
-    {kind: "volume", requestId: "volume-2", mode: "relative", value: 1},
+    {kind: "volume", requestId: "volume-1", mode: "relative", valueDb: 1},
+    {kind: "volume", requestId: "volume-2", mode: "relative", valueDb: 1},
     {kind: "observed", line: "MV32"},
     {kind: "observed", line: "MV28"}
   ];
@@ -36,7 +37,7 @@ export function run() {
     {payload: "MV31\r", operation: "volume"},
     {payload: "MV32\r", operation: "volume"}
   ]);
-  assert.equal(result.state.observed.volume, 28);
+  assert.equal(result.state.observed.volume, -52);
   assert.equal(result.state.volumeRequest, null);
   assert.deepEqual(result.state.volumeMetrics, {
     intents: 2,

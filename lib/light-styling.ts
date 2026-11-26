@@ -10,20 +10,23 @@ export interface LightLevels {
   maxColorTempKelvin: number;
 }
 
-// Brightness on Zigbee2MQTT's 1-254 scale; colour temperature in mireds.
+// Brightness in percent and colour temperature in kelvin, unrounded: a
+// light's adapter turns them into its device's units (z2m-light for
+// Zigbee2MQTT).
 export interface LightStyle {
-  brightness: number;
-  color_temp: number;
+  brightnessPct: number;
+  colorTempKelvin: number;
 }
 
 export function styleAtLevel(level: number, levels: LightLevels): LightStyle {
   const percent = levels.sleepBrightnessPct + (levels.maxBrightnessPct - levels.sleepBrightnessPct) * level;
-  // Colour moves evenly in mireds, the unit bulbs take: equal mired steps look
-  // evenly spaced, where equal kelvin steps would bunch up at the cool end.
+  // Colour moves evenly in mireds (reciprocal megakelvin): equal mired steps
+  // look evenly spaced, where equal kelvin steps would bunch up at the cool
+  // end.
   const sleepMired = 1_000_000 / levels.sleepColorTempKelvin;
   const dayMired = 1_000_000 / levels.maxColorTempKelvin;
   return {
-    brightness: Math.min(254, Math.max(1, Math.round(percent * 254 / 100))),
-    color_temp: Math.round(sleepMired + (dayMired - sleepMired) * level)
+    brightnessPct: percent,
+    colorTempKelvin: 1_000_000 / (sleepMired + (dayMired - sleepMired) * level)
   };
 }
