@@ -210,7 +210,7 @@ test("back to TV mode while the screen opens: the TV stays on, the lamp is shut 
   result = observe(result.state, "projector", {watts: 155}, 3.2, 2);
   assert.equal(command(result, "projector", "power_toggle")?.reason, "shutdown-confirm");
   result = observe(result.state, "projector", {watts: 2.1}, 5, 2);
-  assert.equal(command(result, "screen", "close")?.position, 0);
+  assert.deepEqual(command(result, "screen", "close") && Object.hasOwn(command(result, "screen", "close")!, "position"), false, "closed by its own close");
   result = observe(result.state, "screen", {position: 0, state: "closed"}, 6, 2);
   assert.equal(result.state.phase, "ready");
 });
@@ -235,7 +235,7 @@ test("TV mode confirms the projector shutdown prompt before cool-down and only t
   assert.equal(result.state.pending?.operation, "projector_cooldown");
 
   result = observe(result.state, "projector", {watts: 2.1}, 4, 2);
-  assert.equal(command(result, "screen", "close")?.position, 0);
+  assert.deepEqual(command(result, "screen", "close") && Object.hasOwn(command(result, "screen", "close")!, "position"), false, "closed by its own close");
 
   result = observe(result.state, "screen", {position: 0, state: "closed"}, 5, 2);
   assert.equal(result.state.phase, "ready");
@@ -562,7 +562,8 @@ function withoutMeter(meter: "periodic" | "on-change" | "answered") {
         if (entry.operation === "set_power") devices.tv = entry.power as "on" | "standby";
         follow.push(["tv", {power: devices.tv}]);
       } else if (entry.device === "screen") {
-        if (entry.operation === "open" || entry.operation === "close") devices.screen = Number(entry.position);
+        if (entry.operation === "open") devices.screen = Number(entry.position ?? 100);
+        if (entry.operation === "close") devices.screen = 0;
         follow.push(["screen", {position: devices.screen, state: "stopped"}]);
       }
     }
@@ -793,4 +794,40 @@ test("an uncalibrated screen left part-way is read, and opened or closed by its 
   assert.notEqual(result.state.phase, "ready", "still moving");
   result = ownObserve(result.state, "screen", {position: null, state: "closed"}, 5);
   assert.equal(result.state.phase, "ready");
+});
+
+test("closing always runs the screen to its end, which works whether or not it knows its position", () => {
+  // A viewing position is set, but closing doesn't use it.
+  let result = discover("tv", 1, [
+    [0.1, "tv", {power: "on"}],
+    [0.2, "screen", {position: null, state: "stopped"}],
+    [0.3, "projector", {watts: 2.1}]
+  ]);
+  const close = command(result, "screen", "close");
+  assert.ok(close);
+  assert.equal(Object.hasOwn(close, "position"), false);
+  result = observe(result.state, "screen", {position: 0, state: "closed"}, 3);
+  assert.equal(result.state.phase, "ready");
+});
+
+test("projector mode with a viewing position and a lost position closes first, then goes there; never calibrated fails clearly", () => {
+  const start = () => discover("projector", 1, [
+    [0.1, "tv", {power: "on"}],
+    [0.2, "screen", {position: null, state: "stopped"}],
+    [0.3, "projector", {watts: 155}]
+  ]);
+  // Lost after a power cut: closing restores it, then the viewing position.
+  let result = start();
+  assert.ok(command(result, "screen", "close"), "closed first");
+  assert.equal(command(result, "screen", "open"), undefined);
+  result = observe(result.state, "screen", {position: 0, state: "closed"}, 3);
+  assert.equal(command(result, "screen", "open")?.position, 82);
+  result = observe(result.state, "screen", {position: 82, state: "stopped"}, 6);
+  assert.equal(command(result, "tv", "set_power")?.power, "standby");
+
+  // Not calibrated: still no position once closed, so a clear failure, not a refused move.
+  result = start();
+  result = observe(result.state, "screen", {position: null, state: "closed"}, 3);
+  assert.deepEqual([result.state.phase, result.state.failure?.device, result.state.failure?.reason], ["failed", "screen", "screen-not-calibrated"]);
+  assert.equal(command(result, "screen", "open"), undefined);
 });

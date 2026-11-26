@@ -92,7 +92,10 @@
     pre-shared key. The <b>Screen controller host</b> is a Shelly Gen2 cover (its <code>Cover</code> RPC). For
     projector mode it opens the screen to the <b>Screen viewing position</b> (a percentage of its travel) and confirms it
     within the <b>Screen position tolerance</b>; left empty, it uses the screen's own open command and confirms the
-    screen fully open, which also suits a screen that isn't calibrated for positions. Other modes close it. The
+    screen fully open, which also suits a screen that isn't calibrated for positions. Other modes close it with its
+    own close, which runs to the end and restores a position the screen has lost. A viewing position needs a screen
+    that knows where it is: one that doesn't is closed first, and if it still has no position (not calibrated), the
+    request fails with reason <code>screen-not-calibrated</code>; calibrate it, or clear the viewing position. The
     <b>Projector power meter host</b>, if set, is a Shelly Gen2 switch with power metering on the projector's supply
     (switch 1), read against <b>Projector on watts</b> and <b>Projector standby watts</b>. A flow saved before 5.0 names
     that host <code>projectorMeterHost</code>, which is still read.</p>

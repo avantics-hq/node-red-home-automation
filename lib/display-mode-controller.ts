@@ -450,11 +450,12 @@ export function transitionDisplay(
     issue("tv", operation, commandFor(state, "tv", "set_power", {power}), config.tvTimeoutMs);
   }
 
-  // The screen open or closed. With an open position configured, the command
-  // carries the position to go to (0 to close); without, the transport uses
-  // the screen's own open and close.
+  // The screen open or closed. Opening with an open position configured, the
+  // command carries the position; otherwise the transport uses the screen's
+  // own open or close. Closing always runs to the end, which also restores a
+  // position the screen has lost.
   function issueScreen(open: boolean) {
-    const position = config.screenOpenPosition === null ? {} : {position: open ? config.screenOpenPosition : 0};
+    const position = open && config.screenOpenPosition !== null ? {position: config.screenOpenPosition} : {};
     issue("screen", open ? "screen_open" : "screen_close", commandFor(state, "screen", open ? "open" : "close", position), config.screenTimeoutMs);
   }
 
@@ -556,7 +557,16 @@ export function transitionDisplay(
         if (state.observed.projector?.power === "standby") return issueProjectorStart();
         return awaitProjectorPower();
       }
-      if (!screenOpen(state.observed.screen, config)) return issueScreen(true);
+      if (!screenOpen(state.observed.screen, config)) {
+        // A position to go to needs a screen that knows where it is: close it
+        // first, which restores a lost position; one still without a
+        // position once closed isn't calibrated for positions.
+        if (config.screenOpenPosition !== null && state.observed.screen?.position === null) {
+          if (!screenClosed(state.observed.screen, config)) return issueScreen(false);
+          return fail("screen", "screen_open", "screen-not-calibrated");
+        }
+        return issueScreen(true);
+      }
       if (state.observed.tv?.power !== "standby") return issueTv("standby");
       return markReady();
     }
