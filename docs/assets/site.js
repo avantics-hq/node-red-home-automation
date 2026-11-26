@@ -26,6 +26,9 @@ matchMedia("(min-width:801px)").addEventListener("change", (event) => {
 
 const search = document.querySelector("#doc-search");
 const results = document.querySelector("#search-results");
+// A status region (role="status", polite by default) outside the results, so
+// a screen reader hears how many results the query found as the list changes.
+const status = document.querySelector("#search-status");
 const entries = window.DOCS_SEARCH || [];
 const MAX_RESULTS = 8;
 
@@ -47,7 +50,10 @@ search.addEventListener("input", () => {
   const query = search.value.trim();
   results.replaceChildren();
   results.hidden = !query;
-  if (!query) return;
+  if (!query) {
+    status.textContent = "";
+    return;
+  }
   const label = document.createElement("p");
   label.textContent = "Search the documentation";
   results.append(label);
@@ -67,11 +73,13 @@ search.addEventListener("input", () => {
     empty.textContent = "Nothing matches “" + search.value + "”. Try cover, install or roadmap.";
     results.append(empty);
   }
+  status.textContent = matches.length === 0 ? "No results" : matches.length === 1 ? "1 result" : matches.length + " results";
 });
 search.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     results.hidden = true;
     search.value = "";
+    status.textContent = "";
   }
   if (event.key === "ArrowDown") {
     event.preventDefault();

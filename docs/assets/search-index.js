@@ -36,6 +36,13 @@ window.DOCS_SEARCH = [
  },
  {
   "title": "Introduction",
+  "section": "Use Home Assistant as the panel",
+  "description": "Home Assistant is optional. Nodes that publish announce their entities to it through MQTT discovery and keep t",
+  "url": "index.html#home-assistant",
+  "text": "Home Assistant is optional. Nodes that publish announce their entities to it through MQTT discovery and keep their state current. Its controls come back to the nodes as MQTT requests and are carried out like any other request. The devices are still commanded and observed directly, never through Home Assistant. Publishing is opt-in. A new node starts with state publishing and discovery off. Switch them on in its settings and wire the output it publishes on to an MQTT out node. The area names the topics. A node that publishes needs an area where it names something. Topics use the area in lowercase, with spaces as _ : an area called “Upstairs Landing” publishes under home/upstairs_landing/… . Discovery prefix. Each publishing node has a Discovery prefix setting, homeassistant by default, as in Home Assistant. Send a startup message. Send each publishing node a startup message once, a few seconds after the flows start, when the MQTT broker node has usually connected. The example flows use an Inject node that fires once after 3 seconds. Removing a node removes its entities on a “Modified nodes” or “Modified flows” deploy. A full deploy stops the MQTT out node at the same moment, so the clearing never reaches the broker; delete the device in Home Assistant instead. Covers get a cover entity; a cover group has none, since Home Assistant can group the cover entities itself. Rooms get circadian and sleep switches and wake and bed times. Occupancy, motion, the receiver and the house schedule have their own entities. Sources: README Covers and the 4.0.0 release notes, which hold the full detail on entities, availability and cleanup ."
+ },
+ {
+  "title": "Introduction",
   "section": "Follow the project",
   "description": "See what is complete, next and planned on the public roadmap . Run the contract examples to explore the messag",
   "url": "index.html#project",
@@ -43,23 +50,23 @@ window.DOCS_SEARCH = [
  },
  {
   "title": "Wire a cover",
-  "description": "Connect a blind, shutter or curtain through a relay cover adapter. Then add presets, manual control and a group without losing sight of what the motor actually did.",
+  "description": "Connect a blind, shutter or curtain through the shelly cover adapter node. Then add presets, manual control and a group without losing sight of what the motor actually did.",
   "url": "guide-covers.html",
-  "text": "Connect a blind, shutter or curtain through a relay cover adapter. Then add presets, manual control and a group without losing sight of what the motor actually did."
+  "text": "Connect a blind, shutter or curtain through the shelly cover adapter node. Then add presets, manual control and a group without losing sight of what the motor actually did."
  },
  {
   "title": "Wire a cover",
   "section": "Before you wire it",
-  "description": "This guide connects a calibrated relay-module cover over its own MQTT API. You need the device’s MQTT topic pr",
+  "description": "This guide connects a calibrated relay-module cover through the shelly cover node ( home-shelly-cover ), an ad",
   "url": "guide-covers.html#before",
-  "text": "This guide connects a calibrated relay-module cover over its own MQTT API. You need the device’s MQTT topic prefix and a broker connection in Node-RED. Use a compatible generation-2-or-later relay device in cover mode , calibrated on the device first. Enable MQTT and MQTT Control on the device. Keep RPC status notifications enabled so changes are reported. Generic status updates can provide additional full reports. The controller’s positions are 0 = closed and 100 = open . For a motor with no reliable position, use open, close and stop only instead; this position-adapter guide is not that device path."
+  "text": "This guide connects a calibrated relay-module cover through the shelly cover node ( home-shelly-cover ), an adapter that speaks the device’s own MQTT API. You need the device’s MQTT topic prefix and a broker connection in Node-RED. Use a compatible generation-2-or-later relay device in cover mode , calibrated on the device first. Enable MQTT and MQTT Control on the device. Keep RPC status notifications enabled so changes are reported. Generic status updates can provide additional full reports. The controller’s positions are 0 = closed and 100 = open . For a motor with no reliable position, use open, close and stop only instead; this position-adapter guide is not that device path."
  },
  {
   "title": "Wire a cover",
   "section": "Wire the command and observation loop",
   "description": "The adapter translates messages. The controller decides whether a move is complete. Keep both directions conne",
   "url": "guide-covers.html#wiring",
-  "text": "The adapter translates messages. The controller decides whether a move is complete. Keep both directions connected. MQTT in <prefix>/# → Relay cover adapter Device reports ↔ neutral messages ⇄ Cover controller Requests and confirmation Adapter output 1 → MQTT out → device MQTT out Same broker · leave its topic empty Reports: MQTT in → adapter → controller. Commands: controller output 1 → adapter → MQTT out. The table below names every port. Four connections From Connect to Why MQTT in Relay adapter input Subscribe to <prefix>/# ; use auto-detect output. Controller output 1 Relay adapter input Pass neutral device commands unchanged. Relay adapter output 1 MQTT out Same broker; leave the MQTT out topic empty. Relay adapter output 2 Controller input Feed back observations, availability and command results. Set the adapter’s topic prefix. Use the prefix configured on your device. Set Cover ID to 0 , or 1 for a device’s second cover. Choose a position cover. On the controller, leave Cover as “Takes a position (0 to 100)”. Set Invert positions only if the device reports 0 as open. Request a reading at startup. Send msg.cover = {kind: \"startup\"} after deploy. The controller reads the cover rather than trusting old state. Watch state and results. Connect controller output 2 to a Debug node. Output 3 reports whether it is moving; output 4 is for optional MQTT publications, not device commands. A position echo is not a stopped motor. A move confirms from a stopped report at the target, or a position that stays the same for the settle time. Set Settle time to at least the interval between motor travel reports."
+  "text": "The adapter translates messages. The controller decides whether a move is complete. Keep both directions connected. MQTT in <prefix>/# → shelly cover Device reports ↔ neutral messages ⇄ Cover controller Requests and confirmation Adapter output 1 → MQTT out → device MQTT out Same broker · leave its topic empty Reports: MQTT in → adapter → controller. Commands: controller output 1 → adapter → MQTT out. The table below names every port. Four connections From Connect to Why MQTT in shelly cover input Subscribe to <prefix>/# ; use auto-detect output. Controller output 1 shelly cover input Pass neutral device commands unchanged. shelly cover output 1 MQTT out Same broker; leave the MQTT out topic empty. shelly cover output 2 Controller input Feed back observations, availability and command results. Set the adapter’s topic prefix. Use the prefix configured on your device. Set Cover ID to 0 , or 1 for a device’s second cover. Choose a position cover. On the controller, leave Cover as “Takes a position (0 to 100)”. Set Invert positions only if the device reports 0 as open. Request a reading at startup. Send msg.cover = {kind: \"startup\"} after deploy. The controller reads the cover rather than trusting old state. Watch state and results. Connect controller output 2 to a Debug node. Output 3 reports whether it is moving; output 4 is for optional MQTT publications, not device commands. A position echo is not a stopped motor. A move confirms from a stopped report at the target, or a position that stays the same for the settle time. Set Settle time to at least the interval between motor travel reports."
  },
  {
   "title": "Wire a cover",
@@ -87,7 +94,7 @@ window.DOCS_SEARCH = [
   "section": "Check the result",
   "description": "Read the outcome What you see What it means Moving, then ready Fresh reports confirm the cover has stopped at ",
   "url": "guide-covers.html#check",
-  "text": "Read the outcome What you see What it means Moving, then ready Fresh reports confirm the cover has stopped at its target. not-calibrated / position-unknown The device cannot provide a usable position. Calibrate it or restore its position knowledge; do not invent a reading. unavailable The device is offline. No device command is sent; it is read again when it returns. For output messages, optional Home Assistant discovery and timing defaults, open the cover controller reference . Sources: README Covers; cover-controller, cover-group and relay-adapter editor help."
+  "text": "Read the outcome What you see What it means Moving, then ready Fresh reports confirm the cover has stopped at its target. not-calibrated / position-unknown The device cannot provide a usable position. Calibrate it or restore its position knowledge; do not invent a reading. unavailable The device is offline. No device command is sent; it is read again when it returns. For output messages, optional Home Assistant discovery and timing defaults, open the cover controller reference . Sources: README Covers; cover controller, cover group and shelly cover editor help."
  },
  {
   "title": "Cover controller",
@@ -114,7 +121,7 @@ window.DOCS_SEARCH = [
   "section": "Outputs",
   "description": "The port order is fixed. Device commands and optional MQTT publications have different jobs. Four output ports",
   "url": "node-cover-controller.html#outputs",
-  "text": "The port order is fixed. Device commands and optional MQTT publications have different jobs. Four output ports Port Message Connect to 1 · Device commands msg.cover_command = {operation, position, requestId, generation, attempt} Position mode: set_position, stop, observe. Device adapter. For example, the relay adapter input. 2 · State and results msg.theatre = {kind: \"target_state\", target: \"cover\", status, details} Debug, a cover group, or another result consumer. Contains positions and failure or manual-override details. 3 · Moving msg.payload true / false; msg.topic = \"moving\" . Sent on changes. Policies that need to react to cover motion. 4 · MQTT publications Retained state and optional discovery, when publishing is on. MQTT out; not the device-command path. Completion needs a stopped target. A stopped motion report confirms the target, or it must remain at the same position for the settle time. A command echo alone does not prove that travel is finished."
+  "text": "The port order is fixed. Device commands and optional MQTT publications have different jobs. Four output ports Port Message Connect to 1 · Device commands msg.cover_command = {operation, position, requestId, generation, attempt} Position mode: set_position, stop, observe. Device adapter. For example, the shelly cover node’s input. 2 · State and results msg.theatre = {kind: \"target_state\", target: \"cover\", status, details} Debug, a cover group, or another result consumer. Contains positions and failure or manual-override details. 3 · Moving msg.payload true / false; msg.topic = \"moving\" . Sent on changes. Policies that need to react to cover motion. 4 · MQTT publications Retained state and optional discovery, when publishing is on. MQTT out; not the device-command path. Completion needs a stopped target. A stopped motion report confirms the target, or it must remain at the same position for the settle time. A command echo alone does not prove that travel is finished."
  },
  {
   "title": "Cover controller",
@@ -135,7 +142,7 @@ window.DOCS_SEARCH = [
   "section": "Open, close and stop only",
   "description": "For a motor without a reliable position, set Cover to “Open, close and stop only”. Positions and presets are i",
   "url": "node-cover-controller.html#open-close",
-  "text": "For a motor without a reliable position, set Cover to “Open, close and stop only”. Positions and presets are ignored. Commands on output 1 become open , close , stop or observe . Report msg.cover = {kind: \"observed\", motion, state, observedAt} . A reported end state ( open or closed ) confirms the move. Otherwise, a move in the requested direction that stops after the full travel time is explicitly judged by travel time . Stopping early or moving the other way is treated as a person’s move. If the motor reports nothing, the result stays unconfirmed and fails with no-reports after the retry limit. Source: cover-controller editor defaults and help; README Covers. Relay-adapter wiring is sourced separately in the guide."
+  "text": "For a motor without a reliable position, set Cover to “Open, close and stop only”. Positions and presets are ignored. Commands on output 1 become open , close , stop or observe . Report msg.cover = {kind: \"observed\", motion, state, observedAt} . A reported end state ( open or closed ) confirms the move. Otherwise, a move in the requested direction that stops after the full travel time is explicitly judged by travel time . Stopping early or moving the other way is treated as a person’s move. If the motor reports nothing, the result stays unconfirmed and fails with no-reports after the retry limit. Source: cover-controller editor defaults and help; README Covers. The shelly cover wiring is in the cover guide ."
  },
  {
   "title": "Home theatre",

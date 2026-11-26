@@ -17,7 +17,7 @@
       {"label": "House schedule", "href": "README#room-lighting"},
       {"label": "Covers", "href": "guide-covers.html"},
       {"label": "Home theatre", "href": "home-theatre.html"},
-      {"label": "Home Assistant", "href": "README#400"},
+      {"label": "Home Assistant", "href": "index.html#home-assistant"},
       {"label": "Device adapters", "href": "guide-covers.html#wiring"}
     ]
   },
@@ -62,7 +62,7 @@
       {
         "label": "Adapters",
         "items": [
-          {"label": "Relay cover adapter", "href": "guide-covers.html#wiring"}
+          {"label": "Shelly cover", "href": "guide-covers.html#wiring"}
         ]
       }
     ]
