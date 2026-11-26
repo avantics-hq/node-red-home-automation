@@ -101,7 +101,7 @@ test("a second raw edge in the window cancels the toggle and requests full brigh
   }, config, 2200);
 
   assert.equal(second.effects.some((effect) => effect.kind === "cancel-switch-timer"), true);
-  assert.deepEqual(messages(second)[0]?.lighting.values, {brightness: 254});
+  assert.deepEqual(messages(second)[0]?.lighting.values, {brightnessPct: 100});
   assert.equal(messages(second)[0]?.lighting.manual, true);
 });
 
@@ -124,6 +124,6 @@ test("pre-classified actions are immediate and retained actions are inert", () =
     payload: {action: "double"}
   }, config, 3000);
   assert.equal(messages(double)[0]?.lighting.state, "ON");
-  assert.deepEqual(messages(double)[0]?.lighting.values, {brightness: 254});
+  assert.deepEqual(messages(double)[0]?.lighting.values, {brightnessPct: 100});
   assert.equal(messages(double)[0]?.lighting.manual, true);
 });

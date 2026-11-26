@@ -1,5 +1,6 @@
 "use strict";
 
+import {lightValues} from "./z2m-light";
 import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {numberSetting, textSetting} from "./settings";
@@ -131,7 +132,10 @@ function stable(value: unknown): unknown {
   return value;
 }
 
-function valuesMatch(expected: Record<string, unknown>, actual: Record<string, unknown>): boolean {
+// Whether a light's report shows the profile's values. Reports come in the
+// light's own units, so the profile's are converted first (z2m-light).
+function valuesMatch(profileValues: Record<string, unknown>, actual: Record<string, unknown>): boolean {
+  const expected = lightValues(profileValues).values;
   return Object.entries(expected).every(([key, value]) =>
     Object.hasOwn(actual, key) && JSON.stringify(stable(actual[key])) === JSON.stringify(stable(value))
   );
@@ -161,6 +165,17 @@ export function normaliseLightingProfiles(value: unknown): ActivityLightingProfi
     const values = descriptor.values ?? {};
     if (!values || typeof values !== "object" || Array.isArray(values)) {
       throw new Error(`lighting profile ${name} has invalid values`);
+    }
+    // The package's own units, checked when deployed so a bad profile shows
+    // on the node rather than leaving lights unstyled.
+    const {brightnessPct, colorTempKelvin} = values as Record<string, unknown>;
+    if (brightnessPct !== undefined &&
+      (typeof brightnessPct !== "number" || !Number.isFinite(brightnessPct) || brightnessPct < 0 || brightnessPct > 100)) {
+      throw new Error(`lighting profile ${name} brightnessPct must be a number from 0 to 100`);
+    }
+    if (colorTempKelvin !== undefined &&
+      (typeof colorTempKelvin !== "number" || !Number.isFinite(colorTempKelvin) || colorTempKelvin <= 0)) {
+      throw new Error(`lighting profile ${name} colorTempKelvin must be a number above 0`);
     }
     profiles[name] = {
       targets: [...descriptor.targets],
