@@ -219,3 +219,17 @@ test("after carrying on, the command result and reading for the replaced generat
   result = apply(result.state, {kind: "observed", generation: 1, power: "on", observedAt: at(1.1).toISOString()}, 1.1);
   assert.equal(result.traces.at(-1)?.reason, "stale-generation");
 });
+
+test("ready is stamped with the reading it rests on: a repeated intent doesn't make it fresh, a new reading does", () => {
+  let result = readyOn();
+  assert.equal(result.events[0]?.theatre.observedAt, at(0.5).toISOString());
+  // The same request again, much later, with nothing new read.
+  result = intent(result.state, "on", 1, 30);
+  assert.deepEqual([result.events[0]?.theatre.status, result.events[0]?.theatre.observedAt], ["ready", at(0.5).toISOString()]);
+  // A new reading moves it on.
+  result = apply(result.state, {kind: "observed", generation: 1, power: "on", observedAt: at(31).toISOString()}, 31);
+  assert.equal(result.events[0]?.theatre.observedAt, at(31).toISOString());
+  // Not ready yet: stamped now, as before.
+  const confirming = apply(intent(undefined, "on", 2).state, {kind: "command_result", generation: 2, ok: true}, 5);
+  assert.deepEqual([confirming.events[0]?.theatre.status, confirming.events[0]?.theatre.observedAt], ["confirming", at(5).toISOString()]);
+});

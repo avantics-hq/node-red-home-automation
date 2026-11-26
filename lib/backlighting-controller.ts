@@ -376,12 +376,16 @@ export function transitionBacklighting(
   }
 
   if (state.desired && !answerWithReading) {
+    const status = state.phase === "manual_override" ? "transitioning" : asTargetStatus(state.phase, "confirming");
     const theatre = targetStateEvent({
       target: "backlighting",
       requestId: state.desired.requestId,
       generation: state.generation,
-      status: state.phase === "manual_override" ? "transitioning" : asTargetStatus(state.phase, "confirming"),
-      observedAt: now.toISOString(),
+      status,
+      // Ready is only as fresh as the reading it rests on, as the display's
+      // is: a repeated intent or other input with nothing new read must not
+      // look like a new reading, or it would answer a theatre refresh.
+      observedAt: status === "ready" && state.observed ? state.observed.observedAt : now.toISOString(),
       details: {
         power: state.desired.power,
         observedPower: state.observed?.power ?? null,
