@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  LEGACY_VOLUME_UNITS,
   QUERY_COMMAND,
   formatVolumeCommand,
   parseAvrLine,
@@ -16,8 +17,8 @@ const config: AvrConfig = {
   sources: {shield: "SAT/CBL", playstation: "GAME"},
   retryMs: 1000,
   maxAttempts: 3,
-  minVolume: 0,
-  maxVolume: 60
+  minVolumeDb: -80,
+  maxVolumeDb: -20
 };
 const at = (seconds: number): Date =>
   new Date(Date.parse("2026-11-21T10:00:00Z") + seconds * 1000);
@@ -36,26 +37,32 @@ test("parses the Denon state used by the Lounge receiver", () => {
   assert.deepEqual(parseAvrLine("SISAT/CBL", config.sources), {
     field: "source", value: "shield", sourceCode: "SAT/CBL", line: "SISAT/CBL"
   });
-  assert.equal(parseAvrLine("MV315", config.sources)?.value, 31.5);
+  assert.equal(parseAvrLine("MV315", config.sources)?.value, -48.5);
+  assert.equal(parseAvrLine("MV80", config.sources)?.value, 0);
   assert.equal(parseAvrLine("MVMAX 96", config.sources), null);
 });
 
 test("formats whole and half-step volume commands", () => {
-  assert.equal(formatVolumeCommand(5), "MV05\r");
-  assert.equal(formatVolumeCommand(31), "MV31\r");
-  assert.equal(formatVolumeCommand(31.5), "MV315\r");
-  assert.throws(() => formatVolumeCommand(31.2), /half-step/);
+  // In dB; the receiver's 80 is 0 dB.
+  assert.equal(formatVolumeCommand(-75), "MV05\r");
+  assert.equal(formatVolumeCommand(-49), "MV31\r");
+  assert.equal(formatVolumeCommand(-48.5), "MV315\r");
+  assert.equal(formatVolumeCommand(-80), "MV00\r");
+  assert.equal(formatVolumeCommand(18), "MV98\r");
+  assert.throws(() => formatVolumeCommand(-48.8), /half-step/);
+  assert.throws(() => formatVolumeCommand(-80.5), /half-step/);
+  assert.throws(() => formatVolumeCommand(18.5), /half-step/);
 });
 
 test("absolute volume is bounded, commanded and released after fresh confirmation", () => {
-  const boundedConfig = {...config, maxVolume: 40};
+  const boundedConfig = {...config, maxVolumeDb: -40};
   let result = transitionAvr(readyState(), {
-    avr: {kind: "volume", requestId: "absolute-1", mode: "absolute", value: 50}
+    avr: {kind: "volume", requestId: "absolute-1", mode: "absolute", valueDb: -30}
   }, boundedConfig, at(1));
 
   assert.equal(result.commands[0]!.payload, "MV40\r");
   assert.equal(result.commands[0]!.avrCommand.operation, "volume");
-  assert.equal(result.state.volumeRequest?.target, 40);
+  assert.equal(result.state.volumeRequest?.target, -40);
   assert.equal(result.state.volumeMetrics.bounded, 1);
 
   result = transitionAvr(result.state, {
@@ -64,18 +71,18 @@ test("absolute volume is bounded, commanded and released after fresh confirmatio
   assert.equal(result.state.volumeRequest, null);
   assert.equal(result.state.volumeMetrics.confirmations, 1);
   assert.equal(result.events.some(({avr}) =>
-    avr.kind === "volume_ready" && avr.volume === 40 && avr.bounded === true
+    avr.kind === "volume_ready" && avr.volume === -40 && avr.bounded === true
   ), true);
 });
 
 test("rapid relative volume requests accumulate against the pending target", () => {
   let result = transitionAvr(readyState("PWON\rZMON\rSISAT/CBL\rMV30\r"), {
-    avr: {kind: "volume", requestId: "relative-1", mode: "relative", value: 1}
+    avr: {kind: "volume", requestId: "relative-1", mode: "relative", valueDb: 1}
   }, config, at(1));
   assert.equal(result.commands[0]!.payload, "MV31\r");
 
   result = transitionAvr(result.state, {
-    avr: {kind: "volume", requestId: "relative-2", mode: "relative", value: 1}
+    avr: {kind: "volume", requestId: "relative-2", mode: "relative", valueDb: 1}
   }, config, at(1.01));
   assert.equal(result.commands[0]!.payload, "MV32\r");
   assert.equal(result.state.volumeRequest?.requested, 2);
@@ -95,7 +102,7 @@ test("rapid relative volume requests accumulate against the pending target", () 
 test("relative volume waits for fresh state and duplicate request IDs remain inert", () => {
   let state = observed(undefined, "PWON\rZMON\rSISAT/CBL\r").state;
   let result = transitionAvr(state, {
-    avr: {kind: "volume", requestId: "relative-query", mode: "relative", value: -1}
+    avr: {kind: "volume", requestId: "relative-query", mode: "relative", valueDb: -1}
   }, config, at(1));
   assert.equal(result.commands[0]!.payload, QUERY_COMMAND);
   assert.equal(result.commands[0]!.avrCommand.operation, "volume-query");
@@ -106,10 +113,10 @@ test("relative volume waits for fresh state and duplicate request IDs remain ine
   state = result.state;
 
   result = transitionAvr(state, {
-    avr: {kind: "volume", requestId: "relative-query", mode: "relative", value: -1}
+    avr: {kind: "volume", requestId: "relative-query", mode: "relative", valueDb: -1}
   }, config, at(1.3));
   assert.equal(result.commands.length, 0);
-  assert.equal(result.state.observed.volume, 29);
+  assert.equal(result.state.observed.volume, -51);
   assert.equal(result.traces.some((trace) =>
     trace.event === "volume" && trace.outcome === "duplicate"
   ), true);
@@ -118,7 +125,7 @@ test("relative volume waits for fresh state and duplicate request IDs remain ine
 test("volume does not power on a receiver and external adjustments are preserved", () => {
   let state = observed(undefined, "PWSTANDBY\rZMOFF\rSISAT/CBL\rMV30\r").state;
   let result = transitionAvr(state, {
-    avr: {kind: "volume", requestId: "off-volume", mode: "relative", value: 1}
+    avr: {kind: "volume", requestId: "off-volume", mode: "relative", valueDb: 1}
   }, config, at(1));
   assert.equal(result.commands.length, 0);
   assert.equal(result.events.some(({avr}) =>
@@ -127,18 +134,18 @@ test("volume does not power on a receiver and external adjustments are preserved
 
   state = readyState("PWON\rZMON\rSISAT/CBL\rMV30\r");
   result = transitionAvr(state, {
-    avr: {kind: "volume", requestId: "manual-volume", mode: "relative", value: 1}
+    avr: {kind: "volume", requestId: "manual-volume", mode: "relative", valueDb: 1}
   }, config, at(2));
   result = observed(result.state, "MV305", 2.1);
   assert.equal(result.commands.length, 0);
   assert.equal(result.state.volumeRequest, null);
-  assert.equal(result.state.observed.volume, 30.5);
+  assert.equal(result.state.observed.volume, -49.5);
   assert.equal(result.state.volumeMetrics.externalChanges, 1);
   assert.equal(result.events.some(({avr}) => avr.kind === "volume_manual_override"), true);
 
   result = observed(result.state, "MV29", 3);
   assert.equal(result.commands.length, 0);
-  assert.equal(result.state.observed.volume, 29);
+  assert.equal(result.state.observed.volume, -51);
   assert.equal(result.state.volumeMetrics.externalChanges, 2);
   assert.equal(result.events.some(({avr}) => avr.kind === "volume_external"), true);
 });
@@ -149,7 +156,7 @@ test("volume retries are bounded without poisoning an already-ready activity", (
     avr: {kind: "intent", requestId: "activity-1", generation: 1, power: "on", source: "shield"}
   }, retryConfig, at(0));
   result = transitionAvr(result.state, {
-    avr: {kind: "volume", requestId: "volume-failure", mode: "absolute", value: 31}
+    avr: {kind: "volume", requestId: "volume-failure", mode: "absolute", valueDb: -49}
   }, retryConfig, at(0.1));
   result = transitionAvr(result.state, {avr: {kind: "tick"}}, retryConfig, at(1.1));
   assert.equal(result.commands[0]!.avrCommand.attempt, 2);
@@ -330,7 +337,7 @@ test("unsolicited AVR source changes latch manual ownership without fighting the
 });
 
 function volume(state: Partial<AvrState>, requestId: string, mode: "absolute" | "relative", value: number, seconds: number) {
-  return transitionAvr(state, {avr: {kind: "volume", requestId, mode, value}}, config, at(seconds));
+  return transitionAvr(state, {avr: {kind: "volume", requestId, mode, valueDb: value}}, config, at(seconds));
 }
 
 const volumeKinds = (result: ReturnType<typeof transitionAvr>) =>
@@ -338,9 +345,9 @@ const volumeKinds = (result: ReturnType<typeof transitionAvr>) =>
 
 test("a volume request is never confirmed by a reading from before the last command", () => {
   // dev-review repro: at 40, absolute 45 sends MV45; absolute 40 must not report ready from the old 40.
-  let result = volume(readyState("PWON\rZMON\rSISAT/CBL\rMV40\r"), "abs-45", "absolute", 45, 1);
+  let result = volume(readyState("PWON\rZMON\rSISAT/CBL\rMV40\r"), "abs-45", "absolute", -35, 1);
   assert.equal(result.commands[0]?.payload, "MV45\r");
-  result = volume(result.state, "abs-40", "absolute", 40, 1.05);
+  result = volume(result.state, "abs-40", "absolute", -40, 1.05);
   assert.deepEqual(volumeKinds(result), []);
   assert.equal(result.commands[0]?.avrCommand.operation, "volume-query");
   // The receiver reports where the first command took it, then the new target.
@@ -366,7 +373,7 @@ test("a volume request after a failed activity is sent or rejected, not left wai
   for (const seconds of [1, 2, 3]) result = transitionAvr(result.state, {avr: {kind: "tick"}}, config, at(seconds));
   assert.equal(result.state.phase, "failed");
 
-  result = volume(result.state, "after-failure", "absolute", 35, 4);
+  result = volume(result.state, "after-failure", "absolute", -45, 4);
   assert.equal(result.commands[0]?.payload, "MV35\r");
   assert.equal(result.state.phase, "failed");
   result = observed(result.state, "MV35", 4.2);
@@ -375,12 +382,12 @@ test("a volume request after a failed activity is sent or rejected, not left wai
 
   // With the receiver off, the request is rejected straight away.
   result = observed(result.state, "PWSTANDBY", 5);
-  result = volume(result.state, "receiver-off", "absolute", 30, 6);
+  result = volume(result.state, "receiver-off", "absolute", -50, 6);
   assert.equal(result.events.find((message) => message.avr.kind === "volume_rejected")?.avr.reason, "receiver-not-ready");
 });
 
 test("a restart reports a pending volume request as failed instead of dropping it", () => {
-  let result = volume(readyState("PWON\rZMON\rSISAT/CBL\rMV40\r"), "before-restart", "absolute", 45, 1);
+  let result = volume(readyState("PWON\rZMON\rSISAT/CBL\rMV40\r"), "before-restart", "absolute", -35, 1);
   result = transitionAvr(result.state, {avr: {kind: "startup"}}, config, at(2));
   const failed = result.events.find((message) => message.avr.kind === "volume_failed");
   assert.deepEqual(failed?.avr, {
@@ -394,7 +401,7 @@ test("a restart reports a pending volume request as failed instead of dropping i
 
 test("a refresh re-reads the receiver without failing or resetting work in flight", () => {
   // Lead repro: a theatre refresh 0.2 s after a volume command failed it as a restart.
-  let result = volume(readyState("PWON\rZMON\rSISAT/CBL\rMV31\r"), "v1", "absolute", 40, 1);
+  let result = volume(readyState("PWON\rZMON\rSISAT/CBL\rMV31\r"), "v1", "absolute", -40, 1);
   assert.equal(result.commands[0]?.payload, "MV40\r");
   result = transitionAvr(result.state, {avr: {kind: "refresh"}}, config, at(1.2));
   assert.deepEqual(result.commands.map((command) => command.payload), [QUERY_COMMAND]);
@@ -417,7 +424,7 @@ test("a refresh re-reads the receiver without failing or resetting work in fligh
 });
 
 test("every failed volume request is reported in one shape", () => {
-  let result = volume(readyState("PWON\rZMON\rSISAT/CBL\rMV31\r"), "unanswered", "absolute", 40, 1);
+  let result = volume(readyState("PWON\rZMON\rSISAT/CBL\rMV31\r"), "unanswered", "absolute", -40, 1);
   for (const seconds of [2.1, 3.2, 4.3]) result = transitionAvr(result.state, {avr: {kind: "tick"}}, config, at(seconds));
   const failed = result.events.find((message) => message.avr.kind === "volume_failed");
   assert.deepEqual(failed?.avr, {
@@ -519,4 +526,49 @@ test("an adopted request the receiver doesn't match is a manual override: no pow
   assert.deepEqual([...new Set(sent.map(({avrCommand}) => avrCommand.operation))], ["query"], "no PW or SI");
   assert.equal(result.state.phase, "manual_override");
   assert.equal(result.state.classification, "manual_override");
+});
+
+test("a volume request in the receiver's own units still works during 5.x, traced", () => {
+  // Before 5.0, an absolute value was the receiver's 0-98; a relative one was
+  // already a change in dB.
+  let result = transitionAvr(readyState(), {avr: {kind: "volume", requestId: "old-absolute", mode: "absolute", value: 40}}, config, at(1));
+  assert.equal(result.commands[0]?.payload, "MV40\r");
+  assert.equal(result.state.volumeRequest?.target, -40);
+  assert.ok(result.traces.some(({reason}) => reason === LEGACY_VOLUME_UNITS));
+  result = transitionAvr(readyState(), {avr: {kind: "volume", requestId: "old-relative", mode: "relative", value: 1}}, config, at(1));
+  assert.equal(result.commands[0]?.payload, "MV32\r");
+  // The dB form wins when both are given, and isn't traced.
+  result = transitionAvr(readyState(), {avr: {kind: "volume", requestId: "both", mode: "absolute", valueDb: -45, value: 40}}, config, at(1));
+  assert.equal(result.commands[0]?.payload, "MV35\r");
+  assert.ok(!result.traces.some(({reason}) => reason === LEGACY_VOLUME_UNITS));
+});
+
+test("a receiver state saved before 5.0 has its volumes read as the receiver's units, once", () => {
+  // From a context store across the upgrade: a reading of MV31 and an
+  // absolute request for MV40 in flight.
+  const saved = {...readyState(), volumeUnits: undefined, volumeRequest: {requestId: "old", mode: "absolute", requested: 40, target: 40, bounded: false}} as unknown as AvrState;
+  saved.observed.volume = 31;
+  const result = transitionAvr(saved, {avr: {kind: "tick"}}, config, at(1));
+  assert.equal(result.state.observed.volume, -49);
+  assert.deepEqual([result.state.volumeRequest?.requested, result.state.volumeRequest?.target], [-40, -40]);
+  assert.equal(result.state.volumeUnits, "dB");
+  assert.ok(result.commands.every(({payload}) => payload !== "MV90\r"));
+  // Saved again, it is already dB.
+  const again = transitionAvr(result.state, {avr: {kind: "tick"}}, config, at(1.1));
+  assert.equal(again.state.observed.volume, -49);
+  // A relative request's change is the same in both units.
+  const relative = transitionAvr({...saved, volumeRequest: {requestId: "rel", mode: "relative", requested: 2, target: 33, bounded: false}} as unknown as AvrState,
+    {avr: {kind: "tick"}}, config, at(1));
+  assert.deepEqual([relative.state.volumeRequest?.requested, relative.state.volumeRequest?.target], [2, -47]);
+});
+
+test("a volume request's valueDb may be a numeric string, and an old value beside it is ignored, traced", () => {
+  let result = transitionAvr(readyState(), {avr: {kind: "volume", requestId: "text", mode: "absolute", valueDb: " -45 "}}, config, at(1));
+  assert.equal(result.commands[0]?.payload, "MV35\r");
+  result = transitionAvr(readyState(), {avr: {kind: "volume", requestId: "both", mode: "absolute", valueDb: "-45", value: 40}}, config, at(1));
+  assert.equal(result.commands[0]?.payload, "MV35\r");
+  assert.ok(result.traces.some(({reason}) => reason === "legacy-volume-units-ignored"));
+  result = transitionAvr(readyState(), {avr: {kind: "volume", requestId: "loud", mode: "absolute", valueDb: "loud"}}, config, at(1));
+  assert.deepEqual(result.commands, []);
+  assert.ok(result.events.some(({avr}) => avr.kind === "volume_rejected" && avr.reason === "invalid-volume-value"));
 });

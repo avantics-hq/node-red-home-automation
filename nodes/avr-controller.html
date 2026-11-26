@@ -1,6 +1,11 @@
 <script type="text/javascript">
   (function () {
   function on(value) { return value === true || value === "true"; }
+  function given(value) { return value !== undefined && value !== null && String(value).trim() !== ""; }
+  // A dB bound, or a bound saved before 5.0 in its place.
+  function volumeBound(value, legacy) {
+    return given(value) ? Number.isFinite(Number(value)) : given(legacy) && Number.isFinite(Number(legacy));
+  }
   RED.nodes.registerType("home-avr-controller", {
     category: "home automation",
     color: "#c7d9f1",
@@ -17,8 +22,17 @@
       sources: {value: "{\"shield\":\"SAT/CBL\",\"playstation\":\"GAME\"}", required: true, validate: function (v) { try { JSON.parse(v); return true; } catch (e) { return false; } }},
       retryMs: {value: 2000, required: true, validate: RED.validators.number()},
       maxAttempts: {value: 3, required: true, validate: RED.validators.number()},
-      minVolume: {value: 0, required: true, validate: RED.validators.number()},
-      maxVolume: {value: 60, required: true, validate: RED.validators.number()},
+      // In dB (the receiver's 80 is 0 dB). A flow saved before 5.0 has
+      // minVolume and maxVolume in the receiver's own 0-98 instead, which
+      // still work: the node isn't shown invalid for them, and the dialog
+      // fills these from them.
+      minVolumeDb: {value: -80, validate: function (v) { return volumeBound(v, this.minVolume); }},
+      maxVolumeDb: {value: -20, validate: function (v) { return volumeBound(v, this.maxVolume); }},
+      // The bounds before 5.0, with no form rows. Listed so the editor keeps
+      // them: it holds only the properties named here. Cleared once the
+      // dialog saves the dB ones.
+      minVolume: {value: ""},
+      maxVolume: {value: ""},
       // The receiver published nothing before these settings, so both start off.
       publishState: {value: false},
       discovery: {value: false},
@@ -33,6 +47,10 @@
       this.idScheme = "node";
     },
     oneditprepare: function () {
+      // A flow saved before 5.0: show its volume bounds in dB, so saving
+      // the dialog keeps them.
+      if (!given(this.minVolumeDb) && given(this.minVolume)) $("#node-input-minVolumeDb").val(Number(this.minVolume) - 80);
+      if (!given(this.maxVolumeDb) && given(this.maxVolume)) $("#node-input-maxVolumeDb").val(Number(this.maxVolume) - 80);
       $("#node-input-publishState").prop("checked", on(this.publishState));
       $("#node-input-discovery").prop("checked", on(this.discovery));
       // Discovery describes the published state, so it needs it.
@@ -44,6 +62,10 @@
       }
       $("#node-input-publishState, #node-input-discovery").on("change", follow);
       follow();
+    },
+    oneditsave: function () {
+      if (given($("#node-input-minVolumeDb").val())) this.minVolume = "";
+      if (given($("#node-input-maxVolumeDb").val())) this.maxVolume = "";
     },
     inputs: 1,
     outputs: 3,
@@ -60,8 +82,8 @@
   <div class="form-row"><label for="node-input-sources">Sources</label><input type="text" id="node-input-sources"></div>
   <div class="form-row"><label for="node-input-retryMs">Retry milliseconds</label><input type="number" id="node-input-retryMs"></div>
   <div class="form-row"><label for="node-input-maxAttempts">Maximum attempts</label><input type="number" id="node-input-maxAttempts"></div>
-  <div class="form-row"><label for="node-input-minVolume">Minimum volume</label><input type="number" step="0.5" id="node-input-minVolume"></div>
-  <div class="form-row"><label for="node-input-maxVolume">Maximum volume</label><input type="number" step="0.5" id="node-input-maxVolume"></div>
+  <div class="form-row"><label for="node-input-minVolumeDb">Minimum volume (dB)</label><input type="number" step="0.5" id="node-input-minVolumeDb"></div>
+  <div class="form-row"><label for="node-input-maxVolumeDb">Maximum volume (dB)</label><input type="number" step="0.5" id="node-input-maxVolumeDb"></div>
   <div class="form-row"><label for="node-input-publishState">Publish state over MQTT</label><input type="checkbox" id="node-input-publishState" style="display:inline-block; width:auto;"></div>
   <div class="form-row"><label for="node-input-discovery">Home Assistant discovery</label><input type="checkbox" id="node-input-discovery" style="display:inline-block; width:auto;"> <span>(needs Publish state)</span></div>
   <div class="form-row"><label for="node-input-discoveryPrefix">Discovery prefix</label><input type="text" id="node-input-discoveryPrefix"></div>
@@ -71,7 +93,7 @@
   <p>Owns explicit power, main-zone, source and bounded volume commands for a Denon AVR.</p>
   <p>Send protocol observations as <code>msg.avr = {kind: "observed", line: msg.payload}</code>.</p>
   <p>Send activity requests as <code>msg.avr = {kind: "intent", requestId, generation, power: "on", source: "shield"}</code>. Omit <code>source</code> to preserve the current input, or use <code>power: "standby"</code> to stop the AVR.</p>
-  <p>Send volume requests as <code>msg.avr = {kind: "volume", requestId, mode: "absolute", value: 30}</code> or use <code>mode: "relative"</code> with a positive or negative delta. The controller applies configured bounds, accumulates rapid relative requests, confirms fresh <code>MV</code> evidence and releases ownership so external adjustments are preserved.</p>
+  <p>Send volume requests as <code>msg.avr = {kind: "volume", requestId, mode: "absolute", valueDb: -50}</code> or use <code>mode: "relative"</code> with a positive or negative change. Volume is in dB, as are the bounds, results and published state; the receiver's 80 is 0 dB. A <code>value</code> in the receiver's own 0-98 still works during 5.x, with a warning in the log. The controller applies configured bounds, accumulates rapid relative requests, confirms fresh <code>MV</code> evidence and releases ownership so external adjustments are preserved.</p>
   <p>Send <code>kind: "startup"</code> after deployment to discard stale observations and query the receiver; a volume request still pending then is reported as failed with reason <code>restart</code>. Send <code>kind: "refresh"</code> to re-read the receiver without disturbing work in flight. Output 1 connects to a TCP output node; output 2 emits state plus ready, failed, rejected, superseded and volume results.</p>
   <p>While it has a request, output 2 also carries <code>msg.theatre = {kind: "target_state", target: "avr", requestId, generation, status, observedAt, details}</code>, so it can be wired straight back to a theatre activity controller. A ready state is stamped with the oldest receiver reading the request relies on, and a <code>refresh</code> is answered once the receiver reports again.</p>
   <h3>Volume results</h3>
@@ -89,7 +111,7 @@
       <code>home/&lt;area&gt;/receiver/power/state</code> (<code>ON</code> or <code>OFF</code>),
       <code>…/source/state</code> (the source name) and <code>…/volume/state</code>, with <code>online</code> or
       <code>offline</code> on <code>…/availability</code>.</dd>
-    <dt>Home Assistant discovery</dt><dd>power and source sensors, and a volume number between <b>Minimum volume</b>
+    <dt>Home Assistant discovery</dt><dd>power and source sensors, and a volume number in dB between <b>Minimum volume</b>
       and <b>Maximum volume</b>. It needs <b>Publish state</b>. A volume set there arrives on
       <code>…/volume/set</code>; wire an MQTT in node on that topic into this node. Sets arriving within 0.3 seconds
       of each other (a slider, repeated taps) are settled to the last one, which becomes an ordinary absolute

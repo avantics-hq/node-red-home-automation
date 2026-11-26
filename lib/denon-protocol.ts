@@ -44,25 +44,42 @@ export function parseSourceCodes(value: unknown): Record<string, string> {
   return Object.fromEntries(typedEntries);
 }
 
+// The package's volume is in dB. A Denon receiver's master volume runs
+// from 0 to 98 in half steps, where 80 is 0 dB: -80 to +18 dB. This module
+// converts at its edges, so the receiver's strings stay as they are.
+export const VOLUME_STEP_DB = 0.5;
+export const VOLUME_MIN_DB = -80;
+export const VOLUME_MAX_DB = 18;
+const DENON_ZERO_DB = 80;
+
 // Volume moves in half steps.
 export function roundVolume(value: number): number {
   return Math.round(value * 2) / 2;
 }
 
-// "MV" volume digits: two for a whole step, a trailing 5 for a half step.
+// "MV" volume digits: two for a whole step, a trailing 5 for a half step;
+// read as dB.
 function parseVolume(raw: string): number | null {
   if (!/^\d{2,3}$/.test(raw)) return null;
-  if (raw.length === 2) return Number(raw);
-  return Number(raw.slice(0, 2)) + Number(raw.slice(2)) / 10;
+  const denon = raw.length === 2 ? Number(raw) : Number(raw.slice(0, 2)) + Number(raw.slice(2)) / 10;
+  return denon - DENON_ZERO_DB;
 }
 
-export function formatVolumeCommand(value: number): string {
-  const rounded = roundVolume(value);
-  if (!Number.isFinite(value) || rounded < 0 || rounded > 98 || Math.abs(value - rounded) > 0.001) {
-    throw new Error("volume must be a half-step between 0 and 98");
+// A volume request's value from before 5.0, in the receiver's own 0-98:
+// absolute values convert to dB; relative ones are already a change in dB.
+export function legacyVolumeDb(value: number, mode: "absolute" | "relative"): number {
+  return mode === "absolute" ? value - DENON_ZERO_DB : value;
+}
+
+// A volume in dB as the receiver's "MV" command.
+export function formatVolumeCommand(db: number): string {
+  const rounded = roundVolume(db);
+  if (!Number.isFinite(db) || rounded < VOLUME_MIN_DB || rounded > VOLUME_MAX_DB || Math.abs(db - rounded) > 0.001) {
+    throw new Error("volume must be a half-step between -80 and 18 dB");
   }
-  const whole = Math.floor(rounded).toString().padStart(2, "0");
-  return "MV" + whole + (Number.isInteger(rounded) ? "" : "5") + "\r";
+  const denon = rounded + DENON_ZERO_DB;
+  const whole = Math.floor(denon).toString().padStart(2, "0");
+  return "MV" + whole + (Number.isInteger(denon) ? "" : "5") + "\r";
 }
 
 export function parseAvrLine(

@@ -526,3 +526,133 @@ test("an adopted request the display doesn't match is a manual override: no togg
   const next = apply(result.state, {kind: "intent", requestId: "projector-7", generation: 7, mode: "projector"}, 11);
   assert.equal(next.state.desired?.requestId, "projector-7");
 });
+
+// The display driven with no built-in meter: the TV and screen answer as
+// their transports do, the infrared toggle works, and the projector's power
+// comes from an adapter that reports every second unasked ("periodic"),
+// only when its state changes ("on-change"), or also when output 3's query
+// reaches it ("answered"). Returns each mode's outcome.
+function withoutMeter(meter: "periodic" | "on-change" | "answered") {
+  const projector = {power: "standby" as "on" | "standby" | "transitioning", until: 0, next: "standby" as "on" | "standby", prompted: false};
+  const devices = {tv: "on" as "on" | "standby", screen: 0};
+  let reported: string | null = null;
+  let state: Partial<DisplayState> | undefined;
+  let result!: ReturnType<typeof transitionDisplay>;
+  let queries = 0;
+  const report = (now: number, generation: number) => {
+    result = observe(result.state, "projector", {power: projector.power}, now, generation);
+    state = result.state;
+    reported = projector.power;
+    answer(now, generation);
+  };
+  // Carries out each command and feeds back what the devices then report,
+  // until the node has nothing more to send.
+  function answer(now: number, generation: number): void {
+    const follow: Array<[DisplayDevice, ObservationValues]> = [];
+    let asked = false;
+    for (const entry of result.commands) {
+      if (entry.device === "projector" && entry.operation === "query_power") {
+        queries += 1;
+        asked = true;
+      } else if (entry.device === "projector" && entry.operation === "power_toggle") {
+        if (projector.power === "standby") Object.assign(projector, {power: "transitioning", until: now + 1.5, next: "on"});
+        else if (!projector.prompted) projector.prompted = true;
+        else Object.assign(projector, {power: "transitioning", until: now + 2, next: "standby", prompted: false});
+      } else if (entry.device === "tv") {
+        if (entry.operation === "set_power") devices.tv = entry.power as "on" | "standby";
+        follow.push(["tv", {power: devices.tv}]);
+      } else if (entry.device === "screen") {
+        if (entry.operation === "set_position") devices.screen = Number(entry.position);
+        follow.push(["screen", {position: devices.screen, state: "stopped"}]);
+      }
+    }
+    for (const [device, values] of follow) {
+      result = observe(result.state, device, values, now, generation);
+      state = result.state;
+      answer(now, generation);
+    }
+    if (asked && meter === "answered") report(now, generation);
+  }
+  const run = (mode: DisplayMode, generation: number, from: number) => {
+    result = apply(state, {kind: "intent", requestId: `${mode}-${generation}`, generation, mode}, from);
+    state = result.state;
+    answer(from, generation);
+    for (let tenth = 1; tenth <= 300 && !["ready", "failed"].includes(result.state.phase); tenth += 1) {
+      const now = from + tenth / 10;
+      if (projector.power === "transitioning" && now >= projector.until) projector.power = projector.next;
+      const due = meter === "periodic" ? tenth % 10 === 0 : projector.power !== reported;
+      if (due) {
+        report(now, generation);
+      } else {
+        result = apply(state, {kind: "tick", generation}, now);
+        state = result.state;
+        answer(now, generation);
+      }
+    }
+    return {phase: result.state.phase, failure: result.state.failure && {device: result.state.failure.device, reason: result.state.failure.reason}};
+  };
+  // The meter has reported once, as one would when first set up.
+  reported = projector.power;
+  const into = run("projector", 1, 0);
+  const out = into.phase === "ready" ? run("tv", 2, 60) : null;
+  return {into, out, power: projector.power, queries};
+}
+
+test("with no built-in meter, a periodic meter or an answered query takes the display into and out of projector mode", () => {
+  for (const meter of ["periodic", "answered"] as const) {
+    const outcome = withoutMeter(meter);
+    assert.deepEqual([outcome.into.phase, outcome.out?.phase, outcome.power], ["ready", "ready", "standby"], meter);
+    assert.ok(outcome.queries > 0, meter);
+  }
+});
+
+test("a meter that reports only on change, with nothing answering output 3, fails the request naming the projector", () => {
+  const outcome = withoutMeter("on-change");
+  assert.deepEqual(outcome.into, {phase: "failed", failure: {device: "projector", reason: "no-reading"}});
+});
+
+test("discovery asks a silent device again, then fails naming it, at the query timeout each time", () => {
+  let result = apply(undefined, {kind: "intent", requestId: "p-1", generation: 1, mode: "projector"}, 0);
+  result = observe(result.state, "tv", {power: "standby"}, 0.1);
+  result = observe(result.state, "screen", {position: 0, state: "stopped"}, 0.1);
+  result = apply(result.state, {kind: "tick", generation: 1}, 0.9);
+  assert.deepEqual([result.commands.length, result.state.phase], [0, "discovering"], "not yet due");
+  result = apply(result.state, {kind: "tick", generation: 1}, 1);
+  assert.deepEqual(result.commands.map(({device, operation, attempt}) => [device, operation, attempt]), [["projector", "query_power", 2]]);
+  assert.equal(result.state.discovery?.nextAt, at(2).getTime());
+  result = apply(result.state, {kind: "tick", generation: 1}, 2);
+  assert.equal(result.state.phase, "failed");
+  assert.deepEqual(result.state.failure, {device: "projector", operation: "discovery", reason: "no-reading", occurredAt: at(2).toISOString()});
+  assert.ok(result.events.some(({display}) => display.kind === "failed"));
+  // A reading in time ends discovery: no deadline is left behind.
+  result = apply(undefined, {kind: "intent", requestId: "p-2", generation: 1, mode: "tv"}, 0);
+  for (const [device, values] of [["tv", {power: "on"}], ["screen", {position: 0, state: "stopped"}], ["projector", {power: "standby"}]] as const) {
+    result = observe(result.state, device, values, 0.5);
+  }
+  assert.equal(result.state.discovery, undefined);
+  assert.equal(result.state.phase, "ready");
+});
+
+test("a projector reading may give its power state instead of watts", () => {
+  const reading = (values: ObservationValues, previous?: ObservationValues) => {
+    let state: Partial<DisplayState> | undefined;
+    if (previous) state = observe(undefined, "projector", previous, 0).state;
+    return observe(state, "projector", values, 1).state.observed?.projector;
+  };
+  assert.deepEqual([reading({power: "on"})?.power, reading({power: "on"})?.watts], ["on", null]);
+  assert.equal(reading({power: "standby"})?.power, "standby");
+  // Transitioning reads as watts between the thresholds do: the last settled state, if any.
+  assert.equal(reading({power: "transitioning"})?.power, "transitioning");
+  assert.equal(reading({power: "transitioning"}, {power: "on"})?.power, "on");
+  assert.equal(reading({power: "transitioning"}, {watts: 2})?.power, "standby");
+  // Both: the state wins, and the watts are kept.
+  assert.deepEqual([reading({power: "standby", watts: 155})?.power, reading({power: "standby", watts: 155})?.watts], ["standby", 155]);
+  assert.throws(() => reading({power: "warming"}), /on, standby or transitioning/);
+  // Lower case only, trimmed: a plug's relay ON and OFF aren't the lamp's
+  // state, so they fail as invalid rather than read as on or standby.
+  assert.equal(reading({power: " transitioning "})?.power, "transitioning");
+  for (const power of ["ON", "OFF", "On", "STANDBY"]) {
+    assert.throws(() => reading({power}), /on, standby or transitioning/, power);
+  }
+  assert.throws(() => reading({}), /invalid projector power observation/);
+});

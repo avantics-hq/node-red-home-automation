@@ -7,7 +7,14 @@
       area: {value: ""},
       tvHost: {value: "", required: true},
       screenHost: {value: "", required: true},
-      projectorMeterHost: {value: "", required: true},
+      // projectorMeterHost before 5.0; the dialog fills this from it.
+      // Optional: without one, the flow reports the projector's power.
+      projectorPowerMeterHost: {value: ""},
+      // The name before 5.0, with no form row. Listed so the editor keeps it:
+      // it holds only the properties named here. Cleared once the dialog
+      // saves the new one.
+      projectorMeterHost: {value: ""},
+      // DEFAULT_SCREEN_OPEN_POSITION in lib/display-mode-controller.ts.
       screenOpenPosition: {value: 82, required: true, validate: RED.validators.number()},
       screenTolerance: {value: 2, required: true, validate: RED.validators.number()},
       pollMs: {value: 2000, required: true, validate: RED.validators.number()},
@@ -25,9 +32,20 @@
       transportTimeoutMs: {value: 5000, required: true, validate: RED.validators.number()}
     },
     credentials: {tvPsk: {type: "password"}},
+    oneditprepare: function () {
+      // A flow saved before 5.0: show its meter host, so saving the dialog keeps it.
+      if (!this.projectorPowerMeterHost && this.projectorMeterHost) {
+        $("#node-input-projectorPowerMeterHost").val(this.projectorMeterHost);
+      }
+    },
+    oneditsave: function () {
+      // The dialog showed the old host in the field, so what's left there is
+      // the user's choice, including none.
+      this.projectorMeterHost = "";
+    },
     inputs: 1,
-    outputs: 2,
-    outputLabels: ["projector IR fallback", "state and results"],
+    outputs: 3,
+    outputLabels: ["projector IR fallback", "state and results", "projector power queries"],
     icon: "font-awesome/fa-television",
     label: function () { return this.name || (this.area ? this.area + " " : "") + "display mode"; }
   });
@@ -36,10 +54,10 @@
 <script type="text/html" data-template-name="home-display-mode-controller">
   <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
   <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area"></div>
-  <div class="form-row"><label for="node-input-tvHost">Bravia host</label><input type="text" id="node-input-tvHost"></div>
-  <div class="form-row"><label for="node-input-tvPsk">Bravia PSK</label><input type="password" id="node-input-tvPsk"></div>
-  <div class="form-row"><label for="node-input-screenHost">Screen Shelly host</label><input type="text" id="node-input-screenHost"></div>
-  <div class="form-row"><label for="node-input-projectorMeterHost">Projector Shelly host</label><input type="text" id="node-input-projectorMeterHost"></div>
+  <div class="form-row"><label for="node-input-tvHost">TV host</label><input type="text" id="node-input-tvHost"></div>
+  <div class="form-row"><label for="node-input-tvPsk">TV pre-shared key</label><input type="password" id="node-input-tvPsk"></div>
+  <div class="form-row"><label for="node-input-screenHost">Screen controller host</label><input type="text" id="node-input-screenHost"></div>
+  <div class="form-row"><label for="node-input-projectorPowerMeterHost">Projector power meter host (optional)</label><input type="text" id="node-input-projectorPowerMeterHost"></div>
   <div class="form-row"><label for="node-input-screenOpenPosition">Screen viewing position</label><input type="number" id="node-input-screenOpenPosition"></div>
   <div class="form-row"><label for="node-input-screenTolerance">Screen position tolerance</label><input type="number" id="node-input-screenTolerance"></div>
   <div class="form-row"><label for="node-input-pollMs">Confirmation poll milliseconds</label><input type="number" id="node-input-pollMs"></div>
@@ -65,7 +83,28 @@
     TV is left on. A projector warming up or cooling down finishes before a newer request changes it; if it doesn't finish in time, the
     newer request carries on from what the projector then reports.</p>
   <p>Send <code>msg.display = {kind: "intent", requestId, generation, mode}</code>. Send <code>kind: "startup"</code> after deployment to query every owned device and reconcile persisted intent. Send <code>kind: "refresh"</code> to re-confirm a settled display from fresh readings.</p>
-  <p>The Bravia and both Shelly devices use direct LAN APIs. Output 1 carries the projector power toggle (<code>msg.payload = "power"</code> with <code>msg.display_command</code>) for your infrared transport, commanded directly rather than through Home Assistant. Enable “Projector power is fallback” to include its use in activity metrics. Output 2 emits observed state plus ready, manual-override, failed, rejected and superseded results, and <code>msg.theatre</code> target state for the theatre activity controller: wire it straight back to that controller.</p>
+  <p>Each device is reached directly over its LAN API. The <b>TV host</b> is a Sony Bravia with IP control and a
+    pre-shared key. The <b>Screen controller host</b> is a Shelly Gen2 cover (its <code>Cover</code> RPC). The
+    <b>Projector power meter host</b>, if set, is a Shelly Gen2 switch with power metering on the projector's supply
+    (switch 1), read against <b>Projector on watts</b> and <b>Projector standby watts</b>. A flow saved before 5.0 names
+    that host <code>projectorMeterHost</code>, which is still read.</p>
+  <p>Output 1 carries the projector power toggle (<code>msg.payload = "power"</code> with <code>msg.display_command</code>) for your infrared transport, commanded directly rather than through Home Assistant. Enable “Projector power is fallback” to include its use in activity metrics. Output 2 emits observed state plus ready, manual-override, failed, rejected and superseded results, and <code>msg.theatre</code> target state for the theatre activity controller: wire it straight back to that controller. Output 3 asks for the projector's power when there is no meter host (below).</p>
+  <h3>Projector power from your own flow</h3>
+  <p>Leave <b>Projector power meter host</b> empty to report the projector's power from any meter or adapter: send
+    <code>msg.display = {kind: "observed", device: "projector", power: "on"}</code> (<code>"on"</code>,
+    <code>"standby"</code> or <code>"transitioning"</code>, in lower case), or a meter's reading as <code>watts: 140</code>,
+    read against the on and standby watts. A smart plug's own <code>ON</code> and <code>OFF</code> are its socket, not the
+    lamp, so send its power in watts instead. A lamp <code>"transitioning"</code>, or watts between the two, keeps its last
+    settled state while it warms or cools. <code>observedAt</code> (an ISO time) and <code>source</code> are optional.</p>
+  <p>The node needs a fresh projector reading at every request and while it confirms a change. When it does, it sends
+    <code>msg.payload = "query"</code> on output 3: wire that to whatever makes your meter report, such as a Zigbee2MQTT
+    plug's <code>/get</code> topic. Output 3 can be left unwired only if the meter reports on its own at least once every
+    <b>Query timeout milliseconds</b>, whether or not the power changes; a meter that reports only on a change says
+    nothing while the projector sits steady. A device that hasn't reported within the query timeout is asked again, up to
+    <b>Maximum idempotent attempts</b> in all, and then the request fails with reason <code>no-reading</code>, naming
+    the device. This applies to every device, with or without a meter host: keep <b>Transport timeout milliseconds</b>
+    below <b>Query timeout milliseconds</b> &times; <b>Maximum idempotent attempts</b>, so a slow device's answer
+    arrives before it is given up on.</p>
   <p>An unsolicited physical-state change after readiness latches manual ownership. The controller observes and reports it without issuing corrective commands; a newer activity intent resumes automation.</p>
-  <p>The Bravia PSK remains in Node-RED's encrypted credential store and is never emitted in a message or status.</p>
+  <p>The TV pre-shared key remains in Node-RED's encrypted credential store and is never emitted in a message or status.</p>
 </script>

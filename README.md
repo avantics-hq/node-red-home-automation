@@ -100,6 +100,14 @@ on output 2. Example: [`Home theatre equipment.json`](https://github.com/avantic
 | `home-source-capability-controller` | Gates source readiness on fresh availability, active-device, application or playback evidence. |
 | `home-backlighting-controller` | Owns TV-backlight power with observation-gated confirmation. |
 
+The display controller reads the projector's power from any meter or adapter:
+send `msg.display = {kind: "observed", device: "projector", power: "on"}`
+(`"on"`, `"standby"` or `"transitioning"`), or `watts` from a meter. Its
+built-in Shelly meter is optional. Without one, it asks for a reading on output
+3 whenever it needs one; wire that to your meter, unless the meter reports on
+its own at least once per query timeout. A device that doesn't report fails
+the request with reason `no-reading`. The node's help has the details.
+
 ### Theatre activities
 
 One request, such as "tv" or "off", drives every target. The state contract
@@ -477,10 +485,20 @@ msg.lighting = {
   state: "ON",
   source: "activity",
   owner: "theatre",
-  values: {brightness: 64, color_temp: 400},
+  values: {brightnessPct: 25, colorTempKelvin: 2500},
   preserveManual: true
 };
 ```
+
+An intent's `values` use the package's own units: `brightnessPct` (0-100) and
+`colorTempKelvin`. The room controller converts them for the light (for a
+Zigbee2MQTT light, to its 1-254 brightness and mireds); other fields, such as
+`effect`, are passed on as they are. `brightnessPct: 0` is the dimmest the
+light goes, not off: send `state: "OFF"` to switch it off. A value that isn't a
+number (a numeric string such as `"50"` counts), or a colour temperature of 0
+or less, is left out with a warning in the log. During 5.x, `brightness` and `color_temp`
+in Zigbee2MQTT's own units are still accepted and passed on unchanged, and the
+room controller logs a warning once per deploy; they stop working in 6.0.
 
 `home-activity-lighting-controller` does this itself: while a profile is active
 it overrides that profile's lights under its configured owner (default
@@ -538,9 +556,17 @@ msg.avr = {
   kind: "volume",
   requestId: "volume-control-1",
   mode: "relative",
-  value: 1
+  valueDb: 1
 };
 ```
+
+Volume is in dB: `valueDb` is the volume for `absolute`, or the change for
+`relative`, and the bounds, results, published state and Home Assistant
+number are in dB too. The controller converts for the receiver (for a Denon,
+whose 0-98 has 80 at 0 dB, -80 to +18 dB in half steps). During 5.x, a request
+with `value` in the receiver's own 0-98, and bounds saved before 5.0 as
+**minVolume** and **maxVolume**, are still read, and the node logs a warning
+once per deploy for such requests; they stop working in 6.0.
 
 `mode` may be `absolute` or `relative`. The controller resolves relative input
 from fresh observed volume, accumulates rapid requests against the pending
@@ -585,7 +611,7 @@ Each example uses synthetic identifiers and configuration, asserts its central i
 
 The repository contains no home-network addresses, deployment coordinates, or live credentials. Device hosts and room coordinates are required configuration where applicable.
 
-The display controller stores its Bravia PSK as a Node-RED credential. Keep credentials in Node-RED's encrypted credential store rather than flow fields or repository files.
+The display controller stores its TV pre-shared key as a Node-RED credential. Keep credentials in Node-RED's encrypted credential store rather than flow fields or repository files.
 
 Report suspected vulnerabilities privately using the process in
 [`SECURITY.md`](https://github.com/avantics-hq/node-red-home-automation/blob/main/SECURITY.md), not through a public issue.

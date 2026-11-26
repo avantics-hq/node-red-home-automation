@@ -24,11 +24,13 @@ test("commands end in a carriage return", () => {
 
 test("volume uses half steps both ways", () => {
   assert.equal(roundVolume(31.3), 31.5);
-  for (const volume of [0, 5, 31, 31.5, 98]) {
-    const command = formatVolumeCommand(volume).trim();
-    assert.equal(parseAvrLine(command, {})?.value, volume, command);
+  // In dB, where the receiver's 80 is 0 dB.
+  for (const [db, line] of [[-80, "MV00"], [-75, "MV05"], [-49, "MV31"], [-48.5, "MV315"], [0, "MV80"], [18, "MV98"]] as const) {
+    assert.equal(formatVolumeCommand(db).trim(), line);
+    assert.equal(parseAvrLine(line, {})?.value, db, line);
   }
-  assert.throws(() => formatVolumeCommand(99), /half-step/);
+  assert.throws(() => formatVolumeCommand(18.5), /half-step/);
+  assert.throws(() => formatVolumeCommand(-80.5), /half-step/);
 });
 
 test("status lines map to fields, and unknown lines to nothing", () => {

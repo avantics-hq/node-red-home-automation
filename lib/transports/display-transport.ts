@@ -95,7 +95,10 @@ export class DisplayTransport {
     this.tvPsk = String(options.tvPsk || "");
     if (!this.tvPsk) throw new Error("tvPsk is required");
     this.screenHost = host(options.screenHost, "screenHost");
-    this.projectorMeterHost = host(options.projectorMeterHost, "projectorMeterHost");
+    // Optional: without it, the projector's power comes from the flow.
+    this.projectorMeterHost = String(options.projectorMeterHost || "").trim()
+      ? host(options.projectorMeterHost, "projectorMeterHost")
+      : "";
     this.timeoutMs = Math.max(250, Number(options.timeoutMs || 5000));
     this.fetch = options.fetch || globalThis.fetch;
     if (typeof this.fetch !== "function") throw new Error("fetch is unavailable");
@@ -178,7 +181,7 @@ export class DisplayTransport {
         await this.shellyPost(this.screenHost, "Cover.GoToPosition", {id: 0, pos: command.position});
         return null;
       }
-      if (command.device === "projector" && command.operation === "query_power") {
+      if (command.device === "projector" && command.operation === "query_power" && this.projectorMeterHost) {
         const body = await this.shellyGet(this.projectorMeterHost, "Switch.GetStatus?id=1");
         const watts = body.apower;
         if (typeof watts !== "number" || !Number.isFinite(watts) || watts < 0) {
