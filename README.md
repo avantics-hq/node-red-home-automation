@@ -171,9 +171,9 @@ moves, send it to the motion policy's pause input
 cover), as the example does; a pause lasts at most the motion policy's
 **Maximum pause** unless sent again; never its enable (`area-enabled`), which is the
 user's own switch. Device commands come out in a neutral
-shape (`set_position`, `stop` or `observe`); the example flow maps them to and
-from a Zigbee2MQTT cover. Battery and charging status are kept as reported
-facts and never acted on.
+shape (`set_position`, `stop` or `observe`); the example flow wires them to and
+from a Zigbee2MQTT cover through the Zigbee2MQTT cover adapter (below). Battery
+and charging status are kept as reported facts and never acted on.
 
 Switched on, a cover node publishes its state (and position) under
 `home/<area>/cover/<name>/`, named by its **Name in topics** (no default: give
@@ -201,11 +201,24 @@ into availability. A cover that isn't calibrated, or has lost its position,
 fails the command in hand with the reason rather than reporting a position.
 Example: [`Shelly cover.json`](https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/Shelly%20cover.json).
 
+A Zigbee2MQTT cover wires the same way through the Zigbee2MQTT cover adapter:
+set its base topic (`zigbee2mqtt` by default) and the device's friendly name,
+feed it from MQTT in nodes on `<base>/<friendly name>` and its `/availability`,
+and wire it between the cover controller and an MQTT out node. It sends
+`{"position": n}` and `{"state": "OPEN" | "CLOSE" | "STOP"}` on the device's
+`/set`, and asks for a fresh reading on its `/get`. Each state report becomes a
+position reading, with motion from `motor_state` or `moving` where the device
+reports one; a cover that reports none is confirmed by the controller's settle
+time. A cover with no position (set the controller to open, close and stop
+only) reports its end state once its motion says it has stopped.
+Example: [`Cover control.json`](https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/Cover%20control.json).
+
 | Node | Purpose |
 |---|---|
 | `home-cover-controller` | Owns one cover's moves (a position cover, or open, close and stop only), confirmed from what it reports, with presets, manual ownership and a moving signal. |
 | `home-cover-group` | Moves several covers as one, with an honest result when only some confirm. |
 | `home-shelly-cover` | Connects a Shelly Gen2+ cover to a cover controller over the device's own MQTT API. |
+| `home-z2m-cover` | Connects a Zigbee2MQTT cover to a cover controller over Zigbee2MQTT's MQTT messages. |
 
 ## Requirements
 

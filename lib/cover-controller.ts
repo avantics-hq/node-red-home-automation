@@ -364,6 +364,10 @@ export function transitionCover(
   }
 
   function acceptObservation(observation: Extract<CoverEvent, {kind: "observed"}>) {
+    // A cover that reports no position at all is the other cover type.
+    if (observation.position === undefined && ("state" in observation || observation.motion !== undefined)) {
+      throw new Error("observed cover reading has no position: for a cover that reports none, set the cover node's Cover to \"Open, close and stop only\"");
+    }
     const devicePosition = validPosition(observation.position, "observed cover position");
     if (observation.motion !== undefined && !Object.hasOwn(MOTIONS, observation.motion)) {
       throw new Error("unknown observed cover motion");

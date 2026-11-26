@@ -21,6 +21,7 @@ import registerRoom from "../nodes/room-controller";
 import registerHouse from "../nodes/house-schedule";
 import registerHouseMqtt from "../nodes/house-schedule-mqtt";
 import registerShellyCover from "../nodes/shelly-cover";
+import registerZ2mCover from "../nodes/z2m-cover";
 import type {SharedSchedule} from "../lib/house-schedule";
 import registerSource from "../nodes/source-capability-controller";
 import type {TraceRecord} from "../lib/bounded-trace";
@@ -2330,4 +2331,24 @@ test("room node: lighting values in Zigbee2MQTT's units still work during 5.x, w
   await send({colorTempKelvin: 0});
   assert.equal(node.warnings.length, 2);
   assert.match(String(node.warnings[1]), /left out/);
+});
+
+// The adapter has no timers, so nothing to close.
+test("zigbee2mqtt cover node: state reports become cover readings, and cover commands set and get messages", async () => {
+  const node = new (runtime(registerZ2mCover).Constructor)({id: "z1", baseTopic: "z2m", friendlyName: "test-cover"});
+  assert.deepEqual(node.errors, []);
+  const reported = await receive<SendEnvelope>(node, {topic: "z2m/test-cover", payload: {position: 30, state: "OPEN", motor_state: "closing"}});
+  const reading = reported[0]?.[1] as Array<{cover?: {kind: string; position: number; motion: string}}> | undefined;
+  assert.deepEqual([reported[0]?.[0], reading?.map(({cover}) => [cover?.kind, cover?.position, cover?.motion])], [null, [["observed", 30, "closing"]]]);
+  assert.equal((node.statuses.at(-1) as {text?: string}).text, "closing · 30%");
+  const observe = await receive<SendEnvelope>(node, {cover_command: {operation: "observe", requestId: "r", generation: 1, attempt: 1}});
+  assert.deepEqual((observe[0]?.[0] as Array<{topic: string; payload: string}>).map(({topic, payload}) => [topic, payload]),
+    [["z2m/test-cover/get", "{\"position\":\"\"}"]]);
+  await receive(node, {topic: "z2m/test-cover/availability", payload: "{\"state\":\"offline\"}"});
+  assert.equal((node.statuses.at(-1) as {text?: string}).text, "offline");
+  // Its own set echoed back sends nothing.
+  assert.deepEqual(await receive(node, {topic: "z2m/test-cover/set", payload: {position: 3}}), []);
+  // No friendly name: invalid configuration, not a guess.
+  const unset = new (runtime(registerZ2mCover).Constructor)({id: "z2"});
+  assert.equal((unset.statuses.at(-1) as {text?: string}).text, "invalid configuration");
 });
