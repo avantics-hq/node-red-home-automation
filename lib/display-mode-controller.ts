@@ -471,15 +471,18 @@ export function transitionDisplay(
       return markReady();
     }
 
+    // Make before break, as TV mode does: the projector warms up and the
+    // screen opens while the TV still shows the picture, which goes to
+    // standby last. A projector that fails to start leaves the TV on.
     if (mode === "projector") {
-      if (state.observed.tv?.power !== "standby") return issueTv("standby");
-      if (!screenAtPosition(state.observed.screen, config.screenOpenPosition, config.screenTolerance)) {
-        return issueScreen(config.screenOpenPosition);
-      }
       if (state.observed.projector?.power !== "on") {
         if (state.observed.projector?.power === "standby") return issueProjectorStart();
         return awaitProjectorPower();
       }
+      if (!screenAtPosition(state.observed.screen, config.screenOpenPosition, config.screenTolerance)) {
+        return issueScreen(config.screenOpenPosition);
+      }
+      if (state.observed.tv?.power !== "standby") return issueTv("standby");
       return markReady();
     }
 
@@ -594,6 +597,23 @@ export function transitionDisplay(
     }
 
     if (now.getTime() >= pending.deadlineAt) {
+      // A projector step kept from an older request (see the intent) that
+      // never confirmed isn't the newer request's failure: its goal may
+      // already be met. Drop it, read the projector afresh, and let the
+      // newer request act on what it reports; its own steps fail it, under
+      // its own generation, if the projector really is stuck.
+      if (state.desired && pending.command.generation !== state.desired.generation) {
+        state.pending = null;
+        state.seen.projector = false;
+        state.querying.projector = true;
+        commands.push(queryFor(state, "projector"));
+        trace("transition", "dropped", "superseded-operation-unconfirmed", {
+          device: pending.device,
+          operation: pending.operation,
+          generation: pending.command.generation
+        });
+        return;
+      }
       if (pending.retryable && pending.attempt < config.maxAttempts) {
         retry(pending, null);
         return;
@@ -664,7 +684,11 @@ export function transitionDisplay(
       state.lastAttempt = 0;
       state.fallbackUsed = false;
       state.blockedGeneration = null;
-      state.pending = null;
+      // As at startup, a projector power operation in flight (a warm-up, a
+      // shutdown or a cool-down) carries on under the new request: a toggle
+      // now could switch a warming lamp off or a cooling one back on. The
+      // new request's steps follow once it settles.
+      state.pending = state.pending && !state.pending.retryable ? state.pending : null;
       state.seen = {tv: false, screen: false, projector: false};
       state.querying = {tv: false, screen: false, projector: false};
       beginDiscovery();

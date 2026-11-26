@@ -163,3 +163,39 @@ test("a node with nothing saved adopts a refresh's wanted power and observes, ne
   const busy = intent(undefined, "off", 3);
   assert.equal(apply(busy.state, {kind: "refresh", requestId: "activity-9", generation: 9, power: "on"}, 1).state.desired?.requestId, "backlighting-3");
 });
+
+function readyOn() {
+  let result = intent(undefined);
+  result = apply(result.state, {kind: "command_result", generation: 1, ok: true}, 0.1);
+  result = apply(result.state, {kind: "observed", generation: 1, power: "on", observedAt: at(0.5).toISOString()}, 0.5);
+  assert.equal(result.state.phase, "ready");
+  return result;
+}
+
+test("a refresh of ready backlighting re-reads it without leaving ready; the reading answers", () => {
+  let result = apply(readyOn().state, {kind: "refresh", requestId: "backlighting-1", generation: 1, power: "on"}, 30);
+  assert.deepEqual(result.commands.map(({operation, generation}) => [operation, generation]), [["observe", 1]]);
+  assert.deepEqual(result.events, [], "no target state until the reading answers");
+  assert.deepEqual([result.state.phase, result.state.pending, result.state.observed?.power], ["ready", null, "on"]);
+
+  const matching = apply(result.state, {kind: "observed", generation: 1, power: "on", observedAt: at(30.1).toISOString()}, 30.1);
+  assert.deepEqual([matching.events[0]?.theatre.status, matching.events[0]?.theatre.observedAt], ["ready", at(30.1).toISOString()]);
+
+  // A different reading classifies as any reading after ready does.
+  const differing = apply(result.state, {kind: "observed", generation: 1, power: "off", observedAt: at(30.1).toISOString()}, 30.1);
+  assert.equal(differing.state.phase, "manual_override");
+  assert.equal(differing.events[0]?.theatre.classification, "manual_override");
+
+  // Unanswered, nothing is left waiting: still ready, and the next refresh does the same.
+  const later = apply(result.state, {kind: "tick", generation: 1}, 60);
+  assert.deepEqual([later.state.phase, later.state.pending, later.commands], ["ready", null, []]);
+  assert.deepEqual(apply(later.state, {kind: "refresh", requestId: "backlighting-1", generation: 1, power: "on"}, 60).commands.map(({operation}) => operation), ["observe"]);
+});
+
+test("a refresh of backlighting that isn't ready, and a startup, still re-observe as before", () => {
+  const confirming = apply(intent(undefined).state, {kind: "command_result", generation: 1, ok: true}, 0.1);
+  const refreshed = apply(confirming.state, {kind: "refresh", requestId: "backlighting-1", generation: 1, power: "on"}, 1);
+  assert.deepEqual([refreshed.state.phase, refreshed.state.pending?.operation, refreshed.events[0]?.theatre.status], ["confirming", "observe", "confirming"]);
+  const started = apply(readyOn().state, {kind: "startup"}, 30);
+  assert.deepEqual([started.state.phase, started.state.pending?.operation, started.state.observed], ["confirming", "observe", null]);
+});

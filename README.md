@@ -200,10 +200,29 @@ also attaches the package tarball and its SHA-256 checksum. Install a downloaded
 tarball through **Manage palette → Install → Upload module**, or with:
 
 ```sh
-npm install /path/to/avantics-node-red-home-automation-4.0.1.tgz
+npm install /path/to/avantics-node-red-home-automation-4.0.3.tgz
 ```
 
 Add the installed nodes from the **home automation** section of the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.
+
+### 4.0.3
+
+Fixes the theatre state flapping on every scheduled refresh: with an activity
+settled and ready, backlighting and room lighting reported themselves as
+confirming while they re-read their devices, so the theatre published
+`unknown` and back, and counted drift each time. A refresh of a ready target
+now re-reads it without leaving ready, as the display, receiver and source
+already did. A target that really changes on its own still counts as drift.
+
+### 4.0.2
+
+Fixes the display controller switching the TV off before the projector was
+ready: with a source playing, there was sound but no picture while the screen
+opened and the projector warmed up. Projector mode now starts the projector and
+waits for its warm-up, opens the screen, then puts the TV in standby, so the
+picture stays up and the TV stays on if the projector fails to start. A request
+made while the projector is warming up or cooling down now waits for that to
+finish, so the lamp is no longer left on or toggled mid-warm-up.
 
 ### 4.0.1
 

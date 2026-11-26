@@ -19,7 +19,7 @@ import {
 } from "./theatre-requests";
 import type {TraceEntry} from "./bounded-trace";
 import {OFFLINE, ONLINE, discoveryPrefixSetting, type IdScheme} from "./ha-discovery";
-import {IDENTIFIER, areaId, publishingArea} from "./topic-names";
+import {homeTopic, IDENTIFIER, publishingArea} from "./topic-names";
 
 
 export type {ContractRequest, TheatreStateSnapshot} from "./theatre-requests";
@@ -77,7 +77,7 @@ export function normaliseStateContractConfig(
     !config.baseTopic || (discovery && config.idScheme !== "node"));
   const displayName = String(config.displayName || area).trim();
   if (discovery && !displayName) throw new Error("displayName is required");
-  const baseTopic = String(config.baseTopic || `home/${areaId(area)}/theatre`).replace(/^\/+|\/+$/g, "");
+  const baseTopic = String(config.baseTopic || homeTopic(area, "theatre")).replace(/^\/+|\/+$/g, "");
   const discoveryPrefix = discoveryPrefixSetting(config.discoveryPrefix);
   if (!baseTopic || /[+#]/.test(baseTopic)) throw new Error("baseTopic must be a concrete MQTT topic");
   if (!Array.isArray(config.activities) || config.activities.length === 0) {
