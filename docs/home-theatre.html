@@ -1,183 +1,37 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light dark">
-  <meta name="description" content="Public capability reference for deterministic home-theatre orchestration in the Node-RED home-automation package.">
-  <link rel="canonical" href="https://avantics-hq.github.io/node-red-home-automation/home-theatre.html">
-  <title>Home-Theatre Controller Capability</title>
-  <style>
-    :root {
-      --bg: #f4f6f8;
-      --surface: #ffffff;
-      --raised: #f8fafc;
-      --text: #17202a;
-      --muted: #5d6975;
-      --border: #d8dee5;
-      --accent: #315efb;
-      --accent-soft: #e9efff;
-      --success: #18794e;
-      --success-soft: #e7f6ee;
-      --shadow: 0 18px 45px rgba(34, 46, 62, 0.1);
-    }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #101419;
-        --surface: #171d24;
-        --raised: #1d2530;
-        --text: #edf2f7;
-        --muted: #aab5c2;
-        --border: #303a47;
-        --accent: #8aa4ff;
-        --accent-soft: #202d58;
-        --success: #72d6a4;
-        --success-soft: #153b2b;
-        --shadow: 0 18px 45px rgba(0, 0, 0, 0.28);
-      }
-    }
-    * { box-sizing: border-box; }
-    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    a { color: var(--accent); }
-    h1, h2, h3, p { margin-top: 0; }
-    h1 { max-width: 880px; margin-bottom: 18px; font-size: clamp(2.5rem, 6vw, 5rem); line-height: 1; letter-spacing: -0.05em; }
-    h2 { margin-bottom: 10px; font-size: clamp(1.6rem, 3vw, 2.25rem); line-height: 1.15; letter-spacing: -0.025em; }
-    h3 { margin-bottom: 7px; font-size: 1.02rem; }
-    code { padding: 0.12em 0.35em; border-radius: 4px; background: var(--raised); }
-    .shell { width: min(1060px, calc(100% - 40px)); margin: 0 auto; }
-    header, footer { background: var(--surface); }
-    header { border-bottom: 1px solid var(--border); }
-    .site-nav { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 22px 0; }
-    .brand { color: var(--text); font-weight: 760; text-decoration: none; }
-    .site-nav div { display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.9rem; }
-    .site-nav div a { color: var(--muted); text-decoration: none; }
-    .hero { padding: 70px 0 76px; }
-    .eyebrow { margin-bottom: 14px; color: var(--accent); font-size: 0.77rem; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase; }
-    .lead { max-width: 780px; margin-bottom: 26px; color: var(--muted); font-size: clamp(1.05rem, 2vw, 1.25rem); }
-    .pills { display: flex; flex-wrap: wrap; gap: 9px; }
-    .pill { display: inline-flex; padding: 9px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--raised); color: var(--muted); font-size: 0.76rem; font-weight: 750; line-height: 1; }
-    .pill.complete { border-color: color-mix(in srgb, var(--success) 35%, var(--border)); background: var(--success-soft); color: var(--success); }
-    main { padding: 60px 0 78px; }
-    section + section { margin-top: 66px; }
-    .intro { max-width: 760px; margin-bottom: 24px; color: var(--muted); }
-    .targets, .guarantees, .states { display: grid; gap: 14px; }
-    .targets { grid-template-columns: repeat(5, 1fr); }
-    .guarantees { grid-template-columns: repeat(3, 1fr); }
-    .states { grid-template-columns: repeat(5, 1fr); }
-    .card, .target, .state, .contract, .boundary { border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
-    .target, .state { padding: 18px; text-align: center; }
-    .target p, .state p, .card p { margin-bottom: 0; color: var(--muted); font-size: 0.88rem; }
-    .card { padding: 22px; }
-    .feature { box-shadow: var(--shadow); }
-    .state strong { display: block; color: var(--accent); font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; }
-    .state + .state { position: relative; }
-    .state + .state::before { content: "→"; position: absolute; left: -12px; top: 50%; color: var(--muted); transform: translateY(-50%); }
-    .contract { overflow: hidden; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { padding: 14px 16px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
-    th { background: var(--raised); font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; }
-    td { color: var(--muted); font-size: 0.9rem; }
-    tr:last-child td { border-bottom: 0; }
-    .boundary { padding: 22px 24px; background: var(--raised); }
-    .boundary p { margin-bottom: 0; color: var(--muted); }
-    footer { border-top: 1px solid var(--border); }
-    footer .shell { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 18px; padding: 28px 0; color: var(--muted); font-size: 0.86rem; }
-    footer nav { display: flex; flex-wrap: wrap; gap: 16px; }
-    @media (max-width: 900px) {
-      .targets, .states { grid-template-columns: repeat(3, 1fr); }
-      .guarantees { grid-template-columns: 1fr 1fr; }
-      .state + .state::before { display: none; }
-    }
-    @media (max-width: 650px) {
-      .site-nav { align-items: flex-start; flex-direction: column; }
-      .hero { padding: 48px 0 56px; }
-      .targets, .states, .guarantees { grid-template-columns: 1fr; }
-      .target, .state { text-align: left; }
-      .contract { overflow-x: auto; }
-    }
-    @media (max-width: 440px) { .shell { width: min(100% - 28px, 1060px); } }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Home theatre · Node-RED Home Automation</title>
+<meta name="description" content="Activity orchestration across display, receiver, source, lighting and backlighting, with observed completion.">
+<link rel="stylesheet" href="assets/site.css">
 </head>
 <body>
-  <header>
-    <div class="shell">
-      <nav class="site-nav" aria-label="Primary navigation">
-        <a class="brand" href="./">Node-RED Home Automation</a>
-        <div><a href="./">Component overview</a><a href="contract-examples.html">Contract examples</a><a href="https://github.com/avantics-hq/node-red-home-automation">GitHub</a></div>
-      </nav>
-      <div class="hero">
-        <p class="eyebrow">Public capability reference</p>
-        <h1>Deterministic home-theatre activity orchestration.</h1>
-        <p class="lead">A reusable controller contract for coordinating target owners from explicit activity requests and fresh observations. The capability milestone is complete in the source package; this page contains no installation record.</p>
-        <div class="pills"><span class="pill complete">Capability complete</span><span class="pill">Package 5.0.0</span><span class="pill">Latest request wins</span><span class="pill">Observed completion</span></div>
-      </div>
-    </div>
-  </header>
-
-  <main class="shell">
-    <section aria-labelledby="targets-title">
-      <h2 id="targets-title">Composed target owners</h2>
-      <p class="intro">The activity layer emits semantic intent. Each target controller retains its own safe sequencing, transport and confirmation policy.</p>
-      <div class="targets">
-        <article class="target"><h3>Display</h3><p>Mode and power intent</p></article>
-        <article class="target"><h3>Receiver</h3><p>Power, source and bounded volume ownership</p></article>
-        <article class="target"><h3>Media source</h3><p>Capability and readiness</p></article>
-        <article class="target"><h3>Room lighting</h3><p>Ownership-preserving style</p></article>
-        <article class="target"><h3>Backlighting</h3><p>Observed power state</p></article>
-      </div>
-    </section>
-
-    <section aria-labelledby="states-title">
-      <h2 id="states-title">Activity lifecycle</h2>
-      <p class="intro">Every request receives a monotonic generation. Delayed work from older generations cannot mutate current state.</p>
-      <div class="states">
-        <article class="state"><strong>Requested</strong><p>Validate identity and activity.</p></article>
-        <article class="state"><strong>Preparing</strong><p>Refresh target evidence.</p></article>
-        <article class="state"><strong>Transitioning</strong><p>Dispatch semantic target intent.</p></article>
-        <article class="state"><strong>Confirming</strong><p>Require fresh mandatory evidence.</p></article>
-        <article class="state"><strong>Terminal</strong><p>Report ready, waiting or failed.</p></article>
-      </div>
-    </section>
-
-    <section aria-labelledby="guarantees-title">
-      <h2 id="guarantees-title">Behavioral guarantees</h2>
-      <div class="guarantees">
-        <article class="card feature"><h3>Stale work is inert</h3><p>Timers, command results and observations carry generation identity and cannot complete a newer request.</p></article>
-        <article class="card"><h3>Readiness is honest</h3><p>Mandatory targets require fresh observations. Unsupported or unobservable capabilities remain explicit.</p></article>
-        <article class="card"><h3>Manual control is preserved</h3><p>Unsolicited target changes become ownership evidence rather than a reason to fight the user.</p></article>
-        <article class="card"><h3>Volume control has one owner</h3><p>Absolute and relative requests share receiver bounds, observed confirmation and an explicit release point for later manual adjustment.</p></article>
-        <article class="card"><h3>Recovery is bounded</h3><p>Restart refreshes observations without blindly replaying state-changing commands.</p></article>
-        <article class="card"><h3>Failure is actionable</h3><p>Retries, fallback use, target availability and transition latency remain visible through one state contract.</p></article>
-        <article class="card"><h3>Policies stay transport-neutral</h3><p>Activity profiles name semantic outcomes; adapters own protocol-specific operations.</p></article>
-      </div>
-    </section>
-
-    <section aria-labelledby="contract-title">
-      <h2 id="contract-title">Public contract</h2>
-      <p class="intro">Node-RED adapters bridge the pure reducer to MQTT and Home Assistant without moving policy into flow wiring.</p>
-      <div class="contract">
-        <table>
-          <thead><tr><th>Surface</th><th>Contract</th><th>Invariant</th></tr></thead>
-          <tbody>
-            <tr><td>Request</td><td>Unique request ID, configured activity and timestamp</td><td>Retained requests are inert</td></tr>
-            <tr><td>Desired state</td><td>Activity and generation</td><td>One current request identity</td></tr>
-            <tr><td>Target evidence</td><td>Status, observation time, classification and failure</td><td>Older evidence cannot overwrite newer evidence</td></tr>
-            <tr><td>Outcome</td><td>Current activity, phase, availability and failure</td><td>Ready requires all mandatory targets</td></tr>
-            <tr><td>Operations</td><td>Latency, retries, fallbacks, outcomes and objective status</td><td>Expected waiting does not become a false failure</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <section aria-labelledby="proof-title">
-      <h2 id="proof-title">Source-level proof</h2>
-      <p class="intro">The package test suite covers successful activities, optional degradation, mandatory failure, restart, supersession, stale results, manual ownership, recovery and rolling operational objectives.</p>
-      <div class="boundary"><h3>Privacy boundary</h3><p>This reference describes generalized code behavior only. It intentionally omits device models, room names, addresses, entity identifiers, flow exports, activity history and operational records.</p></div>
-    </section>
-  </main>
-
-  <footer>
-    <div class="shell"><span>Reusable package capability · no installation data</span><nav aria-label="Footer navigation"><a href="./">Component overview</a><a href="contract-examples.html">Contract examples</a><a href="https://github.com/avantics-hq/node-red-home-automation#readme">README</a><a href="https://github.com/avantics-hq/node-red-home-automation">Source</a></nav></div>
-  </footer>
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar"><a class="brand" href="index.html"><span class="mark" aria-hidden="true">HA</span>Node-RED Home Automation</a><span class="version">5.0.0</span><button class="menu-button" id="menu-button" aria-controls="menu-drawer" aria-expanded="false">Menu</button><div class="search"><label class="sr-only" for="doc-search">Search the documentation</label><input id="doc-search" type="search" placeholder="Search the documentation…" autocomplete="off" aria-controls="search-results"><p class="sr-only" id="search-status" role="status"></p><div class="search-results" id="search-results" hidden></div></div><a class="source" href="https://github.com/avantics-hq/node-red-home-automation">Source ↗</a></header>
+<dialog id="menu-drawer" aria-labelledby="drawer-title"><div class="drawer-head"><strong id="drawer-title">Documentation</strong><button id="menu-close" autofocus>Close</button></div><nav class="doc-nav" aria-label="Documentation"><div class="nav-group"><p class="nav-label">Get started</p><a href="index.html">Introduction</a><a href="index.html#install">Install</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">Your first room</a><a href="index.html#core-ideas">Core ideas</a></div><div class="nav-group"><p class="nav-label">Guides</p><a href="https://github.com/avantics-hq/node-red-home-automation#room-light-control">Room lighting</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">Motion and occupancy</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">Wall switches</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">House schedule</a><a href="guide-covers.html">Covers</a><a href="home-theatre.html" aria-current="page">Home theatre</a><a href="index.html#home-assistant">Home Assistant</a><a href="guide-covers.html#wiring">Device adapters</a></div><div class="nav-group"><p class="nav-label">Node reference</p><details><summary>Lighting</summary><a href="https://github.com/avantics-hq/node-red-home-automation#room-light-control">Room controller</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">Motion policy</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">Switch policy</a></details><details><summary>Sensors and schedule</summary><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">Occupancy fusion</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">House schedule</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">House schedule MQTT</a></details><details><summary>Covers</summary><a href="node-cover-controller.html">Cover controller</a><a href="guide-covers.html#groups">Cover group</a></details><details><summary>Home theatre</summary><a href="https://github.com/avantics-hq/node-red-home-automation#receiver-volume-ownership">AVR controller</a><a href="https://github.com/avantics-hq/node-red-home-automation#home-theatre-equipment">Display mode</a><a href="https://github.com/avantics-hq/node-red-home-automation#home-theatre-equipment">Source capability</a><a href="https://github.com/avantics-hq/node-red-home-automation#home-theatre-equipment">Backlighting</a><a href="https://github.com/avantics-hq/node-red-home-automation#theatre-activities">Activity controller</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-light-control">Activity lighting</a><a href="https://github.com/avantics-hq/node-red-home-automation#theatre-mqtt-contract">State contract</a></details><details><summary>Adapters</summary><a href="guide-covers.html#wiring">Shelly cover</a></details></div><div class="nav-group"><p class="nav-label">Contracts</p><a href="https://github.com/avantics-hq/node-red-home-automation#theatre-mqtt-contract">Theatre MQTT topics</a><a href="contract-examples.html">Contract examples</a></div><div class="nav-group"><p class="nav-label">Project</p><a href="https://github.com/avantics-hq/node-red-home-automation#install">Releases and upgrading</a><a href="roadmap.html">Roadmap</a><a href="https://github.com/avantics-hq/node-red-home-automation/blob/main/CONTRIBUTING.md">Contributing</a></div></nav></dialog>
+<div class="layout"><aside class="sidebar"><nav class="doc-nav" aria-label="Documentation"><div class="nav-group"><p class="nav-label">Get started</p><a href="index.html">Introduction</a><a href="index.html#install">Install</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">Your first room</a><a href="index.html#core-ideas">Core ideas</a></div><div class="nav-group"><p class="nav-label">Guides</p><a href="https://github.com/avantics-hq/node-red-home-automation#room-light-control">Room lighting</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">Motion and occupancy</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">Wall switches</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">House schedule</a><a href="guide-covers.html">Covers</a><a href="home-theatre.html" aria-current="page">Home theatre</a><a href="index.html#home-assistant">Home Assistant</a><a href="guide-covers.html#wiring">Device adapters</a></div><div class="nav-group"><p class="nav-label">Node reference</p><details><summary>Lighting</summary><a href="https://github.com/avantics-hq/node-red-home-automation#room-light-control">Room controller</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">Motion policy</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">Switch policy</a></details><details><summary>Sensors and schedule</summary><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">Occupancy fusion</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">House schedule</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-lighting">House schedule MQTT</a></details><details><summary>Covers</summary><a href="node-cover-controller.html">Cover controller</a><a href="guide-covers.html#groups">Cover group</a></details><details><summary>Home theatre</summary><a href="https://github.com/avantics-hq/node-red-home-automation#receiver-volume-ownership">AVR controller</a><a href="https://github.com/avantics-hq/node-red-home-automation#home-theatre-equipment">Display mode</a><a href="https://github.com/avantics-hq/node-red-home-automation#home-theatre-equipment">Source capability</a><a href="https://github.com/avantics-hq/node-red-home-automation#home-theatre-equipment">Backlighting</a><a href="https://github.com/avantics-hq/node-red-home-automation#theatre-activities">Activity controller</a><a href="https://github.com/avantics-hq/node-red-home-automation#room-light-control">Activity lighting</a><a href="https://github.com/avantics-hq/node-red-home-automation#theatre-mqtt-contract">State contract</a></details><details><summary>Adapters</summary><a href="guide-covers.html#wiring">Shelly cover</a></details></div><div class="nav-group"><p class="nav-label">Contracts</p><a href="https://github.com/avantics-hq/node-red-home-automation#theatre-mqtt-contract">Theatre MQTT topics</a><a href="contract-examples.html">Contract examples</a></div><div class="nav-group"><p class="nav-label">Project</p><a href="https://github.com/avantics-hq/node-red-home-automation#install">Releases and upgrading</a><a href="roadmap.html">Roadmap</a><a href="https://github.com/avantics-hq/node-red-home-automation/blob/main/CONTRIBUTING.md">Contributing</a></div></nav></aside><main id="main" tabindex="-1">
+<nav class="breadcrumb" aria-label="Breadcrumb"><a href="index.html">Docs</a><span aria-hidden="true">/</span><span>Guides</span></nav><p class="page-kind">Guides</p><h1>Home theatre</h1><p class="lead">A reusable controller contract for coordinating target owners from explicit activity requests and fresh observations.</p>
+<details class="mobile-toc"><summary>On this page</summary><a href="#targets">Composed target owners</a><a href="#lifecycle">Activity lifecycle</a><a href="#guarantees">Behavioral guarantees</a><a href="#contract">Public contract</a><a href="#proof">Source-level proof</a></details>
+<section id="targets"><h2>Composed target owners</h2><p>The activity layer emits semantic intent. Each target controller retains its own safe sequencing, transport and confirmation policy.</p><ul class="rule-list"><li><strong>Display</strong><p>Mode and power intent</p></li><li><strong>Receiver</strong><p>Power, source and bounded volume ownership</p></li><li><strong>Media source</strong><p>Capability and readiness</p></li><li><strong>Room lighting</strong><p>Ownership-preserving style</p></li><li><strong>Backlighting</strong><p>Observed power state</p></li></ul></section>
+<section id="lifecycle"><h2>Activity lifecycle</h2><p>Every request receives a monotonic generation. Delayed work from older generations cannot mutate current state.</p><ol class="step-list"><li><strong>Requested</strong><p>Validate identity and activity.</p></li><li><strong>Preparing</strong><p>Refresh target evidence.</p></li><li><strong>Transitioning</strong><p>Dispatch semantic target intent.</p></li><li><strong>Confirming</strong><p>Require fresh mandatory evidence.</p></li><li><strong>Terminal</strong><p>Report ready, waiting or failed.</p></li></ol></section>
+<section id="guarantees"><h2>Behavioral guarantees</h2><div class="cards"><div class="card"><h3>Stale work is inert</h3><p>Timers, command results and observations carry generation identity and cannot complete a newer request.</p></div><div class="card"><h3>Readiness is honest</h3><p>Mandatory targets require fresh observations. Unsupported or unobservable capabilities remain explicit.</p></div><div class="card"><h3>Manual control is preserved</h3><p>Unsolicited target changes become ownership evidence rather than a reason to fight the user.</p></div><div class="card"><h3>Volume control has one owner</h3><p>Absolute and relative requests share receiver bounds, observed confirmation and an explicit release point for later manual adjustment.</p></div><div class="card"><h3>Recovery is bounded</h3><p>Restart refreshes observations without blindly replaying state-changing commands.</p></div><div class="card"><h3>Failure is actionable</h3><p>Retries, fallback use, target availability and transition latency remain visible through one state contract.</p></div><div class="card"><h3>Policies stay transport-neutral</h3><p>Activity profiles name semantic outcomes; adapters own protocol-specific operations.</p></div></div></section>
+<section id="contract"><h2>Public contract</h2><p>Node-RED adapters bridge the pure reducer to MQTT and Home Assistant without moving policy into flow wiring.</p><div class="table-wrap" role="region" aria-label="Public contract" tabindex="0"><table><caption>Public contract</caption>
+<thead><tr><th scope="col">Surface</th><th scope="col">Contract</th><th scope="col">Invariant</th></tr></thead>
+<tbody>
+<tr><td>Request</td><td>Unique request ID, configured activity and timestamp</td><td>Retained requests are inert</td></tr>
+<tr><td>Desired state</td><td>Activity and generation</td><td>One current request identity</td></tr>
+<tr><td>Target evidence</td><td>Status, observation time, classification and failure</td><td>Older evidence cannot overwrite newer evidence</td></tr>
+<tr><td>Outcome</td><td>Current activity, phase, availability and failure</td><td>Ready requires all mandatory targets</td></tr>
+<tr><td>Operations</td><td>Latency, retries, fallbacks, outcomes and objective status</td><td>Expected waiting does not become a false failure</td></tr>
+</tbody>
+</table></div></section>
+<section id="proof"><h2>Source-level proof</h2><p>The package test suite covers successful activities, optional degradation, mandatory failure, restart, supersession, stale results, manual ownership, recovery and rolling operational objectives.</p><aside class="callout neutral"><strong>Privacy boundary</strong><p>This reference describes generalized code behavior only. It intentionally omits device models, room names, addresses, entity identifiers, flow exports, activity history and operational records.</p></aside></section>
+<footer class="page-footer"><span>Package 5.0.0 · MIT</span><a href="https://github.com/avantics-hq/node-red-home-automation#readme">Read the README ↗</a></footer>
+</main><aside class="toc" aria-label="On this page"><p>On this page</p><a href="#targets">Composed target owners</a><a href="#lifecycle">Activity lifecycle</a><a href="#guarantees">Behavioral guarantees</a><a href="#contract">Public contract</a><a href="#proof">Source-level proof</a></aside></div>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
 </body>
 </html>

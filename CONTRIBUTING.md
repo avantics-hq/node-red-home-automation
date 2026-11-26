@@ -122,6 +122,12 @@ real installation. Keep these out of commits, examples, tests and issues:
 Use synthetic names and addresses instead. `npm run scan:public` catches the
 machine-detectable cases; the rest is up to the author and the reviewer.
 
+### Documentation site
+
+The pages in `docs/` are built, not edited by hand. Change the page content in
+`docs-src/pages/` or the menu in `docs-src/nav.json`, then run `npm run docs`
+and commit both. `npm test` fails when `docs/` doesn't match its build.
+
 ## Public reports and dependency updates
 
 Use the structured bug-report form for reproducible package defects. Security
@@ -178,9 +184,9 @@ Release notes. Cut a release when a group
 of user-noticeable fixes or a feature has merged, not on every merge. The
 version-bump pull request updates every place that names the current version:
 `package.json`, both root entries in `package-lock.json` (`npm version <x.y.z>
---no-git-tag-version`), the README install line, the version placeholder in
-`.github/ISSUE_TEMPLATE/bug.yml`, and the "Package x.y.z" labels in
-`docs/index.html`, `docs/contract-examples.html` and `docs/home-theatre.html`.
+--no-git-tag-version`), the README install line and the version placeholder in
+`.github/ISSUE_TEMPLATE/bug.yml`, then runs `npm run docs`, which writes the new
+version into every documentation page.
 
 ## Repository boundaries
 

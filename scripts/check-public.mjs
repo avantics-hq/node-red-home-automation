@@ -91,8 +91,10 @@ export const contentRules = [
 
 export const pageRules = [
   {
+    // "shelly cover" is the palette name of a node this package ships, so the
+    // docs may name it; every other use of the brand stays out of Pages.
     name: "deployment-specific room or device label in Pages",
-    pattern: /\b(?:Kitchen|Hallway|Lounge|Bravia|Denon|Shield|PlayStation|Shelly)\b/gi
+    pattern: /\b(?:Kitchen|Hallway|Lounge|Bravia|Denon|Shield|PlayStation|Shelly(?![ -]cover\b))\b/gi
   },
   {
     name: "installation-status wording in Pages",
@@ -103,7 +105,7 @@ export const pageRules = [
 // Findings for one file's text, as "file:line: rule name".
 export function scanText(file, text) {
   const findings = [];
-  const activeRules = file.startsWith("docs/") ? [...contentRules, ...pageRules] : contentRules;
+  const activeRules = file.startsWith("docs/") || file.startsWith("docs-src/") ? [...contentRules, ...pageRules] : contentRules;
   for (const rule of activeRules) {
     rule.pattern.lastIndex = 0;
     let match;

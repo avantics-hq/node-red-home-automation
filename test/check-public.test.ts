@@ -70,3 +70,18 @@ test("the public scan leaves documentation look-alikes alone", async () => {
     assert.deepEqual(scanText("sample.md", line), [], line);
   }
 });
+
+test("Pages may name the shelly cover node, but no other device brand or room", async () => {
+  const scanText = await scanner();
+  const pageLabel = "deployment-specific room or device label in Pages";
+  for (const file of ["docs/guide.html", "docs-src/pages/guide.html"]) {
+    for (const line of ["Wire the shelly cover node", "Shelly Cover adapter", "type home-shelly-cover"]) {
+      assert.deepEqual(scanText(file, line), [], `${file}: ${line}`);
+    }
+    for (const line of ["a Shelly relay in cover mode", "Shelly Plus 2PM", "the shelly-covers group", "the Kitchen blind", "Denon receiver"]) {
+      assert.deepEqual(scanText(file, line).map(ruleOf), [pageLabel], `${file}: ${line}`);
+    }
+  }
+  // Pages rules apply to the site only.
+  assert.deepEqual(scanText("README.md", "A Shelly Gen2 or later device"), []);
+});
