@@ -61,7 +61,7 @@ test("direct transport queries and commands the Bravia and both Shelly devices",
   const screen = await display.execute({...base, device: "screen", operation: "query_position"});
   const projector = await display.execute({...base, device: "projector", operation: "query_power"});
   const tvSet = await display.execute({...base, device: "tv", operation: "set_power", power: "standby"});
-  const screenSet = await display.execute({...base, device: "screen", operation: "set_position", position: 82});
+  const screenSet = await display.execute({...base, device: "screen", operation: "open", position: 82});
 
   assert.ok(tv);
   assert.ok(screen);
@@ -115,4 +115,36 @@ test("unusable Shelly replies are transport failures, never position 0 or NaN", 
   replies.cover = {current_pos: 101};
   const outOfRange = await display.execute({...base, device: "screen", operation: "query_position"});
   assert.equal(outOfRange?.display?.kind, "transport_failed");
+});
+
+test("a screen opens and closes by position when the command carries one, and by its own open and close otherwise", async () => {
+  const posted: Array<[string, unknown]> = [];
+  let status: Record<string, unknown> = {state: "open"};
+  const display = transport(fakeFetch(async (request) => {
+    const url = new URL(request.url);
+    if (request.method === "POST") posted.push([url.pathname, await request.json()]);
+    if (url.pathname.endsWith("Cover.GetStatus")) return json(status);
+    return json(null);
+  }));
+  const base = {generation: 3};
+  for (const command of [
+    {operation: "open", position: 82}, {operation: "close", position: 0}, {operation: "open"}, {operation: "close"}
+  ]) assert.equal(await display.execute({...base, device: "screen", ...command}), null);
+  assert.deepEqual(posted, [
+    ["/rpc/Cover.GoToPosition", {id: 0, pos: 82}],
+    ["/rpc/Cover.GoToPosition", {id: 0, pos: 0}],
+    ["/rpc/Cover.Open", {id: 0}],
+    ["/rpc/Cover.Close", {id: 0}]
+  ]);
+  // A screen with no known position (not calibrated) still reads as fully open or closed.
+  const reading = async () => {
+    const result = await display.execute({...base, device: "screen", operation: "query_position"});
+    return result?.display?.kind === "observed" ? [result.display.position, result.display.state] : result?.display?.kind;
+  };
+  assert.deepEqual(await reading(), [null, "open"]);
+  status = {state: "closed", pos_control: false};
+  assert.deepEqual(await reading(), [null, "closed"]);
+  // Moving with no position says nothing usable.
+  status = {state: "opening"};
+  assert.equal((await display.execute({...base, device: "screen", operation: "query_position"}))?.display?.kind, "transport_failed");
 });

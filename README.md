@@ -108,6 +108,11 @@ built-in Shelly meter is optional. Without one, it asks for a reading on output
 its own at least once per query timeout. A device that doesn't report fails
 the request with reason `no-reading`. The node's help has the details.
 
+For projector mode it opens the screen to its **Screen viewing position**, or,
+left empty (the default for a new node), by the screen's own open command,
+confirmed when the screen reports itself fully open. A node saved with a
+position keeps it.
+
 ### Theatre activities
 
 One request, such as "tv" or "off", drives every target. The state contract

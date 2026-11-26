@@ -14,8 +14,13 @@
       // it holds only the properties named here. Cleared once the dialog
       // saves the new one.
       projectorMeterHost: {value: ""},
-      // DEFAULT_SCREEN_OPEN_POSITION in lib/display-mode-controller.ts.
-      screenOpenPosition: {value: 82, required: true, validate: RED.validators.number()},
+      // Empty: the screen's own open command. No shared default position: a
+      // node saved with one keeps it.
+      screenOpenPosition: {value: "", validate: function (v) {
+        if (v === undefined || v === null || String(v).trim() === "") return true;
+        var position = Number(v);
+        return isFinite(position) && position > 0 && position <= 100;
+      }},
       screenTolerance: {value: 2, required: true, validate: RED.validators.number()},
       pollMs: {value: 2000, required: true, validate: RED.validators.number()},
       queryTimeoutMs: {value: 5000, required: true, validate: RED.validators.number()},
@@ -58,7 +63,7 @@
   <div class="form-row"><label for="node-input-tvPsk">TV pre-shared key</label><input type="password" id="node-input-tvPsk"></div>
   <div class="form-row"><label for="node-input-screenHost">Screen controller host</label><input type="text" id="node-input-screenHost"></div>
   <div class="form-row"><label for="node-input-projectorPowerMeterHost">Projector power meter host (optional)</label><input type="text" id="node-input-projectorPowerMeterHost"></div>
-  <div class="form-row"><label for="node-input-screenOpenPosition">Screen viewing position</label><input type="number" id="node-input-screenOpenPosition"></div>
+  <div class="form-row"><label for="node-input-screenOpenPosition">Screen viewing position</label><input type="number" min="1" max="100" id="node-input-screenOpenPosition" placeholder="fully open"></div>
   <div class="form-row"><label for="node-input-screenTolerance">Screen position tolerance</label><input type="number" id="node-input-screenTolerance"></div>
   <div class="form-row"><label for="node-input-pollMs">Confirmation poll milliseconds</label><input type="number" id="node-input-pollMs"></div>
   <div class="form-row"><label for="node-input-queryTimeoutMs">Query timeout milliseconds</label><input type="number" id="node-input-queryTimeoutMs"></div>
@@ -84,7 +89,10 @@
     newer request carries on from what the projector then reports.</p>
   <p>Send <code>msg.display = {kind: "intent", requestId, generation, mode}</code>. Send <code>kind: "startup"</code> after deployment to query every owned device and reconcile persisted intent. Send <code>kind: "refresh"</code> to re-confirm a settled display from fresh readings.</p>
   <p>Each device is reached directly over its LAN API. The <b>TV host</b> is a Sony Bravia with IP control and a
-    pre-shared key. The <b>Screen controller host</b> is a Shelly Gen2 cover (its <code>Cover</code> RPC). The
+    pre-shared key. The <b>Screen controller host</b> is a Shelly Gen2 cover (its <code>Cover</code> RPC). For
+    projector mode it opens the screen to the <b>Screen viewing position</b> (a percentage of its travel) and confirms it
+    within the <b>Screen position tolerance</b>; left empty, it uses the screen's own open command and confirms the
+    screen fully open, which also suits a screen that isn't calibrated for positions. Other modes close it. The
     <b>Projector power meter host</b>, if set, is a Shelly Gen2 switch with power metering on the projector's supply
     (switch 1), read against <b>Projector on watts</b> and <b>Projector standby watts</b>. A flow saved before 5.0 names
     that host <code>projectorMeterHost</code>, which is still read.</p>

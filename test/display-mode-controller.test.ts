@@ -110,7 +110,7 @@ test("projector mode starts the lamp first, then opens the screen, and puts the 
   result = apply(result.state, {kind: "tick", generation: 1}, 4);
   assert.ok(command(result, "projector", "query_power"));
   result = observe(result.state, "projector", {watts: 155}, 4.1);
-  assert.equal(command(result, "screen", "set_position")?.position, 82);
+  assert.equal(command(result, "screen", "open")?.position, 82);
   assert.equal(command(result, "tv", "set_power"), undefined, "the TV stays on while the screen moves");
 
   result = observe(result.state, "screen", {position: 82, state: "stopped"}, 5);
@@ -194,7 +194,7 @@ test("back to TV mode while the screen opens: the TV stays on, the lamp is shut 
     [0.2, "screen", {position: 0, state: "closed"}],
     [0.3, "projector", {watts: 155}]
   ]);
-  assert.equal(command(result, "screen", "set_position")?.position, 82);
+  assert.equal(command(result, "screen", "open")?.position, 82);
 
   result = apply(result.state, {kind: "intent", requestId: "tv-2", generation: 2, mode: "tv"}, 1);
   const sent = [...result.commands];
@@ -210,7 +210,7 @@ test("back to TV mode while the screen opens: the TV stays on, the lamp is shut 
   result = observe(result.state, "projector", {watts: 155}, 3.2, 2);
   assert.equal(command(result, "projector", "power_toggle")?.reason, "shutdown-confirm");
   result = observe(result.state, "projector", {watts: 2.1}, 5, 2);
-  assert.equal(command(result, "screen", "set_position")?.position, 0);
+  assert.equal(command(result, "screen", "close")?.position, 0);
   result = observe(result.state, "screen", {position: 0, state: "closed"}, 6, 2);
   assert.equal(result.state.phase, "ready");
 });
@@ -235,7 +235,7 @@ test("TV mode confirms the projector shutdown prompt before cool-down and only t
   assert.equal(result.state.pending?.operation, "projector_cooldown");
 
   result = observe(result.state, "projector", {watts: 2.1}, 4, 2);
-  assert.equal(command(result, "screen", "set_position")?.position, 0);
+  assert.equal(command(result, "screen", "close")?.position, 0);
 
   result = observe(result.state, "screen", {position: 0, state: "closed"}, 5, 2);
   assert.equal(result.state.phase, "ready");
@@ -562,7 +562,7 @@ function withoutMeter(meter: "periodic" | "on-change" | "answered") {
         if (entry.operation === "set_power") devices.tv = entry.power as "on" | "standby";
         follow.push(["tv", {power: devices.tv}]);
       } else if (entry.device === "screen") {
-        if (entry.operation === "set_position") devices.screen = Number(entry.position);
+        if (entry.operation === "open" || entry.operation === "close") devices.screen = Number(entry.position);
         follow.push(["screen", {position: devices.screen, state: "stopped"}]);
       }
     }
@@ -675,7 +675,7 @@ test("a newer refresh that wants the projector mode already warming up carries o
   sent.push(...result.commands);
   result = observe(result.state, "projector", {watts: 155}, 3.4, 2);
   sent.push(...result.commands);
-  assert.equal(command(result, "screen", "set_position")?.position, 82);
+  assert.equal(command(result, "screen", "open")?.position, 82);
   result = observe(result.state, "screen", {position: 82, state: "stopped"}, 4, 2);
   sent.push(...result.commands);
   assert.equal(command(result, "tv", "set_power")?.power, "standby");
@@ -710,4 +710,73 @@ test("after carrying on, answers to queries sent under the replaced generation s
   result = transitionDisplay(result.state, {display: {kind: "intent", requestId: "tv-3", generation: 3, mode: "tv"}}, strict, at(1));
   result = transitionDisplay(result.state, {display: {kind: "observed", device: "tv", generation: 1, source: "transport", power: "on"}}, strict, at(1.1));
   assert.ok(result.traces.some(({reason}) => reason === "stale-generation"));
+});
+
+// The display with no open position: the screen opens by its own command
+// and is open when it reports so.
+const ownOpen = normaliseConfig({...config, screenOpenPosition: ""});
+const own = (state: Partial<DisplayState> | undefined, display: DisplayInputEvent, seconds: number) =>
+  transitionDisplay(state, {display}, ownOpen, at(seconds));
+const ownObserve = (state: Partial<DisplayState> | undefined, device: DisplayDevice, values: ObservationValues, seconds: number, generation = 1) =>
+  own(state, {kind: "observed", device, generation, source: "test", ...values}, seconds);
+
+function ownProjectorWarm(generation = 1) {
+  let result = own(undefined, {kind: "intent", requestId: `projector-${generation}`, generation, mode: "projector"}, 0);
+  result = ownObserve(result.state, "tv", {power: "on"}, 0.1, generation);
+  result = ownObserve(result.state, "screen", {position: 0, state: "closed"}, 0.2, generation);
+  result = ownObserve(result.state, "projector", {watts: 2.1}, 0.3, generation);
+  result = ownObserve(result.state, "projector", {watts: 155}, 1, generation);
+  result = own(result.state, {kind: "tick", generation}, 3.3);
+  return ownObserve(result.state, "projector", {watts: 155}, 3.4, generation);
+}
+
+test("with no open position, the screen opens by its own command and is confirmed fully open", () => {
+  let result = ownProjectorWarm();
+  const open = command(result, "screen", "open");
+  assert.ok(open);
+  assert.equal(Object.hasOwn(open, "position"), false, "no position: the screen's own open");
+  // Part-way is not open; reported open (with or without a position) is.
+  result = ownObserve(result.state, "screen", {position: 82, state: "stopped"}, 5);
+  assert.equal(command(result, "tv", "set_power"), undefined);
+  result = ownObserve(result.state, "screen", {position: null, state: "open"}, 6);
+  assert.equal(command(result, "tv", "set_power")?.power, "standby");
+  result = ownObserve(result.state, "tv", {power: "standby"}, 6.5);
+  assert.equal(result.state.phase, "ready");
+});
+
+test("with a configured position, the screen goes there and is confirmed within tolerance, as before", () => {
+  const result = discover("projector", 1, [
+    [0.1, "tv", {power: "standby"}],
+    [0.2, "screen", {position: 0, state: "closed"}],
+    [0.3, "projector", {watts: 155}]
+  ]);
+  assert.deepEqual([command(result, "screen", "open")?.position], [82]);
+  const near = observe(result.state, "screen", {position: 81, state: "stopped"}, 1);
+  assert.equal(near.state.phase, "ready", "within the tolerance of 2");
+  const open = observe(result.state, "screen", {position: 100, state: "open"}, 1);
+  assert.notEqual(open.state.phase, "ready", "fully open is not the configured position");
+});
+
+test("a screen that doesn't open fails the request; a newer request mid-move sends it the other way", () => {
+  let result = ownProjectorWarm();
+  assert.ok(command(result, "screen", "open"));
+  // Still closed at the screen timeout, and after the retry's.
+  result = ownObserve(result.state, "screen", {position: 0, state: "closed"}, 4);
+  result = own(result.state, {kind: "tick", generation: 1}, 3.4 + config.screenTimeoutMs / 1000);
+  assert.ok(command(result, "screen", "open"), "retried");
+  result = own(result.state, {kind: "tick", generation: 1}, 3.5 + 2 * config.screenTimeoutMs / 1000);
+  assert.deepEqual([result.state.phase, result.state.failure?.device, result.state.failure?.reason], ["failed", "screen", "confirmation-timeout"]);
+
+  // Opening when TV mode is asked for: the screen is closed by its own command.
+  let moving = ownProjectorWarm(3);
+  moving = ownObserve(moving.state, "screen", {position: 30, state: "opening"}, 4, 3);
+  moving = own(moving.state, {kind: "intent", requestId: "tv-4", generation: 4, mode: "tv"}, 4.5);
+  for (const [device, values] of [["tv", {power: "on"}], ["screen", {position: 40, state: "opening"}], ["projector", {watts: 2.1}]] as const) {
+    moving = ownObserve(moving.state, device, values, 4.6, 4);
+  }
+  const close = command(moving, "screen", "close");
+  assert.ok(close, JSON.stringify(moving.commands));
+  assert.equal(Object.hasOwn(close, "position"), false);
+  moving = ownObserve(moving.state, "screen", {position: null, state: "closed"}, 8, 4);
+  assert.equal(moving.state.phase, "ready");
 });
