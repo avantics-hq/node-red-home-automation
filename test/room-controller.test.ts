@@ -96,7 +96,7 @@ test("OFF clears manual state and TOGGLE resolves from desired state", () => {
       state: "ON",
       source: "wall",
       manual: true,
-      values: {brightness: 254}
+      values: {brightnessPct: 100}
     }
   }, config, now);
   assert.equal(initial.state.control.cooking?.state, "manual");
@@ -116,7 +116,7 @@ test("activity styling preserves manual and occupancy power ownership", () => {
       state: "ON",
       source: "wall",
       manual: true,
-      values: {brightness: 254}
+      values: {brightnessPct: 100}
     }
   }, config, now);
   result.state.desired.dining = false;
@@ -127,7 +127,7 @@ test("activity styling preserves manual and occupancy power ownership", () => {
       targets: ["cooking", "dining"],
       state: "ON",
       source: "activity",
-      values: {brightness: 64},
+      values: {brightnessPct: 25},
       updateOnOnly: true,
       preserveManual: true
     }
@@ -143,7 +143,7 @@ test("activity styling preserves manual and occupancy power ownership", () => {
       targets: ["cooking"],
       state: "ON",
       source: "activity",
-      values: {brightness: 64},
+      values: {brightnessPct: 25},
       updateOnOnly: true,
       preserveManual: true
     }
@@ -163,7 +163,7 @@ test("off-only intents preserve active lights while applying a bedtime level to 
       targets: ["cooking", "dining"],
       state: "ON",
       source: "bedtime",
-      values: {brightness: 40},
+      values: {brightnessPct: 15.7},
       updateOffOnly: true,
       manual: true
     }
@@ -316,7 +316,7 @@ function ownedActivity(state: Parameters<typeof publishRoom>[0], ms: number) {
       state: "ON",
       source: "activity",
       owner: "theatre",
-      values: {brightness: 64, color_temp: 400},
+      values: {brightnessPct: 25, colorTempKelvin: 2500},
       preserveManual: true
     }
   }, config, later2(ms));
@@ -376,7 +376,7 @@ test("only the owner switching a held light off returns it to the room controlle
 test("a person's change on an overridden light makes it manual; enabling circadian keeps other owners", () => {
   let result = ownedActivity(undefined, 0);
   result = publishRoom(result.state, {
-    lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "wall", manual: true, values: {brightness: 254}}
+    lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "wall", manual: true, values: {brightnessPct: 100}}
   }, config, later2(1000));
   assert.equal(result.status.control.cooking, "manual");
   // An owner intent with preserveManual leaves a person's light alone.
@@ -386,7 +386,7 @@ test("a person's change on an overridden light makes it manual; enabling circadi
 
   result = ownedActivity(undefined, 2000);
   result = publishRoom(result.state, {
-    lighting: {kind: "intent", targets: ["dining"], state: "ON", source: "wall", manual: true, values: {brightness: 100}}
+    lighting: {kind: "intent", targets: ["dining"], state: "ON", source: "wall", manual: true, values: {brightnessPct: 39.4}}
   }, config, later2(3000));
   result = publishRoom(result.state, {lighting: {kind: "circadian", enabled: true}}, config, later2(4000));
   assert.equal(result.status.control.cooking, "overridden");
@@ -410,7 +410,7 @@ const heldConfig: RoomConfig = {...config, targets: [
 function heldLamp() {
   let result = publishRoom(undefined, {lighting: {kind: "intent", targets: ["lamp", "wall"], state: "ON", source: "motion"}}, heldConfig, now);
   result = publishRoom(result.state, {
-    lighting: {kind: "intent", targets: ["lamp"], state: "ON", source: "activity", owner: "film", values: {brightness: 30}}
+    lighting: {kind: "intent", targets: ["lamp"], state: "ON", source: "activity", owner: "film", values: {brightnessPct: 12}}
   }, heldConfig, later2(1000));
   assert.equal(result.status.control.lamp, "overridden");
   return result;
@@ -430,9 +430,9 @@ test("a held light ignores owner-less automation", () => {
     {state: "ON", source: "motion"},
     {state: "OFF", source: "motion"},
     {state: "TOGGLE", source: "schedule"},
-    {state: "ON", source: "bedtime", values: {brightness: 40}},
-    {state: "ON", source: "activity", values: {brightness: 80}, updateOnOnly: true},
-    {state: "ON", source: "bedtime", values: {brightness: 5}, updateOffOnly: true}
+    {state: "ON", source: "bedtime", values: {brightnessPct: 15.7}},
+    {state: "ON", source: "activity", values: {brightnessPct: 31.5}, updateOnOnly: true},
+    {state: "ON", source: "bedtime", values: {brightnessPct: 2}, updateOffOnly: true}
   ]) {
     const result = heldIntent(held.state, lighting);
     assert.equal(result.outputs.length, 0, JSON.stringify(lighting));
@@ -443,14 +443,14 @@ test("a held light ignores owner-less automation", () => {
 
 test("a held light follows its owner, a newer owner, a person and a release", () => {
   const held = heldLamp();
-  let result = heldIntent(held.state, {state: "ON", source: "activity", owner: "film", values: {brightness: 20}});
+  let result = heldIntent(held.state, {state: "ON", source: "activity", owner: "film", values: {brightnessPct: 8}});
   assert.equal(payload(result, 0).brightness, 20);
 
-  result = heldIntent(held.state, {state: "ON", source: "scene", owner: "reading", values: {brightness: 90}});
+  result = heldIntent(held.state, {state: "ON", source: "scene", owner: "reading", values: {brightnessPct: 35.4}});
   assert.equal(payload(result, 0).brightness, 90);
   assert.deepEqual(result.state.control.lamp, {state: "overridden", owner: "reading"});
 
-  result = heldIntent(held.state, {state: "ON", source: "wall", manual: true, values: {brightness: 254}});
+  result = heldIntent(held.state, {state: "ON", source: "wall", manual: true, values: {brightnessPct: 100}});
   assert.equal(payload(result, 0).brightness, 254);
   assert.equal(result.status.control.lamp, "manual");
 
@@ -675,7 +675,7 @@ test("state reports are traced as confirming our command, stale, or someone else
 test("a confirmed OFF leaves control as the OFF intent set it", () => {
   // A person set values, so the light is manual; our OFF intent returns it to
   // in-control. The confirming report changes nothing more.
-  let result = publishRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "wall", manual: true, values: {brightness: 80}}}, config, now);
+  let result = publishRoom(undefined, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "wall", manual: true, values: {brightnessPct: 31.5}}}, config, now);
   assert.equal(result.state.control.cooking?.state, "manual");
   result = publishRoom(result.state, {lighting: {kind: "intent", targets: ["cooking"], state: "OFF", source: "wall"}}, config, new Date(now.getTime() + 100));
   assert.equal(result.state.control.cooking, undefined);

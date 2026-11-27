@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  LEGACY_VOLUME_UNITS,
+  REMOVED_VOLUME_VALUE,
   QUERY_COMMAND,
   formatVolumeCommand,
   parseAvrLine,
@@ -528,19 +528,16 @@ test("an adopted request the receiver doesn't match is a manual override: no pow
   assert.equal(result.state.classification, "manual_override");
 });
 
-test("a volume request in the receiver's own units still works during 5.x, traced", () => {
-  // Before 5.0, an absolute value was the receiver's 0-98; a relative one was
-  // already a change in dB.
-  let result = transitionAvr(readyState(), {avr: {kind: "volume", requestId: "old-absolute", mode: "absolute", value: 40}}, config, at(1));
-  assert.equal(result.commands[0]?.payload, "MV40\r");
-  assert.equal(result.state.volumeRequest?.target, -40);
-  assert.ok(result.traces.some(({reason}) => reason === LEGACY_VOLUME_UNITS));
-  result = transitionAvr(readyState(), {avr: {kind: "volume", requestId: "old-relative", mode: "relative", value: 1}}, config, at(1));
-  assert.equal(result.commands[0]?.payload, "MV32\r");
-  // The dB form wins when both are given, and isn't traced.
-  result = transitionAvr(readyState(), {avr: {kind: "volume", requestId: "both", mode: "absolute", valueDb: -45, value: 40}}, config, at(1));
-  assert.equal(result.commands[0]?.payload, "MV35\r");
-  assert.ok(!result.traces.some(({reason}) => reason === LEGACY_VOLUME_UNITS));
+test("a volume request in the receiver's own 0-98 (removed in 6.0) is rejected, never sent", () => {
+  for (const mode of ["absolute", "relative"] as const) {
+    const result = transitionAvr(readyState(), {avr: {kind: "volume", requestId: `old-${mode}`, mode, value: 40}}, config, at(1));
+    assert.deepEqual(result.commands, [], mode);
+    assert.ok(result.events.some(({avr}) => avr.kind === "volume_rejected" && avr.reason === REMOVED_VOLUME_VALUE), mode);
+    assert.equal(result.state.volumeRequest, null);
+  }
+  // With valueDb as well, valueDb is the request.
+  const both = transitionAvr(readyState(), {avr: {kind: "volume", requestId: "both", mode: "absolute", valueDb: -45, value: 40}}, config, at(1));
+  assert.equal(both.commands[0]?.payload, "MV35\r");
 });
 
 test("a receiver state saved before 5.0 has its volumes read as the receiver's units, once", () => {
@@ -562,12 +559,9 @@ test("a receiver state saved before 5.0 has its volumes read as the receiver's u
   assert.deepEqual([relative.state.volumeRequest?.requested, relative.state.volumeRequest?.target], [2, -47]);
 });
 
-test("a volume request's valueDb may be a numeric string, and an old value beside it is ignored, traced", () => {
+test("a volume request's valueDb may be a numeric string", () => {
   let result = transitionAvr(readyState(), {avr: {kind: "volume", requestId: "text", mode: "absolute", valueDb: " -45 "}}, config, at(1));
   assert.equal(result.commands[0]?.payload, "MV35\r");
-  result = transitionAvr(readyState(), {avr: {kind: "volume", requestId: "both", mode: "absolute", valueDb: "-45", value: 40}}, config, at(1));
-  assert.equal(result.commands[0]?.payload, "MV35\r");
-  assert.ok(result.traces.some(({reason}) => reason === "legacy-volume-units-ignored"));
   result = transitionAvr(readyState(), {avr: {kind: "volume", requestId: "loud", mode: "absolute", valueDb: "loud"}}, config, at(1));
   assert.deepEqual(result.commands, []);
   assert.ok(result.events.some(({avr}) => avr.kind === "volume_rejected" && avr.reason === "invalid-volume-value"));

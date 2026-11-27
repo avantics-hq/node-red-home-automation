@@ -7,12 +7,15 @@
       area: {value: ""},
       tvHost: {value: "", required: true},
       screenHost: {value: "", required: true},
-      // projectorMeterHost before 5.0; the dialog fills this from it.
-      // Optional: without one, the flow reports the projector's power.
-      projectorPowerMeterHost: {value: ""},
-      // The name before 5.0, with no form row. Listed so the editor keeps it:
-      // it holds only the properties named here. Cleared once the dialog
-      // saves the new one.
+      // Optional: without one, the flow reports the projector's power. A node
+      // still naming only the old key is invalid until this is set.
+      projectorPowerMeterHost: {value: "", validate: function (v) {
+        return String(v || "").trim() !== "" || String(this.projectorMeterHost || "").trim() === "";
+      }},
+      // The name before 5.0, removed in 6.0 but kept here, with no form row,
+      // so the editor carries it: dropped, a deploy from the editor would
+      // quietly switch the node to having no built-in meter. With it, the
+      // node stays an invalid configuration until the new host is set.
       projectorMeterHost: {value: ""},
       // Empty: the screen's own open command. No shared default position: a
       // node saved with one keeps it.
@@ -37,16 +40,9 @@
       transportTimeoutMs: {value: 5000, required: true, validate: RED.validators.number()}
     },
     credentials: {tvPsk: {type: "password"}},
-    oneditprepare: function () {
-      // A flow saved before 5.0: show its meter host, so saving the dialog keeps it.
-      if (!this.projectorPowerMeterHost && this.projectorMeterHost) {
-        $("#node-input-projectorPowerMeterHost").val(this.projectorMeterHost);
-      }
-    },
+    // Once the new host is set, the removed name goes.
     oneditsave: function () {
-      // The dialog showed the old host in the field, so what's left there is
-      // the user's choice, including none.
-      this.projectorMeterHost = "";
+      if (String($("#node-input-projectorPowerMeterHost").val() || "").trim() !== "") this.projectorMeterHost = "";
     },
     inputs: 1,
     outputs: 3,
@@ -97,8 +93,9 @@
     that knows where it is: one that doesn't is closed first, and if it still has no position (not calibrated), the
     request fails with reason <code>screen-not-calibrated</code>; calibrate it, or clear the viewing position. The
     <b>Projector power meter host</b>, if set, is a Shelly Gen2 switch with power metering on the projector's supply
-    (switch 1), read against <b>Projector on watts</b> and <b>Projector standby watts</b>. A flow saved before 5.0 names
-    that host <code>projectorMeterHost</code>, which is still read.</p>
+    (switch 1), read against <b>Projector on watts</b> and <b>Projector standby watts</b>. A node still naming
+    that host <code>projectorMeterHost</code>, as before 5.0, is an invalid configuration, in the editor and when
+    deployed: that name was removed in 6.0, so set <b>Projector power meter host</b>.</p>
   <p>Output 1 carries the projector power toggle (<code>msg.payload = "power"</code> with <code>msg.display_command</code>) for your infrared transport, commanded directly rather than through Home Assistant. Enable “Projector power is fallback” to include its use in activity metrics. Output 2 emits observed state plus ready, manual-override, failed, rejected and superseded results, and <code>msg.theatre</code> target state for the theatre activity controller: wire it straight back to that controller. Output 3 asks for the projector's power when there is no meter host (below).</p>
   <h3>Projector power from your own flow</h3>
   <p>Leave <b>Projector power meter host</b> empty to report the projector's power from any meter or adapter: send

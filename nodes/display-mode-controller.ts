@@ -24,7 +24,8 @@ interface DisplayControllerConfig extends NodeDef {
   tvHost?: string;
   screenHost?: string;
   projectorPowerMeterHost?: string;
-  // Before 5.0; read when projectorPowerMeterHost is missing.
+  // The name before 5.0, removed in 6.0: present without the new one, an
+  // invalid configuration rather than a quiet switch to no meter.
   projectorMeterHost?: string;
   transportTimeoutMs?: number | string;
   screenOpenPosition?: number | string;
@@ -67,7 +68,10 @@ const registerDisplayModeController: NodeInitializer = (RED) => {
       controllerConfig = normaliseConfig(config);
       // Optional: without a meter of its own, the node asks the flow for the
       // projector's power on its third output, and reads what comes back.
-      projectorPowerMeterHost = String(config.projectorPowerMeterHost ?? "").trim() || String(config.projectorMeterHost ?? "").trim();
+      projectorPowerMeterHost = String(config.projectorPowerMeterHost ?? "").trim();
+      if (!projectorPowerMeterHost && String(config.projectorMeterHost ?? "").trim()) {
+        throw new Error("projectorMeterHost was removed in 6.0: set Projector power meter host");
+      }
       transport = new DisplayTransport({
         // No defaults: these name the user's own devices.
         tvHost: textSetting(config.tvHost, "TV host"),

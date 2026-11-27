@@ -22,9 +22,11 @@ test("the receiver's settings are read from editor strings with its deployed def
   assert.deepEqual(normaliseAvrConfig({sources}), {area: "", sources, retryMs: 2000, maxAttempts: 3, minVolumeDb: -80, maxVolumeDb: -20});
   assert.deepEqual(normaliseAvrConfig({area: "area-a", sources, retryMs: "100", maxAttempts: "2.7", minVolumeDb: "-70", maxVolumeDb: "-39.5"}),
     {area: "area-a", sources, retryMs: 250, maxAttempts: 2, minVolumeDb: -70, maxVolumeDb: -39.5});
-  // A flow saved before 5.0 has the bounds in the receiver's own 0-98, read
-  // when the dB ones are missing; a dB one given wins.
-  assert.deepEqual(normaliseAvrConfig({sources, minVolume: "10", maxVolume: 40.5}), normaliseAvrConfig({sources, minVolumeDb: -70, maxVolumeDb: -39.5}));
+  // A flow saved before 5.0 has its bounds only in the receiver's own 0-98,
+  // removed in 6.0: an invalid configuration naming the setting to set,
+  // never the default bounds; beside the dB ones, they are ignored.
+  assert.throws(() => normaliseAvrConfig({sources, minVolume: "10", maxVolume: 40.5}), /0-98 were removed in 6\.0: set Minimum volume \(dB\)/);
+  assert.throws(() => normaliseAvrConfig({sources, minVolumeDb: -70, maxVolume: 50}), /set Maximum volume \(dB\)/);
   assert.deepEqual(normaliseAvrConfig({sources, minVolume: 10, minVolumeDb: -60, maxVolumeDb: -30}), normaliseAvrConfig({sources, minVolumeDb: -60, maxVolumeDb: -30}));
   assert.throws(() => normaliseAvrConfig({sources, maxVolumeDb: 18.5}), /between -80 and 18 dB/);
   // An emptied or non-numeric field is an error naming the setting.

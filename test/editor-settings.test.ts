@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {resolve} from "node:path";
 import test from "node:test";
+import {normaliseAvrConfig} from "../lib/avr-controller";
 
 interface Definition {
   category?: string;
@@ -248,10 +249,11 @@ test("the zigbee2mqtt cover adapter defaults the base topic, has no default devi
   assert.deepEqual([definition.outputs, definition.outputLabels], [2, ["to the device (MQTT out)", "to the cover controller"]]);
 });
 
-test("a display node's projector power meter host is optional, so no display node is shown invalid for it", () => {
+test("a display node's projector power meter host is optional: empty is valid unless the removed old name is still set", () => {
   const definition = editorDefinition("display-mode-controller.html");
   const {projectorPowerMeterHost: setting} = definition.defaults;
-  assert.deepEqual([setting!.required, setting!.validate], [undefined, undefined]);
+  assert.equal(setting!.required, undefined);
+  assert.deepEqual([setting!.validate!.call({}, ""), setting!.validate!.call({}, "meter.example")], [true, true]);
   assert.equal(definition.outputs, 3);
   assert.deepEqual(definition.outputLabels, ["projector IR fallback", "state and results", "projector power queries"]);
 });
@@ -277,39 +279,41 @@ function dialog(values: Record<string, unknown> = {}) {
   }), {values});
 }
 
-test("a display node saved before 5.0 keeps its meter host through the editor, and saving moves it to the new name", () => {
+test("a display node naming only projectorMeterHost (removed in 6.0) keeps it through the editor and shows invalid until the new host is set", () => {
   const $ = dialog();
   const definition = editorDefinition("display-mode-controller.html", $);
+  // Kept in defaults, so a deploy from the editor carries it and the runtime stays invalid, not silently meterless.
   const node = asLoaded(definition, {type: "home-display-mode-controller", projectorMeterHost: "meter.example"});
-  assert.equal(node.projectorMeterHost, "meter.example", "kept as loaded, so the runtime still reads it");
-  definition.oneditprepare!.call(node);
-  assert.equal($.values["#node-input-projectorPowerMeterHost"], "meter.example");
+  assert.equal(node.projectorMeterHost, "meter.example");
+  const valid = (target: Record<string, unknown>) => definition.defaults.projectorPowerMeterHost!.validate!.call(target, target.projectorPowerMeterHost);
+  assert.equal(valid(node), false, "invalid in the editor");
+  assert.equal(valid({}), true, "no host at all is fine: the flow reports power");
+  assert.equal(valid({projectorPowerMeterHost: "meter.example", projectorMeterHost: "meter.example"}), true);
+  // Saving with the new host set clears the old name.
+  $.values["#node-input-projectorPowerMeterHost"] = "meter.example";
   definition.oneditsave!.call(node);
   assert.equal(node.projectorMeterHost, "");
-  // Clearing the filled-in host and saving leaves none: the node then reads
-  // the projector's power from the flow.
-  const migrated = asLoaded(definition, {type: "home-display-mode-controller", projectorMeterHost: "meter.example"});
-  definition.oneditprepare!.call(migrated);
-  $.values["#node-input-projectorPowerMeterHost"] = "";
-  definition.oneditsave!.call(migrated);
-  assert.equal(migrated.projectorMeterHost, "");
 });
 
-test("a receiver saved before 5.0 keeps its volume bounds through the editor, isn't invalid, and saving moves them to dB", () => {
+test("a receiver saved before 5.0 keeps its 0-98 bounds (removed in 6.0) through the editor, and is invalid until the dB bounds are set", () => {
   const $ = dialog();
   const definition = editorDefinition("avr-controller.html", $);
+  // Kept in defaults: without them, a deploy from the editor would leave no bounds, which the runtime would give the louder defaults.
   const node = asLoaded(definition, {type: "home-avr-controller", minVolume: 10, maxVolume: 50, publishState: false});
-  assert.deepEqual([node.minVolume, node.maxVolume], [10, 50], "kept as loaded, so the runtime still reads them");
-  const valid = (key: string) => definition.defaults[key]!.required !== true && definition.defaults[key]!.validate!.call(node, node[key]);
-  assert.deepEqual([valid("minVolumeDb"), valid("maxVolumeDb")], [true, true]);
-  definition.oneditprepare!.call(node);
-  assert.deepEqual([$.values["#node-input-minVolumeDb"], $.values["#node-input-maxVolumeDb"]], [-70, -30]);
-  definition.oneditsave!.call(node);
-  assert.deepEqual([node.minVolume, node.maxVolume], ["", ""]);
-  // Neither form, or a non-number, is invalid.
-  assert.equal(definition.defaults.minVolumeDb!.validate!.call({minVolume: ""}, ""), false);
+  assert.deepEqual([node.minVolume, node.maxVolume], [10, 50]);
+  const valid = (key: string) => definition.defaults[key]!.validate!.call(node, node[key]);
+  assert.deepEqual([valid("minVolumeDb"), valid("maxVolumeDb")], [false, false]);
+  // Deployed from the editor as it is (only the properties defaults name are exported): still an
+  // invalid configuration at runtime, never the default -80..-20 dB bounds.
+  const deployed = asLoaded(definition, {...node, sources: "{\"shield\":\"SAT/CBL\"}"});
+  assert.throws(() => normaliseAvrConfig({...deployed, sources: {shield: "SAT/CBL"}}), /0-98 were removed in 6\.0/);
   assert.equal(definition.defaults.minVolumeDb!.validate!.call({}, "quiet"), false);
   assert.equal(definition.defaults.minVolumeDb!.validate!.call({}, -60), true);
+  // Saving with dB bounds set clears the old ones.
+  $.values["#node-input-minVolumeDb"] = -70;
+  $.values["#node-input-maxVolumeDb"] = -30;
+  definition.oneditsave!.call(node);
+  assert.deepEqual([node.minVolume, node.maxVolume], ["", ""]);
 });
 
 test("the screen viewing position has no default: empty uses the screen's own open, and a saved position is kept", () => {

@@ -38,8 +38,8 @@
     <code>brightnessPct</code> runs from 0 (the dimmest the light goes, not off) to 100, and
     <code>colorTempKelvin</code> must be above 0; anything else is an invalid configuration. The room
     controller converts them for the light, and a light's report (in its own units) is compared after the same
-    conversion. Zigbee2MQTT's <code>brightness</code> and <code>color_temp</code> still work during 5.x, with a
-    warning from the room controller.</p>
+    conversion. Zigbee2MQTT's own <code>brightness</code> and <code>color_temp</code> were removed in 6.0: a profile
+    using them is an invalid configuration.</p>
   <p>While a profile is active, its lights are overridden in the room controller under <b>Owner</b>
     (default <code>activity</code>), so circadian refresh leaves the activity style alone. When a new profile
     no longer includes a light, including a switch to an off profile with no targets, the node emits
