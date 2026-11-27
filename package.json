@@ -1,6 +1,6 @@
 {
   "name": "@avantics/node-red-home-automation",
-  "version": "5.0.0",
+  "version": "6.0.0",
   "description": "Deterministic home automation components for Node-RED",
   "keywords": [
     "node-red",
