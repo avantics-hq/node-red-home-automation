@@ -89,7 +89,9 @@
     <dt>pause</dt><dd><code>true</code> pauses motion lighting, <code>false</code> releases it, for the owner in
       <code>msg.owner</code> (for example a cover's name), which is required. A pause lasts at most the
       <b>Maximum pause</b> unless sent again, so a lost release can't stop motion lighting for good. Motion lighting acts only while no owner holds a pause,
-      and a pause cancels a pending vacancy timer, as switching it off does. A pause never changes the enables,
+      and a pause cancels a pending vacancy timer, as switching it off does. A vacancy while paused or switched
+      off isn't forgotten: when motion resumes (every pause released or run out, and both enables on) in a room
+      still vacant, the vacancy timer starts then, and the off intent names when the room went vacant. A pause never changes the enables,
       which are the user's own: wire a cover's <i>moving</i> output here to pause motion while it moves. Any value but
       <code>true</code> or <code>false</code> is refused, as for the enables.</dd>
   </dl>

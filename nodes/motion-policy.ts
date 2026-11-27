@@ -43,6 +43,9 @@ interface MotionPolicyNode extends Node {}
 type MotionStatus = ReturnType<typeof transitionMotion>["status"];
 
 
+// The longest wait setTimeout takes: anything longer fires at once.
+const MAX_TIMEOUT_MS = 2 ** 31 - 1;
+
 const registerMotionPolicy: NodeInitializer = (RED) => {
   function HomeMotionLightingPolicy(this: MotionPolicyNode, config: MotionPolicyConfig) {
     RED.nodes.createNode(this, config);
@@ -50,6 +53,7 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
     const context = node.context();
     const globalContext = context.global;
     let offTimer: ReturnType<typeof setTimeout> | undefined;
+    let pauseTimer: ReturnType<typeof setTimeout> | undefined;
 
     let policyConfig: MotionConfig & {area: string};
     let publishing: MotionPublishingConfig;
@@ -90,6 +94,21 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
         offTimer = undefined;
         process({source: "off-timer", generation}, node.send.bind(node));
       }), delayMs);
+    }
+
+    // Wakes the policy when the first pause runs out, so motion resumes then
+    // (and acts on a vacancy meanwhile) rather than at the next message. A
+    // wait longer than setTimeout takes (about 24.8 days) is split: it wakes
+    // at the longest and arms again.
+    function armPauseTimer(state: Partial<MotionState> | undefined) {
+      clearTimeout(pauseTimer);
+      pauseTimer = undefined;
+      const ends = (state?.pausedBy ?? []).map(({until}) => until).filter(Number.isFinite);
+      if (!ends.length) return;
+      pauseTimer = setTimeout(guarded(node, () => {
+        pauseTimer = undefined;
+        process({source: "pause-check"}, node.send.bind(node));
+      }), Math.min(MAX_TIMEOUT_MS, Math.max(0, Math.min(...ends) - Date.now()) + 1));
     }
 
     // The enable state and delay in use, by the reducer's own rule: a saved
@@ -141,6 +160,7 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
       }
       updateStatus(result.status);
       showRefused(result.traces);
+      armPauseTimer(result.state);
       return result;
     }
     const showRefused = refusedEnables(node);
@@ -150,6 +170,7 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
     // off-timer is re-armed. Without one, it starts with nothing saved, and
     // vacancy starts now.
     const savedState = context.get("state") as Partial<MotionState> | undefined;
+    armPauseTimer(savedState);
     if (typeof savedState?.offTimerDueAt === "number") {
       armOffTimer(Math.max(0, savedState.offTimerDueAt - Date.now()), Number(savedState.offTimerGeneration) || 0);
     } else if (savedState === undefined) {
@@ -168,6 +189,7 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
 
     node.on("close", (_removed: boolean, done: () => void) => {
       clearTimeout(offTimer);
+      clearTimeout(pauseTimer);
       done();
     });
   }

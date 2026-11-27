@@ -170,12 +170,12 @@ test("enable and pause inputs take only true or false: anything else, such as \"
   }
 });
 
-test("re-enabling motion switches nothing off; a later vacancy schedules OFF as before", () => {
+test("re-enabling motion switches nothing off at once: a vacancy while disabled starts its delay then (#193); a later vacancy schedules OFF as before", () => {
   let result = transitionMotion(undefined, {source: "area-enabled", payload: false}, config, true, 1000);
   result = transitionMotion(result.state, {source: "occupancy", payload: {occupied: false}}, config, true, 2000);
   result = transitionMotion(result.state, {source: "area-enabled", payload: true}, config, true, 3000);
   assert.equal(sendEffects(result).length, 0);
-  assert.equal(scheduled(result), undefined);
+  assert.equal(scheduled(result)?.delayMs, 30_000);
 
   result = transitionMotion(result.state, {source: "occupancy", payload: {occupied: false}}, config, true, 4000);
   const timer = scheduled(result);
@@ -289,4 +289,41 @@ test("a pause runs out after the maximum pause unless renewed, and needs an owne
   // No owner: ignored, so a stray pause can't take a shared slot.
   const ownerless = run(undefined, {source: "pause", payload: true}, 0);
   assert.deepEqual([ownerless.status.paused, ownerless.traces.at(-1)?.reason], [false, "owner-required"]);
+});
+
+test("a vacancy while motion is paused or disabled is acted on when motion resumes (#193)", () => {
+  type Input = Parameters<typeof transitionMotion>[1];
+  // Occupied in the dark at 0 s, then the inputs given, then whether an off
+  // timer is due and when (its delay from the resume), and the OFF it sends.
+  function story(inputs: Array<[number, Input, boolean?]>) {
+    let result = transitionMotion(undefined, {source: "occupancy", payload: {occupied: true}}, config, true, 0);
+    for (const [at, input, globalEnabled = true] of inputs) result = transitionMotion(result.state, input, config, globalEnabled, at);
+    return result;
+  }
+  const pause = (payload: boolean, owner = "scene:Bath"): Input => ({source: "pause", payload, owner});
+  const vacant: Input = {source: "occupancy", payload: {occupied: false}};
+
+  // Released: the vacancy delay starts then, and its OFF names when the room went vacant.
+  const released = story([[0, pause(true)], [30_000, vacant], [90_000, pause(false)]]);
+  assert.equal(released.state.offTimerDueAt, 90_000 + 30_000);
+  assert.deepEqual(released.traces.filter(({reason}) => reason === "resumed-vacant").map(({details}) => details), [{vacantSince: new Date(30_000).toISOString()}]);
+  const off = transitionMotion(released.state, {source: "off-timer", generation: released.state.offTimerGeneration}, config, true, 120_000);
+  assert.deepEqual(sendEffects(off).map(({lighting}) => [lighting.state, lighting.vacantSince]), [["OFF", new Date(30_000).toISOString()]]);
+  assert.equal(off.state.vacantSince, null, "acted on once");
+  assert.equal(transitionMotion(off.state, pause(true), config, true, 130_000).state.offTimerDueAt, null);
+
+  // Occupied again before the release: nothing to do.
+  assert.equal(story([[0, pause(true)], [30_000, vacant], [60_000, {source: "occupancy", payload: {occupied: true}}], [90_000, pause(false)]]).state.offTimerDueAt, null);
+  // Another owner still pausing: only when the last lets go.
+  const two = story([[0, pause(true)], [0, pause(true, "blind")], [30_000, vacant], [90_000, pause(false)]]);
+  assert.equal(two.state.offTimerDueAt, null);
+  assert.equal(transitionMotion(two.state, pause(false, "blind"), config, true, 100_000).state.offTimerDueAt, 100_000 + 30_000);
+  // A pause that runs out, noticed at the node's own wake-up.
+  const lapsed = story([[0, pause(true)], [30_000, vacant], [600_001, {source: "pause-check"}]]);
+  assert.equal(lapsed.state.offTimerDueAt, 600_001 + 30_000);
+  // Motion disabled, then enabled again, for the area or for the house.
+  assert.equal(story([[0, {source: "area-enabled", payload: false}], [30_000, vacant], [90_000, {source: "area-enabled", payload: true}]]).state.offTimerDueAt, 120_000);
+  assert.equal(story([[0, {source: "global-enabled", payload: false}], [30_000, vacant, false], [90_000, {source: "global-enabled", payload: true}, false]]).state.offTimerDueAt, 120_000);
+  // Still enabled throughout: unchanged, the vacancy schedules at once.
+  assert.equal(story([[30_000, vacant]]).state.offTimerDueAt, 60_000);
 });
