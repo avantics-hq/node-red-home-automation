@@ -82,7 +82,8 @@ at startup and whenever the device comes online, and shows what it found. In
 detached mode, where the relay stays on to power smart bulbs, the switch's
 presses go to the switch policy: a toggle switch's on/off as edges, with the
 device's status as the baseline, and a push button's single, double or long
-presses as actions. The relay is never commanded, and a relay that reports off
+presses as actions (the switch policy acts on single and double; long is passed
+on for later use). The relay is never commanded, and a relay that reports off
 is flagged, as the bulbs have lost power. In any other mode the relay is the
 light: the node reports its state and takes on and off. Its **Mode** setting
 overrides what was read, and decides when the configuration can't be read.

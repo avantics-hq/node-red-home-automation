@@ -70,7 +70,7 @@
       on/off becomes <code>msg.source = "switch"</code> with <code>msg.payload = {state}</code> (the first, from the
       device's status, marked <code>baseline</code>); a button-type input's pushes become
       <code>msg.source = "switch-action"</code> with <code>single</code>, <code>double</code> or <code>long</code>
-      (the switch policy acts on the first two). The device going offline or online becomes
+      (the switch policy acts on single and double; long is passed on for later use). The device going offline or online becomes
       <code>msg.source = "switch-availability"</code>. If the relay reports off, the status warns: the bulbs have lost
       power.</li>
     <li><b>Relay</b> (follow, flip, momentary and the other modes): the relay is the light. Its state becomes
