@@ -68,6 +68,7 @@ try {
   if (errors.length || missing.length) failure = `missing: ${missing.join(", ") || "none"}; errors: ${errors.length}`;
   if (!failure && deepImport !== "ERR_PACKAGE_PATH_NOT_EXPORTED") failure = `a deep import into dist/ gave ${deepImport}, not ERR_PACKAGE_PATH_NOT_EXPORTED`;
   if (!failure) failure = await checkExamples();
+  if (!failure) failure = await checkAnnounceOnConnect();
 } catch (error) {
   failure = error instanceof Error ? error.message : String(error);
 } finally {
@@ -103,9 +104,57 @@ async function checkExamples() {
   return problems.length ? problems.join("; ") : null;
 }
 
+// A publishing node announces itself again when a Status node watching MQTT
+// out reports it connected (#185): Node-RED's MQTT broker node drops what it
+// is given before it connects (5.0.10 nodes/core/network/10-mqtt.js publish),
+// so the announcement made as the flows start is lost on a first start, a
+// full deploy or a restart. Through the runtime's own Status node path, with
+// no socket: the broker node never connects (autoConnect off, an .invalid
+// host), and the check sets MQTT out's status as the broker node would.
+async function checkAnnounceOnConnect() {
+  const handed = [];
+  const tab = {id: "smoke0announce0tab", type: "tab", label: "announce"};
+  const flow = [
+    tab,
+    {id: "smoke0broker", type: "mqtt-broker", name: "", broker: "broker.invalid", port: "1883", clientid: "", autoConnect: false,
+      usetls: false, protocolVersion: "4", keepalive: "60", cleansession: true},
+    {id: "smoke0room", type: "home-room-lighting-controller", z: tab.id, name: "", area: "smoke", targets: "[{\"id\":\"main\"}]",
+      publishState: true, discovery: true, idScheme: "node", discoveryPrefix: "homeassistant", initialTransitionSeconds: 1,
+      wires: [["smoke0out", "smoke0count"], [], []]},
+    {id: "smoke0out", type: "mqtt out", z: tab.id, broker: "smoke0broker", topic: "", qos: "", retain: "", wires: []},
+    {id: "smoke0status", type: "status", z: tab.id, name: "", scope: ["smoke0out"], wires: [["smoke0room"]]},
+    // What the room hands MQTT out, as topics.
+    {id: "smoke0count", type: "function", z: tab.id, name: "", outputs: 0, wires: [],
+      func: "const handed = global.get('smoke-handed') || []; handed.push(msg.topic); global.set('smoke-handed', handed); return null;"}
+  ];
+  const settle = () => new Promise((done) => setTimeout(done, 200));
+  const take = () => {
+    const context = RED.nodes.getNode("smoke0count").context().global;
+    const topics = context.get("smoke-handed") || [];
+    context.set("smoke-handed", []);
+    return topics;
+  };
+  await RED.runtime.flows.setFlows({flows: {flows: flow}, deploymentType: "full"});
+  await settle();
+  const atStart = take();
+  const out = RED.nodes.getNode("smoke0out");
+  out.status({fill: "yellow", shape: "ring", text: "node-red:common.status.connecting"});
+  await settle();
+  const connecting = take();
+  out.status({fill: "green", shape: "dot", text: "node-red:common.status.connected"});
+  await settle();
+  const connected = take();
+  const wanted = ["home/smoke/lighting/availability", "homeassistant/sensor/nrha_smoke0room_main_control/config"];
+  console.log(JSON.stringify({announceOnConnect: {atStart: atStart.length, connecting: connecting.length, connected: wanted.filter((topic) => connected.includes(topic))}}));
+  if (!wanted.every((topic) => atStart.includes(topic))) return "the room didn't announce as the flows started";
+  if (connecting.length) return "the room announced on MQTT out's connecting status";
+  if (!wanted.every((topic) => connected.includes(topic))) return "the room didn't announce again when MQTT out reported connected";
+  return null;
+}
+
 if (failure) {
   console.error(`Node-RED smoke failed: ${failure}`);
   process.exit(1);
 }
-console.log(`Node-RED smoke passed: ${expected.length} node types registered, example flows deployed.`);
+console.log(`Node-RED smoke passed: ${expected.length} node types registered, example flows deployed, announced again on MQTT out's connect.`);
 process.exit(0);

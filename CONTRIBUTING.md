@@ -17,7 +17,9 @@ privately, as described in [SECURITY.md](SECURITY.md), not in a public issue.
 3. Make your change and run `npm test` (build, unit tests and contract
    examples). If you changed a node or an example flow, also run the Node-RED
    smoke that CI runs, which loads the packed package and every example flow in
-   an embedded Node-RED:
+   an embedded Node-RED, and checks that a publishing node announces itself
+   again when a Status node reports MQTT out connected (with no broker or
+   socket):
 
    ```sh
    smoke="$(mktemp -d)"

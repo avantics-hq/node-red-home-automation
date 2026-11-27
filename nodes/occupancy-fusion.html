@@ -84,4 +84,9 @@
     <li>Occupancy events, for the motion lighting policy.</li>
     <li>MQTT publications, when publishing is on.</li>
   </ol>
+  <h3>When MQTT out connects</h3>
+  <p>Wire a <b>Status node</b> whose scope is your MQTT out node into this node. Each time MQTT out shows
+    "connected", this node takes it as its startup message (<code>msg.source = "startup"</code>) and announces itself again:
+    Node-RED's MQTT broker node drops what it is given before it connects, so what the node sends as the flows
+    start is lost on a first start, a full deploy or a restart. Any other status message is ignored.</p>
 </script>

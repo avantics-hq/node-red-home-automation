@@ -1161,7 +1161,12 @@ test("the example theatre flow reaches ready with no translation and stays ready
   const activity = () => nodes.get(activityId)!.context().get("state") as
     {phase: string; currentActivity: string; degraded: Array<{target: string; reason: string}>};
 
-  // The example's injects: start the contract, then ask for the tv activity.
+  // MQTT out connects: the example's status node starts the contract.
+  for (const entry of flow.filter((candidate) => candidate.type === "status")) {
+    queue.push([entry.wires![0]![0]!, {status: {fill: "green", shape: "dot", text: "node-red:common.status.connected", source: {id: "out", type: "mqtt out", name: ""}}}]);
+    await settle();
+  }
+  // The example's injects: ask for the tv activity.
   for (const entry of flow.filter((candidate) => candidate.type === "inject")) {
     const msg: Record<string, unknown> = {};
     for (const prop of entry.props as Array<{p: string; v: string; vt: string}>) {
@@ -2594,6 +2599,44 @@ test("two zigbee2mqtt light nodes fed one room's light output: each acts on its 
   // The other light still works afterwards.
   const report = await receive<Envelope>(side, {topic: "z2m/hall-side", payload: {state: "OFF"}});
   assert.deepEqual(port(report, 1).map((entry) => (entry.light as {kind: string}).kind), ["observed"]);
+});
+
+// Each node that announces itself as the flows start, with publishing on, and
+// its own startup message.
+const ANNOUNCING: Array<[string, NodeInitializer, Record<string, unknown>, Record<string, unknown>]> = [
+  ["room lighting controller", registerRoom, {targets: "[{\"id\":\"main\"}]"}, {lighting: {kind: "startup"}}],
+  ["circadian lighting policy", registerCircadian, {}, {lighting: {kind: "startup"}}],
+  ["house schedule MQTT", registerHouseMqtt, {schedule: "announcing-house"}, {lighting: {kind: "startup"}}],
+  ["motion policy", registerMotion, {}, {source: "startup"}],
+  ["occupancy fusion", registerOccupancy, {}, {source: "startup"}],
+  ["cover controller", registerCover, {topicName: "left"}, {cover: {kind: "startup"}}],
+  ["AVR controller", registerAvr, {}, {avr: {kind: "startup"}}],
+  ["theatre state contract", registerTheatreStateContract, {activities: "[\"off\",\"tv\"]"}, {theatreStateContract: {kind: "startup"}}],
+  // It publishes no retained state, but asks the device for its configuration as the flows start.
+  ["shelly switch", registerShellySwitch, {topicPrefix: "shellyplus1-test", channel: "0"}, {shellySwitch: {kind: "startup"}}]
+];
+const mqttStatus = (type: string, fill: string, text: string) =>
+  ({status: {fill, shape: fill === "green" ? "dot" : "ring", text, source: {id: "out-1", type, name: ""}}});
+
+test("each node that announces itself as the flows start announces again when MQTT out says it has connected", async (t) => {
+  new (runtime(registerHouse).Constructor)({id: "announcing-house", name: "test", wakeTime: "07:00", bedTime: "23:00"});
+  // The two runs are a moment apart: times aside, the same messages.
+  const timeless = (sent: unknown) => JSON.parse(JSON.stringify(sent).replace(/\d{4}-\d\d-\d\dT[\d:.]+Z/g, "<time>"));
+  for (const [label, register, settings, startup] of ANNOUNCING) {
+    const config = {area: "test", name: "", publishState: true, discovery: true, ...settings};
+    const viaStartup = new (runtime(register).Constructor)({id: "n-" + label, ...config});
+    const viaStatus = new (runtime(register).Constructor)({id: "n-" + label, ...config});
+    t.after(() => close(viaStartup));
+    t.after(() => close(viaStatus));
+    assert.deepEqual([viaStartup.errors, viaStatus.errors], [[], []], label);
+    const expected = await receive(viaStartup, startup);
+    assert.ok(JSON.stringify(expected).length > 10, `${label}: its startup message sends something`);
+    assert.deepEqual(await receive(viaStatus, mqttStatus("mqtt out", "yellow", "node-red:common.status.connecting")), [], `${label}: connecting`);
+    assert.deepEqual(await receive(viaStatus, mqttStatus("mqtt in", "green", "node-red:common.status.connected")), [], `${label}: another node type`);
+    assert.deepEqual(timeless(await receive(viaStatus, mqttStatus("mqtt out", "green", "node-red:common.status.connected"))),
+      timeless(expected), `${label}: connected`);
+    assert.deepEqual([viaStartup.errors, viaStatus.errors], [[], []], label);
+  }
 });
 
 test("activity lighting takes a light's reading as the room passes it on", async (t) => {

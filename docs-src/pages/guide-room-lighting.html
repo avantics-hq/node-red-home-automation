@@ -34,7 +34,7 @@
 <tr><td>Each zigbee2mqtt light, output 2</td><td>Controller input</td><td>The light’s readings, and other people’s commands on it.</td></tr>
 <tr><td>MQTT in on <code>zigbee2mqtt/&lt;device&gt;/#</code></td><td>That light’s zigbee2mqtt light node</td><td>The light’s state, its <code>/set</code> topic and its availability.</td></tr>
 <tr><td>Controller output 3</td><td>Activity lighting, if any</td><td>Each light’s reading with whether a person set it.</td></tr>
-<tr><td>Inject, once after 3 seconds</td><td>Controller input</td><td><code>msg.lighting = {kind: "startup"}</code>, as in the example.</td></tr>
+<tr><td>Status node watching MQTT out</td><td>Controller and circadian policy inputs</td><td>MQTT out’s “connected”, taken as the startup message, as in the example.</td></tr>
 </tbody></table></div>
 <p>The motion and switch inputs have their own guides: <a href="guide-motion-occupancy.html">Motion and occupancy</a> and <a href="guide-wall-switches.html">Wall switches</a>. In the example both policies light the target <code>main</code>; their target names must match the controller’s.</p>
 <ol class="step-list">
@@ -42,7 +42,7 @@
 <li><strong>Add a zigbee2mqtt light per light.</strong><p>Set its <strong>Target</strong> to the light’s id and its <strong>Friendly name</strong> to the light’s (or group’s) name in Zigbee2MQTT; tick <strong>Zigbee2MQTT group</strong> for a group, and set <code>retain: true</code> under that group in Zigbee2MQTT’s <code>configuration.yaml</code>, so the room has its state after a restart (a group can’t be asked for it). See <a href="node-z2m-light.html">Zigbee2MQTT light</a>.</p></li>
 <li><strong>Wire them both ways.</strong><p>The controller’s second output into every light’s node; each node’s second output back into the controller; each node’s first output to MQTT out on the same broker, with the topic left empty.</p></li>
 <li><strong>Feed each light’s node.</strong><p>An MQTT in node on <code>zigbee2mqtt/&lt;device&gt;/#</code> (output: auto-detect) into the light’s node. That brings its reports, other people’s commands on its <code>/set</code> topic, and its availability.</p></li>
-<li><strong>Send a startup message.</strong><p>Keep the example’s “startup” inject, which fires once 3 seconds after a deploy, so the MQTT broker node has usually connected first. The controller then asks each light for a reading.</p></li>
+<li><strong>Keep the example’s “MQTT out connected” Status node.</strong><p>Each time MQTT out connects to the broker, it gives the controller and the circadian policy their startup message, so their announcements reach the broker, which drops anything sent before it connects. The controller then asks each light for a reading.</p></li>
 </ol>
 <div class="code-block"><div class="code-label"><span>Targets JSON · two lights, one only switching</span></div><pre><code>[{"id": "main"},
  {"id": "lamp", "onOffOnly": true}]</code></pre></div>

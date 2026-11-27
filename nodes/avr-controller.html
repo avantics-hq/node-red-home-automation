@@ -117,4 +117,9 @@
   </dl>
   <p>These go on the third output; wire it to an MQTT out node. The node announces itself once the flows have
     started, and again at <code>kind: "startup"</code>.</p>
+  <h3>When MQTT out connects</h3>
+  <p>Wire a <b>Status node</b> whose scope is your MQTT out node into this node. Each time MQTT out shows
+    "connected", this node takes it as its startup message (<code>msg.avr = {kind: "startup"}</code>) and announces itself again:
+    Node-RED's MQTT broker node drops what it is given before it connects, so what the node sends as the flows
+    start is lost on a first start, a full deploy or a restart. Any other status message is ignored.</p>
 </script>

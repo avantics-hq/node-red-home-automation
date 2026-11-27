@@ -214,7 +214,7 @@ const registerAvrController: NodeInitializer = (RED) => {
         avr: objectField<AvrMessage["avr"]>(msg, "avr"),
         payload: msg.payload
       }, send);
-    });
+    }, {message: {avr: {kind: "startup"}}, trace: {area: controllerConfig.area, component: "avr-controller"}});
 
     node.on("close", (_removed: boolean, done: () => void) => {
       clearTimeout(retryTimer);

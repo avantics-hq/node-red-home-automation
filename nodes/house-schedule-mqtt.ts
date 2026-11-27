@@ -95,7 +95,7 @@ const registerHouseScheduleMqtt: NodeInitializer = (RED) => {
       } else if (inbound) {
         runReducer(node, trace, (state: unknown) => ({state, traces: inbound.traces}));
       }
-    });
+    }, {message: {lighting: {kind: "startup"}}, trace: trace});
   }
 
   RED.nodes.registerType("home-house-schedule-mqtt", HomeHouseScheduleMqtt);

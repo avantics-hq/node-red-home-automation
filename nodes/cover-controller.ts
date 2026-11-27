@@ -164,7 +164,7 @@ const registerCoverController: NodeInitializer = (RED) => {
         return;
       }
       handleRequest(inbound ? {payload: inbound.request, source: "home-assistant"} as InputMessage : msg, send);
-    });
+    }, {message: {cover: {kind: "startup"}}, trace: trace});
 
     function handleRequest(msg: InputMessage, send: Send) {
       requests += 1;

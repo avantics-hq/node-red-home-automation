@@ -421,7 +421,12 @@ Also new in 6.0.0, with nothing to change:
   the wall switches guide).
 - **Discovery as the flows start.** Every publishing node, now including the
   room controller and the theatre state contract, announces its Home Assistant
-  entities once the flows start, as well as at its startup message.
+  entities once the flows start, as well as at its startup message. On a
+  first start, a full deploy or a restart that announcement is lost, as
+  Node-RED's MQTT broker node connects only afterwards, so from 6.0.1 wire a
+  **Status node** watching your MQTT out node into each publishing node: it
+  announces again each time MQTT out connects (see "Send each publishing node
+  its startup message" below).
 - **A documentation site** with a guide for each area, a reference page for
   every node and a releases page:
   [avantics-hq.github.io/node-red-home-automation](https://avantics-hq.github.io/node-red-home-automation/).
@@ -628,9 +633,16 @@ Version 3.0 changed some behaviour, and later versions added to it. Check these 
   publishing off entirely, are cleared only from the record. A node that never gets a startup message
   keeps clearing its old topics at every start, so to move an area from one older room node to another, send the old
   node a startup message, or delete it.
-- **Send each publishing node a startup message once, a few seconds after deploy.** The example flows do this with an
-  inject node set to fire once after 3 seconds: by then the MQTT broker node has usually connected, and a message
-  sent before it connects is dropped, along with the discovery and state it carried.
+- **Send each publishing node its startup message once MQTT out has connected: wire in a Status node.** Node-RED's
+  MQTT broker node connects after the flows have started and drops anything it is given before then, without a
+  warning, so what a node announces as the flows start (its availability, discovery and state) is lost on a first
+  start, a full deploy or a restart. Add a **Status node** whose scope is your MQTT out node and wire it into each
+  publishing node (room, circadian policy, house schedule MQTT, motion, occupancy, cover controller, AVR controller,
+  theatre state contract, Shelly switch). Each time MQTT out shows "connected", including after the broker
+  reconnects, the Status node passes it on, and the node takes it as its startup message. Other status messages are
+  ignored, so a Status node watching every node on the flow works too; the example flows use one. Since 6.0.1; before
+  that, the examples sent the startup message from an inject node 3 seconds after a deploy, which is lost if the
+  broker takes longer. A node still takes its own startup message (each node's section gives it).
 - **Removing entities:** deleting a node clears its Home Assistant entities and retained state, but only when you
   deploy with "Modified nodes" or "Modified flows". On a full deploy (the deploy button's default), Node-RED stops the
   MQTT out node at the same moment, so the clearing never reaches the broker. Disabling a node or its flow keeps its

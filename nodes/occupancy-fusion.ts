@@ -108,7 +108,7 @@ const registerOccupancyFusion: NodeInitializer = (RED) => {
         lifecycle.publish(send, occupancyStateOutputs(publishing, output.payload.occupied));
       }
       updateStatus(result.status);
-    });
+    }, {message: {source: "startup"}, trace: {area: fusionConfig.area, component: "occupancy-fusion"}});
 
   }
 

@@ -3,7 +3,7 @@
     "id": "example-home-theatre-activity-home-theatre-activity-example",
     "type": "comment",
     "name": "Home theatre activity example",
-    "info": "The state contract turns a request on home/<area>/theatre/request into an activity intent. The activity controller plans each target and sends msg.theatreCommand; the switch routes each command by its target, and a change node moves it onto that controller's input. Every controller reports msg.theatre target state on output 2, wired straight back to the activity controller, which publishes a complete snapshot through the contract.\n\nName the area on the state contract before deploying: it names the MQTT topics and Home Assistant entities, and until it is set the contract shows \"invalid configuration\". Put the same area in the \"request tv activity\" inject's topic. Set the display controller's device hosts and TV pre-shared key too; until then it shows \"invalid configuration\" and the activity waits for it. Wire the controllers' output 1 to your device transports and activity lighting to your room lighting controller. Activity lighting holds the room's lights through a room lighting controller, which reaches its light through a zigbee2mqtt light node and passes each light's reading back to activity lighting (its third output), so the lights confirm. Set the light's friendly name, wire the debug's place to MQTT out, and an MQTT in node on the light's topics (zigbee2mqtt/<your light>/#) into the light node.",
+    "info": "The state contract turns a request on home/<area>/theatre/request into an activity intent. The activity controller plans each target and sends msg.theatreCommand; the switch routes each command by its target, and a change node moves it onto that controller's input. Every controller reports msg.theatre target state on output 2, wired straight back to the activity controller, which publishes a complete snapshot through the contract.\n\nName the area on the state contract before deploying: it names the MQTT topics and Home Assistant entities, and until it is set the contract shows \"invalid configuration\". Put the same area in the \"request tv activity\" inject's topic. Set the display controller's device hosts and TV pre-shared key too; until then it shows \"invalid configuration\" and the activity waits for it. Wire the controllers' output 1 to your device transports and activity lighting to your room lighting controller. Activity lighting holds the room's lights through a room lighting controller, which reaches its light through a zigbee2mqtt light node and passes each light's reading back to activity lighting (its third output), so the lights confirm. Set the light's friendly name, wire the debug's place to MQTT out, and an MQTT in node on the light's topics (zigbee2mqtt/<your light>/#) into the light node.\n\nThe \"MQTT out connected\" status node sends the state contract its startup message each time an MQTT out node connects to the broker, so what it announces reaches it: the broker drops anything sent before it connects. It watches every node on this flow, and the nodes act only on an MQTT out node's connected status; you can scope it to your MQTT out node instead.",
     "x": 190,
     "y": 40,
     "wires": []
@@ -38,21 +38,10 @@
     ]
   },
   {
-    "id": "example-home-theatre-activity-contract-startup",
-    "type": "inject",
-    "name": "contract startup",
-    "props": [
-      {
-        "p": "theatreStateContract",
-        "v": "{\"kind\":\"startup\"}",
-        "vt": "json"
-      }
-    ],
-    "repeat": "",
-    "crontab": "",
-    "once": true,
-    "onceDelay": 3,
-    "topic": "",
+    "id": "example-home-theatre-activity-contract-mqtt-connected",
+    "type": "status",
+    "name": "MQTT out connected",
+    "scope": null,
     "x": 170,
     "y": 140,
     "wires": [

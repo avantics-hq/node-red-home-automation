@@ -84,7 +84,7 @@
 <tr><td><code>observe</code></td><td><code>status_update</code>: the device reports a fresh status</td><td><code>{"position": ""}</code> on <code>…/get</code>, or <code>{"state": ""}</code> for a cover with no position</td></tr>
 </tbody></table></div>
 <p>Some Zigbee2MQTT devices cannot be read through <code>…/get</code>; they still report their position whenever it changes.</p>
-<div class="code-block"><div class="code-label"><span>Inject → cover controller · read the cover after a deploy</span></div><pre><code>msg.cover = {kind: "startup"};
+<div class="code-block"><div class="code-label"><span>Inject → cover controller · read the cover again (a Status node watching MQTT out does this each time it connects)</span></div><pre><code>msg.cover = {kind: "startup"};
 return msg;</code></pre></div>
 <p>On startup the controller reads the cover again rather than trusting old state, so the adapter sends its <code>observe</code> message.</p>
 </section>

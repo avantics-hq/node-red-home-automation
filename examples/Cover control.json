@@ -3,27 +3,16 @@
     "id": "example-cover-control-cover-control-example",
     "type": "comment",
     "name": "Cover control example",
-    "info": "A position cover (blind, shutter or curtain motor) owned by the cover controller. Requests go in as \"open\", \"close\", \"stop\", a position from 0 to 100, or a preset name; an automatic target sets respectManual so a person's move holds. The Zigbee2MQTT cover adapter maps to and from a Zigbee2MQTT cover: set its friendly name, feed it from MQTT in nodes on the cover's topic and its availability topic, and wire its first output to an MQTT out node. A button can stop the cover if it is moving and open it otherwise, and the cover's availability report keeps requests from going to an offline device. Output 3 says whether the cover is moving, for other policies to react to. Here it pauses motion lighting while the cover moves, through the motion policy's pause input, which never touches the user's own enable.",
+    "info": "A position cover (blind, shutter or curtain motor) owned by the cover controller. Requests go in as \"open\", \"close\", \"stop\", a position from 0 to 100, or a preset name; an automatic target sets respectManual so a person's move holds. The Zigbee2MQTT cover adapter maps to and from a Zigbee2MQTT cover: set its friendly name, feed it from MQTT in nodes on the cover's topic and its availability topic, and wire its first output to an MQTT out node. A button can stop the cover if it is moving and open it otherwise, and the cover's availability report keeps requests from going to an offline device. Output 3 says whether the cover is moving, for other policies to react to. Here it pauses motion lighting while the cover moves, through the motion policy's pause input, which never touches the user's own enable.\n\nThe \"MQTT out connected\" status node sends the cover controller its startup message each time an MQTT out node connects to the broker, so what it announces reaches it: the broker drops anything sent before it connects. It watches every node on this flow, and the nodes act only on an MQTT out node's connected status; you can scope it to your MQTT out node instead.",
     "x": 170,
     "y": 40,
     "wires": []
   },
   {
-    "id": "example-cover-control-startup",
-    "type": "inject",
-    "name": "startup",
-    "props": [
-      {
-        "p": "cover",
-        "v": "{\"kind\":\"startup\"}",
-        "vt": "json"
-      }
-    ],
-    "repeat": "",
-    "crontab": "",
-    "once": true,
-    "onceDelay": 3,
-    "topic": "",
+    "id": "example-cover-control-mqtt-connected",
+    "type": "status",
+    "name": "MQTT out connected",
+    "scope": null,
     "x": 130,
     "y": 100,
     "wires": [
