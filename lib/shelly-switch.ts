@@ -17,6 +17,11 @@
 // The node's Mode setting overrides what was read, and decides when the
 // configuration can't be read.
 //
+// With a Target, the relay is that room light in either mode
+// (shelly-relay-light.ts): the room's commands switch it, and its reports
+// go back to the room as neutral readings. Presses still go to the switch
+// policy when detached. Without one, the node works as it did before.
+//
 // From Shelly's Gen2 API documentation (RPC channels, Mqtt, Shelly, Switch,
 // Input and Notifications; see also shelly-gen2.ts):
 // - an RPC request is {id, src, method, params} on <prefix>/rpc, and its
@@ -35,7 +40,9 @@
 
 import type {TraceEntry} from "./bounded-trace";
 import {isObject, parsedPayload, type MqttPublication} from "./mqtt-message";
+import type {LightReading} from "./light-contract";
 import {readShellyMessage, shellyTopics} from "./shelly-gen2";
+import {createRelayLightState, relayLightCommandSeen, relayLightFromRoom, relayLightReport, type RelayLightState, type RelayLightStep} from "./shelly-relay-light";
 
 export const SHELLY_SWITCH_MODES = ["auto", "detached", "relay"] as const;
 export type ShellySwitchMode = typeof SHELLY_SWITCH_MODES[number];
@@ -51,6 +58,9 @@ export interface ShellySwitchConfig {
   channel: number;
   // auto: as the device is configured; detached or relay: as set here.
   mode: ShellySwitchMode;
+  // The room's id for the light its relay is; null when the relay isn't a
+  // room light.
+  target: string | null;
 }
 
 export interface DeviceSetup {
@@ -71,6 +81,8 @@ export interface ShellySwitchState {
   // The relay's last reported output, and whether an input is known on.
   relayOn: boolean | null;
   inputState: boolean | null;
+  // As a room light, with a Target.
+  light: RelayLightState;
 }
 
 export interface ShellySwitchMessage {
@@ -80,6 +92,8 @@ export interface ShellySwitchMessage {
   shellySwitch?: {kind?: unknown};
   // A relay-mode command: {power: "on" | "off"}.
   switchCommand?: {power?: unknown};
+  // A room's light command or observe, for its Target.
+  light?: unknown;
 }
 
 // What goes to the switch lighting policy (detached), as its messages take
@@ -95,7 +109,7 @@ const ACTIONS: Record<string, "single" | "double" | "long"> = {single_push: "sin
 
 // Settings may be editor strings. The prefix names the user's own device,
 // so it has no default.
-export function normaliseShellySwitchConfig(config: {topicPrefix?: unknown; channel?: unknown; mode?: unknown}): ShellySwitchConfig {
+export function normaliseShellySwitchConfig(config: {topicPrefix?: unknown; channel?: unknown; mode?: unknown; target?: unknown}): ShellySwitchConfig {
   const topicPrefix = String(config.topicPrefix ?? "").trim().replace(/^\/+|\/+$/g, "");
   if (!topicPrefix) throw new Error("the device's MQTT topic prefix is required");
   if (/[+#]/.test(topicPrefix)) throw new Error("the MQTT topic prefix can't contain + or #");
@@ -103,7 +117,9 @@ export function normaliseShellySwitchConfig(config: {topicPrefix?: unknown; chan
   if (!Number.isInteger(channel) || channel < 0) throw new Error("the switch ID must be a whole number from 0");
   const mode = config.mode === undefined || config.mode === "" ? "auto" : String(config.mode);
   if (!(SHELLY_SWITCH_MODES as readonly string[]).includes(mode)) throw new Error("mode must be auto, detached or relay");
-  return {topicPrefix, channel, mode: mode as ShellySwitchMode};
+  // Not set, or empty: not a room light.
+  const target = typeof config.target === "string" && config.target.trim() ? config.target.trim() : null;
+  return {topicPrefix, channel, mode: mode as ShellySwitchMode, target};
 }
 
 export function shellySwitchTopics(config: ShellySwitchConfig) {
@@ -141,18 +157,26 @@ export function transitionShellySwitch(
     requestId: Number.isInteger(saved?.requestId) ? saved!.requestId! : 0,
     online: saved?.online !== false,
     relayOn: typeof saved?.relayOn === "boolean" ? saved.relayOn : null,
-    inputState: typeof saved?.inputState === "boolean" ? saved.inputState : null
+    inputState: typeof saved?.inputState === "boolean" ? saved.inputState : null,
+    light: createRelayLightState(saved?.light)
   };
   const topics = shellySwitchTopics(config);
   const nowMs = now.getTime();
   const observedAt = now.toISOString();
   const publications: MqttPublication[] = [];
   const readings: SwitchReading[] = [];
+  // For the room, with a Target.
+  const lightReadings: LightReading[] = [];
   const traces: TraceEntry[] = [];
   const trace = (event: string, outcome: string, reason: string | null = null, details: Record<string, unknown> = {}) => {
     traces.push({event, outcome, reason, details});
   };
   const mode = () => effectiveMode(config, state);
+  function light(result: RelayLightStep) {
+    publications.push(...result.publications);
+    lightReadings.push(...result.readings);
+    traces.push(...result.traces);
+  }
 
   // Asks for the device's configuration and its whole status (the baseline).
   function readDevice(reason: string) {
@@ -177,12 +201,14 @@ export function transitionShellySwitch(
   // check that the bulbs still have power.
   function relayOutput(status: Record<string, unknown>) {
     if (typeof status.output !== "boolean") return;
+    const previous = state.relayOn;
     state.relayOn = status.output;
+    if (config.target) light(relayLightReport(state.light, status.output, previous, config.target, nowMs));
     if (mode() === "relay") {
       // The device names the source of the last change: its own input is a person at the switch.
       const person = status.source === "button" || status.source === "switch" || status.source === "input";
       readings.push({switchState: {kind: "observed", on: status.output, person, observedAt}});
-    } else if (mode() === "detached" && !status.output) {
+    } else if (mode() === "detached" && !status.output && !config.target) {
       trace("relay", "off", "bulbs-unpowered");
     }
   }
@@ -191,7 +217,14 @@ export function transitionShellySwitch(
 
   const command = msg.switchCommand;
   const own = msg.shellySwitch;
-  if (isObject(own) && own.kind === "startup") {
+  const room = isObject(msg.light) && (msg.light.kind === "command" || msg.light.kind === "observe") ? msg.light : null;
+  if (room) {
+    // The room's messages for every light arrive here; only this one's count.
+    if (!config.target || room.target !== config.target) {
+      return {state, publications, readings, lightReadings, traces, status: shellySwitchStatus(config, state), ignored: true};
+    }
+    light(relayLightFromRoom(state.light, room, config.target, topics.command, state.relayOn, nowMs));
+  } else if (isObject(own) && own.kind === "startup") {
     readDevice("startup");
   } else if (isObject(own) && own.kind === "tick") {
     if (state.setupStatus === "reading" && state.requestedAt !== null && nowMs - state.requestedAt >= CONFIG_TIMEOUT_MS) {
@@ -267,14 +300,18 @@ export function transitionShellySwitch(
       trace("availability", message.online ? "online" : "offline");
       if (mode() === "detached") readings.push({source: "switch-availability", payload: message.online ? "online" : "offline"});
       if (mode() === "relay") readings.push({switchState: {kind: "availability", online: message.online}});
+      if (config.target) lightReadings.push({kind: "availability", target: config.target, online: message.online});
       // Back online: read its configuration again, and a fresh baseline.
       if (message.online) readDevice("online");
-    } else if (msg.topic !== topics.rpc && msg.topic !== topics.command && msg.topic !== topics.deviceCommand) {
+    } else if (msg.topic === topics.command) {
+      // Its own commands, or someone else's: only a room light reads them.
+      if (config.target) light(relayLightCommandSeen(state.light, msg.payload, config.target, nowMs));
+    } else if (msg.topic !== topics.rpc && msg.topic !== topics.deviceCommand) {
       trace("message", "ignored", "unrelated-message", {topic: typeof msg.topic === "string" ? msg.topic : null});
     }
   }
 
-  return {state, publications, readings, traces, status: shellySwitchStatus(config, state)};
+  return {state, publications, readings, lightReadings, traces, status: shellySwitchStatus(config, state), ignored: false};
 }
 
 // What the node's status shows: the mode found, and anything to act on.
@@ -288,7 +325,7 @@ export function shellySwitchStatus(config: ShellySwitchConfig, state: ShellySwit
       : {text: "configuration unreadable: set Mode", fill: "red"};
   }
   const found = config.mode === "auto" ? setup : `${mode} (set)${setup ? `, device ${setup}` : ""}`;
-  if (mode === "detached" && state.relayOn === false) return {text: `${found} · relay off: bulbs unpowered`, fill: "yellow"};
-  const now = mode === "relay" && state.relayOn !== null ? ` · ${state.relayOn ? "on" : "off"}` : "";
+  if (mode === "detached" && state.relayOn === false && !config.target) return {text: `${found} · relay off: bulbs unpowered`, fill: "yellow"};
+  const now = (mode === "relay" || config.target) && state.relayOn !== null ? ` · ${config.target ? config.target + " " : ""}${state.relayOn ? "on" : "off"}` : "";
   return {text: `${found ?? mode}${now}`, fill: "green"};
 }

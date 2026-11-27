@@ -2768,3 +2768,22 @@ test("activity lighting takes a light's reading as the room passes it on", async
   assert.ok(ready.length > 0);
 });
 
+
+test("shelly switch node with a Target: the room's commands switch its relay, readings go back on output 3, other lights' commands are ignored silently", async (t) => {
+  type Envelope = Array<Array<Record<string, unknown>> | Record<string, unknown> | null>;
+  const node = new (runtime(registerShellySwitch).Constructor)({id: "w-light", topicPrefix: "shellyplus1-test", channel: "0", mode: "detached", target: "hall"});
+  t.after(() => close(node));
+  assert.deepEqual(node.errors, []);
+  const port = (sent: unknown[], index: number) => sent.flatMap((envelope) => {
+    const out = (envelope as Envelope)[index];
+    return out === null || out === undefined ? [] : Array.isArray(out) ? out : [out];
+  });
+  assert.deepEqual(await receive(node, {light: {kind: "command", target: "lamp", state: "ON", source: "wall", id: "1"}}), [], "another light's");
+  const on = await receive<Envelope>(node, {light: {kind: "command", target: "hall", state: "ON", source: "wall", id: "2"}});
+  assert.deepEqual(port(on, 0), [{topic: "shellyplus1-test/command/switch:0", payload: "on"}]);
+  const report = await receive<Envelope>(node, {topic: "shellyplus1-test/status/switch:0", payload: {id: 0, output: true, source: "MQTT"}});
+  assert.deepEqual(port(report, 2).map(({light}) => [(light as {kind: string}).kind, (light as {on: boolean}).on]), [["observed", true]]);
+  assert.deepEqual(port(report, 1), [], "nothing for the switch policy");
+  assert.deepEqual(node.errors, []);
+});
+

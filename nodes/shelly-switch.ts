@@ -15,6 +15,7 @@ interface ShellySwitchNodeConfig extends NodeDef {
   topicPrefix?: string;
   channel?: number | string;
   mode?: string;
+  target?: string;
 }
 
 const registerShellySwitch: NodeInitializer = (RED) => {
@@ -32,14 +33,22 @@ const registerShellySwitch: NodeInitializer = (RED) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     function process(msg: ShellySwitchMessage, send: Send) {
-      const result = runReducer(node, trace, (saved: Partial<ShellySwitchState> | undefined, now) =>
-        transitionShellySwitch(saved, msg, device, now));
+      const result = runReducer(node, trace, (saved: Partial<ShellySwitchState> | undefined, now) => {
+        const decided = transitionShellySwitch(saved, msg, device, now);
+        // Another light's command: nothing to keep or trace, and the result
+        // still says it was ignored.
+        return decided.ignored ? {...decided, state: (saved ?? decided.state) as ShellySwitchState, traces: []} : decided;
+      });
+      // Another light's command: nothing to keep, send or show.
+      if (result.ignored) return;
       // MQTT publications for the device on output 1, for an MQTT out node;
       // readings on output 2: for the switch lighting policy when detached,
-      // the relay's state otherwise.
+      // the relay's state otherwise; with a Target, the light's readings for
+      // the room on output 3.
       const outputs = [
         result.publications.length ? result.publications.map((publication) => ({...publication})) : null,
-        result.readings.length ? result.readings.map((reading) => ({payload: undefined, ...reading})) : null
+        result.readings.length ? result.readings.map((reading) => ({payload: undefined, ...reading})) : null,
+        result.lightReadings.length ? result.lightReadings.map((reading) => ({payload: undefined, light: reading})) : null
       ];
       if (outputs.some((output) => output !== null)) send(outputs);
       node.status({fill: result.status.fill, shape: result.status.fill === "green" ? "dot" : "ring", text: result.status.text});
