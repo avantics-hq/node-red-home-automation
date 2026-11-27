@@ -371,16 +371,25 @@ test("releasing an overridden light restyles it and refresh resumes", () => {
   assert.equal(payload(result, 0).brightness, 254);
 });
 
-test("only the owner switching a held light off returns it to the room controller", () => {
+test("an owner holds a light off: motion leaves it off until the owner lets go, and it comes back on in the room's style", () => {
   let result = publishRoom(fresh(), {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, now);
   result = ownedActivity(result.state, 1000);
   result = publishRoom(result.state, {lighting: {kind: "intent", targets: ["cooking"], state: "OFF", source: "activity", owner: "theatre"}}, config, later2(2000));
   assert.equal(payload(result, 0).state, "OFF");
-  assert.equal(result.status.control.cooking, "in-control");
-  assert.equal(result.traces.some((entry) => entry.event === "control" && entry.reason === "off"), true);
+  assert.deepEqual(result.state.control.cooking, {state: "overridden", owner: "theatre"});
 
-  result = publishRoom(result.state, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, later2(60000));
-  assert.equal(payload(result, 0).brightness, 254);
+  for (const state of ["ON", "TOGGLE"]) {
+    const motion = publishRoom(result.state, {lighting: {kind: "intent", targets: ["cooking"], state, source: "motion"}}, config, later2(60000));
+    assert.deepEqual(motion.outputs.filter((entry) => entry.lighting_command), [], state);
+    assert.equal(motion.state.desired.cooking, false);
+  }
+
+  // It was on, and the room's: back on, styled as the room would now.
+  result = publishRoom(result.state, {lighting: {kind: "release", owner: "theatre", source: "activity"}}, config, later2(120000));
+  assert.deepEqual(payload(result, 0), styledCommand(now));
+  assert.equal(result.status.control.cooking, "in-control");
+  assert.equal(result.state.desired.cooking, true);
+  assert.deepEqual(result.state.holds, {});
 });
 
 test("a person's change on an overridden light makes it manual; switching circadian on keeps other owners", () => {
@@ -469,6 +478,115 @@ test("a held light follows its owner, a newer owner, a person and a release", ()
   assert.equal(result.status.control.lamp, "in-control");
   assert.equal(output(result, 0).lighting_command?.target, "lamp");
   assert.equal(payload(result, 0).brightness, 254);
+});
+
+// The lamp held by film, then by reading on top of it.
+function stackedLamp() {
+  const held = heldLamp();
+  const result = heldIntent(held.state, {state: "ON", source: "scene", owner: "reading", values: {brightnessPct: 35.4}});
+  assert.deepEqual(result.state.holds.lamp?.owners.map(({owner}) => owner), ["film", "reading"]);
+  return result;
+}
+
+const release = (state: Parameters<typeof publishRoom>[0], owner: string | null, ms: number) =>
+  publishRoom(state, {lighting: {kind: "release", source: "scene", ...(owner ? {owner} : {})}}, heldConfig, later2(ms));
+const lampCommands = (result: ReturnType<typeof publishRoom>) =>
+  result.outputs.filter((entry) => entry.lighting_command?.target === "lamp").map((entry) => entry.payload);
+
+test("owners stack: releasing the newer gives the light to the one beneath with its values, then back to the room", () => {
+  let result = release(stackedLamp().state, "reading", 3000);
+  assert.deepEqual(lampCommands(result), [{state: "ON", brightness: 30, transition: 1}]);
+  assert.deepEqual(result.state.control.lamp, {state: "overridden", owner: "film"});
+  assert.deepEqual(controlOutputs(result), [["home/kitchen/lighting/lamp/control", {state: "overridden", owner: "film"}]]);
+
+  result = release(result.state, "film", 4000);
+  assert.deepEqual(lampCommands(result), [styledCommand(now, {restyle: true})]);
+  assert.equal(result.status.control.lamp, "in-control");
+});
+
+test("owners stack: releasing the one beneath first leaves the light to the newer, then back to the room", () => {
+  let result = release(stackedLamp().state, "film", 3000);
+  assert.deepEqual(lampCommands(result), []);
+  assert.deepEqual(result.state.control.lamp, {state: "overridden", owner: "reading"});
+  assert.deepEqual(controlOutputs(result), []);
+  assert.deepEqual(result.traces.filter(({reason}) => reason === "beneath-owner").map(({details}) => details), [{target: "lamp", owner: "film"}]);
+
+  result = release(result.state, "reading", 4000);
+  assert.deepEqual(lampCommands(result), [styledCommand(now, {restyle: true})]);
+  assert.equal(result.status.control.lamp, "in-control");
+});
+
+test("an owner beneath asking again updates its own entry and leaves the light to the newer", () => {
+  let result = heldIntent(stackedLamp().state, {state: "ON", source: "activity", owner: "film", values: {brightnessPct: 50}}, 3000);
+  assert.deepEqual(lampCommands(result), []);
+  assert.equal(result.state.control.lamp?.state === "overridden" && result.state.control.lamp.owner, "reading");
+  // The newer asking again changes the light.
+  result = heldIntent(result.state, {state: "OFF", source: "scene", owner: "reading"}, 3500);
+  assert.deepEqual(lampCommands(result), [{state: "OFF"}]);
+  result = release(result.state, "reading", 4000);
+  assert.deepEqual(lampCommands(result), [{state: "ON", brightness: 127, transition: 1}]);
+  assert.deepEqual(result.state.control.lamp, {state: "overridden", owner: "film"});
+});
+
+test("a release without an owner lets go of every owner and gives the light back to the room", () => {
+  const result = release(stackedLamp().state, null, 3000);
+  assert.deepEqual(lampCommands(result), [styledCommand(now, {restyle: true})]);
+  assert.equal(result.status.control.lamp, "in-control");
+  assert.deepEqual(result.state.holds, {});
+});
+
+test("the last release gives a light that was off its off back", () => {
+  let result = publishRoom(fresh(), {lighting: {kind: "intent", targets: ["lamp"], state: "ON", source: "scene", owner: "bath", values: {brightnessPct: 50}}}, heldConfig, now);
+  assert.deepEqual(lampCommands(result), [{state: "ON", brightness: 127, transition: 1}]);
+  result = release(result.state, "bath", 1000);
+  assert.deepEqual(lampCommands(result), [{state: "OFF"}]);
+  assert.equal(result.status.control.lamp, "in-control");
+  assert.equal(result.state.desired.lamp, false);
+});
+
+test("the last release gives a person's light their values back, and it stays theirs", () => {
+  let result = publishRoom(fresh(), {lighting: {kind: "intent", targets: ["lamp"], state: "ON", source: "dashboard", manual: true, values: {brightnessPct: 40}}}, heldConfig, now);
+  result = publishRoom(result.state, {topic: "home/kitchen/light/lamp", payload: {state: "ON", brightness: 102, color_temp: 370}, lighting: {kind: "observed"}}, heldConfig, later2(500));
+  assert.equal(result.status.control.lamp, "manual");
+  result = heldIntent(result.state, {state: "OFF", source: "scene", owner: "bath"}, 1000);
+  assert.deepEqual(lampCommands(result), [{state: "OFF"}]);
+  result = release(result.state, "bath", 2000);
+  assert.deepEqual(lampCommands(result), [{state: "ON", brightness: 102, color_temp: 370, transition: 1}]);
+  assert.equal(result.status.control.lamp, "manual");
+});
+
+test("a person switching on a light an owner holds off makes it theirs, and the owner's release leaves it alone", () => {
+  let result = heldIntent(heldLamp().state, {state: "OFF", source: "scene", owner: "film"});
+  result = heldIntent(result.state, {state: "ON", source: "wall", person: true}, 3000);
+  assert.deepEqual(lampCommands(result), [{state: "ON"}]);
+  assert.equal(result.status.control.lamp, "manual");
+  assert.equal(result.traces.find(({event}) => event === "control")?.reason, "person-changed");
+  result = release(result.state, "film", 4000);
+  assert.deepEqual(lampCommands(result), []);
+  assert.equal(result.status.control.lamp, "manual");
+
+  // At the light itself: someone else's ON on its command path.
+  result = heldIntent(heldLamp().state, {state: "OFF", source: "scene", owner: "film"});
+  result = publishRoom(result.state, {topic: "home/kitchen/light/lamp/set", payload: {state: "ON"}, lighting: {kind: "command-observed", target: "lamp"}}, heldConfig, later2(60000));
+  assert.equal(result.status.control.lamp, "manual");
+  assert.deepEqual(result.state.holds, {});
+});
+
+test("the stack survives a redeploy, and a room held under 6.0.0's state is released as 6.0.0 released it", () => {
+  // As a context store keeps it.
+  const saved = JSON.parse(JSON.stringify(stackedLamp().state)) as RoomState;
+  let result = release(saved, "reading", 3000);
+  assert.deepEqual(lampCommands(result), [{state: "ON", brightness: 30, transition: 1}]);
+
+  const {holds: _holds, ...old} = JSON.parse(JSON.stringify(heldLamp().state)) as RoomState;
+  result = release(old, "film", 3000);
+  assert.deepEqual(lampCommands(result), [styledCommand(now, {restyle: true})]);
+  assert.equal(result.status.control.lamp, "in-control");
+  // A newer owner on top of it, released, hands it back to the old one as it is.
+  result = heldIntent(old, {state: "ON", source: "scene", owner: "reading", values: {brightnessPct: 35.4}}, 3000);
+  result = release(result.state, "reading", 4000);
+  assert.deepEqual(lampCommands(result), []);
+  assert.deepEqual(result.state.control.lamp, {state: "overridden", owner: "film"});
 });
 
 test("a wall-switch press reaches a held light like any person", () => {
@@ -926,7 +1044,8 @@ test("refresh: true no longer changes an intent's transition", () => {
 });
 
 test("a release restyles over the style's transition; switching circadian on takes back what a person set", () => {
-  let result = publishRoom(fresh(), {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "activity", owner: "theatre", values: {brightnessPct: 20}}}, config, now);
+  let result = publishRoom(fresh(), {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "motion"}}, config, now);
+  result = publishRoom(result.state, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "activity", owner: "theatre", values: {brightnessPct: 20}}}, config, later(500));
   result = publishRoom(result.state, {lighting: {kind: "release", owner: "theatre", source: "activity"}}, config, later(1000));
   assert.deepEqual(payload(result, 0), styledCommand(now, {restyle: true}));
   result = publishRoom(result.state, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "wall", manual: true, values: {brightnessPct: 100}}}, config, later(2000));

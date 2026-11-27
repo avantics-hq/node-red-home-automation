@@ -743,8 +743,8 @@ The room lighting controller gives each target one control state:
 
 - `in-control`: the room styles the light with the style it is sent, such as a
   circadian lighting policy's (the default).
-- `overridden`: another owner, such as an activity or a scene, holds the light;
-  styles leave it alone until it is released.
+- `overridden`: another owner, such as an activity or a scene, holds the light
+  on or off; styles and owner-less intents leave it alone until it is released.
 - `manual`: a person changed the light: an intent with `manual: true` (a wall
   switch's double press), or someone else's command with values on its command
   topic. An intent's values alone don't make a light manual. Switching circadian
@@ -760,8 +760,9 @@ nothing names can keep its start-time style all day; to bring it back into step,
 switch circadian lighting on (for example with the Home Assistant circadian
 switch), or let motion or a wall switch name it.
 
-Add `owner` to an intent to override the targets it switches on. With
-`preserveManual: true`, manual lights are skipped:
+Add `owner` to an intent to hold its targets, on or off: an owner's OFF keeps
+the light off, so motion can't switch it back on. With `preserveManual: true`,
+manual lights are skipped:
 
 ```js
 msg.lighting = {
@@ -795,13 +796,30 @@ hands back lights the other still holds. A flow that sets its own `owner` must
 set it on every lighting message from the node, releases included, or leave it
 to the node's Owner setting.
 
+Owners stack, per light. The first owner to take a light records what it was:
+its control state, whether it was on, and the brightness and colour temperature
+it last reported. A newer owner goes on top and sets the light; the owner
+beneath keeps its own request, and sending again updates it without changing
+the light.
+
 Release overridden targets (default: all; with `owner`, only that owner's
-lights). Released lights that are on are restyled with the room's style, over
-the style's own transition:
+lights):
 
 ```js
 msg.lighting = {kind: "release", targets: ["wall", "lamp"], owner: "theatre"};
 ```
+
+- Releasing the owner on top hands the light to the owner beneath, with what
+  that owner last asked for.
+- Releasing an owner beneath a newer one just drops it; the light is left as
+  it is.
+- When the last owner lets go (or a release without `owner`), the light goes
+  back to what was recorded. A light the room was running is the room's again,
+  on or off as it was: on, it takes the room's style as it is now (over the
+  style's own transition if it was still on, the room's turn-on transition if
+  it was held off). A light that was off goes off. A light a person had set
+  gets the brightness and colour temperature it last reported, and stays
+  `manual`.
 
 A held (`overridden`) light changes only for an intent with an `owner` (its own,
 or a newer owner who takes it over), a person (`manual: true`, an external
@@ -811,7 +829,9 @@ and are traced as `ignored held-by`; their other targets are still handled.
 The switch policy marks presses with `person: true`. Owner-less
 intents, with or without values, reach a held light only with `manual: true` or
 `person: true`; a flow acting for a person, such as a dashboard, sets one.
-Switching a light off by its owner or a person returns it to `in-control`. With
+A person switching a held light off returns it to `in-control`; a person
+switching on a light an owner holds off makes it `manual`. Either way it leaves
+every owner, and their later releases leave it alone. With
 **Publish state over MQTT** on (new nodes start with it off; nodes saved before
 the setting existed keep it on), on startup and whenever a target's state
 changes, the controller sends a retained message on its command output:

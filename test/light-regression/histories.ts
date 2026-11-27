@@ -126,3 +126,14 @@ export function generateHistories(count = 400, firstSeed = 1): RegressionHistory
 export function fingerprintOf(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex").slice(0, 32);
 }
+
+// A history without owners: no owner intents and no releases. The rest of
+// the room behaves as it did in 6.0.0, so these must match it exactly.
+export function withoutOwners(history: RegressionHistory): RegressionHistory {
+  return {...history, events: history.events.filter((event) => event.type !== "release" && !(event.type === "intent" && event.lighting.owner))};
+}
+
+// Whether an event is an owner's: an owner intent or a release.
+export function isOwnerEvent(event: RegressionEvent): boolean {
+  return event.type === "release" || (event.type === "intent" && Boolean(event.lighting.owner));
+}
