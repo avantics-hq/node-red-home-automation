@@ -2574,6 +2574,28 @@ test("a room and a zigbee2mqtt light node, wired as in the examples: commands, r
   assert.equal((room.context().get("state") as {control: Record<string, {state: string}>}).control.main?.state, "manual");
 });
 
+test("two zigbee2mqtt light nodes fed one room's light output: each acts on its own light and ignores the other's silently", async (t) => {
+  type Envelope = Array<Array<Record<string, unknown>> | Record<string, unknown> | null>;
+  const room = new (runtime(registerRoom).Constructor)({id: "room-2", targets: "[{\"id\":\"main\"},{\"id\":\"side\"}]", area: "hall", publishState: false, discovery: false});
+  const main = new (runtime(registerZ2mLight).Constructor)({id: "light-main", target: "main", baseTopic: "z2m", friendlyName: "hall-main"});
+  const side = new (runtime(registerZ2mLight).Constructor)({id: "light-side", target: "side", baseTopic: "z2m", friendlyName: "hall-side"});
+  t.after(() => close(room));
+  const port = (sent: unknown[], index: number) => sent.flatMap((envelope) => {
+    const out = (envelope as Envelope)[index];
+    return out === null || out === undefined ? [] : Array.isArray(out) ? out : [out];
+  });
+
+  const on = await receive<Envelope>(room, {lighting: {kind: "intent", targets: ["main"], state: "ON", source: "wall", manual: true, values: {brightnessPct: 25}}});
+  const command = port(on, 1)[0]!;
+  assert.deepEqual(await receive<Envelope>(side, command), [], "nothing from the other light");
+  const published = await receive<Envelope>(main, command);
+  assert.deepEqual(port(published, 0), [{topic: "z2m/hall-main/set", payload: {state: "ON", brightness: 64, transition: 1}, retain: false}]);
+  assert.deepEqual([main.errors, side.errors], [[], []]);
+  // The other light still works afterwards.
+  const report = await receive<Envelope>(side, {topic: "z2m/hall-side", payload: {state: "OFF"}});
+  assert.deepEqual(port(report, 1).map((entry) => (entry.light as {kind: string}).kind), ["observed"]);
+});
+
 test("activity lighting takes a light's reading as the room passes it on", async (t) => {
   const node = new (runtime(registerActivityLighting).Constructor)({area: "lounge", owner: "activity",
     profiles: JSON.stringify({off: {targets: [], values: {}}, tv: {targets: ["wall"], values: {brightnessPct: 25}}}), confirmationTimeoutMs: 15000, maxAttempts: 2});
