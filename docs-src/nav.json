@@ -3,6 +3,7 @@
     "label": "Get started",
     "items": [
       {"label": "Introduction", "href": "index.html"},
+      {"label": "Install", "href": "install.html"},
       {"label": "Your first room", "href": "guide-room-lighting.html"}
     ]
   },
@@ -19,9 +20,48 @@
     ]
   },
   {
-    "label": "Reference",
+    "label": "Lighting nodes",
+    "items": [
+      {"label": "Room lighting controller", "href": "node-room-controller.html"},
+      {"label": "Circadian lighting policy", "href": "node-circadian-policy.html"},
+      {"label": "Motion lighting policy", "href": "node-motion-policy.html"},
+      {"label": "Occupancy fusion", "href": "node-occupancy-fusion.html"},
+      {"label": "Switch lighting policy", "href": "node-switch-policy.html"},
+      {"label": "House schedule node", "href": "node-house-schedule.html"},
+      {"label": "House schedule MQTT", "href": "node-house-schedule-mqtt.html"}
+    ]
+  },
+  {
+    "label": "Cover nodes",
     "items": [
       {"label": "Cover controller", "href": "node-cover-controller.html"},
+      {"label": "Cover group", "href": "node-cover-group.html"}
+    ]
+  },
+  {
+    "label": "Home theatre nodes",
+    "items": [
+      {"label": "Theatre activity controller", "href": "node-theatre-activity-controller.html"},
+      {"label": "Theatre state contract", "href": "node-theatre-state-contract.html"},
+      {"label": "Display mode controller", "href": "node-display-mode-controller.html"},
+      {"label": "AVR controller", "href": "node-avr-controller.html"},
+      {"label": "Source capability controller", "href": "node-source-capability-controller.html"},
+      {"label": "Backlighting controller", "href": "node-backlighting-controller.html"},
+      {"label": "Activity lighting controller", "href": "node-activity-lighting-controller.html"}
+    ]
+  },
+  {
+    "label": "Adapter nodes",
+    "items": [
+      {"label": "Shelly cover", "href": "node-shelly-cover.html"},
+      {"label": "Zigbee2MQTT cover", "href": "node-z2m-cover.html"},
+      {"label": "Shelly switch", "href": "node-shelly-switch.html"}
+    ]
+  },
+  {
+    "label": "Contracts",
+    "items": [
+      {"label": "Theatre MQTT contract", "href": "contract-theatre-mqtt.html"},
       {"label": "Contract examples", "href": "contract-examples.html"}
     ]
   },

@@ -16,9 +16,9 @@ window.DOCS_SEARCH = [
  {
   "title": "Introduction",
   "section": "Get the package",
-  "description": "In Node-RED, choose Manage palette → Install and search for @avantics/node-red-home-automation . Or run this f",
+  "description": "In Node-RED, choose Manage palette → Install and search for @avantics/node-red-home-automation , then find the",
   "url": "index.html#install",
-  "text": "In Node-RED, choose Manage palette → Install and search for @avantics/node-red-home-automation . Or run this from your Node-RED user directory, then restart Node-RED: Terminal npm install @avantics/node-red-home-automation Find the nodes in the home automation palette category. Import a wiring example from Import → Examples . Check before updating This package is under active development. Pin the version you use, read the release notes and check your flows after an update."
+  "text": "In Node-RED, choose Manage palette → Install and search for @avantics/node-red-home-automation , then find the nodes in the home automation palette category. Install has the requirements, npm and release-file installs, the example flows and the recommended context store."
  },
  {
   "title": "Introduction",
@@ -47,6 +47,75 @@ window.DOCS_SEARCH = [
   "description": "See what is complete, next and planned on the public roadmap . Run the contract examples to explore the messag",
   "url": "index.html#project",
   "text": "See what is complete, next and planned on the public roadmap . Run the contract examples to explore the messages without a device. Sources: README and package metadata."
+ },
+ {
+  "title": "Install",
+  "description": "Add the package to Node-RED from the palette manager, npm or a release tarball, then set up a file context store so the nodes keep their state across deploys and restarts.",
+  "url": "install.html",
+  "text": "Add the package to Node-RED from the palette manager, npm or a release tarball, then set up a file context store so the nodes keep their state across deploys and restarts."
+ },
+ {
+  "title": "Install",
+  "section": "Before you start",
+  "description": "The package declares what it needs in its package.json . Check both before you add it. Requirements Needs Vers",
+  "url": "install.html#before",
+  "text": "The package declares what it needs in its package.json . Check both before you add it. Requirements Needs Version Declared in Node-RED 5.0.0 or newer node-red.version : >=5.0.0 Node.js 24 or newer engines.node : >=24 Node-RED 5 runs on older Node.js than this package. Node-RED 5 itself accepts Node.js 22.9, but this package needs Node.js 24 or newer. Check the Node.js version that runs your Node-RED before you add the package. For the nodes that talk to devices or publish state, you also need an MQTT broker and an MQTT broker config node in Node-RED. Home Assistant is optional: it is a panel that shows state and sends requests, never the path to a device."
+ },
+ {
+  "title": "Install",
+  "section": "Add it from the palette manager",
+  "description": "Open the palette manager. In the Node-RED editor, choose Manage palette → Install . Search for the package. Se",
+  "url": "install.html#palette",
+  "text": "Open the palette manager. In the Node-RED editor, choose Manage palette → Install . Search for the package. Search for @avantics/node-red-home-automation and install it. Find the nodes. They appear in the home automation category of the palette."
+ },
+ {
+  "title": "Install",
+  "section": "Add it with npm",
+  "description": "Run this from your Node-RED user directory (usually ~/.node-red ), then restart Node-RED: Terminal · Node-RED ",
+  "url": "install.html#npm",
+  "text": "Run this from your Node-RED user directory (usually ~/.node-red ), then restart Node-RED: Terminal · Node-RED user directory npm install @avantics/node-red-home-automation To pin a version, name it, then restart Node-RED. Each version is listed on the GitHub releases page . Terminal · pin a version npm install @avantics/node-red-home-automation@<version> Check before updating. This package is under active development. Pin the version you use, read the release notes and check your flows after an update. A major version can require changes to saved flows: the 6.0.0 notes list what to migrate."
+ },
+ {
+  "title": "Install",
+  "section": "Add it from a release tarball",
+  "description": "Each GitHub Release also attaches the package tarball and its SHA-256 checksum. Check the checksum of the file",
+  "url": "install.html#tarball",
+  "text": "Each GitHub Release also attaches the package tarball and its SHA-256 checksum. Check the checksum of the file you downloaded against the one in the release, then add it in either way: In the editor, choose Manage palette → Install → Upload module and pick the tarball. From your Node-RED user directory, install the tarball with npm and restart Node-RED. Terminal · Node-RED user directory npm install /path/to/avantics-node-red-home-automation-<version>.tgz"
+ },
+ {
+  "title": "Install",
+  "section": "Import an example flow",
+  "description": "Add the nodes from the home automation palette category, then configure the area, device hosts, MQTT topics, s",
+  "url": "install.html#examples",
+  "text": "Add the nodes from the home automation palette category, then configure the area, device hosts, MQTT topics, source mappings and timing limits for your home. To start from a wired flow instead, choose Import → Examples in the editor and pick one of these from the package: Example flows in the package Example What it shows Room lighting Motion and illuminance feed occupancy fusion and the motion policy, a wall switch feeds the switch policy, and a circadian lighting policy styles the room; all send intents to the room lighting controller. House schedule A house schedule shared by two rooms through their circadian lighting policies, with the optional house schedule MQTT node changing its times. Shelly switch A wall switch on a Shelly Gen2 relay in detached mode driving a room’s lights through the switch policy, with no function nodes. Cover control A position cover owned by the cover controller, with function nodes that map to and from a Zigbee2MQTT cover. Cover pair Two covers moved as one by a cover group, which reports ready only when both confirm. Shelly cover A Shelly Gen2 device in cover mode, owned by the cover controller, with no function nodes. Home theatre equipment The AVR, display, source capability and backlighting controllers, each taking an intent and reporting target state. Home theatre activity The theatre state contract and activity controller planning each target and collecting every controller’s state, with activity lighting. The examples use synthetic names and inject nodes in place of devices. Replace the injects with your MQTT in nodes and point the outputs at your broker before you rely on them. The files are also in examples/ on GitHub."
+ },
+ {
+  "title": "Install",
+  "section": "Set up a file context store",
+  "description": "The nodes keep what they are doing in Node-RED’s node context. By default Node-RED keeps context in memory and",
+  "url": "install.html#context-store",
+  "text": "The nodes keep what they are doing in Node-RED’s node context. By default Node-RED keeps context in memory and deletes a node’s context whenever the node stops: on a full deploy, on a “Modified flows” deploy of its flow (which restarts every node in that flow, changed or not), on a “Modified nodes” deploy of the node itself, and on every restart. Configure the file context store so it survives. In settings.js in your Node-RED user directory, set: settings.js contextStorage: { default: { module: \"localfilesystem\" } }, Then restart Node-RED. The file store writes changes to disk every 30 seconds by default, so a change made just before Node-RED stops can still be lost. Without a context store, after a node is redeployed or Node-RED restarts: A room forgets which lights are held or manual. Every light an activity held, or a person set by hand, is back under the room’s control, so the next style restyles them. Changes made at runtime go back to the node’s settings. For example motion lighting’s enable, vacancy delay and lux cutoff, a circadian policy’s circadian lighting, sleep, and wake and bed times, and the house schedule’s times, set from Home Assistant or a message. The theatre starts its counts again. Its counters and operational SLO samples restart, and the activity controller no longer knows the current activity. At its next startup recovery it works it out from what the devices report; if no single activity matches, it switches to the recovery off activity. Work in progress is not recovered. A motion off-timer that was running, or a theatre device change still being confirmed, is gone. The node starts afresh and goes by what it next observes. Old retained topics are not cleared. A node can’t remember what it published, so after you change an area, base topic, discovery prefix or targets, the old retained topics and Home Assistant entities stay until you remove them yourself."
+ },
+ {
+  "title": "Install",
+  "section": "Connect the broker and send a startup message",
+  "description": "A node that publishes state hands its MQTT messages to an MQTT out node on your broker. Two settings make that",
+  "url": "install.html#mqtt",
+  "text": "A node that publishes state hands its MQTT messages to an MQTT out node on your broker. Two settings make that reliable. Send each publishing node a startup message once, a few seconds after a deploy. The example flows use an inject node set to fire once after 3 seconds. By then the MQTT broker node has usually connected; a message sent before it connects is dropped, along with the discovery and state it carried. The room example sends msg.lighting = {kind: \"startup\"} ; each node’s reference page gives its own startup message. Set the broker node’s availability messages. Each publishing node sends a retained online once the flows have started and offline when it stops. On a full deploy, a restart or a shutdown, Node-RED stops the MQTT out node at the same moment, so those messages can’t get through. Set the MQTT broker node’s Birth message to online , and its Close message and Will message to offline , all retained, on the same availability topic; with several publishing nodes, the broker can cover one of them. Removing a node’s entities. Deleting a publishing node clears its Home Assistant entities and retained state only when you deploy with “Modified nodes” or “Modified flows”. After a full deploy, delete the device in Home Assistant instead: Settings → Devices & services → Devices, open the device, then Delete."
+ },
+ {
+  "title": "Install",
+  "section": "Configuration and security",
+  "description": "The repository contains no home-network addresses, home coordinates or credentials. Device hosts and room coor",
+  "url": "install.html#security",
+  "text": "The repository contains no home-network addresses, home coordinates or credentials. Device hosts and room coordinates are settings you provide where a node needs them. The display mode controller stores its TV pre-shared key as a Node-RED credential. Keep credentials in Node-RED’s encrypted credential store rather than in flow fields or repository files. Report a suspected vulnerability privately, using the process in SECURITY.md , not through a public issue."
+ },
+ {
+  "title": "Install",
+  "section": "Next",
+  "description": "Start with one room. The covers and home theatre guides build on the same pattern: one controller owns each de",
+  "url": "install.html#next",
+  "text": "Start with one room. The covers and home theatre guides build on the same pattern: one controller owns each device’s commands. Light your first room Combine motion, a wall switch and a circadian policy in one room lighting controller. Follow the room lighting guide → Wire a cover Connect a blind, shutter or curtain and confirm what the motor actually did. Follow the covers guide → For the receiver, display and sources, see Home theatre ."
  },
  {
   "title": "Light your first room",
@@ -331,45 +400,101 @@ window.DOCS_SEARCH = [
   "text": "Read the outcome What you see What it means Moving, then ready Fresh reports confirm the cover has stopped at its target. not-calibrated / position-unknown The device cannot provide a usable position. Calibrate it or restore its position knowledge; do not invent a reading. unavailable The device is offline. No device command is sent; it is read again when it returns. For output messages, optional Home Assistant discovery and timing defaults, open the cover controller reference . Sources: README Covers; cover controller, cover group and shelly cover editor help."
  },
  {
-  "title": "Home theatre",
-  "description": "Activity orchestration across display, receiver, source, lighting and backlighting, with observed completion.",
+  "title": "Run a home theatre",
+  "description": "Wire the theatre state contract, the theatre activity controller and the five equipment controllers, then request, check and recover activities.",
   "url": "home-theatre.html",
-  "text": "A reusable controller contract for coordinating target owners from explicit activity requests and fresh observations."
+  "text": "One request, such as “tv” or “off”, drives the display, receiver, media source, room lights and TV backlight together. Each device keeps one owner, and the activity is ready only when every required device has been seen doing what was asked."
  },
  {
-  "title": "Home theatre",
-  "section": "Composed target owners",
-  "description": "The activity layer emits semantic intent. Each target controller retains its own safe sequencing, transport an",
+  "title": "Run a home theatre",
+  "section": "Before you wire it",
+  "description": "A home theatre is built from seven nodes. Two coordinate the activity, and five each own one kind of device: T",
+  "url": "home-theatre.html#before",
+  "text": "A home theatre is built from seven nodes. Two coordinate the activity, and five each own one kind of device: The theatre nodes Palette name Type Owns theatre state contract home-theatre-state-contract Turns MQTT activity requests into activity intents, and publishes the activity controller’s state as retained MQTT topics, with optional Home Assistant discovery. theatre activity home-theatre-activity-controller The latest request’s activity: plans each target, collects its evidence and decides when the activity is ready, waiting or failed. display mode home-display-mode-controller The TV, the projector and the projector screen, for the off , tv and projector modes. AVR controller home-avr-controller The receiver’s power, main zone, source and bounded volume. source capability controller home-source-capability-controller Whether a media source is available, active, running an application or playing. TV backlighting home-backlighting-controller The TV backlight’s power. activity lighting home-activity-lighting-controller The activity’s style for room lights that are already on, through a room lighting controller . A broker connection in Node-RED, for the request topic and the retained state. A transport for each device the package doesn’t reach itself: a TCP connection for the receiver, and your own adapters for the media source, the TV backlight and the projector’s infrared power toggle. The display controller reaches the TV and the screen directly over their LAN APIs. A room lighting controller for the lights the activity styles. See Light a room . Home Assistant is optional. It can show the activity and request one, through the MQTT topics; it is never the path to a device."
+ },
+ {
+  "title": "Run a home theatre",
+  "section": "How the pieces divide the work",
+  "description": "The activity controller sends each target what it should end up as, never how to get there. Each equipment con",
   "url": "home-theatre.html#targets",
-  "text": "The activity layer emits semantic intent. Each target controller retains its own safe sequencing, transport and confirmation policy. Display Mode and power intent Receiver Power, source and bounded volume ownership Media source Capability and readiness Room lighting Ownership-preserving style Backlighting Observed power state"
+  "text": "The activity controller sends each target what it should end up as, never how to get there. Each equipment controller keeps its own sequencing, transport, retries and confirmation, and reports back what it observed. Stale work is inert Every request gets a generation number. Timers, results and observations carry it, and one from an older request cannot change or complete a newer one. Readiness is observed A required target counts only with a fresh report from its device. A command that was sent, or acknowledged, is not a confirmation. Manual control is kept A change made by hand becomes a manual override. No controller fights it; the next request takes over again. Volume has one owner The receiver controller bounds, sends and confirms volume requests, then lets go, so a later change by hand becomes the new baseline."
  },
  {
-  "title": "Home theatre",
-  "section": "Activity lifecycle",
-  "description": "Every request receives a monotonic generation. Delayed work from older generations cannot mutate current state",
-  "url": "home-theatre.html#lifecycle",
-  "text": "Every request receives a monotonic generation. Delayed work from older generations cannot mutate current state. Requested Validate identity and activity. Preparing Refresh target evidence. Transitioning Dispatch semantic target intent. Confirming Require fresh mandatory evidence. Terminal Report ready, waiting or failed."
+  "title": "Run a home theatre",
+  "section": "Wire the whole set",
+  "description": "Requests flow down from the state contract to the equipment controllers. Evidence flows back up from each cont",
+  "url": "home-theatre.html#wiring",
+  "text": "Requests flow down from the state contract to the equipment controllers. Evidence flows back up from each controller’s output 2 to the activity controller, whose state goes back to the contract for publishing. MQTT in home/<area>/theatre/request → theatre state contract Request → intent ⇄ theatre activity Plans and aggregates → switch + change Route by target Equipment controllers display · avr · source · lighting · backlighting → Your transports Output 1 → Devices Observed state back in Each equipment controller’s output 2 goes straight back to the activity controller. The contract’s output 2 goes to MQTT out. Connections for the whole theatre From Connect to Why MQTT in on home/<area>/theatre/request State contract input Activity requests. Retained requests are ignored. State contract output 1 Activity controller input Activity intents, each with a new generation. State contract output 2 MQTT out Retained state, availability and, if switched on, Home Assistant discovery. Activity controller output 1 Switch node on msg.theatreCommand.target One command per target. See route commands by target . Activity controller output 2 State contract input Activity events and the complete state snapshot to publish. Each change node Its equipment controller’s input The command, moved onto the property that controller reads. Each equipment controller’s output 1 Its device transport Commands for the device. Activity lighting’s output 1 goes to the room lighting controller. Each equipment controller’s output 2 Activity controller input Target state as msg.theatre . The controller’s own events on the same wire are ignored by the activity controller. Your device readings Their equipment controller’s input Observations. A controller confirms only from these. Display controller output 3 Your projector meter Power queries, when the controller has no meter host. See projector power . AVR controller output 3 MQTT out Optional receiver state and Home Assistant discovery. After a deploy, send the display and AVR controllers {kind: \"startup\"} on their own property ( msg.display , msg.avr ), so they read their devices again rather than trusting saved state. The state contract announces itself once the flows start, and again at msg.theatreStateContract = {kind: \"startup\"} ."
  },
  {
-  "title": "Home theatre",
-  "section": "Behavioral guarantees",
-  "description": "Stale work is inert Timers, command results and observations carry generation identity and cannot complete a n",
-  "url": "home-theatre.html#guarantees",
-  "text": "Stale work is inert Timers, command results and observations carry generation identity and cannot complete a newer request. Readiness is honest Mandatory targets require fresh observations. Unsupported or unobservable capabilities remain explicit. Manual control is preserved Unsolicited target changes become ownership evidence rather than a reason to fight the user. Volume control has one owner Absolute and relative requests share receiver bounds, observed confirmation and an explicit release point for later manual adjustment. Recovery is bounded Restart refreshes observations without blindly replaying state-changing commands. Failure is actionable Retries, fallback use, target availability and transition latency remain visible through one state contract. Policies stay transport-neutral Activity profiles name semantic outcomes; adapters own protocol-specific operations."
+  "title": "Run a home theatre",
+  "section": "Route commands by target",
+  "description": "The activity controller sends msg.theatreCommand = {target, kind, requestId, generation, …} , with kind intent",
+  "url": "home-theatre.html#routing",
+  "text": "The activity controller sends msg.theatreCommand = {target, kind, requestId, generation, …} , with kind intent for a new request or refresh to re-confirm, and the activity’s wanted values for that target. Your flow delivers each one to the matching controller: one switch node on msg.theatreCommand.target with five outputs, and a change node per target that moves msg.theatreCommand to the controller’s property. Where each target command goes target Move to Controller Wanted values display msg.display display mode mode : off , tv or projector avr msg.avr AVR controller power ( on or standby ) and an optional source source msg.sourceCapability source capability controller action ( activate or deactivate ), sourceId and readiness lighting msg.activityLighting activity lighting profile : a profile name on the activity lighting node backlighting msg.backlighting TV backlighting power : on or off In the switch node, set the property to msg.theatreCommand.target and add one == rule per target. In each change node, use Move from msg.theatreCommand to the property in the table."
  },
  {
-  "title": "Home theatre",
-  "section": "Public contract",
-  "description": "Node-RED adapters bridge the pure reducer to MQTT and Home Assistant without moving policy into flow wiring. P",
-  "url": "home-theatre.html#contract",
-  "text": "Node-RED adapters bridge the pure reducer to MQTT and Home Assistant without moving policy into flow wiring. Public contract Surface Contract Invariant Request Unique request ID, configured activity and timestamp Retained requests are inert Desired state Activity and generation One current request identity Target evidence Status, observation time, classification and failure Older evidence cannot overwrite newer evidence Outcome Current activity, phase, availability and failure Ready requires all mandatory targets Operations Latency, retries, fallbacks, outcomes and objective status Expected waiting does not become a false failure"
+  "title": "Run a home theatre",
+  "section": "Describe the activities",
+  "description": "Two settings name the activities, and they must agree. The state contract’s Activities JSON lists the names it",
+  "url": "home-theatre.html#activities",
+  "text": "Two settings name the activities, and they must agree. The state contract’s Activities JSON lists the names it accepts, such as [\"off\",\"tv\"] . The activity controller’s Profiles JSON gives each of them every target’s wanted values. Profile names start with a lower-case letter, followed by lower-case letters, digits, _ or - . theatre activity · Profiles JSON { \"off\": { \"display\": {\"mode\": \"off\"}, \"avr\": {\"power\": \"standby\"}, \"source\": {\"action\": \"deactivate\", \"readiness\": \"optional\"}, \"lighting\": {\"profile\": \"off\"}, \"backlighting\": {\"power\": \"off\"} }, \"tv\": { \"display\": {\"mode\": \"tv\"}, \"avr\": {\"power\": \"on\", \"source\": \"shield\"}, \"source\": {\"action\": \"activate\", \"sourceId\": \"streamer\", \"readiness\": \"required\"}, \"lighting\": {\"profile\": \"tv\"}, \"backlighting\": {\"power\": \"on\"} } } Every profile names all five targets. A profile that leaves one out is an invalid configuration. The source’s readiness decides whether it is waited for. required holds the activity at waiting_for_source until the source is confirmed; optional lets the activity be ready without it. An activate needs a sourceId ; a deactivate without one acts on the previous activity’s source. Names on the other nodes must exist. The AVR’s source is a key in the AVR controller’s Sources (by default {\"shield\":\"SAT/CBL\",\"playstation\":\"GAME\"} ), the sourceId a key in the source controller’s Source capabilities , and the lighting profile a key in the activity lighting node’s Profiles JSON . The activity lighting node’s profiles give targets and values in the package’s own units, for example {\"off\": {\"targets\": [], \"values\": {}}, \"tv\": {\"targets\": [\"main\"], \"values\": {\"brightnessPct\": 25, \"colorTempKelvin\": 2500}}} . It styles only lights that are already on and not manually owned."
  },
  {
-  "title": "Home theatre",
-  "section": "Source-level proof",
-  "description": "The package test suite covers successful activities, optional degradation, mandatory failure, restart, superse",
-  "url": "home-theatre.html#proof",
-  "text": "The package test suite covers successful activities, optional degradation, mandatory failure, restart, supersession, stale results, manual ownership, recovery and rolling operational objectives. Privacy boundary This reference describes generalized code behavior only. It intentionally omits device models, room names, addresses, entity identifiers, flow exports, activity history and operational records."
+  "title": "Run a home theatre",
+  "section": "Request an activity",
+  "description": "Publish a non-retained request on home/<area>/theatre/request , with a new request ID and one of the configure",
+  "url": "home-theatre.html#request",
+  "text": "Publish a non-retained request on home/<area>/theatre/request , with a new request ID and one of the configured activities. The request ID starts with a letter or digit and continues with letters, digits, . , _ , : or - , up to 128 characters. Inject → theatre state contract · request the tv activity msg.topic = \"home/<area>/theatre/request\"; msg.payload = {requestId: \"example-request-1\", activity: \"tv\"}; return msg; A new request ID is a new request. The contract gives it the next generation, and the newest request wins: the activity in hand is reported superseded . The same request again is a duplicate. It is passed on unchanged and starts nothing new. Reusing a request ID for a different activity is an error. An invalid request is an error on the message. An unknown activity or a malformed request ID is reported against the message, where a Catch node can see it. With Home Assistant discovery on, the contract adds a Requested activity selector that publishes the same request with a request ID of its own. The topics and payloads are listed in the Theatre MQTT contract ."
+ },
+ {
+  "title": "Run a home theatre",
+  "section": "How an activity completes",
+  "description": "The activity controller moves through these phases, shown in its node status as <activity>: <phase> : preparin",
+  "url": "home-theatre.html#complete",
+  "text": "The activity controller moves through these phases, shown in its node status as <activity>: <phase> : preparing The request is accepted, earlier target evidence is cleared, and one intent goes to every target. transitioning A required target is changing its device. confirming A required target has not yet reported fresh evidence, or is confirming what it observed. waiting_for_source Every required device is ready, but a source with readiness: \"required\" is not yet confirmed. This is expected waiting, not a failure. ready The display, receiver and backlight each reported ready within Freshness ms (default 30000 ), and so did the source if it is required. Room lighting is optional: a light that is not confirmed, or a source with readiness: \"optional\" that is not, leaves the activity ready with availability degraded and the target listed as degraded, rather than holding it back. Once ready, the activity controller sends each settled target a refresh at half the freshness window, and each controller answers it from fresh readings. A target that stops answering is asked up to three times, then shown as degraded with reason no-response ; it does not undo a ready activity, and it is asked again once per freshness window. Each equipment controller’s output 2 · target state msg.theatre = {kind: \"target_state\", target: \"avr\", requestId, generation, status: \"ready\", observedAt: \"2026-01-01T20:00:01.000Z\"};"
+ },
+ {
+  "title": "Run a home theatre",
+  "section": "How an activity fails",
+  "description": "A required target (display, receiver or backlight) that reports failed or unavailable fails the whole activity",
+  "url": "home-theatre.html#fail",
+  "text": "A required target (display, receiver or backlight) that reports failed or unavailable fails the whole activity: the phase becomes failed , the current activity unknown , and the status shows <activity>: <reason> . The failure names the target, the operation and the reason the target gave, or unavailable or target-failed when it gave none. Common failure and rejection reasons Reason From What it means no-reading display mode A device didn’t report within Query timeout milliseconds , after Maximum idempotent attempts . The failure names the device. screen-not-calibrated display mode A Screen viewing position is set, but the screen has no position. See the screen viewing position . no-response theatre activity A target never answered the activity controller’s refreshes before the activity first completed. stale-generation , request-conflict , generation-conflict theatre activity A request was rejected : it was older than the one in hand, or reused its request ID or generation for something else. A failed activity stays failed until the next request. Fix the cause, then request the activity again with a new request ID."
+ },
+ {
+  "title": "Run a home theatre",
+  "section": "Manual overrides and recovery",
+  "description": "When someone changes the display, receiver, source or backlight by hand after an activity is ready, that contr",
+  "url": "home-theatre.html#manual",
+  "text": "When someone changes the display, receiver, source or backlight by hand after an activity is ready, that controller reports a manual override instead of sending a correcting command. The activity controller’s phase becomes manual_override , with availability degraded . A newer request takes over again. Restart with saved state. Node-RED keeps a node’s state across a restart only with a context store configured; see the README’s file context store setup. A controller then re-reads its devices rather than replaying old commands. Restart with nothing saved. The activity controller reads every target. If fresh display, receiver, source and backlight readings match exactly one profile, it adopts that activity without sending a command. With missing or ambiguous evidence, the activity is unknown and the phase idle , and nothing is commanded until the next request: a redeploy never switches a running activity off. A target that restarted alone. It takes the activity’s wanted values from the next refresh and only reads its device: ready if the device already matches, or a manual override with reason adopted-mismatch if it doesn’t, sending nothing until the next request."
+ },
+ {
+  "title": "Run a home theatre",
+  "section": "Ask the receiver for a volume",
+  "description": "Send volume requests to the AVR controller rather than receiver commands. Volume is in dB: valueDb is the leve",
+  "url": "home-theatre.html#volume",
+  "text": "Send volume requests to the AVR controller rather than receiver commands. Volume is in dB: valueDb is the level for absolute , or the change for relative . Inject → AVR controller · one step louder msg.avr = {kind: \"volume\", requestId: \"volume-control-1\", mode: \"relative\", valueDb: 1}; return msg; dB and the receiver’s 0-98. The controller converts for the receiver: on its 0-98 scale, 80 is 0 dB, so the range is -80 to +18 dB in half steps. A reading of MV30 is -50 dB. Bounds. Every request is held within Minimum volume (dB) and Maximum volume (dB) (defaults -80 and -20 ). Rapid requests add up. A relative request starts from the fresh observed volume, or from the target still pending. Two quick +1 dB steps from -50 dB send -49 dB, then -48 dB. Confirmed, then released. A fresh receiver reading confirms the request ( volume_ready ), and the controller lets go: a later change at the receiver is reported as volume_external and becomes the new baseline, not corrected. 0-98 values are gone. A request with value in the receiver’s 0-98 and no valueDb is answered volume_rejected with reason removed-volume-value , with a warning in the log. A node saved with only the old 0-98 minVolume and maxVolume is an invalid configuration until its dB bounds are set. Activities own power and source, not volume. A volume request waits while an activity is switching the receiver’s power or source, and is rejected with receiver-not-ready while the receiver is off. One still pending at a restart is reported volume_failed with reason restart . With Publish state over MQTT and Home Assistant discovery on, Home Assistant gets a volume number in dB. Its sets arrive on home/<area>/receiver/volume/set : wire an MQTT in node on that topic into the AVR controller. Sets within 0.3 seconds of each other are settled to the last, which becomes an ordinary absolute request."
+ },
+ {
+  "title": "Run a home theatre",
+  "section": "Report projector power from a meter",
+  "description": "The display controller needs a fresh projector power reading at every request and while it confirms a change. ",
+  "url": "home-theatre.html#projector-power",
+  "text": "The display controller needs a fresh projector power reading at every request and while it confirms a change. With Projector power meter host set, it reads a Shelly Gen2 switch with power metering on the projector’s supply itself. Left empty, your flow reports the power from any meter or adapter: Your meter → display mode controller msg.display = {kind: \"observed\", device: \"projector\", watts: 140}; // or, from an adapter that knows the lamp state: msg.display = {kind: \"observed\", device: \"projector\", power: \"on\"}; Watts are read against two thresholds. Projector on watts (default 20 ) and Projector standby watts (default 10 ). Between them, the lamp keeps its last settled state while it warms or cools. Power is lower case. \"on\" , \"standby\" or \"transitioning\" . A smart plug’s own ON and OFF are the socket, not the lamp: send its watts instead. observedAt and source are optional. Output 3 asks for a reading. When the controller needs one, it sends msg.payload = \"query\" on output 3. Wire it to whatever makes your meter report, such as a Zigbee2MQTT plug’s zigbee2mqtt/<device>/get topic. Leave it unwired only if the meter reports on its own at least once every Query timeout milliseconds (default 5000 ), even while the power holds steady. No reading fails the request. A device that hasn’t reported is asked again, up to Maximum idempotent attempts (default 2 ) in all, then the request fails with reason no-reading . Keep Transport timeout milliseconds below the query timeout × the attempts. The projector itself is switched by its power toggle on output 1 ( msg.payload = \"power\" with msg.display_command ): wire it to your infrared transport."
+ },
+ {
+  "title": "Run a home theatre",
+  "section": "Set the screen viewing position",
+  "description": "For projector mode, the display controller opens the screen, a Shelly Gen2 cover at Screen controller host , a",
+  "url": "home-theatre.html#screen",
+  "text": "For projector mode, the display controller opens the screen, a Shelly Gen2 cover at Screen controller host , after the projector has warmed up. Switching between TV and projector is make before break, so a playing source keeps a picture. Empty (the default for a new node). The screen’s own open command, confirmed when the screen reports itself fully open. This also suits a screen that isn’t calibrated for positions. A position from 1 to 100. The percentage of its travel to open to, confirmed within Screen position tolerance (default 2 ). A screen that doesn’t know its position is closed first; if it still has none, the request fails with screen-not-calibrated . Calibrate the screen, or clear the setting. Other modes close it. With the screen’s own close, which runs to the end and restores a position the screen has lost. A node saved with a position keeps it."
+ },
+ {
+  "title": "Run a home theatre",
+  "section": "Check the result",
+  "description": "Wire Debug nodes to the state contract’s output 2 and to each equipment controller’s output 2, then watch the ",
+  "url": "home-theatre.html#check",
+  "text": "Wire Debug nodes to the state contract’s output 2 and to each equipment controller’s output 2, then watch the node statuses. Read the outcome What you see What it means Activity status tv: ready Every required target confirmed the activity from fresh readings. Activity status tv: confirming that doesn’t move on A required target isn’t reporting. Check that its output 2 is wired back to the activity controller and that its device readings reach it. Activity status tv: waiting_for_source The source hasn’t confirmed the readiness its capabilities ask for. Check the source adapter’s observations. Activity status tv: <reason> in red The activity failed. See how an activity fails . Activity status none: idle No request since start, or the activity couldn’t be recovered. Send a request. State contract status tv · 1 The last request’s activity and generation. waiting for state means nothing has arrived yet. A controller shows invalid configuration A required setting is missing: the contract’s area, or the display controller’s hosts and TV pre-shared key. The activity waits for that target. Importable examples are in the package’s examples folder ( Import → Examples in the editor): Home theatre activity.json wires the whole set with the switch and change nodes and Debug nodes in place of transports, and Home theatre equipment.json drives each equipment controller on its own from injects. The retained topics are in the Theatre MQTT contract ; see also the README’s Theatre activities and Receiver volume ownership . Sources: README Home theatre equipment, Theatre activities, Theatre MQTT contract, Receiver volume ownership and 6.0.0; editor help of the seven theatre nodes; lib/theatre-activity-controller.ts, lib/theatre-profiles.ts, lib/theatre-refresh.ts, lib/theatre-requests.ts; the Home theatre activity and Home theatre equipment example flows; contract examples theatre-activity, volume-ownership and source-readiness."
  },
  {
   "title": "Use Home Assistant as the panel",
@@ -503,6 +628,349 @@ window.DOCS_SEARCH = [
   "text": "Wire controller output 2 to a Debug node, then watch the adapter’s node status as well. Read the outcome What you see What it means Adapter status “waiting for the device” No device message has arrived yet. Check the MQTT in topics and the broker. shelly cover status The cover’s last state and position. zigbee2mqtt cover status as a position (such as 60% ), an end state, or a motion with a position Reports are arriving and being read. zigbee2mqtt cover status “online” / “offline” The last message was an availability report. Controller result not-calibrated / position-unknown A shelly cover cannot provide a usable position. Calibrate it on the device. Controller result unavailable The device is offline. No command is sent; it is read again when it returns. Controller error “observed cover reading has no position” A zigbee2mqtt cover reports no position: set the controller’s Cover to Open, close and stop only . No command reaches the device Check that the MQTT out node has no topic set and uses the same broker. For a shelly cover, check Enable MQTT Control ; for a zigbee2mqtt cover, check the base topic and friendly name. Importable examples are in the package’s examples folder ( Import → Examples in the editor): Shelly cover.json wires a shelly cover, and Cover control.json wires a zigbee2mqtt cover. In each, injects stand in for the MQTT in nodes and a Debug node stands in for MQTT out. See also the README Covers section and the cover controller reference . Sources: README Covers; shelly cover, zigbee2mqtt cover and cover controller editor help; the Shelly cover and Cover control example flows."
  },
  {
+  "title": "Room lighting controller",
+  "description": "Message shapes, output and settings for the node that owns one room's lights. It turns intents into light commands, tracks who controls each light, and applies the style it is sent.",
+  "url": "node-room-controller.html",
+  "text": "Message shapes, output and settings for the node that owns one room's lights. It turns intents into light commands, tracks who controls each light, and applies the style it is sent."
+ },
+ {
+  "title": "Room lighting controller",
+  "section": "One room. One owner of its light commands.",
+  "description": "The room lighting controller turns intents from policies (motion, wall switches, activities) into light comman",
+  "url": "node-room-controller.html#summary",
+  "text": "The room lighting controller turns intents from policies (motion, wall switches, activities) into light commands, keeps track of who controls each light, and styles the lights it controls with the style it is sent. In the palette it is room lighting controller ( home-room-lighting-controller ); on the canvas it shows its name, or “<area> lighting controller”. A room without a circadian lighting policy styles nothing: its lights just go on and off. Looking for wiring? Follow Room lighting for a working room, and Motion and occupancy for the motion path into it."
+ },
+ {
+  "title": "Room lighting controller",
+  "section": "Inputs",
+  "description": "Intents, releases and styles arrive as msg.lighting . Light reports and commands seen on MQTT arrive on the sa",
+  "url": "node-room-controller.html#inputs",
+  "text": "Intents, releases and styles arrive as msg.lighting . Light reports and commands seen on MQTT arrive on the same input, matched to a target by its state topic or command topic. Input messages Message Fields Meaning lighting.kind = \"intent\" state , targets , values , owner , preserveManual , manual , person state ON, OFF or TOGGLE for targets (default: all), with optional values : brightnessPct 0-100, colorTempKelvin , and other fields such as effect passed on as they are. lighting.owner string On an intent that switches targets on, marks them overridden by this owner. With preserveManual: true , manual lights are skipped. lighting.kind = \"release\" targets , owner Returns overridden targets (default: all) to in-control; with owner , only that owner’s lights. Released lights that are on are restyled over the style’s transition. lighting.kind = \"style\" values , transitionSeconds , until How lights should look, usually from a circadian lighting policy. values is {brightnessPct, colorTempKelvin} or null . MQTT in on a target’s state or command topic topic , payload What the light reports, and commands from others, so the room can tell its own commands from a person’s. Intent with an owner · msg.lighting { kind: \"intent\", targets: [\"wall\", \"lamp\"], state: \"ON\", source: \"activity\", owner: \"theatre\", values: {brightnessPct: 25, colorTempKelvin: 2500}, preserveManual: true } brightnessPct: 0 is the dimmest the light goes, not off: send state: \"OFF\" to switch it off. A value that isn’t a number, or a colour temperature of 0 or less, is left out with a warning. Zigbee2MQTT’s own brightness and color_temp were removed in 6.0: they are left out with a warning once per deploy. Circadian, sleep and schedule messages go to the circadian lighting policy since 6.0; the room ignores them, with a warning."
+ },
+ {
+  "title": "Room lighting controller",
+  "section": "Outputs",
+  "description": "One output carries both the light commands and, when publishing is on, the room’s publications. Wire it to an ",
+  "url": "node-room-controller.html#outputs",
+  "text": "One output carries both the light commands and, when publishing is on, the room’s publications. Wire it to an MQTT out node unchanged. Output messages Port Message Connect to 1 · Commands and publications Light commands on each target’s commandTopic , not retained, with msg.lighting_command = {area, target, source} . With publishing on, also the retained control state, availability and discovery topics below. MQTT out. Flows that filter this output by topic must pass the /control topics through. Don’t rewrite its commands. The room watches each light’s command topic to tell its own commands from other people’s, so a function that rewrites them on the way makes them look like someone else’s. A bare ON or OFF that arrives within 5 seconds of one of its own commands with that power, before that command has come back on the topic, is taken as that command (traced as mutated-own-command ), and it restyles a light after someone else’s bare ON at most once every 5 seconds."
+ },
+ {
+  "title": "Room lighting controller",
+  "section": "Settings",
+  "description": "Defaults below are from the editor definition. Editor settings and exact defaults Setting / property Default M",
+  "url": "node-room-controller.html#settings",
+  "text": "Defaults below are from the editor definition. Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label; a new palette node starts unnamed. Area area · string Empty Needed only when publishing state or discovery, and then with a letter or digit. Topics and IDs use it in lowercase, with anything but letters, digits, _ and - as _ . Publish state over MQTT publishState · boolean Off for a new node Each light’s control state and the room’s availability. A node saved before this setting existed keeps publishing. Home Assistant discovery discovery · boolean Off for a new node A control sensor for each light. Needs Publish state . Display name displayName · string Empty The name Home Assistant shows for the room’s device (“<display name> Lighting Controller”) and its control sensors. Empty uses the area. Discovery prefix discoveryPrefix · string homeassistant The topic prefix Home Assistant listens on for discovery. Targets JSON targets · JSON [] A JSON list of lights, each {\"id\", \"stateTopic\", \"commandTopic\"} . Add \"onOffOnly\": true for a light that only switches on and off: it is never sent brightness, colour or a transition. Turn-on transition seconds initialTransitionSeconds · number 1 The transition for a light switched on, styled or with an intent’s values. New nodes use node-based Home Assistant identifiers ( idScheme = \"node\" ), so renaming the area keeps the entities; a node saved before that setting keeps its area-named entities. That internal marker is set when a node is added from the palette; it is not an editor setting."
+ },
+ {
+  "title": "Room lighting controller",
+  "section": "Settings from before 6.0",
+  "description": "Circadian lighting moved to the circadian lighting policy in 6.0. The room keeps its old circadian settings on",
+  "url": "node-room-controller.html#before-6",
+  "text": "Circadian lighting moved to the circadian lighting policy in 6.0. The room keeps its old circadian settings only to carry them to that migration, with no form rows: maxBrightnessPct , maxColorTempKelvin , sleepBrightnessPct , sleepColorTempKelvin , refreshTransitionSeconds , refreshSeconds , initialSleep , wakeTime , bedTime and houseSchedule . A room that still has any of them is an invalid configuration, and its lights don’t respond, until it is migrated. Its edit dialog lists the old values; add a circadian lighting policy wired to the room with those values, then save the room’s dialog, which clears them. A room that should stay unstyled needs only the save. See the 6.0.0 upgrade notes ."
+ },
+ {
+  "title": "Room lighting controller",
+  "section": "Control state",
+  "description": "Each target has one control state. in-control : the room styles the light with the style it is sent. This is t",
+  "url": "node-room-controller.html#control-state",
+  "text": "Each target has one control state. in-control : the room styles the light with the style it is sent. This is the default. overridden : another owner, such as an activity or a scene, holds the light. Styles leave it alone until that owner releases it. manual : a person set the light: an intent with manual: true (a wall switch’s double press), or someone else’s command on its command topic with values. An intent’s values alone don’t make a light manual. Switching circadian lighting on returns manual lights to in-control. An overridden light changes only for an intent with an owner (its own, or a newer owner who takes it over), a person ( manual: true , person: true , an external command on the command topic, or a change seen at the light), or a release. Any other intent, including motion ON or OFF, leaves it alone and is traced as ignored held-by . Switching a light off by its owner or a person returns it to in-control. A motion OFF intent carries vacantSince , so a light a person set after the room went vacant stays on. Control states are kept in the node’s context. When the node starts with nothing saved (its first deploy, or a redeploy or restart without a context store), it leaves every light as it is until an intent or release names it, someone switches it on with a bare ON, or circadian lighting is switched on. See the recommended context store ."
+ },
+ {
+  "title": "Room lighting controller",
+  "section": "Style",
+  "description": "The room keeps the latest style it was sent and uses it when a light it controls comes on with no values given",
+  "url": "node-room-controller.html#style",
+  "text": "The room keeps the latest style it was sent and uses it when a light it controls comes on with no values given (a motion ON, a wall-switch press), on each new style for lights that are on, after someone else’s bare ON, and when an owner releases a light. A style never switches a light on or off and never reaches a light that an owner holds or a person set. With no style, or once a style has run out ( until ), the lights just go on and off. Style · msg.lighting { kind: \"style\", values: {brightnessPct, colorTempKelvin} | null, transitionSeconds, until }"
+ },
+ {
+  "title": "Room lighting controller",
+  "section": "Optional MQTT and Home Assistant",
+  "description": "New nodes start with both publishing settings off. When on, topics are named after the Area : Guest Room publi",
+  "url": "node-room-controller.html#publishing",
+  "text": "New nodes start with both publishing settings off. When on, topics are named after the Area : Guest Room publishes under home/guest_room/… . Published topics Topic Retained Payload home/<area>/lighting/<target>/control Yes {\"state\": \"in-control\" | \"overridden\" | \"manual\", \"owner\": string | null} , at startup and whenever a target’s control state changes. home/<area>/lighting/availability Yes online once the flows start, offline as it stops. The availability messages get through only when this node is stopped on its own, so set the MQTT broker node’s Birth, Close and Will messages to the same. With discovery on, Home Assistant gets a diagnostic sensor per light showing its control state, with the owner as an attribute. The entities are announced once the flows start, before online , and again at the startup message; switching discovery off removes them at the next startup message. At every start the room also clears the circadian, sleep, wake and bed entities it published before 6.0. Home Assistant shows state here; the room never commands lights through it. See Home Assistant ."
+ },
+ {
+  "title": "Room lighting controller",
+  "section": "Status",
+  "description": "The node status reads styled or unstyled , then how many lights are on, how many are manual, and how many are ",
+  "url": "node-room-controller.html#status",
+  "text": "The node status reads styled or unstyled , then how many lights are on, how many are manual, and how many are overridden when any are, for example styled · 2 on · 0 manual . The dot is yellow while any light is manual, green while styled, and grey otherwise."
+ },
+ {
+  "title": "Circadian lighting policy",
+  "description": "Message shapes, outputs and settings for the node that works out how lights should look over the day and sends it to room lighting controllers as a style.",
+  "url": "node-circadian-policy.html",
+  "text": "Message shapes, outputs and settings for the node that works out how lights should look over the day and sends it to room lighting controllers as a style."
+ },
+ {
+  "title": "Circadian lighting policy",
+  "section": "A style for the day, not a light command.",
+  "description": "The circadian lighting policy works out a brightness and colour temperature for lights that nobody has set oth",
+  "url": "node-circadian-policy.html#summary",
+  "text": "The circadian lighting policy works out a brightness and colour temperature for lights that nobody has set otherwise, and sends it to room lighting controllers as a style . In the palette it is circadian lighting policy ( home-circadian-lighting-policy ); on the canvas it shows its name, or “<area> circadian lighting”. The lights rise to the daytime level over the hour after waking, stay there through the day, and wind down to the sleep levels over the three hours before bed. Sleep mode holds the sleep levels whatever the time. Times are the Node-RED host’s local time. One policy can style several rooms, or each area can have its own. Looking for wiring? Follow Room lighting to wire it into a room, and House schedule to share wake and bed times between rooms."
+ },
+ {
+  "title": "Circadian lighting policy",
+  "section": "Inputs",
+  "description": "Changes arrive as msg.lighting , or as MQTT set topics while Publish state is on. Input messages Message Field",
+  "url": "node-circadian-policy.html#inputs",
+  "text": "Changes arrive as msg.lighting , or as MQTT set topics while Publish state is on. Input messages Message Fields Meaning lighting.kind = \"circadian\" or \"sleep\" enabled true or false switches circadian lighting or sleep. Any other value, such as \"on\" , is refused: nothing changes, and the node logs a warning once per deploy and shows it on its status. lighting.kind = \"schedule\" wakeTime , bedTime \"HH:MM\" , either alone. A time set this way lasts until a deploy gives the node a different setting for it. lighting.kind = \"startup\" None Sends the style, and with publishing on, its availability, state and discovery. Send it a few seconds after the flows start, as the examples do. topic = home/<area>/circadian/set , home/<area>/sleep/set ON or OFF As the circadian and sleep messages above. Read only while Publish state is on. Retained messages and other payloads are ignored. topic = home/<area>/wake-time/set or bed-time/set A time A time from Home Assistant, with its own times only. Switching circadian lighting on takes back the lights a person set, even when it is already on, so a flow can send it to bring lights back into step."
+ },
+ {
+  "title": "Circadian lighting policy",
+  "section": "Outputs",
+  "description": "The port order is fixed. Two output ports Port Message Connect to 1 · Style msg.lighting = {kind: \"style\", sou",
+  "url": "node-circadian-policy.html#outputs",
+  "text": "The port order is fixed. Two output ports Port Message Connect to 1 · Style msg.lighting = {kind: \"style\", source: \"circadian\", values: {brightnessPct, colorTempKelvin} | null, transitionSeconds, until, takeBack?} One or more room lighting controllers . 2 · Publications Availability, circadian and sleep state, its own wake and bed times, and discovery. An MQTT out node with no topic set. It sends a style once the flows start, every Restyle interval , at its startup message, and at once when circadian lighting, sleep or the times change. Each style lasts three intervals: if the policy stops (deleted, disabled, or its flow stopped), rooms stop styling soon after. Deleted with a modified deploy, it tells rooms at once. While circadian lighting is off it sends a style with no values, and rooms style nothing. A style is not a request to change a light. It never switches a light on or off, and never reaches a light that an owner (such as an activity) holds or a person set."
+ },
+ {
+  "title": "Circadian lighting policy",
+  "section": "Settings",
+  "description": "Defaults below are from the editor definition. Transition and interval values are in seconds . Editor settings",
+  "url": "node-circadian-policy.html#settings",
+  "text": "Defaults below are from the editor definition. Transition and interval values are in seconds . Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label. Schedule houseSchedule · config node None A house schedule, so several rooms share one wake and bed time; none uses its own Wake time and Bed time . Following a house, it has no time entities of its own: the house schedule MQTT node offers them. Wake time wakeTime · HH:MM 07:00 Its own wake time, without a schedule. Bed time bedTime · HH:MM 23:00 Its own bed time, without a schedule. Daytime brightness % maxBrightnessPct · number 100 Brightness at full day. Daytime kelvin maxColorTempKelvin · number 6500 Colour temperature at full day. Sleep brightness % sleepBrightnessPct · number 1 Brightness in sleep. Sleep kelvin sleepColorTempKelvin · number 2200 Colour temperature in sleep. Restyle transition (s) refreshTransitionSeconds · number 60 How long a room takes to move a light that is on to a new style. A light turning on uses the room’s own transition. Restyle interval (s) refreshSeconds · number 60 How often it sends its style, at least 10 seconds. Start in sleep mode initialSleep · boolean false Starts with sleep on. Area area · string Empty Needed when publishing, and then with a letter or digit; topics are made from it. Publish state over MQTT publishState · boolean false Publishes state and reads the set topics. Home Assistant discovery discovery · boolean false Announces its switches and time entities. Needs Publish state . Discovery prefix discoveryPrefix · string homeassistant The topic prefix Home Assistant listens on for discovery. New nodes name their Home Assistant entities after the node ( idScheme = \"node\" ). That internal marker is not an editor setting."
+ },
+ {
+  "title": "Circadian lighting policy",
+  "section": "Optional MQTT and Home Assistant",
+  "description": "Publishing is off unless switched on. The topics keep the names the room controller used before 6.0, so a flow",
+  "url": "node-circadian-policy.html#publishing",
+  "text": "Publishing is off unless switched on. The topics keep the names the room controller used before 6.0, so a flow already writing home/<area>/circadian/set keeps working when this node has that area. Subscribe an MQTT in node to home/<area>/+/set and wire it into the policy to cover all four set topics. Published topics and incoming requests Topic Direction Payload home/<area>/circadian/availability Output 2 Availability. home/<area>/circadian/state , …/set Output 2 / MQTT in ON or OFF . home/<area>/sleep/state , …/set Output 2 / MQTT in ON or OFF . home/<area>/wake-time/state , …/set Output 2 / MQTT in HH:MM:SS , with its own times only. home/<area>/bed-time/state , …/set Output 2 / MQTT in HH:MM:SS , with its own times only. With both settings on, Home Assistant shows Circadian lighting and Sleep switches and, with its own times, Wake time and Bed time, on the policy’s own device. Before announcing, it clears the circadian entities older room controllers in its area published, migrated or not, in the same batch, so Home Assistant can give the new ones the same entity IDs. See Home Assistant ."
+ },
+ {
+  "title": "Circadian lighting policy",
+  "section": "Status",
+  "description": "While styling, a green dot shows day or sleep with the current brightness and kelvin, for example day · 100% 6",
+  "url": "node-circadian-policy.html#status",
+  "text": "While styling, a green dot shows day or sleep with the current brightness and kelvin, for example day · 100% 6500K . With circadian lighting off, a grey dot shows off . When its chosen house schedule is missing, the status adds schedule missing: own times ."
+ },
+ {
+  "title": "Motion lighting policy",
+  "description": "Message shapes, outputs and settings for the node that turns occupancy and light level into lighting intents for a room.",
+  "url": "node-motion-policy.html",
+  "text": "Message shapes, outputs and settings for the node that turns occupancy and light level into lighting intents for a room."
+ },
+ {
+  "title": "Motion lighting policy",
+  "section": "Lights on when occupied and dark. Off once vacant.",
+  "description": "The motion lighting policy turns normalised occupancy, illuminance and enable-state events into msg.lighting i",
+  "url": "node-motion-policy.html#summary",
+  "text": "The motion lighting policy turns normalised occupancy, illuminance and enable-state events into msg.lighting intents: ON when the room is occupied and dark enough, and OFF once it has been vacant for the vacancy time. In the palette it is motion lighting policy ( home-motion-lighting-policy ); on the canvas it shows its name, or “<area> motion policy”. Wall switches go to the switch lighting policy, not here; switch messages sent to this node are ignored. Looking for wiring? Follow Motion and occupancy for the sensor path, and Room lighting for the room it feeds."
+ },
+ {
+  "title": "Motion lighting policy",
+  "section": "Inputs",
+  "description": "Each message names its kind in msg.source . Input messages msg.source Value Meaning occupancy msg.payload.occu",
+  "url": "node-motion-policy.html#inputs",
+  "text": "Each message names its kind in msg.source . Input messages msg.source Value Meaning occupancy msg.payload.occupied From the occupancy fusion node. illuminance lux The light level. area-enabled true / false Enables this node’s motion lighting. Any other value, such as \"ON\" (accepted before 6.0), is refused: nothing changes, and the node logs a warning once per deploy and shows it on its status. global-enabled true / false Enables motion lighting for every motion node. Refused values as for area-enabled . delay seconds A new vacancy time, in the same unit as Vacancy seconds . illuminance-cut-off lux A new lux cutoff. pause true / false , with msg.owner true pauses motion lighting and false releases it, for the owner in msg.owner (for example a cover’s name), which is required. A pause lasts at most the Maximum pause unless sent again. startup None Announces its publications again. Motion lighting acts only while no owner holds a pause, and a pause cancels a pending vacancy timer, as switching it off does. A pause never changes the enables, which are the user’s own: wire a cover’s moving output here to pause motion while it moves. A delay or illuminance-cut-off message overrides the setting, and lasts across restarts until a deploy gives the node a different Vacancy seconds or Lux cutoff , which then applies. Lasting across a redeploy or restart needs a context store ."
+ },
+ {
+  "title": "Motion lighting policy",
+  "section": "Outputs",
+  "description": "The port order is fixed. Two output ports Port Message Connect to 1 · Lighting intents msg.lighting = {kind: \"",
+  "url": "node-motion-policy.html#outputs",
+  "text": "The port order is fixed. Two output ports Port Message Connect to 1 · Lighting intents msg.lighting = {kind: \"intent\", targets, state, source} : ON for ON targets , OFF for OFF targets . The OFF intent carries vacantSince . The room lighting controller . 2 · MQTT publications State, availability and discovery, when publishing is on. An MQTT out node. Because the OFF intent carries vacantSince , the room lighting controller keeps any light a person set after the room went vacant."
+ },
+ {
+  "title": "Motion lighting policy",
+  "section": "Settings",
+  "description": "Defaults below are from the editor definition. Editor settings and exact defaults Setting / property Default M",
+  "url": "node-motion-policy.html#settings",
+  "text": "Defaults below are from the editor definition. Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label; a new palette node starts unnamed. Area area · string Empty Needed when publishing, and then with a letter or digit; topics and IDs are made from it. ON targets onTargets · JSON [\"main\"] A JSON array of the room’s target names to switch on. OFF targets offTargets · JSON [\"main\"] A JSON array of the room’s target names to switch off once vacant. Vacancy seconds defaultDelaySeconds · number 120 How long the room must be vacant before the OFF intent. Lux cutoff defaultIlluminanceCutoff · number 10 The light level below which occupancy switches the lights on. Maximum pause (s) maxPauseSeconds · number 600 How long a pause lasts unless renewed, at least 1, so a lost release can’t stop motion lighting for good. Publish state over MQTT publishState · boolean false Publishes its enable, delay and availability, and reads the set topics. Home Assistant discovery discovery · boolean false A motion lighting switch and a vacancy delay number. Needs Publish state . Discovery prefix discoveryPrefix · string homeassistant The topic prefix Home Assistant listens on for discovery. New nodes name their Home Assistant entities after the node ( idScheme = \"node\" ); motion has no older entities, so not set also means node. That internal marker is set when a node is added from the palette; it is not an editor setting."
+ },
+ {
+  "title": "Motion lighting policy",
+  "section": "Optional MQTT and Home Assistant",
+  "description": "Off unless switched on, and then named after the Area . Publications go on output 2. Wire an MQTT in node on h",
+  "url": "node-motion-policy.html#publishing",
+  "text": "Off unless switched on, and then named after the Area . Publications go on output 2. Wire an MQTT in node on home/<area>/motion/+/set into this node. Published state and incoming requests Topic Direction Payload home/<area>/motion/enabled/state Output 2 · retained ON or OFF : this node’s enable. home/<area>/motion/delay/state Output 2 · retained The vacancy delay in seconds. home/<area>/motion/availability Output 2 online or offline . home/<area>/motion/enabled/set MQTT in → policy ON or OFF , as area-enabled . Retained messages are ignored. home/<area>/motion/delay/set MQTT in → policy A delay of 0 to 86400 seconds, as delay . The shared global-enabled is not published, and the switch shows this node’s enable only, so motion can still be off everywhere while it shows on. The node announces itself once the flows have started, and again on msg.source = \"startup\" . See Home Assistant ."
+ },
+ {
+  "title": "Motion lighting policy",
+  "section": "Status",
+  "description": "The status reads enabled , paused or disabled , then the last light level ( lux ? before one is reported) and ",
+  "url": "node-motion-policy.html#status",
+  "text": "The status reads enabled , paused or disabled , then the last light level ( lux ? before one is reported) and the vacancy delay, for example enabled · 4 lux · 120s . The dot is green while enabled and grey otherwise."
+ },
+ {
+  "title": "Motion lighting policy",
+  "section": "After a restart",
+  "description": "When the node starts with nothing saved (its first deploy, or a redeploy or restart without a context store), ",
+  "url": "node-motion-policy.html#restart",
+  "text": "When the node starts with nothing saved (its first deploy, or a redeploy or restart without a context store), it doesn’t know whether the room is occupied, so it counts the room as vacant from then: unless occupancy is reported within Vacancy seconds , it sends its OFF intent. Someone sitting still in a lit room has the lights switched off after the delay unless motion is seen. With a context store, a running off-timer carries on instead."
+ },
+ {
+  "title": "Occupancy fusion",
+  "description": "Message shapes, output ports and settings for the node that turns PIR motion, and optionally presence, into one occupancy signal. Motion establishes occupancy; presence can only hold it.",
+  "url": "node-occupancy-fusion.html",
+  "text": "Message shapes, output ports and settings for the node that turns PIR motion, and optionally presence, into one occupancy signal. Motion establishes occupancy; presence can only hold it."
+ },
+ {
+  "title": "Occupancy fusion",
+  "section": "Motion establishes. Presence holds.",
+  "description": "Combines normalised motion and optional presence events into one occupancy event, msg.source = \"occupancy\" , f",
+  "url": "node-occupancy-fusion.html#summary",
+  "text": "Combines normalised motion and optional presence events into one occupancy event, msg.source = \"occupancy\" , for the motion lighting policy. In the palette it is home-occupancy-fusion ; on the canvas it shows its name, or “<area> occupancy”, or “occupancy”. A PIR sensor establishes occupancy. A presence sensor (such as mmWave) can keep an established occupancy going while motion is clear, but it cannot establish occupancy by itself. Looking for wiring? Follow Light a room from motion for the sensor connections and the motion lighting policy after it."
+ },
+ {
+  "title": "Occupancy fusion",
+  "section": "Inputs",
+  "description": "Each message names its sensor in msg.source . Other sources are ignored. Input messages msg.source msg.payload",
+  "url": "node-occupancy-fusion.html#inputs",
+  "text": "Each message names its sensor in msg.source . Other sources are ignored. Input messages msg.source msg.payload Effect \"motion\" A boolean, a string, or an object with motion , occupancy or active Motion on makes the area occupied. Motion off makes it vacant unless a held presence keeps it. \"presence\" A boolean, a string, or an object with presence , occupancy or active Only with Presence sensor set to hold. Presence on holds occupancy that motion established; presence off with motion off makes the area vacant. \"startup\" Any Announce the MQTT publications again, as after the broker reconnects. Strings read as on: on , true , occupied , active , detected . Strings read as off: off , false , clear , inactive , not_detected . Case does not matter; anything else is ignored. Motion from a sensor · msg { source: \"motion\", payload: {motion: true} }"
+ },
+ {
+  "title": "Occupancy fusion",
+  "section": "Outputs",
+  "description": "The port order is fixed. Two output ports Port Message Connect to 1 · Occupancy events msg.source = \"occupancy",
+  "url": "node-occupancy-fusion.html#outputs",
+  "text": "The port order is fixed. Two output ports Port Message Connect to 1 · Occupancy events msg.source = \"occupancy\" , msg.payload = {kind: \"occupancy\", occupied, trigger, reason, sources} . Sent only when occupancy changes. The motion lighting policy’s input. 2 · MQTT publications Retained state, availability and discovery messages, when publishing is on. An MQTT out node. trigger is \"motion\" when motion made the area occupied, otherwise null . reason is motion-active or all-sources-inactive . sources gives the last known motion and presence , each true , false or null when unknown or not used."
+ },
+ {
+  "title": "Occupancy fusion",
+  "section": "Settings",
+  "description": "Defaults below are from the editor definition. Editor settings and exact defaults Setting / property Default M",
+  "url": "node-occupancy-fusion.html#settings",
+  "text": "Defaults below are from the editor definition. Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label; a new palette node starts unnamed. Area area · string Empty Required when publishing, and then with a letter or digit. Topics use it in lowercase, with spaces and other characters as _ . Presence sensor presenceMode · enum none none : PIR only, presence messages are ignored. hold : PIR plus a presence sensor that holds occupancy. Publish state over MQTT publishState · boolean false Publish the occupancy and availability on output 2. Home Assistant discovery discovery · boolean false Publish an occupancy binary sensor. Needs Publish state over MQTT ; the editor clears and disables it otherwise. Discovery prefix discoveryPrefix · string homeassistant Home Assistant discovery topic prefix. Must not be empty or contain + or # . New nodes use node-based Home Assistant identifiers ( idScheme = \"node\" ). That internal marker is set when a node is added from the palette; it is not an editor setting. Occupancy has no older entities, so an unset idScheme also means node-based."
+ },
+ {
+  "title": "Occupancy fusion",
+  "section": "Optional MQTT and Home Assistant",
+  "description": "Publishing and discovery are off by default. When publishing is on, set Area . The messages go on output 2. Pu",
+  "url": "node-occupancy-fusion.html#publishing",
+  "text": "Publishing and discovery are off by default. When publishing is on, set Area . The messages go on output 2. Published topics Topic Direction Payload home/<area>/occupancy/state Output 2 · retained ON or OFF , whenever occupancy changes. home/<area>/occupancy/availability Output 2 · retained online or offline . With discovery on, Home Assistant gets an occupancy binary sensor reading that state. The node announces itself once the flows have started, and again when it receives msg.source = \"startup\" . It is a view only: occupancy never goes to devices through Home Assistant. See Use Home Assistant as the panel ."
+ },
+ {
+  "title": "Occupancy fusion",
+  "section": "Status",
+  "description": "The node status shows occupied (green) or vacant (grey), followed by pir on or pir off once motion is known, a",
+  "url": "node-occupancy-fusion.html#status",
+  "text": "The node status shows occupied (green) or vacant (grey), followed by pir on or pir off once motion is known, and presence on or presence off once presence is known and in use."
+ },
+ {
+  "title": "Switch lighting policy",
+  "description": "Message shapes, output and settings for the node that turns wall switch edges or button actions into lighting intents. It tracks whether the switch input is fresh, stale or unavailable.",
+  "url": "node-switch-policy.html",
+  "text": "Message shapes, output and settings for the node that turns wall switch edges or button actions into lighting intents. It tracks whether the switch input is fresh, stale or unavailable."
+ },
+ {
+  "title": "Switch lighting policy",
+  "section": "A press becomes an intent.",
+  "description": "Turns raw switch edges, or single and double actions already classified by the device, into msg.lighting inten",
+  "url": "node-switch-policy.html#summary",
+  "text": "Turns raw switch edges, or single and double actions already classified by the device, into msg.lighting intents for the room lighting controller. It keeps no occupancy or motion state. In the palette it is home-switch-lighting-policy ; on the canvas it shows its name, or “<area> switch policy”, or “switch policy”. A single press toggles the targets. A double press switches them on at full brightness as a person’s manual setting. Looking for wiring? Follow Wire wall switches for the switch connections and the room controller after it."
+ },
+ {
+  "title": "Switch lighting policy",
+  "section": "Inputs",
+  "description": "Each message names its kind in msg.source . Other sources are ignored. Input messages msg.source Other propert",
+  "url": "node-switch-policy.html#inputs",
+  "text": "Each message names its kind in msg.source . Other sources are ignored. Input messages msg.source Other properties Effect \"switch\" msg.payload = {state: true | false} ; optional msg.retain , msg.baseline , msg.observedAt or msg.payload.observedAt A raw wall switch state. A change is an edge; a second edge within Raw-edge window ms is a double press, otherwise the first edge becomes a single press when the window ends. \"switch-action\" msg.payload = \"single\" or \"double\" , or {action: …} A press the device already classified. Other actions (such as long ) and retained messages are ignored. \"switch-availability\" msg.payload = online , available , on or true ; offline , unavailable , off or false Offline forgets the baseline; the first observation after it re-baselines without a press. A retained observation, or one marked msg.baseline = true (for a polled snapshot), only sets the baseline and never becomes a press. A repeated, unchanged state refreshes freshness without a press. The baseline is kept across a restart, but counts as unconfirmed until this runtime receives an observation."
+ },
+ {
+  "title": "Switch lighting policy",
+  "section": "Outputs",
+  "description": "One output: lighting intents, for the room lighting controller’s input. Single press · msg.lighting { kind: \"i",
+  "url": "node-switch-policy.html#outputs",
+  "text": "One output: lighting intents, for the room lighting controller’s input. Single press · msg.lighting { kind: \"intent\", targets: [\"main\"], state: \"TOGGLE\", source: \"wall\", person: true } A double press sends state: \"ON\" with manual: true and values: {brightnessPct: 100} . Every intent carries person: true ."
+ },
+ {
+  "title": "Switch lighting policy",
+  "section": "Settings",
+  "description": "Defaults below are from the editor definition. Note the units: the window is in milliseconds , freshness in se",
+  "url": "node-switch-policy.html#settings",
+  "text": "Defaults below are from the editor definition. Note the units: the window is in milliseconds , freshness in seconds . Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label. Area area · string Empty Optional; labels the node and its traces. Targets targets · JSON array [\"main\"] The room controller targets the intents name. A non-empty JSON array of strings. Raw-edge window ms switchWindowMs · number 500 How long after one edge a second edge counts as a double press. Zero or more. Input freshness seconds switchFreshnessSeconds · number 3600 How long after the last observation the switch input counts as fresh. Greater than zero."
+ },
+ {
+  "title": "Switch lighting policy",
+  "section": "Status",
+  "description": "Node status Status Meaning switch fresh · <age> (green) Observed in this runtime within the freshness time. sw",
+  "url": "node-switch-policy.html#status",
+  "text": "Node status Status Meaning switch fresh · <age> (green) Observed in this runtime within the freshness time. switch stale · <age> (yellow) The baseline is known but older than the freshness time, unconfirmed since start, or without a timestamp. switch unavailable (red) The last availability message said offline. awaiting switch baseline (yellow) No switch state is known yet. The age shows in seconds, minutes or hours, and is refreshed on a timer as the input ages."
+ },
+ {
+  "title": "House schedule node",
+  "description": "Settings for the configuration node that holds one wake and bed time for many rooms. It has no wires: circadian lighting policies choose it as their Schedule.",
+  "url": "node-house-schedule.html",
+  "text": "Settings for the configuration node that holds one wake and bed time for many rooms. It has no wires: circadian lighting policies choose it as their Schedule."
+ },
+ {
+  "title": "House schedule node",
+  "section": "One wake time. One bed time. Many rooms.",
+  "description": "A configuration node, like an MQTT broker: it never appears on the canvas and has no inputs or outputs. Choose",
+  "url": "node-house-schedule.html#summary",
+  "text": "A configuration node, like an MQTT broker: it never appears on the canvas and has no inputs or outputs. Choose it in a circadian lighting policy’s Schedule setting and that policy follows its wake and bed times, hearing of every change as it happens, without wires. In the configuration nodes list it shows its name, or “house schedule”. Those policies then have no wake and bed time entities of their own in Home Assistant. A policy that keeps its own times (for a child’s room, say) chooses none. Deleting the house schedule in the editor returns its policies to their own times. Looking for wiring? Follow Share a house schedule to set one up with several rooms."
+ },
+ {
+  "title": "House schedule node",
+  "section": "Where it is chosen",
+  "description": "Circadian lighting policy : its Schedule setting. The policy follows this schedule’s times. House schedule MQT",
+  "url": "node-house-schedule.html#used-by",
+  "text": "Circadian lighting policy : its Schedule setting. The policy follows this schedule’s times. House schedule MQTT : its Schedule setting. It publishes this schedule’s times and changes them from messages or Home Assistant."
+ },
+ {
+  "title": "House schedule node",
+  "section": "Settings",
+  "description": "Defaults below are from the editor definition. Times are HH:MM in the Node-RED host’s local time. Editor setti",
+  "url": "node-house-schedule.html#settings",
+  "text": "Defaults below are from the editor definition. Times are HH:MM in the Node-RED host’s local time. Editor settings and exact defaults Setting / property Default Meaning Name name · string house Labels the schedule and names its topics, home/<name>/schedule/... . Needs a letter or digit. Wake time wakeTime · string 07:00 The wake time, from 00:00 to 23:59 . Bed time bedTime · string 23:00 The bed time, from 00:00 to 23:59 ; must differ from the wake time."
+ },
+ {
+  "title": "House schedule node",
+  "section": "Changing the times",
+  "description": "Times change at runtime from a message or from Home Assistant, through a house schedule MQTT node. A time chan",
+  "url": "node-house-schedule.html#changing",
+  "text": "Times change at runtime from a message or from Home Assistant, through a house schedule MQTT node. A time changed that way lasts until a deploy gives this schedule a different Wake time or Bed time , which then applies. The times in use are kept in the node’s context, so they survive a restart only with a context store configured (see the README’s Recommended setup )."
+ },
+ {
+  "title": "House schedule MQTT",
+  "description": "Message shapes, output and settings for the node that publishes a house schedule’s times over MQTT and takes changes back. Optional: rooms follow the schedule without it.",
+  "url": "node-house-schedule-mqtt.html",
+  "text": "Message shapes, output and settings for the node that publishes a house schedule’s times over MQTT and takes changes back. Optional: rooms follow the schedule without it."
+ },
+ {
+  "title": "House schedule MQTT",
+  "section": "The schedule’s MQTT side.",
+  "description": "Publishes a house schedule ’s wake and bed times as retained MQTT state and, with discovery, as Home Assistant",
+  "url": "node-house-schedule-mqtt.html#summary",
+  "text": "Publishes a house schedule ’s wake and bed times as retained MQTT state and, with discovery, as Home Assistant time entities, and changes the schedule from their set topics or from a message. In the palette it is home-house-schedule-mqtt ; on the canvas it shows its name, or “house schedule MQTT”. Use one per schedule: two would share the same topics and entities, and deleting one clears them for both until the other next starts. Looking for wiring? Follow Share a house schedule for the full flow, and Use Home Assistant as the panel for the entities."
+ },
+ {
+  "title": "House schedule MQTT",
+  "section": "Inputs",
+  "description": "Wire an MQTT in node subscribed to the set topics into the input. Input messages Message Shape Effect Time fro",
+  "url": "node-house-schedule-mqtt.html#inputs",
+  "text": "Wire an MQTT in node subscribed to the set topics into the input. Input messages Message Shape Effect Time from Home Assistant msg.topic = home/<name>/schedule/wake-time/set or …/bed-time/set , msg.payload a time Sets that time. Retained messages and anything but a time are ignored. New times msg.lighting = {kind: \"schedule\", wakeTime, bedTime} , each HH:MM , either one alone Sets the schedule’s times. Startup msg.source = \"startup\" (or msg.lighting.kind = \"startup\" ) Announce again, as after the broker reconnects. A time changed this way lasts until a deploy gives the house schedule a different Wake time or Bed time . Every policy following the schedule hears of the change without wires."
+ },
+ {
+  "title": "House schedule MQTT",
+  "section": "Outputs",
+  "description": "One output port Port Message Connect to 1 · MQTT publications Retained times, availability and discovery messa",
+  "url": "node-house-schedule-mqtt.html#outputs",
+  "text": "One output port Port Message Connect to 1 · MQTT publications Retained times, availability and discovery messages. Sent at start, at every change to the schedule, and when it stops. An MQTT out node."
+ },
+ {
+  "title": "House schedule MQTT",
+  "section": "Settings",
+  "description": "Defaults below are from the editor definition. Editor settings and exact defaults Setting / property Default M",
+  "url": "node-house-schedule-mqtt.html#settings",
+  "text": "Defaults below are from the editor definition. Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label; a new palette node starts unnamed. Schedule schedule · home-house-schedule None Required. The house schedule to publish; its name names the topics. Home Assistant discovery discovery · boolean true Publish wake and bed time entities. Discovery prefix discoveryPrefix · string homeassistant Home Assistant discovery topic prefix. Must not be empty or contain + or # . New nodes use node-based Home Assistant identifiers ( idScheme = \"node\" ). That internal marker is set when a node is added from the palette; it is not an editor setting. This node has no older entities, so an unset idScheme also means node-based. Entities are named after the schedule, not this node, so a replacement node keeps them."
+ },
+ {
+  "title": "House schedule MQTT",
+  "section": "MQTT and Home Assistant",
+  "description": "Publishing is what this node is for, so its state is always published. The base topic is home/<name>/schedule ",
+  "url": "node-house-schedule-mqtt.html#publishing",
+  "text": "Publishing is what this node is for, so its state is always published. The base topic is home/<name>/schedule , from the house schedule’s Name . Published state and incoming requests Topic suffix Direction Payload /wake-time/state Output 1 · retained The wake time as HH:MM:SS . /bed-time/state Output 1 · retained The bed time as HH:MM:SS . /availability Output 1 · retained online or offline . /wake-time/set MQTT in → node A new wake time. Not retained. /bed-time/set MQTT in → node A new bed time. Not retained. With discovery on, Home Assistant gets two time entities, Wake time and Bed time, reading the state topics and commanding the set topics. They change the schedule, never a device."
+ },
+ {
+  "title": "House schedule MQTT",
+  "section": "Status",
+  "description": "The node status shows the times in use, wake HH:MM · bed HH:MM (green), and updates at every change.",
+  "url": "node-house-schedule-mqtt.html#status",
+  "text": "The node status shows the times in use, wake HH:MM · bed HH:MM (green), and updates at every change."
+ },
+ {
   "title": "Cover controller",
   "description": "Message shapes, output ports and settings for one blind, shutter or curtain. Position-aware confirmation without fighting manual moves.",
   "url": "node-cover-controller.html",
@@ -549,6 +1017,715 @@ window.DOCS_SEARCH = [
   "description": "For a motor without a reliable position, set Cover to “Open, close and stop only”. Positions and presets are i",
   "url": "node-cover-controller.html#open-close",
   "text": "For a motor without a reliable position, set Cover to “Open, close and stop only”. Positions and presets are ignored. Commands on output 1 become open , close , stop or observe . Report msg.cover = {kind: \"observed\", motion, state, observedAt} . A reported end state ( open or closed ) confirms the move. Otherwise, a move in the requested direction that stops after the full travel time is explicitly judged by travel time . Stopping early or moving the other way is treated as a person’s move. If the motor reports nothing, the result stays unconfirmed and fails with no-reports after the retry limit. Source: cover-controller editor defaults and help; README Covers. The shelly cover wiring is in the cover guide ."
+ },
+ {
+  "title": "Cover group",
+  "description": "Message shapes, output ports and settings for moving several covers as one. Ready only when every member confirms; otherwise it says which did what.",
+  "url": "node-cover-group.html",
+  "text": "Message shapes, output ports and settings for moving several covers as one. Ready only when every member confirms; otherwise it says which did what."
+ },
+ {
+  "title": "Cover group",
+  "section": "Several covers. One honest answer.",
+  "description": "Moves several covers as one, such as the left and right of a curtain: one request goes to every member, each u",
+  "url": "node-cover-group.html#summary",
+  "text": "Moves several covers as one, such as the left and right of a curtain: one request goes to every member, each under its own request ID, and the group reports how far it got. In the palette it is home-cover-group ; on the canvas it shows its name, or “<area> cover group”, or “cover group”. A cover group has no MQTT topics or Home Assistant entity of its own: Home Assistant can group the covers’ entities itself. Looking for wiring? Follow Wire a cover , and see the Cover pair example for a group of two."
+ },
+ {
+  "title": "Cover group",
+  "section": "Inputs",
+  "description": "Requests and member answers share the same input. Input properties Property Type Meaning msg.payload string / ",
+  "url": "node-cover-group.html#inputs",
+  "text": "Requests and member answers share the same input. Input properties Property Type Meaning msg.payload string / number A cover request: \"open\" , \"close\" , \"stop\" , a position or a preset name. Each member gets the same request. msg.stopIfMoving boolean Passed on to each member, as for a cover controller . msg.respectManual boolean Passed on to each member, as for a cover controller. msg.theatre object A member’s result: wire each member cover controller’s second output back into the group. Other state from a cover controller, and its moving signal, are ignored."
+ },
+ {
+  "title": "Cover group",
+  "section": "Outputs",
+  "description": "Output 1 is the group’s result, then one output per member in the order of Members , each labelled with its na",
+  "url": "node-cover-group.html#outputs",
+  "text": "Output 1 is the group’s result, then one output per member in the order of Members , each labelled with its name. Changing Members changes the number of outputs, and the editor moves each member’s wire with its name. Output ports Port Message Connect to 1 · Group result msg.theatre = {kind: \"target_state\", target: \"cover\", status, details} Debug, or another result consumer. 2 and on · One per member That member’s request, with its own coverRequestId and msg.topic naming the member. That member’s cover controller input. No switch node is needed. ready only when every member confirms. Once every member has settled with any not ready, failed with reason partial (some confirmed) or none-confirmed , and details.members saying what each did. A member silent at the Answer deadline counts as no-answer . A new request first answers the open one failed with reason superseded . A cover controller answers the request even when it doesn’t carry it out, with the reason."
+ },
+ {
+  "title": "Cover group",
+  "section": "Settings",
+  "description": "Defaults below are from the editor definition. The deadline is in seconds . Editor settings and exact defaults",
+  "url": "node-cover-group.html#settings",
+  "text": "Defaults below are from the editor definition. The deadline is in seconds . Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label. Area area · string Empty Optional; labels the node and its traces. Members members · JSON array [\"left\",\"right\"] At least two unique names, each lowercase, starting with a letter, with letters, digits, _ or - . Each name gets its own output. Answer deadline (s) deadlineSeconds · number 120 How long members have to answer before a silent one counts as no-answer . At least 1. The hidden outputs key is internal: the editor keeps the output count (default 3) and a map of how each member’s port moved when Members changes, as the core switch node does. It is not an editor setting."
+ },
+ {
+  "title": "Cover group",
+  "section": "Status",
+  "description": "The node status shows idle before the first request, then <ready>/<members> confirmed : green when every membe",
+  "url": "node-cover-group.html#status",
+  "text": "The node status shows idle before the first request, then <ready>/<members> confirmed : green when every member is ready, blue otherwise."
+ },
+ {
+  "title": "Theatre activity controller",
+  "description": "Message shapes, output ports and settings for the node that owns the whole theatre’s activity. One request drives every target, and the activity is ready only on fresh evidence from each one.",
+  "url": "node-theatre-activity-controller.html",
+  "text": "Message shapes, output ports and settings for the node that owns the whole theatre’s activity. One request drives every target, and the activity is ready only on fresh evidence from each one."
+ },
+ {
+  "title": "Theatre activity controller",
+  "section": "One activity. Five targets.",
+  "description": "Owns the theatre’s latest-request-wins activity state, such as tv or off . It turns an activity intent into on",
+  "url": "node-theatre-activity-controller.html#summary",
+  "text": "Owns the theatre’s latest-request-wins activity state, such as tv or off . It turns an activity intent into one semantic command per target (display, AVR, source, lighting and backlighting) and aggregates the generation-scoped target_state evidence each target controller reports back. It never talks to a device: each target controller and its transport do that. In the palette it is theatre activity controller under home automation ; on the canvas it shows its name, or theatre activity when unnamed. Looking for wiring? Follow Home theatre for the state contract, the routing switch and the target controllers around this node."
+ },
+ {
+  "title": "Theatre activity controller",
+  "section": "Inputs",
+  "description": "Every input is msg.theatre with a kind . A message without msg.theatre , such as a target controller’s own msg",
+  "url": "node-theatre-activity-controller.html#inputs",
+  "text": "Every input is msg.theatre with a kind . A message without msg.theatre , such as a target controller’s own msg.avr or msg.display events on the same wire, is ignored, so each target controller’s output 2 can be wired straight back here. msg.theatre kinds kind Other fields Use intent requestId, generation, activity , optional requestedAt Start an activity. activity must be a configured profile, generation a positive integer. Usually comes from the theatre state contract’s output 1. target_state target, generation, status, observedAt , optional classification, failure, details A target controller’s progress. Reports for another generation are ignored. startup , refresh None Ask every target to report again. With no activity in hand it probes the targets and starts recovery. recover reason ( startup or manual_override ), observations Physical evidence per target, {observedAt, values} , for adopting an activity without commands. tick optional generation Sent by the node itself on its timer; you don’t need to send it. Target status is one of discovering , transitioning , confirming , ready , waiting_for_source , failed or unavailable . A classification of manual_override or drift marks a change the theatre didn’t make. Activity intent · msg.theatre { kind: \"intent\", requestId: \"example-request-1\", generation: 1, activity: \"tv\" }"
+ },
+ {
+  "title": "Theatre activity controller",
+  "section": "Outputs",
+  "description": "The port order is fixed. Commands go out on output 1; everything the theatre knows goes out on output 2. Two o",
+  "url": "node-theatre-activity-controller.html#outputs",
+  "text": "The port order is fixed. Commands go out on output 1; everything the theatre knows goes out on output 2. Two output ports Port Message Connect to 1 · Semantic target commands msg.theatreCommand = {target, kind, requestId, generation, …} . kind is intent or refresh ; the rest is the profile’s values for that target. A switch on theatreCommand.target ( display , avr , source , lighting , backlighting ), then a change node per target that moves it to msg.display , msg.avr , msg.sourceCapability , msg.activityLighting or msg.backlighting . 2 · Activity state and events msg.theatre : first a complete {kind: \"state\", …} snapshot, then any events. The theatre state contract’s input, which publishes the snapshot as retained MQTT state. The snapshot carries area, requestId, generation, desiredActivity, requestedAt, currentActivity, phase, availability, transitionStartedAt, transitionCompletedAt, targets, failure, degraded and metrics . availability is unknown , available , degraded or unavailable . Events after the snapshot have kind ready , failed , waiting_for_source , manual_override , drift , superseded , rejected , recovery_required , recovery_adopted , recovery_unknown or recovery_ambiguous , each with area, requestId, generation, activity . A refresh carries the activity’s values. A refresh command holds the same wanted values as the intent, so a target controller that started with nothing saved can adopt them and read its device instead of staying idle."
+ },
+ {
+  "title": "Theatre activity controller",
+  "section": "Settings",
+  "description": "Defaults below are from the editor definition. Timing values are in milliseconds . Editor settings and exact d",
+  "url": "node-theatre-activity-controller.html#settings",
+  "text": "Defaults below are from the editor definition. Timing values are in milliseconds . Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label. Area area · string Empty Optional; copied into the snapshot and events. Freshness ms freshnessMs · number 30000 How long a target report counts as fresh; at least 1000. The node ticks at half this, and refreshes a settled target at half this. Profiles JSON activityProfiles · JSON object {} Activity name to its values for every target. Required: an empty object is an invalid configuration."
+ },
+ {
+  "title": "Theatre activity controller",
+  "section": "Activity profiles",
+  "description": "Each activity name is lowercase, starting with a letter ( a-z , digits, _ , - ). Each profile defines all five",
+  "url": "node-theatre-activity-controller.html#profiles",
+  "text": "Each activity name is lowercase, starting with a letter ( a-z , digits, _ , - ). Each profile defines all five targets. Display and AVR values are passed through to their controllers; source, lighting and backlighting are checked. Profiles JSON · from the example flow { \"off\": {\"display\": {\"mode\": \"off\"}, \"avr\": {\"power\": \"standby\"}, \"source\": {\"action\": \"deactivate\", \"readiness\": \"optional\"}, \"lighting\": {\"profile\": \"off\"}, \"backlighting\": {\"power\": \"off\"}}, \"tv\": {\"display\": {\"mode\": \"tv\"}, \"avr\": {\"power\": \"on\", \"source\": \"shield\"}, \"source\": {\"action\": \"activate\", \"sourceId\": \"streamer\", \"readiness\": \"required\"}, \"lighting\": {\"profile\": \"tv\"}, \"backlighting\": {\"power\": \"on\"}} } source.action is activate or deactivate ; activate needs a sourceId . A deactivate without one is sent the previous activity’s source. source.readiness is required (the activity waits for the source) or optional (a missing source only degrades it). lighting.profile names a profile in the activity lighting controller. backlighting.power is on or off ."
+ },
+ {
+  "title": "Theatre activity controller",
+  "section": "When an activity is ready",
+  "description": "Display, AVR and backlighting are required: each needs a fresh ready report. A fresh failed or unavailable rep",
+  "url": "node-theatre-activity-controller.html#readiness",
+  "text": "Display, AVR and backlighting are required: each needs a fresh ready report. A fresh failed or unavailable report from one of them fails the activity. Lighting is always optional, and the source is optional or required per profile; an optional target that isn’t ready shows in degraded instead of blocking. A required source that isn’t ready holds the phase at waiting_for_source . A fresh manual_override report from any target puts the theatre in manual_override without corrective commands; a newer request resumes automation. Once ready, a target that is only due for re-confirmation keeps the activity ready and shows as stale in degraded . An unanswered refresh is re-sent up to three attempts in all; after that the target is reported as not responding ( no-response ) and is still asked once per freshness window."
+ },
+ {
+  "title": "Theatre activity controller",
+  "section": "Startup and recovery",
+  "description": "On startup with an activity in hand, it refreshes every target and confirms again. Without one (a redeploy or ",
+  "url": "node-theatre-activity-controller.html#recovery",
+  "text": "On startup with an activity in hand, it refreshes every target and confirms again. Without one (a redeploy or restart with no context store), it probes the targets, emits recovery_required and waits for a recover message. One fresh profile matching the display, AVR, source and backlighting evidence is adopted without commands ( recovery_adopted ). With no evidence, or more than one match, the activity is unknown , the phase is idle and nothing is commanded until the next request ( recovery_unknown ), so a restart never switches a running activity off. If nobody answers the probes, it falls back the same way."
+ },
+ {
+  "title": "Theatre activity controller",
+  "section": "Status",
+  "description": "The node status reads <activity>: <phase> , or <activity>: <reason> when failed, with none when no activity is",
+  "url": "node-theatre-activity-controller.html#status",
+  "text": "The node status reads <activity>: <phase> , or <activity>: <reason> when failed, with none when no activity is in hand. Status appearance by phase Phase Appearance idle Grey dot transitioning Blue dot confirming Blue ring waiting_for_source , recovering , manual_override Yellow ring ready Green dot failed Red ring Any other, such as preparing Grey ring"
+ },
+ {
+  "title": "Theatre state contract",
+  "description": "Message shapes, output ports and settings for the bridge between MQTT activity requests and the theatre activity controller. It passes requests in and publishes the controller’s truth as retained state.",
+  "url": "node-theatre-state-contract.html",
+  "text": "Message shapes, output ports and settings for the bridge between MQTT activity requests and the theatre activity controller. It passes requests in and publishes the controller’s truth as retained state."
+ },
+ {
+  "title": "Theatre state contract",
+  "section": "Requests in. Retained truth out.",
+  "description": "Turns non-retained MQTT activity requests into activity intents for the theatre activity controller , and publ",
+  "url": "node-theatre-state-contract.html#summary",
+  "text": "Turns non-retained MQTT activity requests into activity intents for the theatre activity controller , and publishes that controller’s state snapshots as retained MQTT topics, with an operational SLO and, optionally, Home Assistant discovery. Home Assistant is only a panel: its activity selector publishes a request, and the theatre does the rest. In the palette it is theatre state contract under home automation ; on the canvas it shows its name, or theatre state contract when unnamed. Looking for wiring or the full topic list? Follow Home theatre for the wiring, and the Theatre MQTT contract for every topic and payload."
+ },
+ {
+  "title": "Theatre state contract",
+  "section": "Inputs",
+  "description": "Three kinds of message share the input. Anything else is ignored. Input messages Message Shape Use Activity re",
+  "url": "node-theatre-state-contract.html#inputs",
+  "text": "Three kinds of message share the input. Anything else is ignored. Input messages Message Shape Use Activity request msg.topic = \"<base>/request\" , msg.payload = {requestId, activity} , optional requestedAt From an MQTT in node. activity must be in Activities JSON . A retained request is inert. The same requestId again is passed on unchanged; reusing it for another activity is an error. Controller state msg.theatre = {kind: \"state\", …} The activity controller’s output 2. A snapshot older than the request in hand is ignored. Startup msg.theatreStateContract = {kind: \"startup\"} Publish (or, with discovery off, clear) the discovery entries and online again. A requestId starts with a letter or digit and holds up to 128 letters, digits, . , _ , : or - ."
+ },
+ {
+  "title": "Theatre state contract",
+  "section": "Outputs",
+  "description": "The port order is fixed. Two output ports Port Message Connect to 1 · Activity requests msg.theatre = {kind: \"",
+  "url": "node-theatre-state-contract.html#outputs",
+  "text": "The port order is fixed. Two output ports Port Message Connect to 1 · Activity requests msg.theatre = {kind: \"intent\", requestId, generation, activity, requestedAt} ; each new request takes the next generation. The theatre activity controller’s input. 2 · Retained MQTT state and HA discovery {topic, payload, retain: true} , payload a string (JSON for objects). An MQTT out node."
+ },
+ {
+  "title": "Theatre state contract",
+  "section": "Settings",
+  "description": "Defaults below are from the editor definition. The latency budget is in milliseconds . Editor settings and exa",
+  "url": "node-theatre-state-contract.html#settings",
+  "text": "Defaults below are from the editor definition. The latency budget is in milliseconds . Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label; a new palette node starts unnamed. Area area · string Empty Names the default base topic home/<area>/theatre ; needs a letter or digit. Required when Base topic is empty, or with discovery on for a contract saved before node-based IDs. With discovery on it is suggested to Home Assistant as the device’s area. Display name displayName · string Empty Names the Home Assistant device; empty means the area. Needed when discovery is on. Base topic baseTopic · string Empty Empty means home/<area>/theatre . No + or # . Home Assistant discovery discovery · boolean Off for a new node Publish discovery for the activity selector and status sensors. The stored default is null (“not set”), which a flow saved before this setting has and which keeps discovery on; a node added from the palette starts with it off. Discovery prefix discoveryPrefix · string homeassistant Home Assistant’s discovery prefix; no + or # . Activities JSON activities · JSON array [] Activities a request may name, unique lowercase identifiers, such as [\"off\",\"tv\"] . Required: an empty list is an invalid configuration. SLO window sloWindowSize · number 20 Outcomes kept for the operational SLO. Minimum samples sloMinimumSamples · number 5 Outcomes needed before normal evaluation. Latency budget (ms) sloLatencyBudgetMs · number 60000 Transition latency budget. Success objective (%) sloSuccessObjectivePct · number 95 Success rate objective. New nodes name their Home Assistant entities after the node ( idScheme = \"node\" ), so renaming the area keeps them. A contract saved before that setting has idScheme unset and keeps its area-named entities. That internal marker is set when a node is added from the palette; it is not an editor setting."
+ },
+ {
+  "title": "Theatre state contract",
+  "section": "MQTT and Home Assistant",
+  "description": "Requests arrive on <base>/request and must not be retained. Each controller snapshot is published, retained, u",
+  "url": "node-theatre-state-contract.html#publishing",
+  "text": "Requests arrive on <base>/request and must not be retained. Each controller snapshot is published, retained, under <base>/ : desired , current , phase , transition , failure , readiness , metrics , slo , slo/breach and health/<target> . An accepted request immediately publishes desired , phase requested , an empty failure and readiness unknown . Once the flows start it publishes a retained online on <base>/availability , and offline as it stops. These get through only when this node is redeployed on its own, so also set the MQTT broker node’s Birth message to online and its Close and Will messages to offline , all retained, on the same topic (README Upgrading from 2.x ). Payloads and entity details are on the Theatre MQTT contract page. With discovery on, it announces a Requested activity select and sensors for current activity, phase, readiness, failure, transition latency, operational SLO, an SLO breach binary sensor and one health sensor per target, once the flows start and again at each startup message. Switched off, the next startup message clears them."
+ },
+ {
+  "title": "Theatre state contract",
+  "section": "Status",
+  "description": "The node status reads <activity> · <generation> for the latest request, or waiting for state before one. It is",
+  "url": "node-theatre-state-contract.html#status",
+  "text": "The node status reads <activity> · <generation> for the latest request, or waiting for state before one. It is a blue dot after passing on a request, a green dot after publishing, and a grey ring otherwise."
+ },
+ {
+  "title": "Display mode controller",
+  "description": "Message shapes, output ports and settings for the TV, projector and projector screen. One request picks off, TV or projector, and the node confirms each device from fresh readings.",
+  "url": "node-display-mode-controller.html",
+  "text": "Message shapes, output ports and settings for the TV, projector and projector screen. One request picks off, TV or projector, and the node confirms each device from fresh readings."
+ },
+ {
+  "title": "Display mode controller",
+  "section": "TV, projector and screen as one display",
+  "description": "Owns Sony Bravia TV power, projector lamp power and projector-screen position for the modes off , tv and proje",
+  "url": "node-display-mode-controller.html#summary",
+  "text": "Owns Sony Bravia TV power, projector lamp power and projector-screen position for the modes off , tv and projector . In the palette it is home-display-mode-controller ; on the canvas it shows its name, or “<area> display mode”. Switching between the TV and the projector is make before break: for the projector, the lamp starts and warms up, then the screen opens, and the TV goes to standby last; for the TV, it comes on before the projector shuts down and the screen closes. If the projector fails to start, the TV is left on. A projector warming up or cooling down finishes before a newer request changes it. Looking for wiring? Follow Home theatre for how a theatre activity routes its display commands to this node and reads its results back."
+ },
+ {
+  "title": "Display mode controller",
+  "section": "Inputs",
+  "description": "Everything arrives as msg.display . A theatre activity controller sends msg.theatreCommand with target: \"displ",
+  "url": "node-display-mode-controller.html#inputs",
+  "text": "Everything arrives as msg.display . A theatre activity controller sends msg.theatreCommand with target: \"display\" ; your flow routes it here as msg.display , as the example activity flow does with a switch node and a change node. msg.display shapes kind Other fields Use intent requestId, generation, mode Asks for off , tv or projector . An older generation is rejected with stale-generation . startup None After a deploy: query every owned device and reconcile the saved intent. refresh requestId, generation, mode (optional) Re-confirm a settled display from fresh readings. observed device: \"projector\", power or watts ; optional observedAt, source The projector’s power from your own meter or adapter, when no meter host is set. Display request · msg.display { kind: \"intent\", requestId: \"example-display-1\", generation: 1, mode: \"tv\" }"
+ },
+ {
+  "title": "Display mode controller",
+  "section": "Outputs",
+  "description": "The TV, the screen and an optional power meter are reached directly over their own network APIs, so only the p",
+  "url": "node-display-mode-controller.html#outputs",
+  "text": "The TV, the screen and an optional power meter are reached directly over their own network APIs, so only the projector’s infrared toggle leaves the node as a command. Three output ports Port Message Connect to 1 · Projector IR fallback msg.payload = \"power\" with msg.display_command : the projector power toggle. Your infrared transport, commanded directly, never through Home Assistant. 2 · State and results Observed state plus ready, manual-override, failed, rejected and superseded results, and msg.theatre target state. Straight back to the theatre activity controller’s input. 3 · Projector power queries msg.payload = \"query\" when a fresh projector reading is needed and no meter host is set. Whatever makes your meter report, such as a Zigbee2MQTT plug’s zigbee2mqtt/<device>/get topic."
+ },
+ {
+  "title": "Display mode controller",
+  "section": "Settings",
+  "description": "Defaults below are from the editor definition. Timing values are in milliseconds . Editor settings and exact d",
+  "url": "node-display-mode-controller.html#settings",
+  "text": "Defaults below are from the editor definition. Timing values are in milliseconds . Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label. Area area · string Empty The area the display belongs to; used in the canvas label. TV host tvHost · string Empty Required. A Sony Bravia with IP control. TV pre-shared key tvPsk · credential Empty The Bravia’s pre-shared key. Kept in Node-RED’s encrypted credential store; never sent in a message or status. Screen controller host screenHost · string Empty Required. A Shelly Gen2 cover (its Cover RPC). Projector power meter host (optional) projectorPowerMeterHost · string Empty A Shelly Gen2 switch with power metering on the projector’s supply (switch 1). Empty: your flow reports the projector’s power. Screen viewing position screenOpenPosition · number Empty Percentage of travel for projector mode, above 0 and up to 100. Empty: the screen’s own open command. Screen position tolerance screenTolerance · number 2 How close to the viewing position confirms the screen. Confirmation poll milliseconds pollMs · number 2000 How often devices are read while a change is confirmed. Query timeout milliseconds queryTimeoutMs · number 5000 How long a device has to report before it is asked again. TV confirmation timeout tvTimeoutMs · number 30000 How long the TV has to confirm its power. Screen movement timeout screenTimeoutMs · number 65000 How long the screen has to reach its position. Projector warm-up timeout projectorWarmupMs · number 60000 How long the lamp has to report on. Projector minimum warm-up projectorMinimumWarmupMs · number 15000 The least time the lamp is given to warm up. Projector shutdown confirm delay projectorShutdownConfirmMs · number 5000 Delay before the second power toggle that confirms a shutdown. Projector cool-down timeout projectorCooldownMs · number 120000 How long the lamp has to report standby. Maximum idempotent attempts maxAttempts · number 2 Attempts in all, for a command or a reading, before the request fails. Projector on watts projectorOnWatts · number 20 A reading at or above this is on. Projector standby watts projectorOffWatts · number 10 A reading at or below this is standby. Projector power is fallback projectorPowerFallback · boolean false Counts the infrared toggle’s use in activity metrics. Transport timeout milliseconds transportTimeoutMs · number 5000 Timeout of one request to a device’s API. Keep it below Query timeout × Maximum attempts. The editor also carries projectorMeterHost , the meter host’s name before 5.0. It was removed in 6.0 and is no longer read: a node naming only that key is an invalid configuration, in the editor and after a deploy, until Projector power meter host is set. Saving the node with the new host clears it."
+ },
+ {
+  "title": "Display mode controller",
+  "section": "Projector power",
+  "description": "With a meter host, the node reads the Shelly switch itself. Without one, report the projector from any meter o",
+  "url": "node-display-mode-controller.html#projector-power",
+  "text": "With a meter host, the node reads the Shelly switch itself. Without one, report the projector from any meter or adapter: msg.display = {kind: \"observed\", device: \"projector\", power: \"on\"} with \"on\" , \"standby\" or \"transitioning\" in lower case, or a meter’s reading as watts: 140 , read against the on and standby watts. A smart plug’s own ON and OFF describe its socket, not the lamp, so send its power in watts instead. A lamp \"transitioning\" , or watts between the two thresholds, keeps its last settled state while it warms or cools. The node needs a fresh projector reading at every request and while it confirms a change, and asks for one on output 3. Leave output 3 unwired only if the meter reports on its own at least once every Query timeout milliseconds , whether or not the power changes. A device that hasn’t reported within the query timeout is asked again, up to Maximum idempotent attempts in all; then the request fails with reason no-reading , naming the device. This applies to every device. Query timeout × Maximum attempts Keep Transport timeout milliseconds below Query timeout milliseconds × Maximum idempotent attempts (5000 × 2 with the defaults), so a slow device’s answer arrives before it is given up on."
+ },
+ {
+  "title": "Display mode controller",
+  "section": "Screen viewing position",
+  "description": "Set: projector mode opens the screen to that percentage of its travel and confirms it within Screen position t",
+  "url": "node-display-mode-controller.html#screen",
+  "text": "Set: projector mode opens the screen to that percentage of its travel and confirms it within Screen position tolerance . Empty (the default for a new node): the screen’s own open command, confirmed when the screen reports itself fully open. This also suits a screen not calibrated for positions. A node saved with a position keeps it. Other modes close the screen with its own close, which runs to the end and restores a position the screen has lost. A viewing position needs a screen that knows where it is: one that doesn’t is closed first, and if it still has no position, the request fails with reason screen-not-calibrated . Calibrate the screen, or clear the viewing position."
+ },
+ {
+  "title": "Display mode controller",
+  "section": "Manual changes",
+  "description": "An unsolicited physical change after the display is ready latches manual ownership. The node observes and repo",
+  "url": "node-display-mode-controller.html#manual",
+  "text": "An unsolicited physical change after the display is ready latches manual ownership. The node observes and reports it without corrective commands; a newer activity intent resumes automation."
+ },
+ {
+  "title": "Display mode controller",
+  "section": "Status",
+  "description": "The node status shows the controller’s phase and a short text: grey ring while discovering, grey dot when idle",
+  "url": "node-display-mode-controller.html#status",
+  "text": "The node status shows the controller’s phase and a short text: grey ring while discovering, grey dot when idle, blue dot while transitioning, green dot when ready, yellow ring for a manual override, red ring when failed (with the mode and failure reason). An invalid configuration, such as a missing host, is shown on the status too."
+ },
+ {
+  "title": "Display mode controller",
+  "section": "MQTT and Home Assistant",
+  "description": "This node publishes nothing over MQTT itself. Display state reaches MQTT and Home Assistant through the theatr",
+  "url": "node-display-mode-controller.html#publishing",
+  "text": "This node publishes nothing over MQTT itself. Display state reaches MQTT and Home Assistant through the theatre activity: see Home theatre and Home Assistant ."
+ },
+ {
+  "title": "AVR controller",
+  "description": "Message shapes, output ports and settings for a Denon receiver. Power, main zone, source and bounded volume in dB, each confirmed from the receiver’s own reports.",
+  "url": "node-avr-controller.html",
+  "text": "Message shapes, output ports and settings for a Denon receiver. Power, main zone, source and bounded volume in dB, each confirmed from the receiver’s own reports."
+ },
+ {
+  "title": "AVR controller",
+  "section": "One receiver. One command owner.",
+  "description": "Owns explicit power, main-zone, source and bounded volume commands for a Denon AVR. In the palette it is home-",
+  "url": "node-avr-controller.html#summary",
+  "text": "Owns explicit power, main-zone, source and bounded volume commands for a Denon AVR. In the palette it is home-avr-controller ; on the canvas it shows its name, or “<area> AVR controller”. Looking for wiring? Follow Home theatre for the TCP connection to the receiver and how a theatre activity drives it."
+ },
+ {
+  "title": "AVR controller",
+  "section": "Inputs",
+  "description": "Requests and receiver reports arrive as msg.avr . A theatre activity controller sends msg.theatreCommand with ",
+  "url": "node-avr-controller.html#inputs",
+  "text": "Requests and receiver reports arrive as msg.avr . A theatre activity controller sends msg.theatreCommand with target: \"avr\" ; your flow routes it here as msg.avr . msg.avr shapes kind Other fields Use intent requestId, generation, power, source power: \"on\" with a source name from Sources ; omit source to keep the current input. power: \"standby\" stops the receiver. volume requestId, mode, valueDb mode: \"absolute\" sets the volume; \"relative\" changes it by a positive or negative amount. observed line One protocol line from the receiver, typically line: msg.payload from the TCP input. startup None After a deploy: discard stale observations and query the receiver. A volume request still pending fails with reason restart . refresh None Re-read the receiver without disturbing work in flight. Activity request · msg.avr { kind: \"intent\", requestId: \"example-avr-1\", generation: 1, power: \"on\", source: \"shield\" } With publishing on, an MQTT message on home/<area>/receiver/volume/set is also accepted on the input (see below)."
+ },
+ {
+  "title": "AVR controller",
+  "section": "Outputs",
+  "description": "Three output ports Port Message Connect to 1 · Denon commands msg.payload (a protocol command as a buffer) wit",
+  "url": "node-avr-controller.html#outputs",
+  "text": "Three output ports Port Message Connect to 1 · Denon commands msg.payload (a protocol command as a buffer) with msg.avr_command . A TCP output node to the receiver. 2 · State and results State plus ready, failed, rejected, superseded and volume results; while it has a request, msg.theatre = {kind: \"target_state\", target: \"avr\", requestId, generation, status, observedAt, details} . Straight back to the theatre activity controller’s input, or a debug node. 3 · MQTT publications Retained state, availability and Home Assistant discovery, when switched on. An MQTT out node. A ready state is stamped with the oldest receiver reading the request relies on, and a refresh is answered once the receiver reports again."
+ },
+ {
+  "title": "AVR controller",
+  "section": "Volume in dB",
+  "description": "Volume is in dB: requests ( valueDb ), bounds, results, published state and the Home Assistant number. The nod",
+  "url": "node-avr-controller.html#volume",
+  "text": "Volume is in dB: requests ( valueDb ), bounds, results, published state and the Home Assistant number. The node converts for the receiver, whose own 0-98 scale has 80 at 0 dB, so 0-98 maps to −80 to +18 dB, in half steps. A numeric string counts as a number. Requests are clamped to Minimum volume (dB) and Maximum volume (dB) . Bounds must be half-step values between −80 and 18 dB, with the minimum below the maximum. Relative requests resolve from a fresh observed volume, and rapid ones accumulate against the pending target. A request completes on fresh MV evidence from the receiver; ownership is then released, so a later physical or external change becomes the new baseline instead of being corrected. A request with value in the receiver’s own 0-98 was removed in 6.0: it is answered volume_rejected with reason removed-volume-value , and the node logs a warning once per deploy. A theatre activity owns power and source, not volume: a volume request waits while power or source is switching, and is rejected with receiver-not-ready while the receiver is off. Volume results on output 2 kind Fields Meaning volume_ready area, requestId, volume, bounded Confirmed by a fresh reading. volume_rejected area, requestId, reason Not sent, for example receiver-not-ready , removed-volume-value or an invalid request. volume_failed area, requestId, reason, operation, attempts attempts-exhausted , or restart (operation and attempts are null ). volume_manual_override area, requestId, reason, observed, target The receiver moved elsewhere while the request was in flight. volume_external area, previous, observed A change made outside any request. The contract example volume-ownership.mjs shows relative requests accumulating and ownership released after confirmation."
+ },
+ {
+  "title": "AVR controller",
+  "section": "Settings",
+  "description": "Defaults below are from the editor definition. Editor settings and exact defaults Setting / property Default M",
+  "url": "node-avr-controller.html#settings",
+  "text": "Defaults below are from the editor definition. Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label; a new palette node starts unnamed. Area area · string Empty Required, with a letter or digit, when publishing; topics and IDs are made from it. Sources sources · JSON {\"shield\":\"SAT/CBL\",\"playstation\":\"GAME\"} Source names mapped to the receiver’s input codes. Must be a JSON object. Retry milliseconds retryMs · number 2000 Wait before a command is retried; at least 250. Maximum attempts maxAttempts · number 3 Attempts in all before a request fails; at least 1. Minimum volume (dB) minVolumeDb · number -80 Lower volume bound, in half steps. Maximum volume (dB) maxVolumeDb · number -20 Upper volume bound, in half steps. Publish state over MQTT publishState · boolean false Publish the receiver’s state on output 3. Home Assistant discovery discovery · boolean false Announce Home Assistant entities. Needs Publish state. Discovery prefix discoveryPrefix · string homeassistant Home Assistant’s discovery topic prefix; no + or # . The editor also carries minVolume and maxVolume , the 0-98 bounds of a node saved before 5.0. They were removed in 6.0: a node with only those is an invalid configuration naming the dB setting to set, and saving it with dB bounds clears them. New nodes use node-based Home Assistant identifiers ( idScheme = \"node\" ), an internal marker set when the node is added from the palette, not an editor setting."
+ },
+ {
+  "title": "AVR controller",
+  "section": "Optional MQTT and Home Assistant",
+  "description": "Off unless switched on, and then named after the Area . Everything goes on output 3. The node announces itself",
+  "url": "node-avr-controller.html#publishing",
+  "text": "Off unless switched on, and then named after the Area . Everything goes on output 3. The node announces itself once the flows have started, and again at kind: \"startup\" . Published state and incoming requests Topic Direction Payload home/<area>/receiver/power/state Output 3 · retained ON or OFF . …/source/state Output 3 · retained The source name. …/volume/state Output 3 · retained The confirmed volume in dB. …/availability Output 3 · retained online or offline . …/volume/set MQTT in → controller A volume in dB from the Home Assistant number. With discovery on, Home Assistant gets power and source sensors and a volume number in dB between the two bounds, in 0.5 dB steps. Wire an MQTT in node on …/volume/set into this node. Sets arriving within 0.3 seconds of each other are settled to the last, which becomes an ordinary absolute volume request, bounded and confirmed like any other and never sent to the receiver directly. See Home Assistant ."
+ },
+ {
+  "title": "AVR controller",
+  "section": "Status",
+  "description": "The node status shows the controller’s phase and a short text: grey ring while discovering, grey dot when idle",
+  "url": "node-avr-controller.html#status",
+  "text": "The node status shows the controller’s phase and a short text: grey ring while discovering, grey dot when idle, blue dot while transitioning, green dot when ready, yellow ring for a manual override, red ring when failed. An invalid configuration, such as 0-98 bounds without dB bounds, is shown on the status too."
+ },
+ {
+  "title": "Source capability controller",
+  "description": "Message shapes, output ports and settings for the node that decides when a playback source is really ready. An input selection alone never counts as success.",
+  "url": "node-source-capability-controller.html",
+  "text": "Message shapes, output ports and settings for the node that decides when a playback source is really ready. An input selection alone never counts as success."
+ },
+ {
+  "title": "Source capability controller",
+  "section": "Ready means evidence.",
+  "description": "Coordinates configured playback sources, such as a streamer or a games console, from what each one can do: whe",
+  "url": "node-source-capability-controller.html#summary",
+  "text": "Coordinates configured playback sources, such as a streamer or a games console, from what each one can do: whether it can be switched on or off by command, only by a person, or not at all, and which evidence proves it ready. It holds no source names, entity IDs or transport logic; a separate adapter in your flow talks to the device. In the palette it is source capability controller under home automation ; on the canvas it shows its name, or source capability controller when unnamed. Looking for wiring? Follow Home theatre , where the theatre activity controller sends this node its source commands."
+ },
+ {
+  "title": "Source capability controller",
+  "section": "Inputs",
+  "description": "Every input is msg.sourceCapability with a kind . A source ID is lowercase, starting with a letter, and must b",
+  "url": "node-source-capability-controller.html#inputs",
+  "text": "Every input is msg.sourceCapability with a kind . A source ID is lowercase, starting with a letter, and must be configured in Source capabilities . msg.sourceCapability kinds kind Other fields Use intent requestId, generation, sourceId, action Request activate or deactivate . sourceId may be null only for a deactivate, which is then reported unavailable ( unknown-active-source ). observed generation, sourceId, status, observedAt , optional application, playback The adapter’s reading. status : active , inactive , available , unavailable or unknown . playback : playing , paused , idle , buffering , stopped or unknown . command_result generation, sourceId, ok , optional reason The adapter’s result for a command. ok: true starts confirmation; it is not confirmation. refresh optional requestId, generation, sourceId, action From the theatre activity controller: re-read the source, or adopt the activity’s wanted values after a start with nothing saved. startup None Re-observe the request in hand with a deadline; the activation itself is never replayed. tick generation Sent by the node itself on its timer. The theatre activity controller’s source command (moved from msg.theatreCommand ) already has this shape; its extra target and readiness fields are not used here. Adapter observation · msg.sourceCapability { kind: \"observed\", generation: 1, sourceId: \"streamer\", status: \"active\", observedAt: \"2026-01-01T12:00:00.200Z\", application: \"player.example\", playback: \"paused\" }"
+ },
+ {
+  "title": "Source capability controller",
+  "section": "Outputs",
+  "description": "The port order is fixed. Two output ports Port Message Connect to 1 · Semantic source commands msg.sourceComma",
+  "url": "node-source-capability-controller.html#outputs",
+  "text": "The port order is fixed. Two output ports Port Message Connect to 1 · Semantic source commands msg.sourceCommand = {sourceId, operation, requestId, generation, attempt} ; operation is activate , deactivate or observe . Your source adapter, which carries out the operation and answers with command_result and observed messages. 2 · Theatre target state msg.theatre = {kind: \"target_state\", target: \"source\", requestId, generation, status, observedAt, details, sourceId, action} , with classification and failure when set. The theatre activity controller’s input. details holds observedStatus , readiness (each evidence layer: required, available, active, application, playback, satisfied ), recovery and metrics ( attempts, retries, fallbackUsed )."
+ },
+ {
+  "title": "Source capability controller",
+  "section": "Settings",
+  "description": "Defaults below are from the editor definition. Timing values are in milliseconds . Editor settings and exact d",
+  "url": "node-source-capability-controller.html#settings",
+  "text": "Defaults below are from the editor definition. Timing values are in milliseconds . Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label. Area area · string Empty Optional label; empty means no area. Source capabilities sources · JSON object {} Source ID to its capabilities. Required: an empty object is an invalid configuration. Poll milliseconds pollMs · number 2000 How often to send observe while confirming; at least 250. Confirmation timeout confirmationTimeoutMs · number 15000 How long one attempt may take to confirm; at least 1000. Maximum attempts maxAttempts · number 2 Attempts before failing; at least 1."
+ },
+ {
+  "title": "Source capability controller",
+  "section": "Source capabilities",
+  "description": "Each source has activation , deactivation and confirmation , and may set fallback: true , which is reported as",
+  "url": "node-source-capability-controller.html#capabilities",
+  "text": "Each source has activation , deactivation and confirmation , and may set fallback: true , which is reported as fallbackUsed once a command is sent to it. Source capabilities · from the example flow {\"streamer\": {\"activation\": \"command\", \"deactivation\": \"command\", \"confirmation\": \"active\"}} command : the node sends the operation on output 1. external : someone else switches it; the node only observes and waits ( waiting_for_source ). unavailable : it can’t be done; the request is reported unavailable ( unobservable-source or unsupported-deactivation ). Confirmation evidence confirmation Ready when the observation shows available status available or active active status active application status active and an application playing status active and playback playing unavailable Never; the source can’t be confirmed A deactivate is confirmed by status inactive . An unavailable observation reports the source unavailable ( adapter-unavailable )."
+ },
+ {
+  "title": "Source capability controller",
+  "section": "Retries, failure and manual changes",
+  "description": "A failed command_result or a confirmation timeout retries the command until Maximum attempts , then fails with",
+  "url": "node-source-capability-controller.html#behaviour",
+  "text": "A failed command_result or a confirmation timeout retries the command until Maximum attempts , then fails with the adapter’s reason, command-failed or confirmation-timeout . A reading that stops matching after the source was ready is a person’s change: it is reported as manual_override and never corrected. A ready source is re-read on refresh without leaving ready."
+ },
+ {
+  "title": "Source capability controller",
+  "section": "Status",
+  "description": "The node status reads <sourceId>: <phase> , with none when no source is in hand. Status appearance by phase Ph",
+  "url": "node-source-capability-controller.html#status",
+  "text": "The node status reads <sourceId>: <phase> , with none when no source is in hand. Status appearance by phase Phase Appearance idle Grey dot transitioning Blue dot confirming Blue ring waiting_for_source Yellow ring ready Green dot unavailable Yellow dot failed Red ring Any other, such as manual_override Grey ring"
+ },
+ {
+  "title": "Backlighting controller",
+  "description": "Message shapes, output ports and settings for TV backlight power. A command acknowledgement never counts as the backlight being on or off.",
+  "url": "node-backlighting-controller.html",
+  "text": "Message shapes, output ports and settings for TV backlight power. A command acknowledgement never counts as the backlight being on or off."
+ },
+ {
+  "title": "Backlighting controller",
+  "section": "On or off, confirmed by a reading.",
+  "description": "Owns the power intent of a TV backlight (bias lighting behind the screen) with bounded command retries. It is ",
+  "url": "node-backlighting-controller.html#summary",
+  "text": "Owns the power intent of a TV backlight (bias lighting behind the screen) with bounded command retries. It is confirmed only when the device reports the wanted power. Your flow’s transport switches the device and reports its power back. In the palette it is backlighting controller under home automation ; on the canvas it shows its name, or TV backlighting when unnamed. Looking for wiring? Follow Home theatre , where the theatre activity controller sends this node its backlighting commands. Backlighting is a required target: an activity isn’t ready until it confirms."
+ },
+ {
+  "title": "Backlighting controller",
+  "section": "Inputs",
+  "description": "Every input is msg.backlighting with a kind . msg.backlighting kinds kind Other fields Use intent requestId, g",
+  "url": "node-backlighting-controller.html#inputs",
+  "text": "Every input is msg.backlighting with a kind . msg.backlighting kinds kind Other fields Use intent requestId, generation, power , optional requestedAt Request power on or off ; generation is a positive integer. observed generation, power, observedAt The device’s reported power. A reading older than the request is ignored. command_result generation, ok , optional reason The transport’s result. ok: true starts confirmation; it is not confirmation. refresh optional requestId, generation, power From the theatre activity controller: re-read a settled backlight, or adopt the activity’s wanted power after a start with nothing saved. startup None Re-read the device for the request in hand; never replays the command. tick generation Sent by the node itself on its timer. Intent · msg.backlighting { kind: \"intent\", requestId: \"example-backlighting-1\", generation: 1, power: \"on\" }"
+ },
+ {
+  "title": "Backlighting controller",
+  "section": "Outputs",
+  "description": "The port order is fixed. Two output ports Port Message Connect to 1 · Backlighting commands msg.backlightingCo",
+  "url": "node-backlighting-controller.html#outputs",
+  "text": "The port order is fixed. Two output ports Port Message Connect to 1 · Backlighting commands msg.backlightingCommand = {operation, requestId, generation, power, attempt} ; operation is set_power or observe . Your backlight transport, which answers with command_result and observed messages. 2 · Theatre target state msg.theatre = {kind: \"target_state\", target: \"backlighting\", requestId, generation, status, observedAt, details} , with classification and failure when set. The theatre activity controller’s input. details holds the wanted power , the observedPower , recovery and metrics ( attempts, retries, fallbackUsed )."
+ },
+ {
+  "title": "Backlighting controller",
+  "section": "Settings",
+  "description": "Defaults below are from the editor definition. Timing values are in milliseconds . Editor settings and exact d",
+  "url": "node-backlighting-controller.html#settings",
+  "text": "Defaults below are from the editor definition. Timing values are in milliseconds . Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label. Area area · string Empty Optional label; empty means no area. Poll ms pollMs · number 2000 How often to send observe while confirming. Confirm ms confirmationTimeoutMs · number 15000 How long one attempt may take to confirm. Attempts maxAttempts · number 2 Power commands before failing."
+ },
+ {
+  "title": "Backlighting controller",
+  "section": "Retries, failure and manual changes",
+  "description": "An intent sends set_power , then polls with observe until the reported power matches. A failed command_result ",
+  "url": "node-backlighting-controller.html#behaviour",
+  "text": "An intent sends set_power , then polls with observe until the reported power matches. A failed command_result or a confirmation timeout resends set_power until Attempts , then fails with the transport’s reason, command-failed or confirmation-timeout . A different power reported after the backlight was ready is a person’s change: it is reported as manual_override and never corrected until the next request. A ready backlight is re-read on refresh without leaving ready."
+ },
+ {
+  "title": "Backlighting controller",
+  "section": "Status",
+  "description": "The node status reads <power>: <phase> , with none when no request is in hand. Status appearance by phase Phas",
+  "url": "node-backlighting-controller.html#status",
+  "text": "The node status reads <power>: <phase> , with none when no request is in hand. Status appearance by phase Phase Appearance idle Grey dot transitioning Blue dot confirming Blue ring ready Green dot failed Red ring Any other, such as manual_override Grey ring"
+ },
+ {
+  "title": "Activity lighting controller",
+  "description": "Message shapes, output ports and settings for the node that styles room lights for a theatre activity. It only touches lights that are already on and not set by a person.",
+  "url": "node-activity-lighting-controller.html",
+  "text": "Message shapes, output ports and settings for the node that styles room lights for a theatre activity. It only touches lights that are already on and not set by a person."
+ },
+ {
+  "title": "Activity lighting controller",
+  "section": "Atmosphere without taking over.",
+  "description": "Applies a configured style, such as dim and warm for a film, to room lights that are already on and not manual",
+  "url": "node-activity-lighting-controller.html#summary",
+  "text": "Applies a configured style, such as dim and warm for a film, to room lights that are already on and not manually owned, and holds them in the room lighting controller while the activity runs. It never switches a light on and never talks to a light itself: it sends standard msg.lighting intents to a room lighting controller . Room-light failure only degrades an activity; it never makes one succeed or fail. In the palette it is activity lighting controller under home automation ; on the canvas it shows its name, or activity lighting when unnamed. Looking for wiring? Follow Home theatre , where the theatre activity controller sends this node its lighting commands."
+ },
+ {
+  "title": "Activity lighting controller",
+  "section": "Inputs",
+  "description": "Every input is msg.activityLighting with a kind . msg.activityLighting kinds kind Other fields Use intent requ",
+  "url": "node-activity-lighting-controller.html#inputs",
+  "text": "Every input is msg.activityLighting with a kind . msg.activityLighting kinds kind Other fields Use intent requestId, generation, profile , optional requestedAt Apply a configured profile; generation is a positive integer. observed generation, target, on, observedAt , optional manual, available, values One light’s state. Lights outside the profile and readings older than the request are ignored. available: false fails the profile ( lighting-unavailable ). command_result generation, ok , optional reason Result of an apply. ok: true is not confirmation. refresh optional requestId, generation, profile From the theatre activity controller: re-read the lights, or adopt the activity’s profile after a start with nothing saved. startup None Re-read the lights for the profile in hand, with a deadline. tick generation Sent by the node itself at the confirmation deadline. The theatre activity controller’s lighting command (moved from msg.theatreCommand ) carries profile from the activity’s lighting values, so it already has the intent shape. No node in the package sends the observed readings yet, and the example flow doesn’t wire them: build them in your flow from each light’s own reports, one message per light, with the generation of the request they answer."
+ },
+ {
+  "title": "Activity lighting controller",
+  "section": "Outputs",
+  "description": "The port order is fixed. Two output ports Port Message Connect to 1 · Room-lighting commands msg.activityLight",
+  "url": "node-activity-lighting-controller.html#outputs",
+  "text": "The port order is fixed. Two output ports Port Message Connect to 1 · Room-lighting commands msg.activityLightingCommand = {operation, requestId, generation, profile, attempt} , operation apply , observe or release . An apply or release also carries msg.lighting . The room lighting controller’s input. 2 · Theatre target state msg.theatre = {kind: \"target_state\", target: \"lighting\", requestId, generation, status, observedAt, details} , with classification and failure when set. The theatre activity controller’s input. details holds the profile , how many lights matched , how many were preserved (off or manual, so left alone), how many were expected , and metrics . Apply · msg.lighting on output 1 { kind: \"intent\", targets: [\"main\"], state: \"ON\", values: {brightnessPct: 25, colorTempKelvin: 2500}, source: \"activity\", owner: \"activity\", updateOnOnly: true, preserveManual: true }"
+ },
+ {
+  "title": "Activity lighting controller",
+  "section": "Settings",
+  "description": "Defaults below are from the editor definition. Timing values are in milliseconds . Editor settings and exact d",
+  "url": "node-activity-lighting-controller.html#settings",
+  "text": "Defaults below are from the editor definition. Timing values are in milliseconds . Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label. Area area · string Empty Optional label; empty means no area. Profiles JSON profiles · JSON object {} Profile name to {targets, values} . Required: an empty object is an invalid configuration. Owner owner · string activity The owner its lights are held under in the room lighting controller. Give each activity lighting node that feeds the same room controller its own owner. Confirm ms confirmationTimeoutMs · number 15000 How long one apply may take to confirm; at least 1000. Attempts maxAttempts · number 2 Applies before failing; at least 1."
+ },
+ {
+  "title": "Activity lighting controller",
+  "section": "Profiles",
+  "description": "Profile and light names are lowercase, starting with a letter. targets lists the room’s light names, without d",
+  "url": "node-activity-lighting-controller.html#profiles",
+  "text": "Profile and light names are lowercase, starting with a letter. targets lists the room’s light names, without duplicates; values is in the package’s own units. Profiles JSON · from the example flow { \"off\": {\"targets\": [], \"values\": {}}, \"tv\": {\"targets\": [\"main\"], \"values\": {\"brightnessPct\": 25, \"colorTempKelvin\": 2500}} } brightnessPct runs from 0 (the dimmest the light goes, not off) to 100. colorTempKelvin must be above 0. Zigbee2MQTT’s own brightness and color_temp were removed in 6.0: a profile using them is an invalid configuration. A profile with no targets, such as off , is ready at once."
+ },
+ {
+  "title": "Activity lighting controller",
+  "section": "How lights are judged and released",
+  "description": "Each light is judged by what it reports, after the room controller’s conversion. A light that is off or manual",
+  "url": "node-activity-lighting-controller.html#behaviour",
+  "text": "Each light is judged by what it reports, after the room controller’s conversion. A light that is off or manual is preserved, not styled. A light that has reported none of the profile’s fields since the node started, such as one that only switches on and off, is confirmed by being on; the node warns once per deploy that the values may not apply. Mark such a light onOffOnly on the room so the room won’t send them. Once a light has reported one of the fields, it is held to the profile’s values. A failed command_result or a confirmation timeout re-applies until Attempts , then fails with the reason, command-failed or confirmation-timeout . When a new profile no longer includes a light, including a switch to an off profile with no targets, it sends msg.lighting = {kind: \"release\", owner, targets, source: \"activity\"} for those lights, and the room controller restyles them."
+ },
+ {
+  "title": "Activity lighting controller",
+  "section": "Status",
+  "description": "The node status reads <profile>: <phase> , with none when no profile is in hand. Status appearance by phase Ph",
+  "url": "node-activity-lighting-controller.html#status",
+  "text": "The node status reads <profile>: <phase> , with none when no profile is in hand. Status appearance by phase Phase Appearance idle Grey dot transitioning Blue dot confirming Blue ring ready Green dot failed Yellow ring: an optional target, so the activity is only degraded Any other, such as manual_override Grey ring"
+ },
+ {
+  "title": "Shelly cover",
+  "description": "Message shapes, output ports and settings for the adapter between a cover controller and a Shelly Gen2-or-later device in cover mode, over the device’s own MQTT API.",
+  "url": "node-shelly-cover.html",
+  "text": "Message shapes, output ports and settings for the adapter between a cover controller and a Shelly Gen2-or-later device in cover mode, over the device’s own MQTT API."
+ },
+ {
+  "title": "Shelly cover",
+  "section": "Neutral commands in, Shelly MQTT out",
+  "description": "The shelly cover node (type home-shelly-cover ; canvas label: its name, or “shelly cover”) translates a cover ",
+  "url": "node-shelly-cover.html#summary",
+  "text": "The shelly cover node (type home-shelly-cover ; canvas label: its name, or “shelly cover”) translates a cover controller’s neutral commands into the device’s MQTT control commands, and the device’s status reports into neutral cover readings. It has no broker connection of its own: device messages arrive from an MQTT in node, and its publications leave through an MQTT out node. No function nodes, no Home Assistant and no HTTP. Looking for wiring? Follow Wire a shelly cover , then Wire a cover for the controller side."
+ },
+ {
+  "title": "Shelly cover",
+  "section": "Inputs",
+  "description": "One input takes both the controller’s commands and the device’s MQTT messages. Anything else is ignored. Input",
+  "url": "node-shelly-cover.html#inputs",
+  "text": "One input takes both the controller’s commands and the device’s MQTT messages. Anything else is ignored. Input messages From Message Effect Cover controller, output 1 msg.cover_command = {operation, position, generation, …} set_position , stop and observe are translated (see device topics ). Other operations, including open and close , are not translated. MQTT in on <prefix>/# <prefix>/status/cover:<id> The cover’s full status: a new reading. MQTT in <prefix>/events/rpc NotifyStatus changes for this cover are laid over the last full status; NotifyFullStatus replaces it. Only a change of position, state or calibration makes a new reading. MQTT in <prefix>/online true or false : availability."
+ },
+ {
+  "title": "Shelly cover",
+  "section": "Outputs",
+  "description": "Two output ports Port Message Connect to 1 · To the device msg.topic and text msg.payload An MQTT out node on ",
+  "url": "node-shelly-cover.html#outputs",
+  "text": "Two output ports Port Message Connect to 1 · To the device msg.topic and text msg.payload An MQTT out node on the same broker, with no topic set. 2 · To the cover controller msg.cover = {kind: \"observed\", position, motion, observedAt} , {kind: \"availability\", online} or {kind: \"command_result\", generation, ok: false, reason} The cover controller’s input. Position runs 0 (closed) to 100 (open), as the controller’s does; set invert on the controller if yours runs the other way. Motion is opening , closing or stopped (the device’s open , closed and stopped all read as stopped). observedAt is when the message arrived, never the device’s own clock."
+ },
+ {
+  "title": "Shelly cover",
+  "section": "Settings",
+  "description": "Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label. ",
+  "url": "node-shelly-cover.html#settings",
+  "text": "Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label. MQTT topic prefix topicPrefix · string Empty Required. The device’s topic prefix: its device ID unless a custom prefix is set on the device. It cannot contain + or # . Cover ID channel · number 0 0 , or 1 for a device’s second cover. On the device, MQTT must be on with Enable MQTT Control (the default), or it ignores the commands. RPC status notifications (also the default) report each change. Calibrate the cover on the device first."
+ },
+ {
+  "title": "Shelly cover",
+  "section": "Device topics and payloads",
+  "description": "Topics sent and read Topic Direction Payload <prefix>/command/cover:<id> Output 1 pos,<0-100> for set_position",
+  "url": "node-shelly-cover.html#device-topics",
+  "text": "Topics sent and read Topic Direction Payload <prefix>/command/cover:<id> Output 1 pos,<0-100> for set_position (rounded and clamped), stop for stop , status_update for observe . <prefix>/status/cover:<id> Read The cover’s full status JSON, including current_pos , state and pos_control . <prefix>/events/rpc Read NotifyStatus / NotifyFullStatus frames holding cover:<id> . <prefix>/online Read true or false . When only changes have arrived and none carries the position, the node sends status_update to get the full status first."
+ },
+ {
+  "title": "Shelly cover",
+  "section": "Availability",
+  "description": "<prefix>/online becomes msg.cover = {kind: \"availability\", online} on output 2. When the device comes back onl",
+  "url": "node-shelly-cover.html#availability",
+  "text": "<prefix>/online becomes msg.cover = {kind: \"availability\", online} on output 2. When the device comes back online, the node also sends status_update , since the cover may have moved while it was away."
+ },
+ {
+  "title": "Shelly cover",
+  "section": "Uncalibrated or unknown position",
+  "description": "The node never makes up a position. A cover that is not calibrated ( pos_control false, or no current_pos in a",
+  "url": "node-shelly-cover.html#calibration",
+  "text": "The node never makes up a position. A cover that is not calibrated ( pos_control false, or no current_pos in a full status) or whose position is unknown ( current_pos null) fails the command in hand with {kind: \"command_result\", ok: false, reason} , reason not-calibrated or position-unknown . A set_position is not sent to an uncalibrated cover, which would refuse it. Reports while the device says calibrating are ignored."
+ },
+ {
+  "title": "Shelly cover",
+  "section": "Status",
+  "description": "waiting for the device (grey ring) until the first status arrives. <state> · <position>% (green), for example ",
+  "url": "node-shelly-cover.html#status",
+  "text": "waiting for the device (grey ring) until the first status arrives. <state> · <position>% (green), for example stopped · 60% ; ? stands for an unknown position. not calibrated (yellow)."
+ },
+ {
+  "title": "Zigbee2MQTT cover",
+  "description": "Message shapes, output ports and settings for the adapter between a cover controller and a Zigbee2MQTT blind, shutter or curtain motor.",
+  "url": "node-z2m-cover.html",
+  "text": "Message shapes, output ports and settings for the adapter between a cover controller and a Zigbee2MQTT blind, shutter or curtain motor."
+ },
+ {
+  "title": "Zigbee2MQTT cover",
+  "section": "Neutral commands in, Zigbee2MQTT out",
+  "description": "The zigbee2mqtt cover node (type home-z2m-cover ; canvas label: its name, its friendly name, or “zigbee2mqtt c",
+  "url": "node-z2m-cover.html#summary",
+  "text": "The zigbee2mqtt cover node (type home-z2m-cover ; canvas label: its name, its friendly name, or “zigbee2mqtt cover”) translates a cover controller’s neutral commands into Zigbee2MQTT’s set and get messages, and the device’s state reports into neutral cover readings. It has no broker connection of its own: device messages arrive from MQTT in nodes, and its publications leave through an MQTT out node. Never Home Assistant. Looking for wiring? Follow Wire a zigbee2mqtt cover , then Wire a cover for the controller side."
+ },
+ {
+  "title": "Zigbee2MQTT cover",
+  "section": "Inputs",
+  "description": "Input messages From Message Effect Cover controller, output 1 msg.cover_command = {operation, position, …} set",
+  "url": "node-z2m-cover.html#inputs",
+  "text": "Input messages From Message Effect Cover controller, output 1 msg.cover_command = {operation, position, …} set_position , open , close , stop and observe are translated. Other operations are ignored. MQTT in on zigbee2mqtt/<device> The device’s state JSON A reading when it carries a position, a motion or an end state; otherwise ignored. MQTT in on zigbee2mqtt/<device>/availability {\"state\": \"online\"} / \"offline\" , or plain online / offline Availability. Topics are shown with the default base topic; <device> is the friendly name. Messages on other topics are ignored."
+ },
+ {
+  "title": "Zigbee2MQTT cover",
+  "section": "Outputs",
+  "description": "Two output ports Port Message Connect to 1 · To the device msg.topic and JSON text msg.payload An MQTT out nod",
+  "url": "node-z2m-cover.html#outputs",
+  "text": "Two output ports Port Message Connect to 1 · To the device msg.topic and JSON text msg.payload An MQTT out node on the same broker, with no topic set. 2 · To the cover controller msg.cover = {kind: \"observed\", position, state, motion, observedAt, battery, charging} or {kind: \"availability\", online} The cover controller’s input. Fields other than kind and observedAt appear only when reported. observedAt is when the report arrived, never a time the device gives. battery and charging (from charging_status , as text) are passed on."
+ },
+ {
+  "title": "Zigbee2MQTT cover",
+  "section": "Settings",
+  "description": "Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label. ",
+  "url": "node-z2m-cover.html#settings",
+  "text": "Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label. Base topic baseTopic · string zigbee2mqtt Zigbee2MQTT’s base topic, unless changed in its settings. It cannot contain + or # . Friendly name friendlyName · string Empty Required. The device’s friendly name in Zigbee2MQTT. It cannot contain + or # ."
+ },
+ {
+  "title": "Zigbee2MQTT cover",
+  "section": "Device topics and payloads",
+  "description": "Messages sent Controller command Topic Payload set_position zigbee2mqtt/<device>/set {\"position\": <0-100>} , r",
+  "url": "node-z2m-cover.html#device-topics",
+  "text": "Messages sent Controller command Topic Payload set_position zigbee2mqtt/<device>/set {\"position\": <0-100>} , rounded and clamped open zigbee2mqtt/<device>/set {\"state\": \"OPEN\"} close zigbee2mqtt/<device>/set {\"state\": \"CLOSE\"} stop zigbee2mqtt/<device>/set {\"state\": \"STOP\"} observe zigbee2mqtt/<device>/get {\"position\": \"\"} , or {\"state\": \"\"} once the device has reported a state without a position Some devices can’t be read through …/get ; they still report their position whenever it changes."
+ },
+ {
+  "title": "Zigbee2MQTT cover",
+  "section": "How a report is read",
+  "description": "Position is position from 0 (closed) to 100 (open), as Zigbee2MQTT reports by default. Set invert on the contr",
+  "url": "node-z2m-cover.html#readings",
+  "text": "Position is position from 0 (closed) to 100 (open), as Zigbee2MQTT reports by default. Set invert on the controller, or the device’s invert_cover option, if yours runs the other way. Motion comes from motor_state ( opening , closing , stopped ; pause reads as stopped), else moving ( UP , DOWN , STOP ), else running: false as stopped. A cover that reports none is confirmed by the controller’s settle time. End state : with a position, open only at 100 and closed only at 0. Without a position, the device’s OPEN or CLOSE , but only once its motion says it has stopped. Set the controller’s Cover to Open, close and stop only for such a cover; one that reports no motion either cannot be confirmed, and the controller says so."
+ },
+ {
+  "title": "Zigbee2MQTT cover",
+  "section": "Availability",
+  "description": "zigbee2mqtt/<device>/availability becomes msg.cover = {kind: \"availability\", online} on output 2. It needs Zig",
+  "url": "node-z2m-cover.html#availability",
+  "text": "zigbee2mqtt/<device>/availability becomes msg.cover = {kind: \"availability\", online} on output 2. It needs Zigbee2MQTT’s availability setting on; without it the cover is taken as available."
+ },
+ {
+  "title": "Zigbee2MQTT cover",
+  "section": "Status",
+  "description": "waiting for the device (grey ring) until the first reading. online (green) or offline (grey ring) after an ava",
+  "url": "node-z2m-cover.html#status",
+  "text": "waiting for the device (grey ring) until the first reading. online (green) or offline (grey ring) after an availability message. After a report: the position, such as 60% , or the end state, or position unknown ; while moving it is prefixed with the motion, such as closing · 60% ."
+ },
+ {
+  "title": "Shelly switch",
+  "description": "Message shapes, output ports, modes and settings for the adapter for one switch channel of a Shelly Gen2-or-later relay, over the device’s own MQTT API.",
+  "url": "node-shelly-switch.html",
+  "text": "Message shapes, output ports, modes and settings for the adapter for one switch channel of a Shelly Gen2-or-later relay, over the device’s own MQTT API."
+ },
+ {
+  "title": "Shelly switch",
+  "section": "One switch channel, used as the device is set up",
+  "description": "The shelly switch node (type home-shelly-switch ; canvas label: its name, or “shelly switch”) connects one swi",
+  "url": "node-shelly-switch.html#summary",
+  "text": "The shelly switch node (type home-shelly-switch ; canvas label: its name, or “shelly switch”) connects one switch channel of a Shelly Gen2-or-later relay. It reads the device’s own configuration for the channel and works in one of two ways: detached , where the wall switch’s presses go to a switch lighting policy and the relay keeps smart bulbs powered, or relay , where the relay is the light. It has no broker connection of its own: device messages arrive from an MQTT in node, and its publications leave through an MQTT out node. No function nodes, no Home Assistant and no HTTP. Looking for wiring? Follow Wire a shelly switch , then the wall switches guide for the switch policy."
+ },
+ {
+  "title": "Shelly switch",
+  "section": "Inputs",
+  "description": "Input messages From Message Effect MQTT in on <prefix>/# Device topics (see device topics ) Configuration repl",
+  "url": "node-shelly-switch.html#inputs",
+  "text": "Input messages From Message Effect MQTT in on <prefix>/# Device topics (see device topics ) Configuration replies, status, change notifications, button events and availability. Relay mode only msg.switchCommand = {power: \"on\" | \"off\"} Switches the relay. Refused in detached mode, before the mode is known, and while the device is offline; any other power is ignored."
+ },
+ {
+  "title": "Shelly switch",
+  "section": "Outputs",
+  "description": "Two output ports Port Message Connect to 1 · To the device msg.topic and text msg.payload An MQTT out node on ",
+  "url": "node-shelly-switch.html#outputs",
+  "text": "Two output ports Port Message Connect to 1 · To the device msg.topic and text msg.payload An MQTT out node on the same broker, with no topic set. 2 · Switch messages or relay state Detached: msg.source messages; relay: msg.switchState (see Mode ) Detached: a switch lighting policy , whose intents go to the room controller. Relay: no node of this package reads that state yet. Readings are timed ( observedAt ) when they arrive."
+ },
+ {
+  "title": "Shelly switch",
+  "section": "Settings",
+  "description": "Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label. ",
+  "url": "node-shelly-switch.html#settings",
+  "text": "Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label. MQTT topic prefix topicPrefix · string Empty Required. The device’s topic prefix: its device ID unless a custom prefix is set on the device. It cannot contain + or # . Switch ID channel · number 0 0 , or the number of another switch on a device with more than one. Use one node per switch. Mode mode · enum auto auto (“As the device is set up”) reads the device’s configuration; detached or relay override it, and are needed when it can’t be read. On the device, MQTT must be on with Enable MQTT Control and RPC status notifications (both the default)."
+ },
+ {
+  "title": "Shelly switch",
+  "section": "Mode",
+  "description": "With auto , the device’s in_mode for switch:<id> decides: detached means detached, and every other mode (follo",
+  "url": "node-shelly-switch.html#mode",
+  "text": "With auto , the device’s in_mode for switch:<id> decides: detached means detached, and every other mode (follow, flip, momentary and the rest) means relay. The input’s type (switch or button) decides what detached mode emits. What each mode emits on output 2 Mode Event Message Detached, switch-type input Input on or off msg.source = \"switch\" , msg.payload = {state} ; the first, from the device’s status, carries baseline: true Detached, button-type input single_push , double_push , long_push msg.source = \"switch-action\" , msg.payload = {action} with single , double or long . The switch policy acts on single and double; long is passed on for later use. Other events are ignored. Detached Device offline or online msg.source = \"switch-availability\" , msg.payload \"online\" or \"offline\" Relay Relay output reported msg.switchState = {kind: \"observed\", on, person, observedAt} ; person is true when the device names its own input as the source of the change Relay Device offline or online msg.switchState = {kind: \"availability\", online} In detached mode the relay is never switched from here. If it reports off, the status warns that the bulbs have lost power."
+ },
+ {
+  "title": "Shelly switch",
+  "section": "Device topics and payloads",
+  "description": "Topics sent and read Topic Direction Payload <prefix>/rpc Output 1 {\"id\": <n>, \"src\": \"<prefix>/home-automatio",
+  "url": "node-shelly-switch.html#device-topics",
+  "text": "Topics sent and read Topic Direction Payload <prefix>/rpc Output 1 {\"id\": <n>, \"src\": \"<prefix>/home-automation-switch-<id>\", \"method\": \"Shelly.GetConfig\"} <prefix>/command Output 1 status_update : the device publishes its whole status <prefix>/command/switch:<id> Output 1, relay mode on or off <prefix>/home-automation-switch-<id>/rpc Read The configuration reply: switch:<id> ( in_mode , input_id ) and its input:<n> ( type ). Replies to other requests are ignored. <prefix>/status Read The whole status: the baseline for the relay and the input. <prefix>/status/switch:<id> Read The relay’s status. <prefix>/events/rpc Read NotifyStatus for the relay or input, and NotifyEvent button events. <prefix>/online Read true or false . The reply is addressed under the device’s prefix, so the same MQTT in node on <prefix>/# receives it."
+ },
+ {
+  "title": "Shelly switch",
+  "section": "Startup and availability",
+  "description": "Once the flows have started, and whenever the device comes back online, the node sends Shelly.GetConfig and st",
+  "url": "node-shelly-switch.html#availability",
+  "text": "Once the flows have started, and whenever the device comes back online, the node sends Shelly.GetConfig and status_update . If no configuration arrives within 10 seconds, it is taken as unreadable: with Mode on auto , nothing is passed on until Mode says how. Offline and online are passed on as shown under Mode , and relay commands are refused while offline."
+ },
+ {
+  "title": "Shelly switch",
+  "section": "Status",
+  "description": "reading the device’s configuration (grey ring) while the request is out. configuration unreadable: set Mode (r",
+  "url": "node-shelly-switch.html#status",
+  "text": "reading the device’s configuration (grey ring) while the request is out. configuration unreadable: set Mode (red ring). The mode found, such as detached, switch input (green). With Mode set, it reads detached (set) or relay (set) , followed by what the device says, if read. Relay mode adds the relay state: · on or · off . Detached with the relay off adds · relay off: bulbs unpowered (yellow ring). offline (grey ring)."
+ },
+ {
+  "title": "Theatre MQTT contract",
+  "description": "The topics, payloads and guarantees of the whole-theatre MQTT contract: one request topic in, retained state topics out, and an optional Home Assistant panel.",
+  "url": "contract-theatre-mqtt.html",
+  "text": "The topics, payloads and guarantees of the whole-theatre MQTT contract: one request topic in, retained state topics out, and an optional Home Assistant panel."
+ },
+ {
+  "title": "Theatre MQTT contract",
+  "section": "One request in. Retained state out.",
+  "description": "The theatre state contract node bridges the theatre activity controller to MQTT and, optionally, Home Assistan",
+  "url": "contract-theatre-mqtt.html#summary",
+  "text": "The theatre state contract node bridges the theatre activity controller to MQTT and, optionally, Home Assistant, without moving policy into flow wiring. It accepts activity requests on one topic, passes them on as intents, and publishes each controller snapshot as retained state topics. Looking for wiring? Follow the Home theatre guide for the full flow, and Home Assistant for the optional panel."
+ },
+ {
+  "title": "Theatre MQTT contract",
+  "section": "Public contract",
+  "description": "Each surface of the contract carries a fixed shape and keeps one invariant. Public contract Surface Contract I",
+  "url": "contract-theatre-mqtt.html#contract",
+  "text": "Each surface of the contract carries a fixed shape and keeps one invariant. Public contract Surface Contract Invariant Request Unique request ID, configured activity and timestamp Retained requests are inert Desired state Activity and generation One current request identity Target evidence Status, observation time, classification and failure Older evidence cannot overwrite newer evidence Outcome Current activity, phase, readiness and failure Ready requires all mandatory targets Operations Latency, retries, fallbacks, outcomes and objective status Expected waiting does not become a false failure"
+ },
+ {
+  "title": "Theatre MQTT contract",
+  "section": "Base topic",
+  "description": "Every topic sits under one base topic. With the contract node's Base topic setting empty, it is home/<area>/th",
+  "url": "contract-theatre-mqtt.html#base-topic",
+  "text": "Every topic sits under one base topic. With the contract node's Base topic setting empty, it is home/<area>/theatre , made from the node's Area ; set it to use any concrete MQTT topic instead. Leading and trailing slashes are dropped, and wildcards ( + , # ) are refused. Below, <base> stands for it."
+ },
+ {
+  "title": "Theatre MQTT contract",
+  "section": "Request",
+  "description": "Send requests to <base>/request , not retained. The payload is a JSON object (a string or buffer is parsed as ",
+  "url": "contract-theatre-mqtt.html#request",
+  "text": "Send requests to <base>/request , not retained. The payload is a JSON object (a string or buffer is parsed as JSON): Request · <base>/request { \"requestId\": \"movie-0001\", \"activity\": \"movie\", \"requestedAt\": \"2026-01-01T20:00:00.000Z\" } Request fields Field Rule requestId Required and unique per request: starts with a letter or digit, then up to 127 letters, digits, . , _ , : or - . Repeating the same ID with the same activity is a duplicate, not a new request; reusing it for another activity is an error. activity Required; must be one of the activities configured in the contract's Activities JSON . requestedAt Optional ISO timestamp; when absent, the time of receipt. A new request takes the next generation and resumes automation. On acceptance the contract publishes desired , sets phase to requested , clears failure and sets readiness to unknown until the controller reports. Retained requests are inert A request that arrives retained is ignored and traced as retained-request , so a broker replaying an old request never starts an activity. Command and request topics must not be retained."
+ },
+ {
+  "title": "Theatre MQTT contract",
+  "section": "Retained state topics",
+  "description": "Every publication below is retained, so a restarted subscriber rebuilds the theatre's state at once. A snapsho",
+  "url": "contract-theatre-mqtt.html#state-topics",
+  "text": "Every publication below is retained, so a restarted subscriber rebuilds the theatre's state at once. A snapshot from an older generation than the current request is ignored as stale-generation . Retained state topics Topic Payload <base>/desired JSON {requestId, generation, activity, requestedAt} of the current request, or null when there is none. <base>/current The current activity, or unknown . <base>/phase The controller's phase, for example idle , requested , preparing , transitioning , confirming , recovering or failed . <base>/transition JSON {startedAt, completedAt, degraded} : when the latest transition started and finished, and which targets it left degraded (each {target, reason} ). <base>/failure The failure of the latest transition, or null . <base>/readiness unknown , available , degraded or unavailable . <base>/metrics Transition and per-target counters; see Metrics . <base>/slo The operational objective assessment; see Operational objective . <base>/slo/breach ON while the objective is breached, otherwise OFF . <base>/health/<target> One per target ( display , avr , source , lighting , backlighting ): JSON {status, observedAt, classification, failure, details} ; status is unknown until the target reports. <base>/availability online or offline : whether the contract node is running. See Readiness and availability . Display, AVR and backlighting are mandatory targets; lighting is optional, so its failure degrades a transition instead of failing it."
+ },
+ {
+  "title": "Theatre MQTT contract",
+  "section": "Readiness and availability",
+  "description": "These are two different questions on two topics. <base>/readiness says whether the theatre is ready: unknown ,",
+  "url": "contract-theatre-mqtt.html#readiness-availability",
+  "text": "These are two different questions on two topics. <base>/readiness says whether the theatre is ready: unknown , available , degraded or unavailable . Ready requires all mandatory targets. Before 6.0 this value was on <base>/availability . <base>/availability says whether the contract node is running: online once the flows have started, offline as it stops. Home Assistant shows the theatre entities as available only while it is online . On a full deploy, a restart or a shutdown, Node-RED stops the MQTT out node at the same moment, so set the MQTT broker node's Birth message to online and its Close message and Will message to offline , all retained, on <base>/availability ."
+ },
+ {
+  "title": "Theatre MQTT contract",
+  "section": "Metrics",
+  "description": "<base>/metrics exposes transition latency and outcome counts plus per-target evidence. Before the first snapsh",
+  "url": "contract-theatre-mqtt.html#metrics",
+  "text": "<base>/metrics exposes transition latency and outcome counts plus per-target evidence. Before the first snapshot it carries zeros: Metrics · <base>/metrics { \"requests\": 0, \"ready\": 0, \"failed\": 0, \"superseded\": 0, \"manualOverrides\": 0, \"driftEvents\": 0, \"recoveriesAdopted\": 0, \"recoveriesUnknown\": 0, \"lastTransitionMs\": null, \"maxTransitionMs\": null, \"lastOutcome\": null, \"targets\": {} } Under targets , each target carries retry, fallback, confirmation-latency, failure, manual-override and availability evidence."
+ },
+ {
+  "title": "Theatre MQTT contract",
+  "section": "Operational objective",
+  "description": "The contract keeps a bounded window of transition outcomes and publishes the success rate and the p50 and p95 ",
+  "url": "contract-theatre-mqtt.html#slo",
+  "text": "The contract keeps a bounded window of transition outcomes and publishes the success rate and the p50 and p95 transition latency on <base>/slo , with a status and a reason . Objective settings and limits Setting Default Allowed Latency budget (ms) 60000 1000 to 3600000 Success objective (%) 95 50 to 100 SLO window 20 5 to 100 outcomes Minimum samples 5 1 to the window size Objective status Status Reason When breached transition_failed The phase is failed ; breaches at once. breached transition_timeout A transition in progress has run past the latency budget; breaches at once. breached success_objective With enough samples, the success rate is below the objective. breached latency_budget With enough samples, p95 latency is above the budget. at_risk error_budget_consumed or latency_headroom Success rate below 100%, or p95 latency at 80% of the budget or more. healthy objectives_met Otherwise, with enough samples. Expected waiting_for_source and physical manual ownership do not create false operational failures."
+ },
+ {
+  "title": "Theatre MQTT contract",
+  "section": "Observation time and clock skew",
+  "description": "MQTT state topics may be retained so controllers rebuild observed state after a restart. An observation's time",
+  "url": "contract-theatre-mqtt.html#observations",
+  "text": "MQTT state topics may be retained so controllers rebuild observed state after a restart. An observation's time may be supplied as msg.observedAt or msg.payload.observedAt ; otherwise only non-retained observations receive the current time. Retained observations, and messages marked msg.baseline = true , establish an inert baseline; duplicate observations refresh freshness without replaying commands. Across all controllers, an observation time more than one second ahead of Node-RED's clock is treated as observed on receipt and traced as clock-skew , so one device with a wrong clock cannot hold back later reports. Older evidence never overwrites newer evidence."
+ },
+ {
+  "title": "Theatre MQTT contract",
+  "section": "Manual ownership",
+  "description": "Unsolicited display, AVR, source and backlighting changes latch manual ownership instead of issuing corrective",
+  "url": "contract-theatre-mqtt.html#manual",
+  "text": "Unsolicited display, AVR, source and backlighting changes latch manual ownership instead of issuing corrective commands. A newer explicit activity request resumes automation. A target controller that starts with nothing saved (a redeploy or restart without a context store) takes the activity's wanted values from the activity controller's next refresh and only reads its device: it reports ready when the device already matches, and a manual override with reason adopted-mismatch when it doesn't, sending no command until the next request."
+ },
+ {
+  "title": "Theatre MQTT contract",
+  "section": "Recovery",
+  "description": "On start, the activity controller adopts physical state only when fresh display, AVR, source and backlighting ",
+  "url": "contract-theatre-mqtt.html#recovery",
+  "text": "On start, the activity controller adopts physical state only when fresh display, AVR, source and backlighting evidence matches exactly one configured profile. With missing or ambiguous evidence the activity is unknown and nothing is commanded until the next request, so a redeploy or restart never switches a running activity off. While it is unknown, <base>/phase shows idle (the controller isn't working on anything) and <base>/current shows unknown until the next request, even if something is playing."
+ },
+ {
+  "title": "Theatre MQTT contract",
+  "section": "Home Assistant entities",
+  "description": "With Home Assistant discovery on, the contract announces these entities under the discovery prefix once the fl",
+  "url": "contract-theatre-mqtt.html#home-assistant",
+  "text": "With Home Assistant discovery on, the contract announces these entities under the discovery prefix once the flows start, before online , and again at a startup event; switched off, the next startup event clears them. They read the topics above and follow <base>/availability . Home Assistant is an optional panel, never the device path. See Home Assistant . Home Assistant entities Entity Component Reads or writes Requested activity select Sends requests; shows the desired activity. Current activity sensor <base>/current Phase sensor <base>/phase , with the transition details as attributes. Readiness sensor <base>/readiness Failure sensor <base>/failure Transition latency sensor <base>/metrics Operational SLO sensor <base>/slo Operational SLO breach binary_sensor <base>/slo/breach : the actionable problem sensor. Display health, Avr health, Source health, Lighting health, Backlighting health sensor <base>/health/<target> The device is named <Display name> Theatre Controller ."
  },
  {
   "title": "Contract examples",

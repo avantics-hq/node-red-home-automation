@@ -71,7 +71,7 @@ main{min-width:0;padding:40px clamp(24px,4vw,64px) 32px;max-width:930px;width:10
 .code-label{padding:9px 15px;border-bottom:1px solid var(--border);font-size:.73rem;color:var(--muted);display:flex;justify-content:space-between}
 .diagram{border:1px solid var(--border);background:var(--raised);border-radius:8px;padding:24px;margin:22px 0}
 .flow{display:flex;align-items:center;gap:10px}
-.flow-node{flex:1;text-align:center;padding:14px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);font-size:.8rem;line-height:1.4}
+.flow-node{flex:1;min-width:0;overflow-wrap:anywhere;text-align:center;padding:14px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);font-size:.8rem;line-height:1.4}
 .flow-node.owner{background:var(--accent-soft);border-color:var(--accent)}
 .flow-node small{display:block;color:var(--muted);font-size:.67rem;margin-top:7px}
 .arrow{color:var(--muted)}

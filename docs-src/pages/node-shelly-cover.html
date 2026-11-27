@@ -1,0 +1,38 @@
+<!--{
+ "title": "Shelly cover",
+ "lead": "Message shapes, output ports and settings for the adapter between a cover controller and a Shelly Gen2-or-later device in cover mode, over the device’s own MQTT API.",
+ "description": "",
+ "htmlTitle": "Shelly cover · Node-RED Home Automation",
+ "node": "home-shelly-cover"
+}-->
+<div class="meta"><span class="tag"><code>home-shelly-cover</code></span><span class="tag">1 input · 2 outputs</span><span class="tag">home automation</span></div>
+<section id="summary"><h2>Neutral commands in, Shelly MQTT out</h2>
+<p>The <strong>shelly cover</strong> node (type <code>home-shelly-cover</code>; canvas label: its name, or “shelly cover”) translates a cover controller’s neutral commands into the device’s MQTT control commands, and the device’s status reports into neutral cover readings. It has no broker connection of its own: device messages arrive from an MQTT in node, and its publications leave through an MQTT out node. No function nodes, no Home Assistant and no HTTP.</p>
+<aside class="callout neutral"><strong>Looking for wiring?</strong><p>Follow <a href="guide-device-adapters.html#shelly-cover">Wire a shelly cover</a>, then <a href="guide-covers.html">Wire a cover</a> for the controller side.</p></aside>
+</section>
+<section id="inputs"><h2>Inputs</h2>
+<p>One input takes both the controller’s commands and the device’s MQTT messages. Anything else is ignored.</p>
+<div class="table-wrap" role="region" aria-label="Input messages; scroll horizontally on a phone" tabindex="0"><table><caption>Input messages</caption><thead><tr><th scope="col">From</th><th scope="col">Message</th><th scope="col">Effect</th></tr></thead><tbody><tr><td>Cover controller, output 1</td><td><code>msg.cover_command = {operation, position, generation, …}</code></td><td><code>set_position</code>, <code>stop</code> and <code>observe</code> are translated (see <a href="#device-topics">device topics</a>). Other operations, including <code>open</code> and <code>close</code>, are not translated.</td></tr><tr><td>MQTT in on <code>&lt;prefix&gt;/#</code></td><td><code>&lt;prefix&gt;/status/cover:&lt;id&gt;</code></td><td>The cover’s full status: a new reading.</td></tr><tr><td>MQTT in</td><td><code>&lt;prefix&gt;/events/rpc</code></td><td><code>NotifyStatus</code> changes for this cover are laid over the last full status; <code>NotifyFullStatus</code> replaces it. Only a change of position, state or calibration makes a new reading.</td></tr><tr><td>MQTT in</td><td><code>&lt;prefix&gt;/online</code></td><td><code>true</code> or <code>false</code>: availability.</td></tr></tbody></table></div>
+</section>
+<section id="outputs"><h2>Outputs</h2>
+<div class="table-wrap" role="region" aria-label="Two output ports; scroll horizontally on a phone" tabindex="0"><table><caption>Two output ports</caption><thead><tr><th scope="col">Port</th><th scope="col">Message</th><th scope="col">Connect to</th></tr></thead><tbody><tr><td>1 · To the device</td><td><code>msg.topic</code> and text <code>msg.payload</code></td><td>An MQTT out node on the same broker, with no topic set.</td></tr><tr><td>2 · To the cover controller</td><td><code>msg.cover = {kind: "observed", position, motion, observedAt}</code>, <code>{kind: "availability", online}</code> or <code>{kind: "command_result", generation, ok: false, reason}</code></td><td>The cover controller’s input.</td></tr></tbody></table></div>
+<p>Position runs 0 (closed) to 100 (open), as the controller’s does; set <strong>invert</strong> on the controller if yours runs the other way. Motion is <code>opening</code>, <code>closing</code> or <code>stopped</code> (the device’s <code>open</code>, <code>closed</code> and <code>stopped</code> all read as stopped). <code>observedAt</code> is when the message arrived, never the device’s own clock.</p>
+</section>
+<section id="settings"><h2>Settings</h2>
+<div class="table-wrap" role="region" aria-label="Editor settings and exact defaults; scroll horizontally on a phone" tabindex="0"><table><caption>Editor settings and exact defaults</caption><thead><tr><th scope="col">Setting / property</th><th scope="col">Default</th><th scope="col">Meaning</th></tr></thead><tbody><tr><td>Name<span class="field">name · string</span></td><td>Empty</td><td>Display label.</td></tr><tr><td>MQTT topic prefix<span class="field">topicPrefix · string</span></td><td>Empty</td><td>Required. The device’s topic prefix: its device ID unless a custom prefix is set on the device. It cannot contain <code>+</code> or <code>#</code>.</td></tr><tr><td>Cover ID<span class="field">channel · number</span></td><td><code>0</code></td><td><code>0</code>, or <code>1</code> for a device’s second cover.</td></tr></tbody></table></div>
+<p>On the device, MQTT must be on with <strong>Enable MQTT Control</strong> (the default), or it ignores the commands. <strong>RPC status notifications</strong> (also the default) report each change. Calibrate the cover on the device first.</p>
+</section>
+<section id="device-topics"><h2>Device topics and payloads</h2>
+<div class="table-wrap" role="region" aria-label="Topics sent and read; scroll horizontally on a phone" tabindex="0"><table><caption>Topics sent and read</caption><thead><tr><th scope="col">Topic</th><th scope="col">Direction</th><th scope="col">Payload</th></tr></thead><tbody><tr><td><code>&lt;prefix&gt;/command/cover:&lt;id&gt;</code></td><td>Output 1</td><td><code>pos,&lt;0-100&gt;</code> for <code>set_position</code> (rounded and clamped), <code>stop</code> for <code>stop</code>, <code>status_update</code> for <code>observe</code>.</td></tr><tr><td><code>&lt;prefix&gt;/status/cover:&lt;id&gt;</code></td><td>Read</td><td>The cover’s full status JSON, including <code>current_pos</code>, <code>state</code> and <code>pos_control</code>.</td></tr><tr><td><code>&lt;prefix&gt;/events/rpc</code></td><td>Read</td><td><code>NotifyStatus</code> / <code>NotifyFullStatus</code> frames holding <code>cover:&lt;id&gt;</code>.</td></tr><tr><td><code>&lt;prefix&gt;/online</code></td><td>Read</td><td><code>true</code> or <code>false</code>.</td></tr></tbody></table></div>
+<p>When only changes have arrived and none carries the position, the node sends <code>status_update</code> to get the full status first.</p>
+</section>
+<section id="availability"><h2>Availability</h2>
+<p><code>&lt;prefix&gt;/online</code> becomes <code>msg.cover = {kind: "availability", online}</code> on output 2. When the device comes back online, the node also sends <code>status_update</code>, since the cover may have moved while it was away.</p>
+</section>
+<section id="calibration"><h2>Uncalibrated or unknown position</h2>
+<p>The node never makes up a position. A cover that is not calibrated (<code>pos_control</code> false, or no <code>current_pos</code> in a full status) or whose position is unknown (<code>current_pos</code> null) fails the command in hand with <code>{kind: "command_result", ok: false, reason}</code>, reason <code>not-calibrated</code> or <code>position-unknown</code>. A <code>set_position</code> is not sent to an uncalibrated cover, which would refuse it. Reports while the device says <code>calibrating</code> are ignored.</p>
+</section>
+<section id="status"><h2>Status</h2>
+<ul class="rule-list"><li><strong>waiting for the device</strong> (grey ring) until the first status arrives.</li><li><strong>&lt;state&gt; · &lt;position&gt;%</strong> (green), for example <code>stopped · 60%</code>; <code>?</code> stands for an unknown position.</li><li><strong>not calibrated</strong> (yellow).</li></ul>
+</section>
+<p class="caption">Sources: nodes/shelly-cover.html, nodes/shelly-cover.ts, lib/shelly-cover.ts, lib/shelly-gen2.ts, examples/Shelly cover.json.</p>
