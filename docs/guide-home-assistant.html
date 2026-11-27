@@ -90,6 +90,7 @@ return msg;</code></pre></div>
 <tr><td>AVR controller</td><td><code>home/&lt;area&gt;/receiver/availability</code></td><td><code>msg.avr = {kind: "startup"}</code></td></tr>
 <tr><td>cover controller</td><td><code>home/&lt;area&gt;/cover/&lt;name&gt;/availability</code></td><td><code>msg.cover = {kind: "startup"}</code></td></tr>
 <tr><td>house schedule MQTT</td><td><code>home/&lt;name&gt;/schedule/availability</code></td><td><code>msg.source = "startup"</code></td></tr>
+<tr><td>scene</td><td><code>home/&lt;area&gt;/scene/&lt;name&gt;/availability</code></td><td><code>msg.scene = {kind: "startup"}</code></td></tr>
 </tbody></table></div>
 <ol class="step-list">
 <li><strong>Wire a Status node watching MQTT out into each publishing node.</strong><p>Node-RED’s MQTT broker node connects after the flows have started, and drops anything it is given before then without a warning, so the announcement a node makes as the flows start is lost on a first start, a full deploy or a restart. A <strong>Status node</strong> whose scope is your MQTT out node passes on each of its status changes; when MQTT out shows “connected”, including after the broker reconnects, each node takes it as its startup message and announces again. Other status messages are ignored, so a Status node watching every node on the flow works too, as in the example flows. The startup messages below still work when you send them yourself.</p></li>

@@ -20,8 +20,10 @@
 <tr><td>Scene output 2</td><td>Each motion lighting policy to pause</td><td>An owner pause, renewed every minute, lifted as it ends.</td></tr>
 <tr><td>Scene output 3</td><td>MQTT out</td><td>Its Home Assistant switch, when it publishes.</td></tr>
 <tr><td>MQTT in on <code>home/&lt;area&gt;/scene/&lt;name&gt;/set</code></td><td>Scene input</td><td>Home Assistant’s ON and OFF.</td></tr>
+<tr><td>Status node watching MQTT out</td><td>Scene input</td><td>MQTT out’s “connected”, taken as the startup message, so its switch is announced once the broker can take it.</td></tr>
 </tbody></table></div>
 <ol class="step-list">
+<li><strong>Wire output 1 only to the rooms it sets.</strong><p>Its intents reach every room on that wire, and each room acts on any light with a matching id. If those rooms share ids (two <code>main</code> lights), use one scene per room, or give the lights distinct ids.</p></li>
 <li><strong>Name it.</strong><p>The name is how its rooms, its motion policies and Home Assistant know it, so give each scene its own: <code>Exercise mode</code>, <code>Bath</code>.</p></li>
 <li><strong>List its lights.</strong><p>One entry per light or socket, by its id in the room’s Targets JSON:</p>
 <div class="code-block"><div class="code-label"><span>Exercise mode · main light off, TV socket on</span></div><pre><code>[{"target": "main", "state": "OFF"},

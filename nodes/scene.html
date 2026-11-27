@@ -104,6 +104,11 @@
     <dd><code>ON</code> or <code>OFF</code> on its set topic, from Home Assistant: a start, or an end by
       <code>home-assistant</code>.</dd>
   </dl>
+  <h3>When MQTT out connects</h3>
+  <p>Wire a <b>Status node</b> whose scope is your MQTT out node into this node. Each time MQTT out shows
+    "connected", this node takes it as its startup message (<code>msg.scene = {kind: "startup"}</code>) and announces
+    itself again: Node-RED's MQTT broker node drops what it is given before it connects, so what the node sends as
+    the flows start is lost on a first start, a full deploy or a restart. Any other status message is ignored.</p>
   <h3>Outputs</h3>
   <ol class="node-ports">
     <li>Room lighting controllers: an owner intent per light as it starts,
@@ -129,6 +134,9 @@
   </dl>
   <h3>Rules</h3>
   <ul>
+    <li>Its intents reach every room wired to output 1, and each room acts on any light with a matching id. Wire
+      output 1 only to the rooms it sets; if those rooms share ids (two <code>main</code> lights), use one scene per
+      room or give the lights distinct ids.</li>
     <li>Scenes stack: a newer scene holding a light another scene holds takes it, and hands it back to the older
       one when it ends. Ending the older one first leaves the light with the newer.</li>
     <li>A person changing a light the scene holds makes it theirs: the scene's end leaves it alone.</li>

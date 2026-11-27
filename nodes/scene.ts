@@ -111,7 +111,7 @@ const registerScene: NodeInitializer = (RED) => {
       } else {
         runReducer(node, trace, (state: unknown) => ({state, traces: [{event: "input", outcome: "ignored", reason: "not-a-scene-message", details: {}}]}));
       }
-    });
+    }, {message: {scene: {kind: "startup"}}, trace});
 
     node.on("close", (removed: boolean, done: () => void) => {
       clearTimeout(timer);

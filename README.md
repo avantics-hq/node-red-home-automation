@@ -137,8 +137,12 @@ back to the older one when it ends.
 Wire the scene's first output to each room lighting controller whose lights it
 sets, its second to each motion lighting policy to pause, and, to start and
 stop it from Home Assistant, its third to MQTT out, with an MQTT in node on
-`home/<area>/scene/<name>/set` into it. Its lights are listed by their ids in
-the room's Targets JSON; a socket is a target marked `"onOffOnly": true`:
+`home/<area>/scene/<name>/set` and a Status node watching MQTT out into it.
+Its lights are listed by their ids in the room's Targets JSON; a socket is a
+target marked `"onOffOnly": true`. Its intents reach every room on its first
+output, and each room acts on any light with a matching id, so wire it only to
+the rooms it sets; if those rooms share ids, use one scene per room or distinct
+ids:
 
 ```json
 [{"target": "main", "state": "OFF"}, {"target": "tv", "state": "ON"},
@@ -703,7 +707,7 @@ Version 3.0 changed some behaviour, and later versions added to it. Check these 
   warning, so what a node announces as the flows start (its availability, discovery and state) is lost on a first
   start, a full deploy or a restart. Add a **Status node** whose scope is your MQTT out node and wire it into each
   publishing node (room, circadian policy, house schedule MQTT, motion, occupancy, cover controller, AVR controller,
-  theatre state contract, Shelly switch). Each time MQTT out shows "connected", including after the broker
+  theatre state contract, Shelly switch, scene). Each time MQTT out shows "connected", including after the broker
   reconnects, the Status node passes it on, and the node takes it as its startup message. Other status messages are
   ignored, so a Status node watching every node on the flow works too; the example flows use one. Since 6.0.1; before
   that, the examples sent the startup message from an inject node 3 seconds after a deploy, which is lost if the

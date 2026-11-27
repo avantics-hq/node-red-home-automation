@@ -27,6 +27,7 @@
 <tr><td>End trigger</td><td>The end above, sent by your flow</td><td>The condition is your flow’s: a switch node on a power reading, a light switched off, a door opened. See <a href="guide-scenes.html#end-trigger">End it when something happens</a>.</td></tr>
 <tr><td>Home Assistant</td><td><code>ON</code> or <code>OFF</code> on <code>home/&lt;area&gt;/scene/&lt;name&gt;/set</code></td><td>A start, or an end by <code>home-assistant</code>. Read only while it publishes; retained messages are ignored.</td></tr>
 <tr><td>Startup</td><td><code>msg.scene = {kind: "startup"}</code></td><td>Announces its switch again, and renews its pause while on.</td></tr>
+<tr><td><code>msg.status</code> from a Status node</td><td>MQTT out’s “connected”</td><td>Taken as the startup message (<code>msg.scene = {kind: "startup"}</code>), so the node announces itself again once the broker can take it. Wire in a Status node whose scope is your MQTT out node. Any other status message is ignored.</td></tr>
 </tbody></table></div>
 <p>Anything else is ignored, with a trace.</p>
 </section>
@@ -54,7 +55,7 @@
 </section>
 <section id="rules"><h2>What it holds, and what it hands back</h2>
 <ul class="rule-list">
-<li><strong>Through the room:</strong> each light is held under the scene’s owner, so motion, wall switches without a person’s mark, and the circadian style leave it alone while the scene is on, on or off. See <a href="node-room-controller.html#owners">owners stack</a>.</li>
+<li><strong>Which rooms:</strong> its intents reach every room wired to output 1, and each room acts on any light with a matching id. Wire output 1 only to the rooms it sets; if those rooms share ids (two <code>main</code> lights), use one scene per room or give the lights distinct ids.</li><li><strong>Through the room:</strong> each light is held under the scene’s owner, so motion, wall switches without a person’s mark, and the circadian style leave it alone while the scene is on, on or off. See <a href="node-room-controller.html#owners">owners stack</a>.</li>
 <li><strong>Handed back:</strong> when it ends, each room gives a light back what it was before the scene: on or off as it was, in the room’s style as it is now, or a person’s own values if they had set it.</li>
 <li><strong>Scenes stack:</strong> a newer scene holding a light another holds takes it, and hands it back to the older one when it ends. Ending the older one first leaves the light with the newer.</li>
 <li><strong>A person’s change stands:</strong> a person changing a light the scene holds makes it theirs; the scene’s end leaves it alone.</li>

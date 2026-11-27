@@ -2640,6 +2640,7 @@ const ANNOUNCING: Array<[string, NodeInitializer, Record<string, unknown>, Recor
   ["AVR controller", registerAvr, {}, {avr: {kind: "startup"}}],
   ["theatre state contract", registerTheatreStateContract, {activities: "[\"off\",\"tv\"]"}, {theatreStateContract: {kind: "startup"}}],
   // It publishes no retained state, but asks the device for its configuration as the flows start.
+  ["scene", registerScene, {name: "Exercise mode", lights: "[{\"target\":\"main\",\"state\":\"OFF\"}]"}, {scene: {kind: "startup"}}],
   ["shelly switch", registerShellySwitch, {topicPrefix: "shellyplus1-test", channel: "0"}, {shellySwitch: {kind: "startup"}}]
 ];
 const mqttStatus = (type: string, fill: string, text: string) =>
