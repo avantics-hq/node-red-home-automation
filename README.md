@@ -274,7 +274,7 @@ also attaches the package tarball and its SHA-256 checksum. Install a downloaded
 tarball through **Manage palette → Install → Upload module**, or with:
 
 ```sh
-npm install /path/to/avantics-node-red-home-automation-5.0.0.tgz
+npm install /path/to/avantics-node-red-home-automation-6.0.0.tgz
 ```
 
 Add the installed nodes from the **home automation** section of the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.
@@ -406,6 +406,23 @@ The other changes:
   `ERR_PACKAGE_PATH_NOT_EXPORTED`. Only the nodes are a public interface, as
   5.0.0 said. Node-RED loads them by file path, so installing and using the
   nodes is unchanged.
+
+Also new in 6.0.0, with nothing to change:
+
+- **Zigbee2MQTT cover** and **Shelly switch** nodes. The Zigbee2MQTT cover
+  adapter replaces the hand-written function nodes in the Cover control
+  example. The Shelly switch node follows the relay's own mode: a detached
+  wall switch's presses go to the switch policy, and the relay is never
+  switched.
+- **A Shelly script** (`shelly/wall-switch-fallback.js`) that keeps a detached
+  wall switch working as an ordinary switch while MQTT or Node-RED is down (see
+  the wall switches guide).
+- **Discovery as the flows start.** Every publishing node, now including the
+  room controller and the theatre state contract, announces its Home Assistant
+  entities once the flows start, as well as at its startup message.
+- **A documentation site** with a guide for each area, a reference page for
+  every node and a releases page:
+  [avantics-hq.github.io/node-red-home-automation](https://avantics-hq.github.io/node-red-home-automation/).
 
 ### 5.0.0
 
