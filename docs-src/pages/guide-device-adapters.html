@@ -1,11 +1,11 @@
 <!--{
- "title": "Connect a cover device",
+ "title": "Connect a device",
  "kind": "Guides / Device adapters",
- "lead": "A device adapter sits between one cover motor and its cover controller. It turns the device’s own MQTT messages into the controller’s neutral readings, and the controller’s neutral commands into messages the device understands.",
+ "lead": "A device adapter sits between one device and its controller. It turns the device’s own MQTT messages into the controller’s neutral readings, and the controller’s neutral commands into messages the device understands.",
  "description": "",
- "htmlTitle": "Connect a cover device · Node-RED Home Automation"
+ "htmlTitle": "Connect a device · Node-RED Home Automation"
 }-->
-<div class="meta"><span class="tag">Guide</span><span class="tag">shelly cover</span><span class="tag">zigbee2mqtt cover</span><a class="tag" href="guide-covers.html">Covers guide →</a></div>
+<div class="meta"><span class="tag">Guide</span><span class="tag">shelly cover</span><span class="tag">zigbee2mqtt cover</span><span class="tag">shelly switch</span><a class="tag" href="guide-covers.html">Covers guide →</a></div>
 <section id="before"><h2>Before you wire it</h2>
 <p>The cover controller (<code>home-cover-controller</code>) is device-neutral. It sends commands as <code>msg.cover_command = {operation, position, requestId, generation, attempt}</code>, where <code>operation</code> is <code>set_position</code>, <code>stop</code> or <code>observe</code> (read the cover now). An <i>Open, close and stop only</i> cover sends <code>open</code>, <code>close</code>, <code>stop</code> or <code>observe</code>. It expects readings back as <code>msg.cover = {kind: "observed", …}</code> and <code>{kind: "availability", online}</code>.</p>
 <p>An adapter does the translation for one kind of device, so the controller never needs to know which device it drives. An adapter has no broker connection of its own: device messages arrive from an <strong>MQTT in</strong> node, and its publications leave through an <strong>MQTT out</strong> node.</p>
@@ -89,10 +89,25 @@
 return msg;</code></pre></div>
 <p>On startup the controller reads the cover again rather than trusting old state, so the adapter sends its <code>observe</code> message.</p>
 </section>
+<section id="shelly-switch"><h2>Wire a shelly switch</h2>
+<p>The <strong>shelly switch</strong> node connects one switch channel of a Gen2-or-later relay, over the device’s own MQTT API, used the way the device is set up. It reads the device’s configuration for its channel at startup and whenever the device comes online, and shows what it found in its status.</p>
+<div class="table-wrap" role="region" aria-label="shelly switch settings; scroll horizontally on a phone" tabindex="0"><table><caption>shelly switch settings</caption><thead><tr><th scope="col">Setting</th><th scope="col">Default</th><th scope="col">What to set</th></tr></thead><tbody>
+<tr><td>MQTT topic prefix</td><td>None: required</td><td>The device’s topic prefix: its device ID unless a custom prefix is set on the device. It cannot contain <code>+</code> or <code>#</code>.</td></tr>
+<tr><td>Switch ID</td><td><code>0</code></td><td><code>0</code>, or the number of another switch on a device with more than one. Use one node per switch.</td></tr>
+<tr><td>Mode</td><td>As the device is set up</td><td>Leave it to read the device’s own configuration, or set <em>detached</em> or <em>relay</em> to override it. Set it when the configuration can’t be read.</td></tr>
+</tbody></table></div>
+<ol class="step-list">
+<li><strong>Subscribe to the whole prefix.</strong><p>One MQTT in node on <code>&lt;prefix&gt;/#</code> feeds the adapter, and its first output goes to an MQTT out node with no topic set. The configuration request’s reply is addressed under the same prefix, so nothing more is needed.</p></li>
+<li><strong>Detached: the switch drives the room.</strong><p>The relay stays on to power smart bulbs. Wire the adapter’s second output to a <strong>switch lighting policy</strong>: a toggle switch’s flips become edges, with the device’s status as the baseline, and a push button’s single, double or long presses become actions (the switch policy acts on single and double; long is passed on for later use). The relay is never commanded, and a relay that reports off is flagged in the status: the bulbs have lost power.</p></li>
+<li><strong>Any other mode: the relay is the light.</strong><p>The adapter reports the relay’s on/off state, with whether a person changed it at the switch, and takes on and off. No node of this package reads that state yet.</p></li>
+</ol>
+<aside class="callout neutral"><strong>No configuration, no guess.</strong><p>If the device doesn’t answer within 10 seconds, the status says <em>configuration unreadable: set Mode</em>, and nothing is passed on until the Mode setting says how.</p></aside>
+</section>
 <section id="choose"><h2>Choose an adapter</h2>
 <div class="cards">
 <div class="card"><h3>shelly cover</h3><p>A Gen2-or-later relay device in cover mode, calibrated on the device. Position covers only. One MQTT in node on <code>&lt;prefix&gt;/#</code>.</p></div>
 <div class="card"><h3>zigbee2mqtt cover</h3><p>A Zigbee cover paired with Zigbee2MQTT. Position covers, or open, close and stop only. Two MQTT in nodes: the device topic and its availability.</p></div>
+<div class="card"><h3>shelly switch</h3><p>A Gen2-or-later relay behind a wall switch: in detached mode, the switch’s presses for the switch policy; otherwise, the relay as the light. One MQTT in node on <code>&lt;prefix&gt;/#</code>.</p></div>
 </div>
 <p>For any other device, the controller’s neutral commands and readings are the contract to map to.</p>
 </section>

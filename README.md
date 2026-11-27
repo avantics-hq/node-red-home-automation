@@ -71,6 +71,23 @@ way; other rewrites can still be misread.
 | `home-motion-lighting-policy` | Converts occupancy and illuminance into lighting intent. A `delay` message (in seconds) or `illuminance-cut-off` message overrides its settings until they are changed and redeployed. |
 | `home-switch-lighting-policy` | Converts raw edges or pre-classified button actions into lighting intent while exposing input freshness and availability. |
 | `home-room-lighting-controller` | Owns the room's light commands, adaptive styling, manual and held lights, and lighting state. |
+| `home-shelly-switch` | Connects one switch channel of a Shelly Gen2+ relay as the device is set up: a detached wall switch's presses to the switch policy, or the relay as the light. |
+
+A Shelly Gen2 or later relay behind a wall switch wires straight in through the
+Shelly switch adapter, with no function nodes: an MQTT in node on the device's
+`<prefix>/#` feeds it, and its first output goes to an MQTT out node. It reads
+the device's own configuration for its channel (with `Shelly.GetConfig`, the
+reply addressed under the device's prefix so the same MQTT in node receives it)
+at startup and whenever the device comes online, and shows what it found. In
+detached mode, where the relay stays on to power smart bulbs, the switch's
+presses go to the switch policy: a toggle switch's on/off as edges, with the
+device's status as the baseline, and a push button's single, double or long
+presses as actions (the switch policy acts on single and double; long is passed
+on for later use). The relay is never commanded, and a relay that reports off
+is flagged, as the bulbs have lost power. In any other mode the relay is the
+light: the node reports its state and takes on and off. Its **Mode** setting
+overrides what was read, and decides when the configuration can't be read.
+Example: [`Shelly switch.json`](https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/Shelly%20switch.json).
 
 One house schedule can set the wake and bed times for many rooms. It is a
 configuration node, like an MQTT broker: choose it as a room controller's

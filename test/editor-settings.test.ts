@@ -230,6 +230,16 @@ test("the shelly cover adapter has no default device and two labelled outputs", 
   assert.deepEqual([definition.outputs, definition.outputLabels], [2, ["to the device (MQTT out)", "to the cover controller"]]);
 });
 
+test("the shelly switch adapter has no default device, a mode as the device is set up, and two labelled outputs", () => {
+  const definition = editorDefinition("shelly-switch.html");
+  assert.deepEqual([definition.defaults.topicPrefix!.value, definition.defaults.channel!.value, definition.defaults.mode!.value], ["", 0, "auto"]);
+  const valid = (key: string, value: unknown) => definition.defaults[key]!.validate!.call({}, value);
+  assert.deepEqual([valid("topicPrefix", ""), valid("topicPrefix", "shellyplus1-a8032ab12345"), valid("topicPrefix", "a/+")], [false, true, false]);
+  assert.deepEqual([valid("channel", 2), valid("channel", "-1")], [true, false]);
+  assert.deepEqual([definition.outputs, definition.outputLabels],
+    [2, ["to the device (MQTT out)", "to the switch policy (detached), or the relay's state"]]);
+});
+
 test("the zigbee2mqtt cover adapter defaults the base topic, has no default device, and two labelled outputs", () => {
   const definition = editorDefinition("z2m-cover.html");
   assert.deepEqual([definition.defaults.baseTopic!.value, definition.defaults.friendlyName!.value], ["zigbee2mqtt", ""]);

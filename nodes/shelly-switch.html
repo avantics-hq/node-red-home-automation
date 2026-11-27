@@ -1,0 +1,82 @@
+<script type="text/javascript">
+  RED.nodes.registerType("home-shelly-switch", {
+    category: "home automation",
+    color: "#e2d96e",
+    defaults: {
+      name: {value: ""},
+      // No default: it names the user's own device.
+      topicPrefix: {value: "", required: true, validate: function (v) {
+        var prefix = String(v || "").trim().replace(/^\/+|\/+$/g, "");
+        return prefix !== "" && !/[+#]/.test(prefix);
+      }},
+      channel: {value: 0, required: true, validate: function (v) {
+        return /^\d+$/.test(String(v).trim());
+      }},
+      // auto: as the device is configured.
+      mode: {value: "auto"}
+    },
+    inputs: 1,
+    outputs: 2,
+    outputLabels: ["to the device (MQTT out)", "to the switch policy (detached), or the relay's state"],
+    icon: "font-awesome/fa-toggle-on",
+    label: function () { return this.name || "shelly switch"; },
+    paletteLabel: "shelly switch"
+  });
+</script>
+
+<script type="text/html" data-template-name="home-shelly-switch">
+  <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
+  <div class="form-row"><label for="node-input-topicPrefix">MQTT topic prefix</label><input type="text" id="node-input-topicPrefix" placeholder="the device's ID, e.g. shellyplus1-a8032ab12345"></div>
+  <div class="form-row"><label for="node-input-channel">Switch ID</label><input type="number" min="0" step="1" id="node-input-channel"></div>
+  <div class="form-row">
+    <label for="node-input-mode">Mode</label>
+    <select id="node-input-mode">
+      <option value="auto">As the device is set up</option>
+      <option value="detached">Detached: the switch's presses</option>
+      <option value="relay">Relay: the relay is the light</option>
+    </select>
+  </div>
+</script>
+
+<script type="text/html" data-help-name="home-shelly-switch">
+  <p>Connects one switch channel of a Shelly Gen2 or later relay, over the device's own MQTT API, used the way the
+    device is set up: no function nodes, no Home Assistant and no HTTP.</p>
+  <h3>Wiring</h3>
+  <ol>
+    <li>An <b>MQTT in</b> node subscribed to <code>&lt;prefix&gt;/#</code> (output: auto-detect) → this node.</li>
+    <li>This node's first output → an <b>MQTT out</b> node on the same broker, with no topic set.</li>
+    <li>Detached: this node's second output → a <b>home switch lighting policy</b>, whose intents go to the room
+      controller.</li>
+  </ol>
+  <p>On the device, MQTT must be on with <b>Enable MQTT Control</b> and <b>RPC status notifications</b> (both the
+    default).</p>
+  <h3>Settings</h3>
+  <dl class="message-properties">
+    <dt>MQTT topic prefix</dt><dd>the device's topic prefix: its device ID (such as
+      <code>shellyplus1-a8032ab12345</code>) unless a custom one is set on the device.</dd>
+    <dt>Switch ID</dt><dd><code>0</code>, or the number of another switch on a device with more than one. Use one
+      node per switch.</dd>
+    <dt>Mode</dt><dd><i>As the device is set up</i> (the default) reads the device's own configuration; the other two
+      override it, and are needed when it can't be read.</dd>
+  </dl>
+  <h3>What it does</h3>
+  <ul>
+    <li>At startup, and whenever the device comes online, it asks the device for its configuration
+      (<code>Shelly.GetConfig</code>, with the reply addressed under the device's prefix, so the same MQTT in node
+      receives it) and for its whole status. The node status shows what it found, such as <i>detached, switch
+      input</i>. If nothing answers within 10 seconds, the status says <i>configuration unreadable: set Mode</i>, and
+      nothing is passed on until <b>Mode</b> says how.</li>
+    <li><b>Detached</b>: the relay stays on, powering smart bulbs, and is never switched from here. A switch-type input's
+      on/off becomes <code>msg.source = "switch"</code> with <code>msg.payload = {state}</code> (the first, from the
+      device's status, marked <code>baseline</code>); a button-type input's pushes become
+      <code>msg.source = "switch-action"</code> with <code>single</code>, <code>double</code> or <code>long</code>
+      (the switch policy acts on single and double; long is passed on for later use). The device going offline or online becomes
+      <code>msg.source = "switch-availability"</code>. If the relay reports off, the status warns: the bulbs have lost
+      power.</li>
+    <li><b>Relay</b> (follow, flip, momentary and the other modes): the relay is the light. Its state becomes
+      <code>msg.switchState = {kind: "observed", on, person, observedAt}</code>, with <code>person</code> true when
+      the change came from the device's own input; <code>msg.switchCommand = {power: "on" | "off"}</code> switches it.
+      No node of this package reads that state yet.</li>
+    <li>Readings are timed when they arrive.</li>
+  </ul>
+</script>

@@ -20,7 +20,8 @@
 
 import type {TraceEntry} from "./bounded-trace";
 import type {CoverCommand, CoverEvent, CoverMotion} from "./cover-controller";
-import {isObject, parsedPayload as parsed, type MqttPublication} from "./mqtt-message";
+import {isObject, type MqttPublication} from "./mqtt-message";
+import {readShellyMessage, shellyTopics} from "./shelly-gen2";
 
 export type {MqttPublication} from "./mqtt-message";
 
@@ -60,14 +61,7 @@ export function normaliseShellyCoverConfig(config: {topicPrefix?: unknown; chann
 }
 
 export function shellyCoverTopics(config: ShellyCoverConfig) {
-  const component = `cover:${config.channel}`;
-  return {
-    command: `${config.topicPrefix}/command/${component}`,
-    status: `${config.topicPrefix}/status/${component}`,
-    events: `${config.topicPrefix}/events/rpc`,
-    online: `${config.topicPrefix}/online`,
-    component
-  };
+  return shellyTopics(config.topicPrefix, `cover:${config.channel}`);
 }
 
 const MOTIONS: Record<string, CoverMotion> = {
@@ -163,49 +157,34 @@ export function transitionShellyCover(
     } else {
       trace("command", "ignored", "unknown-operation", {operation});
     }
-  } else if (msg.topic === topics.status) {
-    const status = parsed(msg.payload);
-    if (!isObject(status)) throw new Error(`${topics.status} must carry the cover's status object`);
-    state.status = {...status};
-    state.complete = true;
-    read(now.toISOString(), true);
-  } else if (msg.topic === topics.events) {
-    const received = parsed(msg.payload);
-    const frame = isObject(received) && (received.method === "NotifyStatus" || received.method === "NotifyFullStatus") &&
-      isObject(received.params) ? {method: received.method, params: received.params} : null;
-    const change = frame?.params[topics.component];
-    if (!frame || !isObject(change)) {
-      trace("event", "ignored", "not-this-cover");
-    } else {
-      // A partial status: a key reported as null has gone.
-      const status: Record<string, unknown> = frame.method === "NotifyFullStatus" ? {} : {...state.status};
-      for (const [key, value] of Object.entries(change)) {
-        if (value === null && key !== "current_pos") delete status[key];
-        else status[key] = value;
-      }
-      state.status = status;
-      if (frame.method === "NotifyFullStatus") state.complete = true;
+  } else {
+    const message = readShellyMessage(msg, topics, state.status, ["current_pos"]);
+    if (message.kind === "status") {
+      state.status = message.status;
+      state.complete = true;
+      read(now.toISOString(), true);
+    } else if (message.kind === "change") {
+      state.status = message.status;
       // Stamped when received, as a status reply is, never with the
       // device's own ts: a Shelly whose clock is behind (no time server, a
       // drifting clock) would have every change dropped as older than the
       // last reading. MQTT's delay is far below what the controller resolves.
-      const observedAt = now.toISOString();
       // Only a change of position or movement is a new reading; a power or
       // temperature update mid-travel isn't.
-      if (frame.method === "NotifyFullStatus" || Object.hasOwn(change, "current_pos") || Object.hasOwn(change, "state") ||
-        Object.hasOwn(change, "pos_control")) {
-        read(observedAt, false);
+      const {change} = message;
+      if (Object.hasOwn(change, "current_pos") || Object.hasOwn(change, "state") || Object.hasOwn(change, "pos_control")) {
+        read(now.toISOString(), false);
       }
+    } else if (message.kind === "online") {
+      readings.push({cover: {kind: "availability", online: message.online}});
+      trace("availability", message.online ? "online" : "offline");
+      // Back online, its position may have changed while it was away.
+      if (message.online) requestStatus("online");
+    } else if (msg.topic === topics.events) {
+      trace("event", "ignored", "not-this-cover");
+    } else {
+      trace("message", "ignored", "unrelated-message", {topic: typeof msg.topic === "string" ? msg.topic : null});
     }
-  } else if (msg.topic === topics.online) {
-    const online = parsed(msg.payload);
-    if (online !== true && online !== false) throw new Error(`${topics.online} must be true or false`);
-    readings.push({cover: {kind: "availability", online}});
-    trace("availability", online ? "online" : "offline");
-    // Back online, its position may have changed while it was away.
-    if (online) requestStatus("online");
-  } else {
-    trace("message", "ignored", "unrelated-message", {topic: typeof msg.topic === "string" ? msg.topic : null});
   }
 
   const status = state.status;
