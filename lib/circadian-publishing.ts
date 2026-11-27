@@ -120,33 +120,28 @@ const circadian = publishingNode<CircadianState, CircadianPublishingConfig>({
   stateOutputs: circadianStateOutputs
 });
 
-// The policy's announcement waits this long after the flows start, so the
-// rooms' clears of their old circadian entities (sent as the flows start)
-// reach Home Assistant first and the new entities keep the old entity IDs.
-export const ANNOUNCE_DELAY_MS = 2000;
-
-// As the flows start, everything but its discovery entries, which wait until
-// the old room entries are cleared (see circadianAnnouncement).
-export function circadianStartingOutputs(config: CircadianPublishingConfig, state: CircadianState): RetainedText[] {
-  const entries = new Set(publishesDiscovery(config) ? circadianDiscovery(config).map(({topic}) => topic) : []);
-  return circadian.starting(config, state).filter(({topic}) => !entries.has(topic));
+// What it publishes as the flows start and at its startup message. First,
+// with discovery on, the circadian, sleep, wake and bed entries older room
+// controllers published before 6.0 under its area, cleared: those named
+// after the area, and those named after each room node with its area
+// (`roomNodeIds`, found in the flows, migrated or not). Then its own entries,
+// availability and state, in the same batch, so Home Assistant always
+// removes the old entities before it sees the new ones and can give them the
+// old entity IDs. Following a house, its own time entities are cleared too.
+export function circadianStartingOutputs(config: CircadianPublishingConfig, state: CircadianState, roomNodeIds: readonly string[] = []): RetainedText[] {
+  return [...circadianClears(config, roomNodeIds), ...circadian.starting(config, state)];
 }
 
-// Its discovery: first the old room entries cleared, then its own, and,
-// following a house, its own time entities cleared.
-export function circadianAnnouncement(config: CircadianPublishingConfig): RetainedText[] {
+function circadianClears(config: CircadianPublishingConfig, roomNodeIds: readonly string[]): RetainedText[] {
   if (!publishesDiscovery(config)) return [];
-  const own = circadianDiscovery(config);
-  const clears = roomCircadianDiscoveryTopics(config).map((topic) => retainedText(topic, ""));
+  const topics = [
+    ...roomCircadianDiscoveryTopics(config),
+    ...roomNodeIds.flatMap((nodeId) => roomCircadianDiscoveryTopics(config, "node", nodeId))
+  ];
   if (config.timesFrom === "house") {
-    const times = discoveryEntriesWithOwnTimes(config).filter((topic) => !own.some((entry) => entry.topic === topic));
-    clears.push(...times.map((topic) => retainedText(topic, "")));
+    topics.push(...circadianDiscovery({...config, timesFrom: "own"}).map(({topic}) => topic).filter((topic) => /\/time\//.test(topic)));
   }
-  return [...clears, ...own];
-}
-
-function discoveryEntriesWithOwnTimes(config: CircadianPublishingConfig): string[] {
-  return circadianDiscovery({...config, timesFrom: "own"}).map(({topic}) => topic);
+  return [...new Set(topics)].map((topic) => retainedText(topic, ""));
 }
 
 export const circadianStoppingOutputs = circadian.stopping;

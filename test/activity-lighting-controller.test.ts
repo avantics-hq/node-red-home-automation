@@ -395,3 +395,12 @@ test("an on/off-only light confirms by being on, and a profile giving it values 
   assert.throws(() => onOffOnlyTargets("lamp"), /list of target names/);
   assert.throws(() => onOffOnlyTargets([1]), /list of target names/);
 });
+
+test("a light that is on but reports none of the profile's values is traced, so the node can say it may be on/off only", () => {
+  let result = transitionActivityLighting(undefined, {activityLighting: {kind: "intent", requestId: "tv-1", generation: 1, profile: "tv"}}, config, at(0));
+  result = transitionActivityLighting(result.state, {activityLighting: {kind: "observed", generation: 1, target: "wall", on: true, values: {}, observedAt: at(1).toISOString()}}, config, at(1));
+  assert.deepEqual(result.traces.filter(({reason}) => reason === "values-not-reported").map(({details}) => details), [{target: "wall"}]);
+  // Values that are there but differ are an ordinary mismatch, not this.
+  result = transitionActivityLighting(result.state, {activityLighting: {kind: "observed", generation: 1, target: "wall", on: true, values: {brightness: 200, color_temp: 300}, observedAt: at(2).toISOString()}}, config, at(2));
+  assert.deepEqual(result.traces.filter(({reason}) => reason === "values-not-reported"), []);
+});

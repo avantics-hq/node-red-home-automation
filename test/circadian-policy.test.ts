@@ -5,7 +5,6 @@ import test from "node:test";
 import {scheduledLighting} from "../lib/circadian";
 import {createCircadianState, transitionCircadian, type CircadianConfig} from "../lib/circadian-policy";
 import {
-  circadianAnnouncement,
   circadianInbound,
   circadianRetainedTopics,
   circadianStartingOutputs,
@@ -44,7 +43,7 @@ test("the style gives the lights exactly what the room's own circadian lighting 
   }
 });
 
-test("a style lasts three intervals, and only switching circadian on takes back what a person set", () => {
+test("a style lasts three intervals, and only switching circadian on (even when already on) takes back what a person set", () => {
   const tick = transitionCircadian(undefined, {kind: "tick"}, config, at("12:00"));
   assert.equal(tick.style?.until, new Date(at("12:00").getTime() + 180_000).toISOString());
   assert.equal(tick.style?.takeBack, undefined);
@@ -60,8 +59,11 @@ test("a style lasts three intervals, and only switching circadian on takes back 
   const on = transitionCircadian(off.state, {kind: "circadian", enabled: true}, config, at("12:04"));
   assert.equal(on.style?.takeBack, true);
   assert.ok(on.style?.values);
-  // Already on: nothing new, so no take-back either.
-  assert.equal(transitionCircadian(on.state, {kind: "circadian", enabled: true}, config, at("12:05")).style, null);
+  // Already on, switched on again (a flow bringing lights back into step): it takes back again, as 5.x did.
+  const again = transitionCircadian(on.state, {kind: "circadian", enabled: true}, config, at("12:05"));
+  assert.deepEqual([again.style?.takeBack, again.stateChanged, again.traces.map(({outcome}) => outcome)], [true, false, ["unchanged"]]);
+  // Already off, switched off again: nothing to send.
+  assert.equal(transitionCircadian(off.state, {kind: "circadian", enabled: false}, config, at("12:06")).style, null);
 });
 
 test("sleep and new times send a style at once; enables take only true or false", () => {
@@ -97,19 +99,11 @@ const publishing: CircadianPublishingConfig = {
   area: "Living Room", publishState: true, discovery: true, discoveryPrefix: "homeassistant", nodeId: "c1", idScheme: "node", timesFrom: "own"
 };
 
-test("its entities keep the room's topics, are named after the node, and wait for the old room entries to be cleared", () => {
+test("its entities keep the room's topics, are named after the node, and come after the old room entries are cleared, in one batch", () => {
   const state = createCircadianState(config, {});
-  const starting = circadianStartingOutputs(publishing, state);
-  assert.deepEqual(starting.map(({topic}) => topic), [
-    "home/living_room/circadian/availability",
-    "home/living_room/circadian/state",
-    "home/living_room/sleep/state",
-    "home/living_room/wake-time/state",
-    "home/living_room/bed-time/state"
-  ], "no discovery entries as the flows start");
-  assert.deepEqual(starting.slice(1).map(({payload}) => payload), ["ON", "OFF", "06:30:00", "00:30:00"]);
-
-  const announcement = circadianAnnouncement(publishing);
+  // Two rooms in the flows with this area, named after their nodes.
+  const starting = circadianStartingOutputs(publishing, state, ["r1", "r2"]);
+  const clears = starting.filter(({payload}) => payload === "").map(({topic}) => topic);
   const old = roomCircadianDiscoveryTopics(publishing);
   assert.deepEqual(old, [
     "homeassistant/switch/living_room_circadian_lighting/config",
@@ -117,8 +111,11 @@ test("its entities keep the room's topics, are named after the node, and wait fo
     "homeassistant/time/living_room_wake_time/config",
     "homeassistant/time/living_room_bed_time/config"
   ]);
-  assert.deepEqual(announcement.slice(0, 4).map(({topic, payload}) => [topic, payload]), old.map((topic) => [topic, ""]), "the old entries first");
-  const own = announcement.slice(4).map(({topic, payload}) => [topic, JSON.parse(payload) as Record<string, unknown>] as const);
+  assert.deepEqual(clears, [...old, ...roomCircadianDiscoveryTopics(publishing, "node", "r1"), ...roomCircadianDiscoveryTopics(publishing, "node", "r2")]);
+  assert.ok(clears.includes("homeassistant/switch/nrha_r2_circadian_lighting/config"));
+  // Every clear comes before anything it publishes.
+  assert.equal(starting.findIndex(({payload}) => payload !== ""), clears.length, "the old entries first");
+  const own = starting.slice(clears.length).filter(({topic}) => topic.endsWith("/config")).map(({topic, payload}) => [topic, JSON.parse(payload) as Record<string, unknown>] as const);
   assert.deepEqual(own.map(([topic]) => topic), [
     "homeassistant/switch/nrha_c1_circadian_lighting/config",
     "homeassistant/switch/nrha_c1_sleep/config",
@@ -131,17 +128,25 @@ test("its entities keep the room's topics, are named after the node, and wait fo
   assert.deepEqual(own.map(([, entry]) => entry.default_entity_id), entityIds);
   assert.equal(own[0]![1].command_topic, "home/living_room/circadian/set");
   assert.equal(own[0]![1].availability_topic, "home/living_room/circadian/availability");
+  assert.deepEqual(starting.slice(clears.length + 4).map(({topic, payload}) => [topic, payload]), [
+    ["home/living_room/circadian/availability", "online"],
+    ["home/living_room/circadian/state", "ON"],
+    ["home/living_room/sleep/state", "OFF"],
+    ["home/living_room/wake-time/state", "06:30:00"],
+    ["home/living_room/bed-time/state", "00:30:00"]
+  ]);
 
-  assert.deepEqual(circadianAnnouncement({...publishing, discovery: false}), []);
+  // Discovery off: nothing cleared, nothing announced.
+  assert.ok(!circadianStartingOutputs({...publishing, discovery: false}, state, ["r1"]).some(({topic}) => topic.endsWith("/config")));
   assert.deepEqual(circadianStartingOutputs({...publishing, publishState: false, discovery: false}, state), []);
 });
 
 test("following a house, it has no time entities or time state, and clears its own", () => {
   const house = {...publishing, timesFrom: "house" as const};
-  const announcement = circadianAnnouncement(house);
-  assert.deepEqual(announcement.filter(({payload}) => payload === "").map(({topic}) => topic).slice(4),
-    ["homeassistant/time/nrha_c1_wake_time/config", "homeassistant/time/nrha_c1_bed_time/config"]);
-  assert.ok(!announcement.some(({topic, payload}) => /time/.test(topic) && payload !== ""));
+  const starting = circadianStartingOutputs(house, createCircadianState({...config, timesFrom: "house"}, {}));
+  const cleared = starting.filter(({payload}) => payload === "").map(({topic}) => topic);
+  assert.deepEqual(cleared.slice(4), ["homeassistant/time/nrha_c1_wake_time/config", "homeassistant/time/nrha_c1_bed_time/config"]);
+  assert.ok(!starting.some(({topic, payload}) => /time/.test(topic) && payload !== ""));
   assert.ok(!circadianRetainedTopics(house).some((topic) => /(wake|bed)-time/.test(topic)));
   assert.deepEqual(circadianStateTopics("den"), ["home/den/circadian/state", "home/den/sleep/state", "home/den/wake-time/state", "home/den/bed-time/state"]);
 });

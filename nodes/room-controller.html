@@ -3,8 +3,13 @@
     // A setting is on unless it was explicitly switched off; null ("not set")
     // shows as ticked.
     function on(value) { return value !== false && value !== "false"; }
-    var MOVED = ["wakeTime", "bedTime", "maxBrightnessPct", "maxColorTempKelvin", "sleepBrightnessPct",
-      "sleepColorTempKelvin", "refreshTransitionSeconds", "refreshSeconds", "initialSleep"];
+    // Each old setting, and the circadian lighting policy field it goes into.
+    var MOVED = {
+      houseSchedule: "Schedule", wakeTime: "Wake time", bedTime: "Bed time",
+      maxBrightnessPct: "Daytime brightness %", maxColorTempKelvin: "Daytime kelvin",
+      sleepBrightnessPct: "Sleep brightness %", sleepColorTempKelvin: "Sleep kelvin",
+      refreshTransitionSeconds: "Restyle transition (s)", refreshSeconds: "Restyle interval (s)", initialSleep: "Start in sleep mode"
+    };
     function given(value) { return value !== undefined && value !== null && value !== ""; }
     function moved(value) { return !given(value); }
     RED.nodes.registerType("home-room-lighting-controller", {
@@ -48,7 +53,10 @@
         refreshSeconds: {value: "", validate: moved},
         initialSleep: {value: "", validate: moved},
         wakeTime: {value: "", validate: moved},
-        bedTime: {value: "", validate: moved}
+        bedTime: {value: "", validate: moved},
+        // The house schedule it followed, kept the same way (not as a
+        // config-node reference, as the room no longer uses one).
+        houseSchedule: {value: "", validate: moved}
       },
       onadd: function () {
         if (this.name !== "_DEFAULT_") return;
@@ -72,14 +80,21 @@
         follow();
         // A room saved before 6.0: its circadian settings, to copy into a
         // circadian lighting policy.
-        var old = MOVED.filter(function (key) { return given(node[key]); });
+        var old = Object.keys(MOVED).filter(function (key) { return given(node[key]); });
         $("#room-moved-circadian").toggle(old.length > 0);
-        $("#room-moved-circadian-values").text(old.map(function (key) { return key + ": " + node[key]; }).join(", "));
+        $("#room-moved-circadian-values").text(old.map(function (key) {
+          var value = node[key];
+          if (key === "houseSchedule") {
+            var schedule = RED.nodes.node(value);
+            value = schedule ? (schedule.name || schedule.id) : value + " (no longer in the flows)";
+          }
+          return MOVED[key] + " " + value;
+        }).join(", "));
       },
       // Saving the dialog migrates the room: its old circadian settings go.
       oneditsave: function () {
         var node = this;
-        MOVED.forEach(function (key) { node[key] = ""; });
+        Object.keys(MOVED).forEach(function (key) { node[key] = ""; });
       },
       inputs: 1,
       outputs: 1,
@@ -92,9 +107,8 @@
 <script type="text/html" data-template-name="home-room-lighting-controller">
   <div class="form-tips" id="room-moved-circadian" style="display:none; margin-bottom:12px;">
     <b>Circadian lighting moved to its own node in 6.0.</b> Add a <i>circadian lighting policy</i>, wire its first
-    output to this room, and give it these settings from before: <span id="room-moved-circadian-values"></span>. If
-    this room followed a house schedule, choose it there. Saving this dialog then clears them here, and the room runs
-    again.
+    output to this room, and set its fields to this room's settings from before: <span id="room-moved-circadian-values"></span>.
+    A room that should stay unstyled needs no policy. Saving this dialog then clears them here, and the room runs again.
   </div>
   <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
   <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area" placeholder="needed when publishing"></div>

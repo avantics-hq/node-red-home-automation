@@ -4,8 +4,6 @@ import type {Node, NodeDef, NodeInitializer} from "node-red";
 import {scheduledLighting} from "../lib/circadian";
 import {createCircadianState, styleMessage, transitionCircadian, type CircadianConfig, type CircadianEvent, type CircadianState} from "../lib/circadian-policy";
 import {
-  ANNOUNCE_DELAY_MS,
-  circadianAnnouncement,
   circadianInbound,
   circadianRetainedTopics,
   circadianStartingOutputs,
@@ -18,7 +16,7 @@ import {discoveryPrefixSetting} from "../lib/ha-discovery";
 import type {LightLevels} from "../lib/light-styling";
 import {publishesState} from "../lib/publishing-node";
 import {booleanSetting, numberSetting, optionalBooleanSetting, textSetting} from "../lib/settings";
-import {publishingArea} from "../lib/topic-names";
+import {areaId, publishingArea} from "../lib/topic-names";
 import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, wasDeleted, whenFlowsStarted, type Send} from "./adapter";
 import {publishingLifecycle} from "./publishing-lifecycle";
 import {refusedEnables} from "./refused-enable";
@@ -49,7 +47,6 @@ const registerCircadianPolicy: NodeInitializer = (RED) => {
     const node = this;
     const context = node.context();
     let tickTimer: ReturnType<typeof setInterval> | undefined;
-    let announceTimer: ReturnType<typeof setTimeout> | undefined;
 
     // A schedule that is set but not running, as when it was deleted: the
     // policy keeps to its own times and says so.
@@ -100,12 +97,25 @@ const registerCircadianPolicy: NodeInitializer = (RED) => {
       return createCircadianState(policyConfig, context.get("state") as Partial<CircadianState> | undefined);
     }
 
+    // The room controllers in the flows with this area, migrated or not:
+    // their old circadian entries named after them are cleared with this
+    // node's own (see circadianStartingOutputs).
+    function roomsInArea(): string[] {
+      const ids: string[] = [];
+      RED.nodes.eachNode((entry) => {
+        const room = entry as {id: string; type: string; area?: unknown};
+        if (room.type === "home-room-lighting-controller" && typeof room.area === "string" && publishing.area !== "" &&
+          areaId(room.area) === areaId(publishing.area)) ids.push(room.id);
+      });
+      return ids;
+    }
+
     // Styles go to rooms on the first output; MQTT publications on the
-    // second. Its discovery waits for announce() (see ANNOUNCE_DELAY_MS).
+    // second.
     const lifecycle = publishingLifecycle(RED, node, {
       retainedTopics: () => circadianRetainedTopics(publishing),
       possible: {owner: publishing, topics: () => publishesState(publishing) ? circadianRetainedTopics({...publishing, publishState: true, discovery: true}) : []},
-      starting: () => circadianStartingOutputs(publishing, savedState()),
+      starting: () => circadianStartingOutputs(publishing, savedState(), roomsInArea()),
       stopping: () => circadianStoppingOutputs(publishing),
       output: 1,
       outputs: 2
@@ -136,17 +146,14 @@ const registerCircadianPolicy: NodeInitializer = (RED) => {
       return result;
     }
 
-    function announce(send: Send) {
-      lifecycle.publish(send, circadianAnnouncement(publishing));
-    }
 
     // Once the flows have started: the house's times (this node may have
-    // restarted alone), the style, and, a moment later, its discovery.
+    // restarted alone) and the style. Its publications go out then too, from
+    // the lifecycle.
     whenFlowsStarted(RED, node, guarded(node, () => {
       const send = node.send.bind(node);
       if (house) process({kind: "schedule", ...house.schedule()}, send);
       process({kind: "tick"}, send);
-      announceTimer = setTimeout(guarded(node, () => announce(node.send.bind(node))), ANNOUNCE_DELAY_MS);
     }));
     if (house) {
       node.on("close", house.subscribe(guarded(node, () => {
@@ -157,8 +164,7 @@ const registerCircadianPolicy: NodeInitializer = (RED) => {
     onInput(node, (msg, send) => {
       const lighting = objectField<CircadianEvent>(msg, "lighting");
       if (lighting?.kind === "startup") {
-        clearTimeout(announceTimer);
-        lifecycle.startup(send, [...circadianStartingOutputs(publishing, savedState()), ...circadianAnnouncement(publishing)]);
+        lifecycle.startup(send, circadianStartingOutputs(publishing, savedState(), roomsInArea()));
         process({kind: "tick"}, send);
         return;
       }
@@ -178,7 +184,6 @@ const registerCircadianPolicy: NodeInitializer = (RED) => {
     // runs out.
     node.on("close", (removed: boolean, done: () => void) => {
       clearInterval(tickTimer);
-      clearTimeout(announceTimer);
       if (wasDeleted(RED, node, removed)) {
         node.send([{payload: undefined, lighting: {...styleMessage(policyConfig, savedState(), new Date()), values: null}}, null]);
       }

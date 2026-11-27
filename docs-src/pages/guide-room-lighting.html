@@ -65,7 +65,7 @@ return msg;</code></pre></div>
   values: {brightnessPct: 40, colorTempKelvin: 3000}
 };
 return msg;</code></pre></div>
-<p><code>brightnessPct</code> is 0–100 and <code>colorTempKelvin</code> is in kelvin; the controller converts them for a Zigbee2MQTT light to its 1–254 brightness and mireds. <code>brightnessPct: 0</code> is the dimmest the light goes, not off: send <code>state: "OFF"</code> to switch it off. An intent with values (other than from an activity) makes the light <code>manual</code>, described next.</p>
+<p><code>brightnessPct</code> is 0–100 and <code>colorTempKelvin</code> is in kelvin; the controller converts them for a Zigbee2MQTT light to its 1–254 brightness and mireds. <code>brightnessPct: 0</code> is the dimmest the light goes, not off: send <code>state: "OFF"</code> to switch it off. An intent’s values alone don’t make the light <code>manual</code>; add <code>manual: true</code> for a person’s change, described next.</p>
 <p>Values alone don’t count as a person’s change. Your flow decides who a request is from; the controller doesn’t guess. When a request comes from a person, for example a dashboard slider, set <code>person: true</code> (or <code>manual: true</code>) on the intent. The controller then records that a person set the light, and motion’s vacancy OFF leaves it on when the person set it after the room went vacant (see <a href="#manual">Leave a person’s change alone</a>).</p>
 <div class="code-block"><div class="code-label"><span>Function → controller · a dashboard slider, from a person</span></div><pre><code>msg.lighting = {
   kind: "intent",
@@ -90,7 +90,7 @@ return msg;</code></pre></div>
 return msg;</code></pre></div>
 <p><code>enabled</code> is <code>true</code> or <code>false</code>; anything else is refused with a warning. Sleep mode holds the lights at the sleep settings, whatever the time. To share one wake and bed time across rooms, choose a house schedule as the policy’s <strong>Schedule</strong>; see <a href="guide-house-schedule.html">House schedule</a>.</p>
 <p>A light that only switches on and off can be marked <code>"onOffOnly": true</code> in Targets JSON: it is never sent brightness, colour or a transition, and styles skip it.</p>
-<aside class="callout"><strong>From 5.x: migrate each room.</strong><p>A room controller saved before 6.0 still has its circadian settings, which moved to the policy, and shows as an invalid configuration until migrated. Add a circadian lighting policy wired into the room, copy the room’s old settings into it (its edit dialog lists them), then open the room and click <strong>Done</strong>. See the README’s 6.0.0 notes.</p></aside>
+<aside class="callout"><strong>From 5.x: migrate every room.</strong><p>Every room controller saved before 6.0 still has its circadian settings, which moved to the policy, and shows as an invalid configuration until migrated. Add a circadian lighting policy wired into the room, set its fields to the room’s old settings (the room’s edit dialog lists them, field by field), then open the room, click <strong>Done</strong> and deploy both together. A room that should stay unstyled needs only the last step. See the README’s 6.0.0 notes.</p></aside>
 </section>
 <section id="manual"><h2>Leave a person’s change alone</h2>
 <p>Each light has one control state, and a style only touches lights that are <code>in-control</code>:</p>

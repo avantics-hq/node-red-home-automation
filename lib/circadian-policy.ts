@@ -117,14 +117,17 @@ export function transitionCircadian(
     trace(event.kind, "ignored", NOT_TRUE_OR_FALSE, {source: event.kind, payload: describeValue(event.enabled)});
   } else if (event.kind === "circadian") {
     const enabled = event.enabled === true;
-    if (enabled !== state.enabled) {
+    const changed = enabled !== state.enabled;
+    if (changed) {
       state.enabled = enabled;
       stateChanged = true;
-      trace("circadian", "changed", null, {enabled});
-      // Switched on, it takes back what a person set; switched off, rooms
-      // stop styling.
-      style = styleMessage(config, state, now, enabled);
     }
+    trace("circadian", changed ? "changed" : "unchanged", null, {enabled});
+    // Switched on, even when it already was (as 5.x did: a flow may send it to
+    // bring lights back into step), it takes back what a person set.
+    // Switched off, rooms stop styling.
+    if (enabled) style = styleMessage(config, state, now, true);
+    else if (changed) style = styleMessage(config, state, now);
   } else if (event.kind === "sleep") {
     const sleeping = event.enabled === true;
     if (sleeping !== state.sleeping) {

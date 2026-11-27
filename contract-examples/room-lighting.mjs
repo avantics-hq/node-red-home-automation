@@ -1,5 +1,6 @@
 import {scheduledLighting} from "../dist/lib/circadian.js";
 import {resolveSchedule} from "../dist/lib/circadian-schedule.js";
+import {transitionCircadian} from "../dist/lib/circadian-policy.js";
 import {transitionRoom} from "../dist/lib/room-controller.js";
 import {assert, runWhenMain} from "./_shared.mjs";
 
@@ -20,15 +21,20 @@ export function run() {
   const now = "2026-03-20T10:00:00Z";
   // A circadian lighting policy sends the room how lights should look now; the
   // room uses it for lights it controls.
-  const values = scheduledLighting(schedule, {
-    sleepBrightnessPct: 5,
-    maxBrightnessPct: 100,
-    sleepColorTempKelvin: 1800,
-    maxColorTempKelvin: 5000
-  }).styleAt(new Date(now), false);
-  const style = {
-    lighting: {kind: "style", source: "circadian", values, transitionSeconds: 30, until: "2026-03-20T10:03:00Z"}
+  const policy = {
+    lighting: scheduledLighting(schedule, {
+      sleepBrightnessPct: 5,
+      maxBrightnessPct: 100,
+      sleepColorTempKelvin: 1800,
+      maxColorTempKelvin: 5000
+    }),
+    schedule,
+    timesFrom: "own",
+    initialSleep: false,
+    transitionSeconds: 30,
+    intervalSeconds: 60
   };
+  const style = {lighting: transitionCircadian(undefined, {kind: "tick"}, policy, now).style};
   const input = {
     lighting: {
       kind: "intent",
@@ -37,6 +43,7 @@ export function run() {
       source: "motion"
     }
   };
+  assert.equal(style.lighting.until, "2026-03-20T10:03:00.000Z");
   const styled = transitionRoom(undefined, style, configuration, now);
   assert.equal(styled.outputs.length, 0);
   const result = transitionRoom(styled.state, input, configuration, now);

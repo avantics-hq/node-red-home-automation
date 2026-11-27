@@ -88,7 +88,7 @@
     owner (such as an activity) holds or a person set. A room uses it when a light it controls comes on with no values
     given (motion, a wall-switch press), on each new style for lights that are on, after someone else's bare ON, and
     when an owner releases a light. Switching circadian lighting on is the one exception: it takes back the lights a
-    person set.</p>
+    person set, even when it is already on, so a flow can send it to bring lights back into step.</p>
   <p>It sends a style once the flows start, every <b>Restyle interval</b>, at its startup message, and at once when
     circadian lighting, sleep or the times change. Each style lasts three intervals: if the policy stops (deleted,
     disabled, or its flow stopped), rooms stop styling soon after. Deleted with a modified deploy, it tells rooms at
@@ -134,7 +134,7 @@
       shows Circadian lighting and Sleep switches and, with its own times, Wake time and Bed time, named after this
       node. The topics keep the names the room controller used before 6.0, so a flow already writing
       <code>home/&lt;area&gt;/circadian/set</code> keeps working when this node has that area. Before announcing, it
-      clears the circadian entities an older room controller published under that area, so Home Assistant can give
-      the new ones the same entity IDs; it waits two seconds after the flows start, so rooms clear theirs first.</dd>
+      clears the circadian entities older room controllers in its area published, migrated or not, in the same batch,
+      so Home Assistant can give the new ones the same entity IDs.</dd>
   </dl>
 </script>

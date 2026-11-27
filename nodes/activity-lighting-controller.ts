@@ -11,6 +11,7 @@ import {
   normaliseLightingProfiles,
   onOffOnlyTargets,
   valuesForOnOffOnly,
+  VALUES_NOT_REPORTED,
   transitionActivityLighting,
   type ActivityLightingConfig,
   type ActivityLightingMessage,
@@ -99,8 +100,17 @@ const registerActivityLightingController: NodeInitializer = (RED) => {
       }
       updateStatus(result.status);
       schedule(result.state);
+      // Once per deploy: a light that is on but reports none of the values,
+      // most likely one marked onOffOnly on the room but not here.
+      const unreported = result.traces.find(({reason}) => reason === VALUES_NOT_REPORTED);
+      if (unreported && !warnedUnreported) {
+        warnedUnreported = true;
+        node.warn(`${String((unreported.details as {target: string}).target)} is on but reports no brightness or colour, so the activity ` +
+          "can't confirm it: if it only switches on and off, add it to On/off-only targets, as on the room");
+      }
       return result;
     }
+    let warnedUnreported = false;
 
     // A pending transition is here only if the node's context survived its
     // stop, which needs a configured context store (see the README); timers

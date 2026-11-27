@@ -139,6 +139,15 @@ function stable(value: unknown): unknown {
 
 // Whether a light's report shows the profile's values. Reports come in the
 // light's own units, so the profile's are converted first (z2m-light).
+// Traced when a light is on but reports none of the profile's values: the
+// node warns that it may belong in On/off-only targets.
+export const VALUES_NOT_REPORTED = "values-not-reported";
+
+function reportsNoneOf(profileValues: Record<string, unknown>, actual: Record<string, unknown>): boolean {
+  const expected = Object.keys(lightValues(profileValues).values);
+  return expected.length > 0 && expected.every((key) => !Object.hasOwn(actual, key));
+}
+
 function valuesMatch(profileValues: Record<string, unknown>, actual: Record<string, unknown>): boolean {
   const expected = lightValues(profileValues).values;
   return Object.entries(expected).every(([key, value]) =>
@@ -364,6 +373,11 @@ export function transitionActivityLighting(
       }
       // A light that only switches has nothing to match but being on.
       if (!config.onOffOnlyTargets?.includes(target) && !valuesMatch(profile.values, observation.values)) {
+        // On, but reporting none of the values at all: most likely a light
+        // that only switches, marked onOffOnly on the room but not here.
+        if (reportsNoneOf(profile.values, observation.values)) {
+          trace("observation", "confirming", VALUES_NOT_REPORTED, {target});
+        }
         if (isAdopted(state)) {
           // An adopted request the lights don't match: someone else's, and
           // never re-applied.

@@ -152,7 +152,8 @@ test("a house schedule is a config node circadian lighting policies may referenc
     ["config", "house", "07:00", "23:00"]);
   const circadian = editorDefinition("circadian-policy.html").defaults.houseSchedule;
   assert.deepEqual([circadian?.value, circadian?.type, circadian?.required], ["", "home-house-schedule", false], "not required: none means its own times");
-  assert.equal(editorDefinition("room-controller.html").defaults.houseSchedule, undefined, "a room no longer follows a schedule");
+  const roomSchedule = editorDefinition("room-controller.html").defaults.houseSchedule;
+  assert.deepEqual([roomSchedule?.value, roomSchedule?.type], ["", undefined], "a room keeps an old one only to show it; it no longer follows one");
   const mqtt = editorDefinition("house-schedule-mqtt.html");
   assert.deepEqual([mqtt.defaults.schedule?.type, mqtt.defaults.schedule?.required, mqtt.defaults.idScheme?.value], ["home-house-schedule", true, null]);
   assert.equal(newNode(mqtt).idScheme, "node");
@@ -340,7 +341,7 @@ test("a room saved before 6.0 keeps its circadian settings through the editor, s
   const loaded = asLoaded(definition, old);
   // Kept in defaults, so an editor deploy carries them and the runtime stays invalid rather than quietly unstyled.
   for (const key of ["wakeTime", "bedTime", "maxBrightnessPct", "maxColorTempKelvin", "sleepBrightnessPct", "sleepColorTempKelvin",
-    "refreshTransitionSeconds", "refreshSeconds", "initialSleep"]) {
+    "refreshTransitionSeconds", "refreshSeconds", "initialSleep", "houseSchedule"]) {
     assert.equal(loaded[key], (old as Record<string, unknown>)[key], key);
     assert.equal(definition.defaults[key]!.validate!.call(loaded, loaded[key]), false, `${key} shows the room invalid`);
   }

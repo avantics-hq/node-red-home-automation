@@ -88,7 +88,9 @@ const builtNodes = new Map<string, unknown>();
 function runtime(
   register: NodeInitializer,
   credentials: Record<string, string> = {},
-  {contextStore = false}: {contextStore?: boolean} = {}
+  // `flows`: other nodes deployed in the same flows (as their saved configs,
+  // with their type), which eachNode lists too.
+  {contextStore = false, flows = []}: {contextStore?: boolean; flows?: Array<{id: string; type: string} & Record<string, unknown>>} = {}
 ): {Constructor: RuntimeConstructor; events: EventEmitter; flowNodeIds: Set<string>} {
   let Constructor: RuntimeConstructor | undefined;
   const globalValues = new Map<string, unknown>([["MOTION_ENABLED_STATE", true]]);
@@ -100,6 +102,9 @@ function runtime(
   // Node-RED's runtime events, such as "flows:started" after a deploy.
   const events = new EventEmitter();
   const flowNodeIds = new Set<string>();
+  // Each node's saved config with its type, as Node-RED's eachNode gives it.
+  const flowConfigs = new Map<string, Record<string, unknown>>();
+  let typeName = "";
   const RED = {
     events,
     nodes: {
@@ -108,6 +113,7 @@ function runtime(
         // As Node-RED does, the node takes its ID from its saved config.
         (node as RuntimeNode & {id?: string}).id = config?.id;
         flowNodeIds.add(config?.id ?? "");
+        flowConfigs.set(config?.id ?? "", {type: typeName, ...config});
         if (config?.id) builtNodes.set(config.id, node);
         const emitter = new EventEmitter();
         node.on = emitter.on.bind(emitter);
@@ -153,10 +159,12 @@ function runtime(
         return builtNodes.get(id) ?? null;
       },
       // The deployed flows: every node built here, until a test deletes one.
-      eachNode(callback: (node: {id: string}) => void) {
-        for (const id of flowNodeIds) callback({id});
+      eachNode(callback: (node: {id: string} & Record<string, unknown>) => void) {
+        for (const id of flowNodeIds) callback({...flowConfigs.get(id), id});
+        for (const other of flows) callback(other);
       },
-      registerType(_name: string, implementation: RuntimeConstructor) {
+      registerType(name: string, implementation: RuntimeConstructor) {
+        typeName = name;
         Constructor = implementation;
       }
     }
@@ -2419,10 +2427,14 @@ test("shelly switch node: reads the device's configuration once the flows start,
   assert.equal((unset.statuses.at(-1) as {text?: string}).text, "invalid configuration");
 });
 
-test("circadian node: a style once the flows start and every interval, its discovery two seconds later after the old room entries are cleared", async (t) => {
+test("circadian node: a style once the flows start and every interval, with its discovery after the old room entries are cleared, in one batch", async (t) => {
   t.mock.timers.enable({apis: ["setTimeout", "setInterval", "Date"], now: new Date("2026-06-21T12:00:00").getTime()});
   type Out = Array<{lighting?: Record<string, unknown>} | Array<{topic: string; payload: string}> | null>;
-  const circadianRuntime = runtime(registerCircadian);
+  // Two rooms in the flows: one with this area (saved before 6.0, so still invalid), one elsewhere.
+  const circadianRuntime = runtime(registerCircadian, {}, {flows: [
+    {id: "room-den", type: "home-room-lighting-controller", area: "Den", idScheme: "node", wakeTime: "07:00"},
+    {id: "room-hall", type: "home-room-lighting-controller", area: "hall", idScheme: "node"}
+  ]});
   const node = new circadianRuntime.Constructor({id: "c1", area: "den", publishState: true, discovery: true, refreshSeconds: 60});
   t.after(() => close(node));
   assert.deepEqual(node.errors, []);
@@ -2433,17 +2445,20 @@ test("circadian node: a style once the flows start and every interval, its disco
   assert.equal(styles().length, 1);
   assert.deepEqual(Object.keys(styles()[0]!.values as object), ["brightnessPct", "colorTempKelvin"]);
   assert.ok(published().some(({topic, payload}) => topic === "home/den/circadian/availability" && payload === "online"));
-  assert.ok(!published().some(({topic}) => topic.endsWith("/config")), "no discovery yet");
-  t.mock.timers.tick(2000);
+  // No delay: the old entries are cleared in the same batch, before its own.
   const config = published().filter(({topic}) => topic.endsWith("/config"));
-  assert.deepEqual(config.slice(0, 4).map(({topic, payload}) => [topic, payload]), [
+  assert.deepEqual(config.slice(0, 8).map(({topic, payload}) => [topic, payload]), [
     ["homeassistant/switch/den_circadian_lighting/config", ""],
     ["homeassistant/switch/den_sleep/config", ""],
     ["homeassistant/time/den_wake_time/config", ""],
-    ["homeassistant/time/den_bed_time/config", ""]
-  ]);
-  assert.equal(config.slice(4).length, 4);
-  assert.ok(config.slice(4).every(({topic, payload}) => topic.includes("nrha_c1_") && payload !== ""));
+    ["homeassistant/time/den_bed_time/config", ""],
+    ["homeassistant/switch/nrha_room-den_circadian_lighting/config", ""],
+    ["homeassistant/switch/nrha_room-den_sleep/config", ""],
+    ["homeassistant/time/nrha_room-den_wake_time/config", ""],
+    ["homeassistant/time/nrha_room-den_bed_time/config", ""]
+  ], "the room in this area, migrated or not; not the hall's");
+  assert.equal(config.slice(8).length, 4);
+  assert.ok(config.slice(8).every(({topic, payload}) => topic.includes("nrha_c1_") && payload !== ""));
   t.mock.timers.tick(60_000);
   assert.equal(styles().length, 2, "one per interval");
 
@@ -2498,5 +2513,14 @@ test("activity lighting warns once at deploy when a profile gives values to a li
     profiles: JSON.stringify({off: {targets: [], values: {}}, tv: {targets: ["wall", "lamp"], values: {brightnessPct: 25}}}), confirmationTimeoutMs: 15000, maxAttempts: 2});
   t.after(() => close(unset));
   assert.deepEqual(unset.warnings, []);
+  // The lamp marked on the room but not here: on, with no values, it can't confirm, and the node says why, once.
+  for (const at of [1, 2]) {
+    await receive(unset, {activityLighting: {kind: "intent", requestId: `tv-${at}`, generation: at, profile: "tv"}});
+    // The wall reports the profile's level; the lamp only that it is on.
+    await receive(unset, {activityLighting: {kind: "observed", generation: at, target: "wall", on: true, values: {brightness: 64}, observedAt: new Date().toISOString()}});
+    await receive(unset, {activityLighting: {kind: "observed", generation: at, target: "lamp", on: true, values: {}, observedAt: new Date().toISOString()}});
+  }
+  assert.equal(unset.warnings.length, 1);
+  assert.match(String(unset.warnings[0]), /^lamp is on but reports no brightness or colour.*add it to On\/off-only targets/);
 });
 

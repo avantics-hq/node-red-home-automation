@@ -910,7 +910,8 @@ test("a bare ON is styled with the style in force; with none, values null, or a 
   assert.deepEqual(on(stale, later(180_000)), {state: "ON"}, "run out: the policy stopped");
 });
 
-test("an intent's values alone don't make a light manual; manual: true does; refresh: true no longer changes the transition", () => {
+// Pending the person's confirmation (VALUES_MAKE_MANUAL): if 5.x's rule is kept, flip the constant and this test.
+test("an intent's values alone don't make a light manual; manual: true does", () => {
   let result = publishRoom(fresh(), {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "scene", values: {brightnessPct: 30}}}, config, now);
   assert.equal(result.state.control.cooking, undefined, "values alone: still the room's");
   // ... so the next style restyles it.
@@ -918,6 +919,10 @@ test("an intent's values alone don't make a light manual; manual: true does; ref
   assert.equal(result.outputs.filter(({lighting_command}) => lighting_command).length, 1);
   result = publishRoom(result.state, {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "wall", manual: true, values: {brightnessPct: 30}}}, config, later(70_000));
   assert.equal(result.state.control.cooking?.state, "manual");
+});
+
+// Pending the person's confirmation (INTENT_REFRESH): if refresh: true is kept, flip the constant and this test.
+test("refresh: true no longer changes an intent's transition", () => {
   const refreshed = publishRoom(fresh(), {lighting: {kind: "intent", targets: ["dining"], state: "ON", source: "motion", refresh: true}}, config, now);
   assert.equal(payload(refreshed, 0).transition, config.initialTransitionSeconds);
 });

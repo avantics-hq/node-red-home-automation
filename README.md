@@ -43,7 +43,7 @@ manual ownership, and a circadian lighting policy styles them over the day.
 Wire occupancy fusion into the motion policy, wall switches into the switch
 policy, and both policies and the circadian policy into the room controller. A
 room without a circadian policy styles nothing: its lights just go on and off.
-The room controller  keeps a light a person set after the room went
+The room controller keeps a light a person set after the room went
 vacant, so motion doesn't switch it straight off. Without a Node-RED context
 store, a motion node that restarts or is redeployed doesn't know whether the
 room is occupied, so it counts the room as vacant from then: someone sitting
@@ -283,11 +283,15 @@ removes what 5.0 kept working for a release. Check these after upgrading from
 the wake and bed times and the house schedule moved from the room controller to
 a new node, the **circadian lighting policy**. A room saved before 6.0 is an
 *invalid configuration* until you migrate it: its lights don't respond to
-anything until then. For each room that used circadian lighting:
+anything until then. Every room saved by 5.x has these settings, so migrate
+each one. A room that should stay unstyled needs only step 4. For the others:
 
 1. Add a **circadian lighting policy** from the palette and wire its first
-   output into the room controller (one policy can feed several rooms that
-   share its settings, or give each area its own).
+   output into the room controller. One policy can feed several rooms that
+   share its settings, but its Home Assistant switches and set topics are named
+   after its own area only: rooms in other areas lose their
+   `home/<area>/circadian/set` topics and switches, so give each area that
+   needs its own switches its own policy.
 2. Copy the room's old settings into it: wake and bed times (or its house
    schedule), the daytime and sleep brightness and kelvin, the refresh
    transition and interval (now *Restyle transition* and *Restyle interval*),
@@ -298,11 +302,14 @@ anything until then. For each room that used circadian lighting:
    `…/sleep/set`, `…/wake-time/set` or `…/bed-time/set` from the room to the
    policy, and any flow sending `{kind: "circadian" | "sleep" | "schedule"}`.
 4. Open the room controller and click **Done**: saving clears its old settings,
-   and it runs again.
+   and it runs again. Deploy it with its policy.
 
-The room clears its old circadian, sleep, wake and bed entities in Home
-Assistant as it starts, and the policy announces its own two seconds after the
-flows start, so Home Assistant can give them the old entity IDs. A room without
+As it starts, the policy clears the circadian, sleep, wake and bed entities
+that rooms in its area published before 6.0, migrated or not, then announces
+its own in the same batch, so Home Assistant can give them the old entity IDs.
+The room clears its own as it starts too. A 5.x room deleted rather than
+migrated is invalid, so it clears nothing: remove its retained topics and
+entities yourself. A room without
 a circadian policy just switches its lights on and off. Two further room
 changes come with it:
 
@@ -314,6 +321,9 @@ changes come with it:
   `manual: true` does (a wall switch's double press sends it). Before 6.0, an
   owner-less intent with values made the light manual, so circadian lighting
   left it alone; now the next style restyles it.
+- **An intent's `refresh: true` no longer changes its transition.** Before 6.0
+  it styled the light over the refresh transition instead of the turn-on one;
+  the circadian policy now sends a new style whenever anything changes.
 
 The other changes:
 

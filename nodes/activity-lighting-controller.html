@@ -46,7 +46,9 @@
   <p><b>On/off-only targets</b>: a JSON list of the room's targets marked <code>onOffOnly</code>, such as
     <code>["lamp"]</code>. Such a light reports no brightness or colour, so the activity confirms it once it is on,
     rather than waiting for values it can't show. The room leaves out any values a profile gives it, and this node
-    logs a warning once per deploy naming the profile and light.</p>
+    logs a warning once per deploy naming the profile and light. List the same lights as the room's
+    <code>onOffOnly</code> targets: a light marked only on the room never confirms here, and this node warns once per
+    deploy when a light is on but reports none of the profile's values.</p>
   <p>While a profile is active, its lights are overridden in the room controller under <b>Owner</b>
     (default <code>activity</code>), so the room's style (from a circadian lighting policy) leaves the activity's alone. When a new profile
     no longer includes a light, including a switch to an off profile with no targets, the node emits
