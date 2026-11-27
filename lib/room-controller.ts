@@ -4,6 +4,7 @@ import type {TraceEntry} from "./bounded-trace";
 import type {LightStyle} from "./light-styling";
 import {isLightReading, type LightCommandMessage, type LightField, type LightRoomMessage} from "./light-contract";
 import {REMOVED_LIGHT_FIELDS} from "./z2m-light";
+import {addOwner, heldOff as holdHeldOff, legacyHold, newHold, releaseOwner, savedHolds, setOwnerSpec, type LightHold} from "./room-holds";
 import {ECHO_WINDOW_MS, checkStateReport, commandSent, commandSkipped, rememberCommand, type ExpectedCommand} from "./command-echo";
 
 export {fingerprint, parsePayload, type ExpectedCommand} from "./command-echo";
@@ -52,6 +53,8 @@ export interface RoomObservation {
 // holds it until released. "manual": a person changed it.
 export type TargetControlState = "in-control" | "overridden" | "manual";
 export type TargetControl = {state: "manual"} | {state: "overridden"; owner: string};
+
+export type {HeldSpec, LightHold} from "./room-holds";
 
 // Traced when an intent gives brightness or color_temp, Zigbee2MQTT's own
 // units, removed in 6.0: left out of the command, and the node warns.
@@ -103,6 +106,9 @@ export interface RoomState {
   observed: Record<string, RoomObservation>;
   desired: Record<string, boolean>;
   control: Record<string, TargetControl>;
+  // The owners of each overridden light, and what it was before them
+  // (room-holds.ts).
+  holds: Record<string, LightHold>;
   expected: Record<string, ExpectedCommand[]>;
   // The style last received, or none yet.
   style: RoomStyle | null;
@@ -181,10 +187,12 @@ export function createRoomState(
   config: RoomConfig,
   saved: Partial<RoomState> & {manual?: Record<string, boolean>} = {}
 ): RoomState {
+  const control = savedControl(saved);
   return {
     observed: {...(saved.observed || {})},
     desired: {...(saved.desired || {})},
-    control: savedControl(saved),
+    control,
+    holds: savedHolds(saved.holds, (target) => control[target]?.state === "overridden"),
     expected: Object.fromEntries(
       Object.entries(saved.expected || {}).map(([target, entries]) => [target, entries.map((entry) => ({...entry}))])
     ),
@@ -281,6 +289,8 @@ export function transitionRoom(
   }
 
   function setControl(targetId: string, next: TargetControl | null, reason: string) {
+    // A light no owner holds has no owners to remember.
+    if (next?.state !== "overridden") delete state.holds[targetId];
     const previous = state.control[targetId] ?? null;
     if (JSON.stringify(previous) === JSON.stringify(next)) return;
     if (next) state.control[targetId] = next;
@@ -292,6 +302,70 @@ export function transitionRoom(
       owner: next?.state === "overridden" ? next.owner : null,
       previous: previous?.state ?? "in-control"
     });
+  }
+
+  // An overridden light's owners. A light held under state saved before 6.1
+  // has its one owner, with nothing known of what it was before.
+  function holdOf(targetId: string): LightHold {
+    const entry = state.control[targetId];
+    state.holds[targetId] ??= entry?.state === "overridden" ? legacyHold(entry.owner) : {owners: [], before: null};
+    return state.holds[targetId];
+  }
+
+  // Whether the owner on top holds the light off.
+  function heldOff(targetId: string): boolean {
+    return controlOf(targetId) === "overridden" && holdHeldOff(state.holds[targetId]);
+  }
+
+  // An owner taking a light, or asking again. The first owner records what
+  // the light was; a newer one goes on top. True when the owner is beneath
+  // a newer one: its request is remembered for when the newer lets go, and
+  // the light is left as it is.
+  function takeHold(targetId: string, owner: string, wasOn: boolean): boolean {
+    const entry = state.control[targetId];
+    if (entry?.state !== "overridden") {
+      const observed = state.observed[targetId];
+      state.holds[targetId] = newHold(owner, {
+        control: entry?.state === "manual" ? "manual" : "in-control",
+        on: wasOn,
+        ...(typeof observed?.brightnessPct === "number" ? {brightnessPct: observed.brightnessPct} : {}),
+        ...(typeof observed?.colorTempKelvin === "number" ? {colorTempKelvin: observed.colorTempKelvin} : {})
+      });
+      setControl(targetId, {state: "overridden", owner}, "owner-intent");
+      return false;
+    }
+    const added = addOwner(holdOf(targetId), owner);
+    if (added === "pushed") setControl(targetId, {state: "overridden", owner}, "owner-intent");
+    return added === "beneath";
+  }
+
+  // The last owner let go: the light goes back to what it was. One the room
+  // was running is the room's again, on or off as it was, in the style in
+  // force; one that was a person's gets their values back and stays theirs.
+  function restoreHeld(targetId: string, before: LightHold["before"], source: string) {
+    setControl(targetId, before?.control === "manual" ? {state: "manual"} : null, "released");
+    told(targetId);
+    const on = intendedOn(targetId);
+    if (before && !before.on) {
+      if (!on) return;
+      state.desired[targetId] = false;
+      command(targetId, {state: "OFF"}, source);
+    } else if (before?.control === "manual") {
+      state.desired[targetId] = true;
+      command(targetId, onOffOnly(targetId) ? {state: "ON"} : {
+        state: "ON",
+        ...(before.brightnessPct !== undefined ? {brightnessPct: before.brightnessPct} : {}),
+        ...(before.colorTempKelvin !== undefined ? {colorTempKelvin: before.colorTempKelvin} : {}),
+        transitionSeconds: config.initialTransitionSeconds
+      }, source);
+    } else if (on) {
+      // Back in the room's style, over the style's own transition.
+      const style = state.style ? styled(targetId, state.style.transitionSeconds) : null;
+      if (style) command(targetId, style, source);
+    } else if (before) {
+      state.desired[targetId] = true;
+      command(targetId, styled(targetId, config.initialTransitionSeconds) ?? {state: "ON"}, source);
+    }
   }
 
   function told(targetId: string) {
@@ -392,15 +466,20 @@ export function transitionRoom(
       if (event.updateOnOnly === true && !wasOn) continue;
       if (event.updateOffOnly === true && wasOn) continue;
       if (event.preserveManual === true && controlOf(targetId) === "manual") continue;
-      if (resolvedState === "OFF") {
+      // An owner holds a light on or off; a newer owner goes on top.
+      const beneath = owner ? takeHold(targetId, owner, wasOn) : false;
+      if (owner) {
+        // Held: set below.
+      } else if (resolvedState === "OFF") {
         // An off light has no style to protect: it returns to the room controller.
         setControl(targetId, null, "off");
-      } else if (owner) {
-        setControl(targetId, {state: "overridden", owner}, "owner-intent");
       } else if (event.manual === true) {
         // Only a person's change makes a light manual: since 6.0, an intent's
         // values alone don't.
         setControl(targetId, {state: "manual"}, "manual-intent");
+      } else if (person && resolvedState === "ON" && heldOff(targetId)) {
+        // A person switching on a light an owner holds off: theirs now.
+        setControl(targetId, {state: "manual"}, "person-changed");
       }
 
       let spec: Spec;
@@ -427,6 +506,13 @@ export function transitionRoom(
         // A bare ON: the style in force for a light the room controls,
         // otherwise just on.
         spec = (controlOf(targetId) === "in-control" ? styled(targetId, config.initialTransitionSeconds) : null) ?? {state: "ON"};
+      }
+      if (owner) {
+        setOwnerSpec(holdOf(targetId), owner, spec);
+        if (beneath) {
+          trace("intent", "held", "beneath-owner", {target: targetId, owner, top: (state.control[targetId] as {owner: string}).owner});
+          continue;
+        }
       }
       state.desired[targetId] = resolvedState === "ON";
       told(targetId);
@@ -470,6 +556,8 @@ export function transitionRoom(
       // A change the controller didn't cause becomes the intended state.
       state.desired[target.id] = nextOn;
       if (!nextOn) setControl(target.id, null, "observed-off");
+      // Switched on while an owner holds it off: a person's now.
+      else if (heldOff(target.id)) setControl(target.id, {state: "manual"}, "person-changed");
     }
   } else if (reading?.kind === "echo-changed") {
     // Our own command, changed on the way (the command path should pass it
@@ -499,6 +587,9 @@ export function transitionRoom(
       state.desired[target.id] = true;
       if (reading.setsValues === true && !onOffOnly(target.id)) {
         setControl(target.id, {state: "manual"}, "external-values");
+      } else if (heldOff(target.id)) {
+        // Switched on while an owner holds it off: a person's now.
+        setControl(target.id, {state: "manual"}, "person-changed");
       } else if (currentStyle() && !onOffOnly(target.id) && controlOf(target.id) === "in-control") {
         // At most one restyle per light per echo window, whatever comes
         // back: a bare ON delivered twice (two subscriptions, or a QoS
@@ -551,17 +642,27 @@ export function transitionRoom(
       restyleLights(next.source);
     }
   } else if (event.kind === "release") {
-    // Hand overridden lights back; an owner name releases only that owner's lights.
+    // An owner name lets go of that owner's lights; none lets go of every
+    // owner's. A light goes to the owner beneath, with what it asked for, or
+    // with none left back to what it was before the first.
     const targets = Array.isArray(event.targets) ? event.targets : config.targets.map((target) => target.id);
     const owner = typeof event.owner === "string" && event.owner ? event.owner : null;
+    const source = event.source || "release";
     for (const targetId of targets) {
-      const entry = state.control[targetId];
-      if (!targetById[targetId] || entry?.state !== "overridden" || (owner && entry.owner !== owner)) continue;
-      setControl(targetId, null, "released");
-      told(targetId);
-      // Back in the room's style, over the style's own transition.
-      const style = intendedOn(targetId) && state.style ? styled(targetId, state.style.transitionSeconds) : null;
-      if (style) command(targetId, style, event.source || "release");
+      if (!targetById[targetId] || state.control[targetId]?.state !== "overridden") continue;
+      const released = releaseOwner(holdOf(targetId), owner);
+      if (released.kind === "dropped") {
+        trace("release", "dropped", "beneath-owner", {target: targetId, owner});
+      } else if (released.kind === "next") {
+        setControl(targetId, {state: "overridden", owner: released.owner}, "released-to-owner");
+        told(targetId);
+        if (released.spec) {
+          state.desired[targetId] = released.spec.state === "ON";
+          command(targetId, released.spec, source);
+        }
+      } else if (released.kind === "restore") {
+        restoreHeld(targetId, released.before, source);
+      }
     }
   } else if (event.kind === "intent") {
     const sent = emitIntent(event).map(({target, state: power}) => ({target, state: power}));

@@ -5,7 +5,7 @@
 // take, and records the same things scripts/light-regression-golden.mjs
 // records for the room before the adapters.
 import type {LightReading, LightRoomMessage} from "../../lib/light-contract";
-import {publishRoom} from "../../lib/room-publishing";
+import {publishRoom as currentRoom} from "../../lib/room-publishing";
 import type {RoomMessage, RoomState} from "../../lib/room-controller";
 import {normaliseZ2mLightConfig, transitionZ2mLight, type Z2mLightState} from "../../lib/z2m-light-adapter";
 import {START, type RegressionHistory} from "./histories";
@@ -14,7 +14,11 @@ import {START, type RegressionHistory} from "./histories";
 const TRACES = new Set(["mutated-own-command", "restyled-recently", "already-at-level", "not-told-since-start", "person-set-after-vacancy", "held-by",
   "on-off-only", "own-command", "stale-report", "external-off", "external-values", "observed-off", "taken-back"]);
 
-export function replay(history: RegressionHistory, {perturb = false} = {}) {
+// The room to drive: this build's, or an earlier build's (the golden script
+// passes 6.0.0's).
+type PublishRoom = typeof currentRoom;
+
+export function replay(history: RegressionHistory, {perturb = false, publishRoom = currentRoom}: {perturb?: boolean; publishRoom?: PublishRoom} = {}) {
   const config = {
     area: "test", displayName: "Test", initialTransitionSeconds: 1, publishState: true, discovery: false,
     targets: history.lights.map((light) => ({id: light.id, ...(light.onOffOnly ? {onOffOnly: true} : {})}))
@@ -26,7 +30,11 @@ export function replay(history: RegressionHistory, {perturb = false} = {}) {
   const lastSet: Record<string, Record<string, unknown>> = {};
   const sets: Array<[number, string, string]> = [];
   const decisions: unknown[] = [];
+  // Each event's decisions and /set publications together, to find the
+  // first event where two rooms part.
+  const steps: unknown[] = [];
   for (const event of history.events) {
+    const setsBefore = sets.length;
     const now = START + event.at * 1000;
     const traces: string[] = [];
     const control: Array<[string, string]> = [];
@@ -101,7 +109,9 @@ export function replay(history: RegressionHistory, {perturb = false} = {}) {
       lights = {};
     }
     drain();
-    decisions.push([event.at, control, traces.sort(), room ? JSON.stringify(room.control) : null, room ? JSON.stringify(room.personAt) : null]);
+    const decision = [event.at, control, traces.sort(), room ? JSON.stringify(room.control) : null, room ? JSON.stringify(room.personAt) : null];
+    decisions.push(decision);
+    steps.push([decision, sets.slice(setsBefore)]);
   }
-  return {sets, decisions};
+  return {sets, decisions, steps};
 }
