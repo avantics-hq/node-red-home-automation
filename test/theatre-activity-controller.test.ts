@@ -828,7 +828,7 @@ test("off and ready: unanswered backlighting refreshes end as no-response with t
 // and source answer each command ready for the theatre's generation. After
 // recovery the backlighting reports `afterRecovery`. Refresh cycles follow.
 function recoveryRoundTrip(afterRecovery: "on" | "off") {
-  const avrConfig = {area: "lounge", sources: {shield: "SAT/CBL", playstation: "GAME"}, retryMs: 1000, maxAttempts: 3, minVolume: 0, maxVolume: 60};
+  const avrConfig = {area: "lounge", sources: {shield: "SAT/CBL", playstation: "GAME"}, retryMs: 1000, maxAttempts: 3, minVolumeDb: -80, maxVolumeDb: -20};
   const backlightingConfig = {pollMs: 1000, confirmationTimeoutMs: 5000, maxAttempts: 2};
   let theatre: ReturnType<typeof transitionTheatre> | undefined;
   let avr: ReturnType<typeof transitionAvr> | undefined;

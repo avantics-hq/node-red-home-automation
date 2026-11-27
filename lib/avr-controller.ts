@@ -41,9 +41,9 @@ export interface AvrConfig {
   maxVolumeDb: number;
 }
 
-// Traced when a volume request gives `value` in the receiver's own units
-// rather than `valueDb`: still read during 5.x, and the node warns.
-export const LEGACY_VOLUME_UNITS = "legacy-volume-units";
+// The reason a volume request that gives only `value`, in the receiver's own
+// 0-98 (removed in 6.0), is rejected; the node warns.
+export const REMOVED_VOLUME_VALUE = "removed-volume-value";
 
 export interface AvrObserved {
   power: AvrPower | null;
@@ -135,8 +135,8 @@ export type AvrInputEvent =
     mode: AvrVolumeMode;
     // In dB: absolute, or a change for "relative". A numeric string counts.
     valueDb?: number | string;
-    // Before 5.0: the receiver's own 0-98 for "absolute".
-    value?: number | string;
+    // Removed in 6.0 (it was the receiver's own 0-98): refused.
+    value?: unknown;
   }
   | {kind: "tick"};
 
@@ -264,17 +264,19 @@ function sameVolume(left: number | null, right: number | null): boolean {
 // failing every message.
 // Settings may be editor strings. Missing or unusable numbers take their
 // defaults: retry 2000 ms (at least 250), 3 attempts (at least 1) and volume
-// bounds -80 to -20 dB. A flow saved before 5.0 has minVolume and maxVolume
-// in the receiver's own 0-98, read when the dB settings are missing.
+// bounds -80 to -20 dB. The 0-98 minVolume and maxVolume of flows saved
+// before 5.0 were removed in 6.0: a flow with only those is an invalid
+// configuration rather than one quietly given the default bounds, which
+// could let the receiver go louder than its old cap.
 export function normaliseAvrConfig(rawConfig: {[K in keyof AvrConfig]?: unknown} & {minVolume?: unknown; maxVolume?: unknown}): AvrConfig {
-  // The editor keeps the old keys, empty once the dialog saves dB ones.
   const given = (value: unknown) => value !== undefined && value !== null && String(value).trim() !== "";
-  const bound = (db: unknown, legacy: unknown, label: string, fallback: number) =>
-    !given(db) && given(legacy)
-      ? legacyVolumeDb(numberSetting(legacy, label, fallback - VOLUME_MIN_DB), "absolute")
-      : numberSetting(db, label, fallback);
-  const rawMinVolume = bound(rawConfig.minVolumeDb, rawConfig.minVolume, "minimum volume", -80);
-  const rawMaxVolume = bound(rawConfig.maxVolumeDb, rawConfig.maxVolume, "maximum volume", -20);
+  for (const [db, removed, label] of [[rawConfig.minVolumeDb, rawConfig.minVolume, "Minimum volume (dB)"], [rawConfig.maxVolumeDb, rawConfig.maxVolume, "Maximum volume (dB)"]] as const) {
+    if (!given(db) && given(removed)) {
+      throw new Error(`volume bounds in the receiver's own 0-98 were removed in 6.0: set ${label}`);
+    }
+  }
+  const rawMinVolume = numberSetting(rawConfig.minVolumeDb, "minimum volume", -80);
+  const rawMaxVolume = numberSetting(rawConfig.maxVolumeDb, "maximum volume", -20);
   const minVolume = roundVolume(rawMinVolume);
   const maxVolume = roundVolume(rawMaxVolume);
   if (!Number.isFinite(rawMinVolume) || !Number.isFinite(rawMaxVolume) ||
@@ -845,20 +847,13 @@ export function transitionAvr(
     }
     forceStateEvent = true;
   } else if (event.kind === "volume") {
-    // In dB; a finite numeric string counts. `value` from before 5.0 is in
-    // the receiver's own units, still read during 5.x and traced so the
-    // node can warn; given with a usable valueDb, it is ignored and traced.
+    // In dB; a finite numeric string counts. `value`, in the receiver's own
+    // 0-98, was removed in 6.0: a request with only that is refused, and
+    // the node warns.
     const valueDb = numberValue(event.valueDb);
-    const value = numberValue(event.value);
-    const legacyUnits = valueDb === null && event.value !== undefined;
-    const volume = {...event, value: valueDb !== null ? valueDb
-      : value !== null && (event.mode === "absolute" || event.mode === "relative") ? legacyVolumeDb(value, event.mode)
-        : value ?? NaN};
-    if (legacyUnits) trace("volume", "accepted", LEGACY_VOLUME_UNITS, {requestId: event.requestId, value: event.value});
-    if (valueDb !== null && event.value !== undefined) {
-      trace("volume", "accepted", "legacy-volume-units-ignored", {requestId: event.requestId, value: event.value});
-    }
-    const reason = validateVolumeIntent(volume);
+    const removedValue = valueDb === null && event.value !== undefined;
+    const volume = {...event, value: valueDb ?? NaN};
+    const reason = removedValue ? REMOVED_VOLUME_VALUE : validateVolumeIntent(volume);
     if (reason) {
       events.push({
         avr: {

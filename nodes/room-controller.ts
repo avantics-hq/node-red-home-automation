@@ -8,7 +8,7 @@ import {
   type RoomState,
   type RoomTarget,
   INVALID_LIGHT_VALUES,
-  LEGACY_LIGHT_UNITS
+  REMOVED_LIGHT_UNITS
 } from "../lib/room-controller";
 import {scheduledLighting} from "../lib/circadian";
 import {resolveSchedule} from "../lib/circadian-schedule";
@@ -150,9 +150,9 @@ const registerRoomController: NodeInitializer = (RED) => {
       }
       // Once per deploy, so a flow still sending Zigbee2MQTT units is told
       // without filling the log.
-      if (!warnedLegacyUnits && result.traces.some(({reason}) => reason === LEGACY_LIGHT_UNITS)) {
-        warnedLegacyUnits = true;
-        node.warn("lighting values in brightness (1-254) or color_temp (mireds) are deprecated and will stop working in 6.0: " +
+      if (!warnedRemovedUnits && result.traces.some(({reason}) => reason === REMOVED_LIGHT_UNITS)) {
+        warnedRemovedUnits = true;
+        node.warn("lighting values in brightness (1-254) or color_temp (mireds) were removed in 6.0 and are left out: " +
           "send brightnessPct (0-100) and colorTempKelvin instead");
       }
       if (!warnedInvalidValues && result.traces.some(({reason}) => reason === INVALID_LIGHT_VALUES)) {
@@ -175,7 +175,7 @@ const registerRoomController: NodeInitializer = (RED) => {
       return result;
     }
     const warnedRefused = new Set<string>();
-    let warnedLegacyUnits = false;
+    let warnedRemovedUnits = false;
     let warnedInvalidValues = false;
 
     onInput(node, (msg, send) => {

@@ -2,10 +2,9 @@
   (function () {
   function on(value) { return value === true || value === "true"; }
   function given(value) { return value !== undefined && value !== null && String(value).trim() !== ""; }
-  // A dB bound, or a bound saved before 5.0 in its place.
-  function volumeBound(value, legacy) {
-    return given(value) ? Number.isFinite(Number(value)) : given(legacy) && Number.isFinite(Number(legacy));
-  }
+  // A dB bound. A node saved before 5.0 has none (its 0-98 bounds were
+  // removed in 6.0), so it shows as invalid until they are set.
+  function volumeBound(value) { return given(value) && Number.isFinite(Number(value)); }
   RED.nodes.registerType("home-avr-controller", {
     category: "home automation",
     color: "#c7d9f1",
@@ -22,15 +21,16 @@
       sources: {value: "{\"shield\":\"SAT/CBL\",\"playstation\":\"GAME\"}", required: true, validate: function (v) { try { JSON.parse(v); return true; } catch (e) { return false; } }},
       retryMs: {value: 2000, required: true, validate: RED.validators.number()},
       maxAttempts: {value: 3, required: true, validate: RED.validators.number()},
-      // In dB (the receiver's 80 is 0 dB). A flow saved before 5.0 has
-      // minVolume and maxVolume in the receiver's own 0-98 instead, which
-      // still work: the node isn't shown invalid for them, and the dialog
-      // fills these from them.
-      minVolumeDb: {value: -80, validate: function (v) { return volumeBound(v, this.minVolume); }},
-      maxVolumeDb: {value: -20, validate: function (v) { return volumeBound(v, this.maxVolume); }},
-      // The bounds before 5.0, with no form rows. Listed so the editor keeps
-      // them: it holds only the properties named here. Cleared once the
-      // dialog saves the dB ones.
+      // In dB (the receiver's 80 is 0 dB).
+      minVolumeDb: {value: -80, validate: volumeBound},
+      maxVolumeDb: {value: -20, validate: volumeBound},
+      // The 0-98 bounds of a node saved before 5.0, removed in 6.0 but kept
+      // here, with no form row, so the editor carries them: the editor keeps
+      // only the properties named here, and without them a deploy from the
+      // editor would leave the node with no bounds at all, which the runtime
+      // would give the default bounds, possibly louder than the old cap.
+      // With them, the node stays an invalid configuration until its dB
+      // bounds are set.
       minVolume: {value: ""},
       maxVolume: {value: ""},
       // The receiver published nothing before these settings, so both start off.
@@ -47,10 +47,6 @@
       this.idScheme = "node";
     },
     oneditprepare: function () {
-      // A flow saved before 5.0: show its volume bounds in dB, so saving
-      // the dialog keeps them.
-      if (!given(this.minVolumeDb) && given(this.minVolume)) $("#node-input-minVolumeDb").val(Number(this.minVolume) - 80);
-      if (!given(this.maxVolumeDb) && given(this.maxVolume)) $("#node-input-maxVolumeDb").val(Number(this.maxVolume) - 80);
       $("#node-input-publishState").prop("checked", on(this.publishState));
       $("#node-input-discovery").prop("checked", on(this.discovery));
       // Discovery describes the published state, so it needs it.
@@ -63,6 +59,7 @@
       $("#node-input-publishState, #node-input-discovery").on("change", follow);
       follow();
     },
+    // Once the dB bounds are set, the removed 0-98 ones go.
     oneditsave: function () {
       if (given($("#node-input-minVolumeDb").val())) this.minVolume = "";
       if (given($("#node-input-maxVolumeDb").val())) this.maxVolume = "";
@@ -93,7 +90,7 @@
   <p>Owns explicit power, main-zone, source and bounded volume commands for a Denon AVR.</p>
   <p>Send protocol observations as <code>msg.avr = {kind: "observed", line: msg.payload}</code>.</p>
   <p>Send activity requests as <code>msg.avr = {kind: "intent", requestId, generation, power: "on", source: "shield"}</code>. Omit <code>source</code> to preserve the current input, or use <code>power: "standby"</code> to stop the AVR.</p>
-  <p>Send volume requests as <code>msg.avr = {kind: "volume", requestId, mode: "absolute", valueDb: -50}</code> or use <code>mode: "relative"</code> with a positive or negative change. Volume is in dB, as are the bounds, results and published state; the receiver's 80 is 0 dB. A <code>value</code> in the receiver's own 0-98 still works during 5.x, with a warning in the log. The controller applies configured bounds, accumulates rapid relative requests, confirms fresh <code>MV</code> evidence and releases ownership so external adjustments are preserved.</p>
+  <p>Send volume requests as <code>msg.avr = {kind: "volume", requestId, mode: "absolute", valueDb: -50}</code> or use <code>mode: "relative"</code> with a positive or negative change. Volume is in dB, as are the bounds, results and published state; the receiver's 80 is 0 dB. A <code>value</code> in the receiver's own 0-98 was removed in 6.0: such a request is answered <code>volume_rejected</code> with reason <code>removed-volume-value</code>, with a warning in the log. A node saved before 5.0 with only its 0-98 bounds is an invalid configuration until <b>Minimum volume (dB)</b> and <b>Maximum volume (dB)</b> are set. The controller applies configured bounds, accumulates rapid relative requests, confirms fresh <code>MV</code> evidence and releases ownership so external adjustments are preserved.</p>
   <p>Send <code>kind: "startup"</code> after deployment to discard stale observations and query the receiver; a volume request still pending then is reported as failed with reason <code>restart</code>. Send <code>kind: "refresh"</code> to re-read the receiver without disturbing work in flight. Output 1 connects to a TCP output node; output 2 emits state plus ready, failed, rejected, superseded and volume results.</p>
   <p>While it has a request, output 2 also carries <code>msg.theatre = {kind: "target_state", target: "avr", requestId, generation, status, observedAt, details}</code>, so it can be wired straight back to a theatre activity controller. A ready state is stamped with the oldest receiver reading the request relies on, and a <code>refresh</code> is answered once the receiver reports again.</p>
   <h3>Volume results</h3>

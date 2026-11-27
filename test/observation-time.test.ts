@@ -66,7 +66,7 @@ test("source capability: a future report does not lock out later ones", () => {
 });
 
 test("activity lighting: a future report does not lock out later ones", () => {
-  const config = {profiles: {tv: {targets: ["wall"], values: {brightness: 64}}}, confirmationTimeoutMs: 15000, maxAttempts: 2};
+  const config = {profiles: {tv: {targets: ["wall"], values: {brightnessPct: 25}}}, confirmationTimeoutMs: 15000, maxAttempts: 2};
   const observed = (observedAt: string) => ({activityLighting: {kind: "observed" as const, generation: 1, target: "wall", on: true, values: {brightness: 10}, observedAt}});
   let result = transitionActivityLighting(undefined, {activityLighting: {kind: "intent", requestId: "a1", generation: 1, profile: "tv"}}, config, at(0));
   result = transitionActivityLighting(result.state, observed(tomorrow), config, at(1));

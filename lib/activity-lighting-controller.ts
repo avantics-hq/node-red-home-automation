@@ -1,6 +1,6 @@
 "use strict";
 
-import {lightValues} from "./z2m-light";
+import {REMOVED_LIGHT_FIELDS, lightValues} from "./z2m-light";
 import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration, adoptionReason, carryOn, answersRequest, savedCarried, type Carried} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {numberSetting, textSetting} from "./settings";
@@ -170,6 +170,10 @@ export function normaliseLightingProfiles(value: unknown): ActivityLightingProfi
     }
     // The package's own units, checked when deployed so a bad profile shows
     // on the node rather than leaving lights unstyled.
+    const removed = (REMOVED_LIGHT_FIELDS as readonly string[]).filter((field) => Object.hasOwn(values, field));
+    if (removed.length) {
+      throw new Error(`lighting profile ${name} uses ${removed.join(" and ")}, removed in 6.0: use brightnessPct (0-100) and colorTempKelvin`);
+    }
     const {brightnessPct, colorTempKelvin} = values as Record<string, unknown>;
     if (brightnessPct !== undefined &&
       (typeof brightnessPct !== "number" || !Number.isFinite(brightnessPct) || brightnessPct < 0 || brightnessPct > 100)) {
