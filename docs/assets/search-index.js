@@ -578,6 +578,47 @@ window.DOCS_SEARCH = [
   "text": "Policy before transport Sensor and user events become semantic outcomes before a target owner selects a protocol. Evidence before ready Command acceptance never substitutes for a fresh observation of the required state. Finite state Timers, retries, generations and traces remain bounded and stale work stays inert. Privacy boundary Every identifier, topic, profile, timestamp and coordinate in these examples is synthetic. The examples contain no device inventory, addresses, credentials, entity identifiers, flow exports or operational records."
  },
  {
+  "title": "Releases and upgrading",
+  "description": "Supported versions, version numbering, and what to do when upgrading to each major version.",
+  "url": "releases.html",
+  "text": "Which Node-RED and Node.js versions the package needs, how its versions are numbered, and what each major version changes and asks of you. The GitHub release notes have the detail of every release."
+ },
+ {
+  "title": "Releases and upgrading",
+  "section": "Supported versions",
+  "description": "The package needs Node-RED 5.0.0 or newer. From 6.0.0, it also needs Node.js 24 or newer. Supported versions P",
+  "url": "releases.html#supported",
+  "text": "The package needs Node-RED 5.0.0 or newer. From 6.0.0, it also needs Node.js 24 or newer. Supported versions Package Node-RED Node.js 6.x 5.0.0 or newer 24 or newer 5.x 5.0.0 or newer 22.9 or newer Node-RED 5 itself runs on Node.js 22.9 or newer; from 6.0.0 this package asks for 24. Check your Node.js version before you update the package."
+ },
+ {
+  "title": "Releases and upgrading",
+  "section": "How versions are numbered",
+  "description": "Major: the first number Everything a flow, a saved node or an installation must act on: for example, raising t",
+  "url": "releases.html#numbering",
+  "text": "Major: the first number Everything a flow, a saved node or an installation must act on: for example, raising the Node.js version the package needs, or removing old units or setting names. Minor: the second number New nodes and features. Patch: the third number Fixes. An old form, such as an old unit or setting name, keeps working through the rest of its major series, with a warning in the log where it can. It is removed in the next major version. This page has a section for each major version; minor and patch releases are described in the GitHub release notes ."
+ },
+ {
+  "title": "Releases and upgrading",
+  "section": "How to upgrade",
+  "description": "Read before you update. Read the section below for each major version you cross, the supported versions , and ",
+  "url": "releases.html#upgrade",
+  "text": "Read before you update. Read the section below for each major version you cross, the supported versions , and the GitHub release notes for the releases in between. Update the package. In Node-RED, open Manage palette and update @avantics/node-red-home-automation there. Or, from your Node-RED user directory, install the version you want and restart Node-RED. Pin the version you use. Name the exact version, so a later install doesn’t move you on before you have read its notes. Check your flows. Open and save the nodes the notes mention, and look for nodes marked invalid and warnings in the log. Terminal · from your Node-RED user directory npm install @avantics/node-red-home-automation@<version> Each GitHub Release also attaches the package tarball and its SHA-256 checksum, which Manage palette → Install → Upload module accepts."
+ },
+ {
+  "title": "Releases and upgrading",
+  "section": "Version 6",
+  "description": "6.0 takes circadian lighting out of the room controller into its own node, the circadian lighting policy , whi",
+  "url": "releases.html#v6",
+  "text": "6.0 takes circadian lighting out of the room controller into its own node, the circadian lighting policy , which sends rooms the style to use. The room controller applies whatever style it is sent, and a light can be marked on/off only. 6.0 also gathers every change that asks something of you: it needs Node.js 24, takes only true or false on enable inputs, removes what 5.0 deprecated, and no longer lets code import the package’s files. Each of these shows itself, as an invalid node or a warning in the log, rather than failing silently. It also brings what was added since 5.0.0: the zigbee2mqtt cover and shelly switch nodes, discovery announced as the flows start, and a Shelly script that keeps a detached wall switch working without Node-RED. When you upgrade from 5.x Migrate every room lighting controller. A room saved before 6.0 is an invalid configuration, and its lights don’t respond, until you migrate it. Add a circadian lighting policy, copy the room’s old circadian, sleep and schedule settings into it (the room’s edit dialog lists them), move any Home Assistant switches, set topics and flows that changed circadian lighting or sleep over to it, then open the room controller and click Done . A room that should stay unstyled needs only that last step. Follow the step-by-step migration in the README . Update Node.js to 24 or newer before you update the package. Send true or false to enable inputs: the motion policy’s area-enabled , global-enabled and pause , and the circadian lighting policy’s circadian and sleep messages. Strings such as \"ON\" are refused with a warning. Home Assistant’s own ON and OFF on the …/set topics still work. Mark a person’s change with manual: true . An intent’s values alone no longer make a light manual. Replace what 5.0 deprecated (see Version 5 ): Zigbee2MQTT’s brightness and color_temp in intents and activity lighting profiles, the receiver’s 0-98 volume, and the display controller’s old projector meter setting. Code that imports the package’s files directly now fails: only the nodes are a public interface. Installing and using the nodes is unchanged. Deprecated, removed in the next major version The 6.0.0 notes deprecate nothing. Details: the README’s 6.0.0 notes ."
+ },
+ {
+  "title": "Releases and upgrading",
+  "section": "Version 5",
+  "description": "5.0 separates the decisions from the devices they drive. Requests to lights and the receiver use plain units (",
+  "url": "releases.html#v5",
+  "text": "5.0 separates the decisions from the devices they drive. Requests to lights and the receiver use plain units (percent, kelvin and dB) instead of Zigbee2MQTT’s brightness and mireds and the receiver’s 0-98 scale, so the decisions no longer depend on one kind of device. The display controller’s settings are named by role, and the projector’s power can come from any meter. It also adds the shelly cover adapter, and fixes theatre recovery and screen handling. When you upgrade from 4.x Lighting values: send brightnessPct (0-100) and colorTempKelvin in lighting intents and activity lighting profiles. Brightness 64 becomes 25%, and color_temp 400 becomes 2500 K (1,000,000 ÷ mireds). 0% is the dimmest level, not off. Receiver volume: send valueDb in volume requests (80 on the receiver’s 0-98 scale is 0 dB). Open and save the AVR controller to store its volume bounds in dB, and update any flow or automation that reads the published volume, which is now in dB. Display controller: open and save it to store its renamed settings. Without the built-in power meter host, wire its new third output to ask your meter for the projector’s power, unless the meter reports on its own at least once every query timeout. Screen: a saved viewing position must be above 0 and at most 100, or empty; with none, the screen opens fully with its own command. Code that imports the package’s files directly: the display transport moved to dist/lib/transports/display-transport . Only the nodes are a public interface. Deprecated in 5, removed in 6.0.0 Deprecated in version 5 Old form Use instead In 6.0.0 brightness (1-254) and color_temp (mireds) in lighting intents and activity lighting profiles brightnessPct and colorTempKelvin Left out of an intent, with a warning; an activity lighting profile using them is invalid. value on the receiver’s 0-98 scale in volume requests valueDb Rejected with removed-volume-value , with a warning. A receiver node that still holds only its 0-98 volume bounds is an invalid configuration until its dB bounds are set. The display controller’s saved setting projectorMeterHost Set Projector power meter host ( projectorPowerMeterHost ) No longer read; a node naming only the old key is invalid. Details: 5.0.0 release notes and the README’s 5.0.0 notes . Sources: README Requirements, 6.0.0 and 5.0.0 notes; package.json; CONTRIBUTING Releases."
+ },
+ {
   "title": "Roadmap",
   "description": "The public progress record: released components and the milestone roadmap.",
   "url": "roadmap.html",

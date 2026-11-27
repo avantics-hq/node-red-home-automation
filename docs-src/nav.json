@@ -66,6 +66,7 @@
   {
     "label": "Project",
     "items": [
+      {"label": "Releases and upgrading", "href": "releases.html"},
       {"label": "Roadmap", "href": "roadmap.html"},
       {"label": "Contributing", "href": "https://github.com/avantics-hq/node-red-home-automation/blob/main/CONTRIBUTING.md"}
     ]

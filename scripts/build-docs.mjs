@@ -20,7 +20,7 @@ export const PAGES = [
   "index",
   "guide-room-lighting", "guide-motion-occupancy", "guide-wall-switches", "guide-house-schedule",
   "guide-covers", "home-theatre", "guide-home-assistant", "guide-device-adapters",
-  "node-cover-controller", "contract-examples", "roadmap"
+  "node-cover-controller", "contract-examples", "releases", "roadmap"
 ];
 
 const escapeHtml = (text) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
