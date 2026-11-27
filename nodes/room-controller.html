@@ -3,6 +3,10 @@
     // A setting is on unless it was explicitly switched off; null ("not set")
     // shows as ticked.
     function on(value) { return value !== false && value !== "false"; }
+    var MOVED = ["wakeTime", "bedTime", "maxBrightnessPct", "maxColorTempKelvin", "sleepBrightnessPct",
+      "sleepColorTempKelvin", "refreshTransitionSeconds", "refreshSeconds", "initialSleep"];
+    function given(value) { return value !== undefined && value !== null && value !== ""; }
+    function moved(value) { return !given(value); }
     RED.nodes.registerType("home-room-lighting-controller", {
       category: "home automation",
       color: "#ffd27f",
@@ -27,23 +31,24 @@
         // before this setting, which keeps its area-named entities. New nodes
         // name them after the node (onadd), so renaming the area keeps them.
         idScheme: {value: null},
-        // Where wake and bed times come from: null (not set) is this room.
-        // The house schedule it follows; none: its own times. Node-RED's
-        // editor offers an existing schedule first for a new room.
-        houseSchedule: {value: "", type: "home-house-schedule", required: false},
         displayName: {value: ""},
         discoveryPrefix: {value: "homeassistant", required: true, validate: function (v) { var prefix = String(v || "").trim().replace(/^\/+|\/+$/g, ""); return Boolean(prefix) && !/[+#]/.test(prefix); }},
         targets: {value: "[]", required: true, validate: function (v) { try { JSON.parse(v); return true; } catch (e) { return false; } }},
-        maxBrightnessPct: {value: 100, required: true, validate: RED.validators.number()},
-        maxColorTempKelvin: {value: 6500, required: true, validate: RED.validators.number()},
-        sleepBrightnessPct: {value: 1, required: true, validate: RED.validators.number()},
-        sleepColorTempKelvin: {value: 2200, required: true, validate: RED.validators.number()},
         initialTransitionSeconds: {value: 1, required: true, validate: RED.validators.number()},
-        refreshTransitionSeconds: {value: 60, required: true, validate: RED.validators.number()},
-        refreshSeconds: {value: 60, required: true, validate: RED.validators.number()},
-        initialSleep: {value: false},
-        wakeTime: {value: "07:00", required: true, validate: function (v) { return /^([01]\d|2[0-3]):[0-5]\d$/.test(v); }},
-        bedTime: {value: "23:00", required: true, validate: function (v) { return /^([01]\d|2[0-3]):[0-5]\d$/.test(v); }}
+        // The circadian settings of a room saved before 6.0, which moved to
+        // the circadian lighting policy. Kept here, with no form rows, so the
+        // editor carries them: without them, a deploy from the editor would
+        // make an unmigrated room valid and quietly unstyled. Each shows the
+        // room as invalid until the dialog is saved, which clears them.
+        maxBrightnessPct: {value: "", validate: moved},
+        maxColorTempKelvin: {value: "", validate: moved},
+        sleepBrightnessPct: {value: "", validate: moved},
+        sleepColorTempKelvin: {value: "", validate: moved},
+        refreshTransitionSeconds: {value: "", validate: moved},
+        refreshSeconds: {value: "", validate: moved},
+        initialSleep: {value: "", validate: moved},
+        wakeTime: {value: "", validate: moved},
+        bedTime: {value: "", validate: moved}
       },
       onadd: function () {
         if (this.name !== "_DEFAULT_") return;
@@ -65,6 +70,16 @@
         }
         $("#node-input-publishState, #node-input-discovery").on("change", follow);
         follow();
+        // A room saved before 6.0: its circadian settings, to copy into a
+        // circadian lighting policy.
+        var old = MOVED.filter(function (key) { return given(node[key]); });
+        $("#room-moved-circadian").toggle(old.length > 0);
+        $("#room-moved-circadian-values").text(old.map(function (key) { return key + ": " + node[key]; }).join(", "));
+      },
+      // Saving the dialog migrates the room: its old circadian settings go.
+      oneditsave: function () {
+        var node = this;
+        MOVED.forEach(function (key) { node[key] = ""; });
       },
       inputs: 1,
       outputs: 1,
@@ -75,6 +90,12 @@
 </script>
 
 <script type="text/html" data-template-name="home-room-lighting-controller">
+  <div class="form-tips" id="room-moved-circadian" style="display:none; margin-bottom:12px;">
+    <b>Circadian lighting moved to its own node in 6.0.</b> Add a <i>circadian lighting policy</i>, wire its first
+    output to this room, and give it these settings from before: <span id="room-moved-circadian-values"></span>. If
+    this room followed a house schedule, choose it there. Saving this dialog then clears them here, and the room runs
+    again.
+  </div>
   <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
   <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area" placeholder="needed when publishing"></div>
   <div class="form-row"><label for="node-input-publishState">Publish state over MQTT</label><input type="checkbox" id="node-input-publishState" style="display:inline-block; width:auto;"></div>
@@ -82,21 +103,23 @@
   <div class="form-row"><label for="node-input-displayName">Display name</label><input type="text" id="node-input-displayName"></div>
   <div class="form-row"><label for="node-input-discoveryPrefix">Discovery prefix</label><input type="text" id="node-input-discoveryPrefix"></div>
   <div class="form-row"><label for="node-input-targets">Targets JSON</label><input type="text" id="node-input-targets"></div>
-  <div class="form-row"><label for="node-input-maxBrightnessPct">Daytime brightness %</label><input type="number" id="node-input-maxBrightnessPct"></div>
-  <div class="form-row"><label for="node-input-maxColorTempKelvin">Daytime kelvin</label><input type="number" id="node-input-maxColorTempKelvin"></div>
-  <div class="form-row"><label for="node-input-sleepBrightnessPct">Sleep brightness %</label><input type="number" id="node-input-sleepBrightnessPct"></div>
-  <div class="form-row"><label for="node-input-sleepColorTempKelvin">Sleep kelvin</label><input type="number" id="node-input-sleepColorTempKelvin"></div>
-  <div class="form-row"><label for="node-input-initialTransitionSeconds">Initial transition seconds</label><input type="number" id="node-input-initialTransitionSeconds"></div>
-  <div class="form-row"><label for="node-input-refreshTransitionSeconds">Refresh transition seconds</label><input type="number" id="node-input-refreshTransitionSeconds"></div>
-  <div class="form-row"><label for="node-input-refreshSeconds">Refresh interval seconds</label><input type="number" id="node-input-refreshSeconds"></div>
-  <div class="form-row"><label for="node-input-houseSchedule">Schedule</label><input type="text" id="node-input-houseSchedule"></div>
-  <div class="form-row"><label for="node-input-wakeTime">Wake time</label><input type="text" id="node-input-wakeTime" placeholder="07:00"></div>
-  <div class="form-row"><label for="node-input-bedTime">Bed time</label><input type="text" id="node-input-bedTime" placeholder="23:00"></div>
-  <div class="form-row"><label for="node-input-initialSleep">Initial sleep mode</label><input type="checkbox" id="node-input-initialSleep" style="display:inline-block; width:auto;"></div>
+  <div class="form-row"><label for="node-input-initialTransitionSeconds">Turn-on transition seconds</label><input type="number" id="node-input-initialTransitionSeconds"></div>
 </script>
 
 <script type="text/html" data-help-name="home-room-lighting-controller">
-  <p>Owns room MQTT commands, adaptive colour and brightness, manual overrides, discovery and bounded tracing.</p>
+  <p>Owns a room's lights: it turns intents from policies (motion, wall switches, activities) into light commands,
+    keeps track of who controls each light, and styles the lights it controls with the style it is sent.</p>
+  <h3>Style</h3>
+  <p>Wire a <i>circadian lighting policy</i> into the room to style its lights over the day. The room keeps the
+    latest style it was sent and uses it when a light it controls comes on with no values given (a motion ON, a
+    wall-switch press), on each new style for lights that are on, after someone else's bare ON, and when an owner
+    releases a light. A style never switches a light on or off and never reaches a light that an owner holds or a
+    person set. With no style, or once a style has run out, the lights just go on and off. Any node may send a style:
+    <code>msg.lighting = {kind: "style", values: {brightnessPct, colorTempKelvin} | null, transitionSeconds, until}</code>.</p>
+  <p><b>From 5.x:</b> circadian lighting, sleep, the wake and bed times and the house schedule moved to the circadian
+    lighting policy in 6.0. A room saved before 6.0 is an invalid configuration until it is migrated: add a circadian
+    lighting policy wired to the room, with the room's old settings (the dialog lists them), then open and save the
+    room. Circadian, sleep and schedule messages sent to the room are ignored, with a warning.</p>
   <h3>Publishing</h3>
   <p>Wire its commands to MQTT out unchanged. It watches each light's command topic to tell its own commands from
     other people's, so a function that rewrites them on the way makes them look like someone else's. A bare ON or OFF
@@ -109,42 +132,33 @@
     <code>-</code>) as <code>_</code>: <i>Living Room</i> publishes under <code>home/living_room/…</code>.</p>
   <dl class="message-properties">
     <dt>Publish state over MQTT</dt><dd>each light's control state on
-      <code>home/&lt;area&gt;/lighting/&lt;target&gt;/control</code> and the circadian state on
-      <code>home/&lt;area&gt;/circadian/state</code>. It also publishes a retained <code>online</code> on
-      <code>home/&lt;area&gt;/lighting/availability</code> once the flows start and <code>offline</code> as it stops, which the
-      circadian switch in Home Assistant follows. These get through only when this node is
-      deployed on its own, so set the MQTT broker node's Birth, Close and Will messages to the same (see the README).</dd>
-    <dt>Home Assistant discovery</dt><dd>a circadian switch in Home Assistant, which reads that state and sends
-      ON/OFF to <code>home/&lt;area&gt;/circadian/set</code>. To act on it, wire an MQTT in node subscribed to that
-      topic into this node. It needs <b>Publish state</b>. The entities are announced once the flows start, before
-      <code>online</code>, and again at the startup message. Switching it off removes them from Home Assistant at the
-      next startup message.</dd>
+      <code>home/&lt;area&gt;/lighting/&lt;target&gt;/control</code>, and a retained <code>online</code> on
+      <code>home/&lt;area&gt;/lighting/availability</code> once the flows start and <code>offline</code> as it stops.
+      These get through only when this node is deployed on its own, so set the MQTT broker node's Birth, Close and
+      Will messages to the same (see the README).</dd>
+    <dt>Home Assistant discovery</dt><dd>a control sensor for each light. It needs <b>Publish state</b>. The entities
+      are announced once the flows start, before <code>online</code>, and again at the startup message. Switching it
+      off removes them from Home Assistant at the next startup message. At every start the room also clears the
+      circadian, sleep, wake and bed entities it published before 6.0; the circadian lighting policy publishes its
+      own.</dd>
     <dt>Discovery prefix</dt><dd>the topic prefix Home Assistant listens on for discovery: <code>homeassistant</code>
       unless you changed it in Home Assistant's MQTT settings.</dd>
   </dl>
   <p>New nodes start with both off. A node saved before these settings existed keeps publishing both.</p>
-  <h3>Circadian schedule</h3>
-  <p><b>Schedule</b>: a house schedule the room follows, shared with other rooms. Following it, the room takes its
-    wake and bed times from it whenever they change, has no wake and bed time entities of its own in Home Assistant
-    (they are cleared), and ignores its own wake-time and bed-time set topics. With none, the room keeps its own
-    <b>Wake time</b> and <b>Bed time</b>. If the schedule is missing when the room starts, as when it was deleted
-    from the flows file, the room keeps its own times and its status says <i>schedule missing: own times</i>; deleting
-    a schedule in the editor sets its rooms to none.</p>
-  <p>Circadian levels follow <b>Wake time</b> and <b>Bed time</b> (24-hour <code>HH:MM</code>, default 07:00 and
-    23:00): they rise to the daytime level over the hour after waking, stay at the daytime brightness and colour
-    through the day, wind down to the sleep settings over the three hours before bed, and stay at the sleep
-    settings until you wake. A bed time after midnight, or a wake time later than the bed time, works. Sleep mode
-    still overrides the schedule.</p>
-  <p>Times are the Node-RED host's local time. Docker containers default to UTC: set the container's
-    <code>TZ</code> if your host should follow a local timezone.</p>
+  <h3>Targets</h3>
+  <p>A JSON list of lights, each <code>{"id", "stateTopic", "commandTopic"}</code>. Add <code>"onOffOnly": true</code>
+    for a light that only switches on and off: it is never sent brightness, colour or a transition, styles skip it,
+    and values an intent gives it are left out with a warning once per deploy. Who controls it works as for any light.
+    <b>Turn-on transition seconds</b> is the transition for a light switched on, styled or with an intent's values.</p>
   <h3>Control state</h3>
   <p>Each target has one control state:</p>
   <dl class="message-properties">
-    <dt>in-control</dt><dd>circadian lighting may style and refresh the light. This is the default.</dd>
-    <dt>overridden</dt><dd>another owner, such as an activity or a scene, holds the light. Refresh and circadian
-      changes leave it alone until that owner releases it.</dd>
-    <dt>manual</dt><dd>a person changed the light. Enabling circadian lighting returns manual lights to
-      in-control.</dd>
+    <dt>in-control</dt><dd>the room styles the light with the style it is sent. This is the default.</dd>
+    <dt>overridden</dt><dd>another owner, such as an activity or a scene, holds the light. Styles leave it alone until
+      that owner releases it.</dd>
+    <dt>manual</dt><dd>a person set the light: an intent with <code>manual: true</code> (a wall switch's double
+      press), or someone else's command on its command topic with values. An intent's values alone don't make a light
+      manual. Switching circadian lighting on returns manual lights to in-control.</dd>
   </dl>
   <p>An overridden light changes only for an intent with an <code>owner</code> (its own, or a newer owner who takes
     it over), a person (a <code>manual: true</code> intent, <code>person: true</code>, set by the wall-switch policies, an external command on the command topic, or a change
@@ -153,34 +167,24 @@
     Switching a light off by its owner or a person returns it to in-control.</p>
   <p>The control states are kept in the node's context. When the node starts with nothing saved (its first deploy,
     or a redeploy or restart without a context store, see the README), it can't know which lights were held or set
-    by a person, so it leaves every light as it is: no periodic refresh restyles a light until an intent or release
-    names it, someone switches it on with a bare ON on its command topic, or circadian lighting is switched on. Sleep
-    and schedule changes restyle only lights it has been told about since. A light that is on at that start and that
-    nothing names can keep its start-time style all day; to bring it back into step, switch circadian lighting on
-    (for example with the Home Assistant circadian switch), or let motion or a wall switch name it.</p>
+    by a person, so it leaves every light as it is: no style restyles a light until an intent or release names it,
+    someone switches it on with a bare ON on its command topic, or circadian lighting is switched on. A light that is
+    on at that start and that nothing names keeps its start-time style; to bring it back into step, switch circadian
+    lighting on (for example with the Home Assistant circadian switch), or let motion or a wall switch name it.</p>
   <h3>Inputs</h3>
   <dl class="message-properties">
-    <dt>lighting.kind = "circadian" or "sleep"</dt>
-    <dd><code>lighting.enabled</code> <code>true</code> or <code>false</code> switches circadian lighting or sleep. Any
-      other value, such as <code>"on"</code>, is refused: nothing changes, and the node logs a warning once per deploy
-      and shows it on its status.</dd>
-    <dt>topic = home/&lt;area&gt;/circadian/set</dt>
-    <dd>payload <code>ON</code> or <code>OFF</code> (any case) switches circadian lighting on or off, as
-      <code>lighting.kind = "circadian"</code> does. Read only while <b>Publish state</b> is on and the area is set.
-      Retained messages and other payloads are ignored.</dd>
-    <dt>topic = home/&lt;area&gt;/sleep/set</dt>
-    <dd><code>ON</code> or <code>OFF</code> switches sleep, as <code>lighting.kind = "sleep"</code> does, under the
-      same conditions.</dd>
-    <dt>topic = home/&lt;area&gt;/wake-time/set or bed-time/set</dt>
-    <dd>a time, <code>HH:MM</code> or <code>HH:MM:SS</code>, changes that time, as
-      <code>lighting = {kind: "schedule", wakeTime, bedTime}</code> does. A time set this way lasts until the node is
-      deployed with a different <b>Wake time</b> or <b>Bed time</b>, which then applies.</dd>
+    <dt>lighting.kind = "intent"</dt>
+    <dd><code>state</code> ON, OFF or TOGGLE for <code>targets</code> (default: all), with optional
+      <code>values</code> (<code>brightnessPct</code> 0-100, <code>colorTempKelvin</code>, <code>effect</code> and other
+      fields passed on as they are).</dd>
+    <dt>lighting.kind = "style"</dt>
+    <dd>how lights should look, usually from a circadian lighting policy (see Style).</dd>
     <dt>lighting.owner <span class="property-type">string</span></dt>
     <dd>on an <code>intent</code> that switches targets on, marks them overridden by this owner. With
       <code>preserveManual: true</code>, manual lights are skipped.</dd>
     <dt>lighting.kind = "release"</dt>
     <dd>returns overridden <code>targets</code> (default: all) to in-control. With <code>owner</code>, only lights
-      held by that owner are released. Released lights that are on are restyled as a refresh would.</dd>
+      held by that owner are released. Released lights that are on are restyled over the style's transition.</dd>
   </dl>
   <h3>Outputs</h3>
   <p>With <b>Publish state</b> on, on startup and whenever a target's control state changes, a retained message is

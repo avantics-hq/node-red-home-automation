@@ -3,7 +3,7 @@
     "id": "example-house-schedule-house-schedule-example",
     "type": "comment",
     "name": "House schedule example",
-    "info": "A house schedule shared by two rooms. Both room controllers choose the house schedule as their Schedule and follow it without wires. \"wake earlier\" changes the schedule through the optional MQTT node, which publishes its times (wire its output to an MQTT out node, and an MQTT in node on its set topics to its input).",
+    "info": "A house schedule shared by two areas. Each area's circadian lighting policy chooses the house schedule as its Schedule and follows it without wires, and styles its own room. \"wake earlier\" changes the schedule through the optional MQTT node, which publishes its times (wire its output to an MQTT out node, and an MQTT in node on its set topics to its input).",
     "x": 170,
     "y": 40,
     "wires": []
@@ -49,20 +49,69 @@
     ]
   },
   {
+    "id": "example-house-schedule-living-circadian",
+    "type": "home-circadian-lighting-policy",
+    "name": "living room",
+    "area": "",
+    "houseSchedule": "example-house-schedule-house",
+    "wakeTime": "07:00",
+    "bedTime": "23:00",
+    "maxBrightnessPct": 100,
+    "maxColorTempKelvin": 6500,
+    "sleepBrightnessPct": 1,
+    "sleepColorTempKelvin": 2200,
+    "refreshTransitionSeconds": 60,
+    "refreshSeconds": 60,
+    "initialSleep": false,
+    "publishState": false,
+    "discovery": false,
+    "discoveryPrefix": "homeassistant",
+    "idScheme": "node",
+    "x": 340,
+    "y": 180,
+    "wires": [
+      [
+        "example-house-schedule-living"
+      ],
+      []
+    ]
+  },
+  {
+    "id": "example-house-schedule-bedroom-circadian",
+    "type": "home-circadian-lighting-policy",
+    "name": "bedroom",
+    "area": "",
+    "houseSchedule": "example-house-schedule-house",
+    "wakeTime": "07:00",
+    "bedTime": "23:00",
+    "maxBrightnessPct": 100,
+    "maxColorTempKelvin": 6500,
+    "sleepBrightnessPct": 1,
+    "sleepColorTempKelvin": 2200,
+    "refreshTransitionSeconds": 60,
+    "refreshSeconds": 60,
+    "initialSleep": false,
+    "publishState": false,
+    "discovery": false,
+    "discoveryPrefix": "homeassistant",
+    "idScheme": "node",
+    "x": 340,
+    "y": 240,
+    "wires": [
+      [
+        "example-house-schedule-bedroom"
+      ],
+      []
+    ]
+  },
+  {
     "id": "example-house-schedule-living",
     "type": "home-room-lighting-controller",
     "name": "living room",
     "area": "",
     "displayName": "",
     "targets": "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]",
-    "maxBrightnessPct": 100,
-    "maxColorTempKelvin": 6500,
-    "sleepBrightnessPct": 1,
-    "sleepColorTempKelvin": 2200,
     "initialTransitionSeconds": 1,
-    "refreshTransitionSeconds": 60,
-    "refreshSeconds": 60,
-    "initialSleep": false,
     "x": 600,
     "y": 100,
     "wires": [
@@ -70,12 +119,9 @@
         "example-house-schedule-living-commands"
       ]
     ],
-    "wakeTime": "07:00",
-    "bedTime": "23:00",
     "publishState": false,
     "discovery": false,
-    "idScheme": "node",
-    "houseSchedule": "example-house-schedule-house"
+    "idScheme": "node"
   },
   {
     "id": "example-house-schedule-bedroom",
@@ -84,14 +130,7 @@
     "area": "",
     "displayName": "",
     "targets": "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]",
-    "maxBrightnessPct": 100,
-    "maxColorTempKelvin": 6500,
-    "sleepBrightnessPct": 1,
-    "sleepColorTempKelvin": 2200,
     "initialTransitionSeconds": 1,
-    "refreshTransitionSeconds": 60,
-    "refreshSeconds": 60,
-    "initialSleep": false,
     "x": 600,
     "y": 160,
     "wires": [
@@ -99,12 +138,9 @@
         "example-house-schedule-bedroom-commands"
       ]
     ],
-    "wakeTime": "07:00",
-    "bedTime": "23:00",
     "publishState": false,
     "discovery": false,
-    "idScheme": "node",
-    "houseSchedule": "example-house-schedule-house"
+    "idScheme": "node"
   },
   {
     "id": "example-house-schedule-living-commands",

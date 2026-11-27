@@ -14,10 +14,10 @@ import {
   type CircadianPublishingConfig
 } from "../lib/circadian-publishing";
 import {resolveSchedule} from "../lib/circadian-schedule";
-import {ID_SCHEMES, discoveryPrefixSetting} from "../lib/ha-discovery";
+import {discoveryPrefixSetting} from "../lib/ha-discovery";
 import type {LightLevels} from "../lib/light-styling";
 import {publishesState} from "../lib/publishing-node";
-import {booleanSetting, numberSetting, optionalBooleanSetting, optionalChoiceSetting, textSetting} from "../lib/settings";
+import {booleanSetting, numberSetting, optionalBooleanSetting, textSetting} from "../lib/settings";
 import {publishingArea} from "../lib/topic-names";
 import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, wasDeleted, whenFlowsStarted, type Send} from "./adapter";
 import {publishingLifecycle} from "./publishing-lifecycle";
@@ -86,7 +86,9 @@ const registerCircadianPolicy: NodeInitializer = (RED) => {
         discovery,
         discoveryPrefix: discoveryPrefixSetting(config.discoveryPrefix),
         nodeId: node.id,
-        idScheme: optionalChoiceSetting(config.idScheme, "ID scheme", ID_SCHEMES) ?? "node",
+        // Always named after the node, so its entries never share a topic
+        // with the area-named ones older rooms published, which it clears.
+        idScheme: "node",
         timesFrom: policyConfig.timesFrom
       };
     } catch (error) {

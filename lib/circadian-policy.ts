@@ -40,6 +40,9 @@ export interface CircadianState {
   // set at runtime lasts until the setting changes.
   schedule: DaySchedule;
   scheduleSetting: DaySchedule;
+  // Whether those times were a house's: a policy that stops following a
+  // house goes back to its own times, not the house's last ones.
+  followsHouse?: boolean;
 }
 
 export interface CircadianEvent {
@@ -70,9 +73,10 @@ export function createCircadianState(config: CircadianConfig, saved: Partial<Cir
     // Following a house, its times are the house's last ones (the node passes
     // each change on as a "schedule" event), or the house's as it started.
     schedule: config.timesFrom === "house"
-      ? {...(saved.schedule ?? config.schedule)}
-      : {wakeTime: kept("wakeTime"), bedTime: kept("bedTime")},
-    scheduleSetting: {...config.schedule}
+      ? {...(saved.followsHouse === true && saved.schedule ? saved.schedule : config.schedule)}
+      : saved.followsHouse === true ? {...config.schedule} : {wakeTime: kept("wakeTime"), bedTime: kept("bedTime")},
+    scheduleSetting: {...config.schedule},
+    followsHouse: config.timesFrom === "house"
   };
 }
 

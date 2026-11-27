@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {resolve} from "node:path";
 import test from "node:test";
+import {movedCircadianSettings} from "../lib/room-controller";
 import {normaliseAvrConfig} from "../lib/avr-controller";
 
 interface Definition {
@@ -145,12 +146,13 @@ test("the contract editor asks for an area only where the runtime needs one", ()
   assert.equal(valid("!!!", {discovery: false, baseTopic: "x", idScheme: "node"}), false);
 });
 
-test("a house schedule is a config node rooms may reference; its MQTT node names its entities after the node", () => {
+test("a house schedule is a config node circadian lighting policies may reference; its MQTT node names its entities after the node", () => {
   const house = editorDefinition("house-schedule.html");
   assert.deepEqual([house.category, house.defaults.name?.value, house.defaults.wakeTime?.value, house.defaults.bedTime?.value],
     ["config", "house", "07:00", "23:00"]);
-  const room = editorDefinition("room-controller.html").defaults.houseSchedule;
-  assert.deepEqual([room?.value, room?.type, room?.required], ["", "home-house-schedule", false], "not required: none means its own times");
+  const circadian = editorDefinition("circadian-policy.html").defaults.houseSchedule;
+  assert.deepEqual([circadian?.value, circadian?.type, circadian?.required], ["", "home-house-schedule", false], "not required: none means its own times");
+  assert.equal(editorDefinition("room-controller.html").defaults.houseSchedule, undefined, "a room no longer follows a schedule");
   const mqtt = editorDefinition("house-schedule-mqtt.html");
   assert.deepEqual([mqtt.defaults.schedule?.type, mqtt.defaults.schedule?.required, mqtt.defaults.idScheme?.value], ["home-house-schedule", true, null]);
   assert.equal(newNode(mqtt).idScheme, "node");
@@ -328,3 +330,26 @@ test("the screen viewing position has no default: empty uses the screen's own op
   assert.deepEqual([saved.screenOpenPosition, valid(saved.screenOpenPosition)], [82, true]);
   assert.equal(Object.hasOwn(asLoaded(definition, {type: "home-display-mode-controller"}), "screenOpenPosition"), false);
 });
+
+test("a room saved before 6.0 keeps its circadian settings through the editor, shows invalid, and saving the dialog migrates it", () => {
+  const definition = editorDefinition("room-controller.html", dialog());
+  // As 5.x saved it: every circadian setting, which moved to the circadian lighting policy.
+  const old = {type: "home-room-lighting-controller", area: "hall", targets: "[]", initialTransitionSeconds: 1, wakeTime: "06:30", bedTime: "23:30",
+    maxBrightnessPct: 90, maxColorTempKelvin: 5000, sleepBrightnessPct: 2, sleepColorTempKelvin: 2200, refreshTransitionSeconds: 45,
+    refreshSeconds: 60, initialSleep: false, houseSchedule: "house1"};
+  const loaded = asLoaded(definition, old);
+  // Kept in defaults, so an editor deploy carries them and the runtime stays invalid rather than quietly unstyled.
+  for (const key of ["wakeTime", "bedTime", "maxBrightnessPct", "maxColorTempKelvin", "sleepBrightnessPct", "sleepColorTempKelvin",
+    "refreshTransitionSeconds", "refreshSeconds", "initialSleep"]) {
+    assert.equal(loaded[key], (old as Record<string, unknown>)[key], key);
+    assert.equal(definition.defaults[key]!.validate!.call(loaded, loaded[key]), false, `${key} shows the room invalid`);
+  }
+  assert.ok(movedCircadianSettings(loaded).length > 0, "the deployed node is still an invalid configuration");
+  // Saving the dialog clears them: the room is valid, and runs.
+  definition.oneditsave!.call(loaded);
+  assert.deepEqual(movedCircadianSettings(loaded), []);
+  for (const key of ["wakeTime", "initialSleep"]) assert.equal(definition.defaults[key]!.validate!.call(loaded, loaded[key]), true, key);
+  // A new 6.0 room has them empty, so it is valid from the start.
+  assert.deepEqual(movedCircadianSettings(newNode(definition)), []);
+});
+

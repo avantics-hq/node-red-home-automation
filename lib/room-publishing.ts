@@ -1,12 +1,13 @@
 "use strict";
 
 // The room's MQTT and Home Assistant side, as the theatre state contract is
-// for the theatre: it turns MQTT the room reads into room events, and the
-// room controller's decisions into the retained topics other systems read.
-// The room controller itself only decides about lights.
+// for the theatre: it turns the room controller's decisions into the
+// retained topics other systems read. The room controller itself only
+// decides about lights. Its circadian, sleep, wake and bed entities and set
+// topics moved to the circadian lighting policy in 6.0.
 
-import type {TraceEntry} from "./bounded-trace";
-import {DEFAULT_DISCOVERY_PREFIX, type IdScheme, timeEntityValue} from "./ha-discovery";
+import {roomCircadianDiscoveryTopics} from "./circadian-publishing";
+import {DEFAULT_DISCOVERY_PREFIX, type IdScheme} from "./ha-discovery";
 import {
   transitionRoom,
   type RoomConfig,
@@ -15,33 +16,15 @@ import {
   type RoomState
 } from "./room-controller";
 import {
-  circadianCommandTopic,
-  circadianStateMessage,
-  circadianStateTopic,
   roomAvailabilityMessage,
   roomAvailabilityTopic,
   roomControlTopic,
   roomDiscovery,
-  roomTimeDiscoveryTopics,
-  scheduleCommandTopic,
-  scheduleStateMessages,
-  scheduleStateTopic,
-  sleepCommandTopic,
-  sleepStateMessage,
-  sleepStateTopic,
   type RoomDiscoveryConfig
 } from "./room-lighting-discovery";
 import {areaId} from "./topic-names";
 
-type PublishSettings = {area: string; publishState?: boolean; discovery?: boolean; timesFrom?: TimesFrom};
-
-// Where a room's wake and bed times come from: its own settings and Home
-// Assistant entities, or the house schedule it follows. Absent means the room.
-export type TimesFrom = "room" | "house";
-
-function ownTimes(config: {timesFrom?: TimesFrom}): boolean {
-  return config.timesFrom !== "house";
-}
+type PublishSettings = {area: string; publishState?: boolean; discovery?: boolean};
 
 // What the room's publishing needs beyond the controller's own settings: the
 // Node-RED node it runs in and how it names its Home Assistant device and
@@ -49,13 +32,11 @@ function ownTimes(config: {timesFrom?: TimesFrom}): boolean {
 export interface RoomPublishingConfig {
   nodeId?: string;
   idScheme?: IdScheme;
-  timesFrom?: TimesFrom;
   // Where Home Assistant listens for discovery. Absent means its default.
   discoveryPrefix?: string;
-  // Publish each light's control state and the circadian state over MQTT,
-  // and the circadian switch's Home Assistant discovery (which needs the
-  // state). Both are named after the area. Unset means on, as before these
-  // settings existed.
+  // Publish each light's control state over MQTT, and its Home Assistant
+  // discovery (which needs the state). Both are named after the area. Unset
+  // means on, as before these settings existed.
   publishState?: boolean;
   discovery?: boolean;
 }
@@ -71,20 +52,29 @@ function discoveryConfig(config: PublishingRoomConfig): RoomDiscoveryConfig {
 }
 
 // Every retained topic the room publishes, for clearing those it no longer
-// does after a change. The discovery entry counts whenever the room has an
-// area, as it is published or cleared at each start.
+// does after a change. The discovery entries count whenever the room has an
+// area, as they are published or cleared at each start.
 export function roomRetainedTopics(config: PublishingRoomConfig): string[] {
   const topics = areaId(config.area) ? roomDiscovery(discoveryConfig(config), targetIds(config)).map(({topic}) => topic) : [];
   if (roomPublishesState(config)) {
-    topics.push(roomAvailabilityTopic(config.area), circadianStateTopic(config.area), sleepStateTopic(config.area));
-    if (ownTimes(config)) topics.push(scheduleStateTopic(config.area, "wake-time"), scheduleStateTopic(config.area, "bed-time"));
+    topics.push(roomAvailabilityTopic(config.area));
     topics.push(...config.targets.map((target) => roomControlTopic(config.area, target.id)));
   }
   return topics;
 }
 
-// Whether the room publishes state under its area, and its circadian
-// switch's discovery, which reads that state.
+// The state topics of the circadian lighting policy, which a room published
+// before 6.0 and may still have in its record of what it published. They are
+// never the room's to clear now: a circadian node with the same area
+// publishes them.
+const CIRCADIAN_STATE = /^home\/[^/]+\/(?:circadian|sleep|wake-time|bed-time)\/state$/;
+
+export function withoutCircadianState(recorded: readonly string[]): string[] {
+  return recorded.filter((topic) => !CIRCADIAN_STATE.test(topic));
+}
+
+// Whether the room publishes its control states and availability under its
+// area, and their discovery.
 export function roomPublishesState(config: PublishSettings): boolean {
   return config.area !== "" && config.publishState !== false;
 }
@@ -93,97 +83,45 @@ export function roomPublishesDiscovery(config: PublishSettings): boolean {
   return roomPublishesState(config) && config.discovery !== false;
 }
 
-// The room's Home Assistant discovery at a startup message: its entries, or
-// with discovery switched off, empty retained entries that remove them; and
-// following the house, its own time entities cleared.
-function roomDiscoveryOutputs(config: PublishingRoomConfig): RoomOutput[] {
-  if (areaId(config.area) === "") return [];
-  const outputs: RoomOutput[] = roomDiscovery(discoveryConfig(config), targetIds(config))
-    .map((entry) => (roomPublishesDiscovery(config) ? entry : {topic: entry.topic, payload: "", retain: true}));
-  if (!ownTimes(config)) {
-    outputs.push(...roomTimeDiscoveryTopics(discoveryConfig(config)).map((topic) => ({topic, payload: "", retain: true})));
-  }
-  return outputs;
+// The circadian, sleep, wake and bed entities the room published before
+// 6.0, cleared at every start: the circadian lighting policy publishes its
+// own, and no 6.0 node publishes these, so clearing them is always safe.
+function oldCircadianClears(config: PublishingRoomConfig): RoomOutput[] {
+  // A room that publishes nothing cleared them itself before 6.0, when its
+  // publishing was switched off.
+  if (areaId(config.area) === "" || !roomPublishesState(config)) return [];
+  const prefix = discoveryConfig(config).discoveryPrefix;
+  return roomCircadianDiscoveryTopics({area: config.area, discoveryPrefix: prefix}, config.idScheme === "node" ? "node" : "area", config.nodeId)
+    .map((topic) => ({topic, payload: "", retain: true}));
 }
 
-// What the room publishes as the flows start and as it stops: with discovery
-// on, its entries, as motion and occupancy announce theirs, so Home
-// Assistant has them without a startup message; and when it publishes at
-// all, its availability, so Home Assistant shows its entities as available
-// only while it runs. Removing entries when discovery is off stays with the
-// startup message, as before.
+// Each light's control sensor, or with discovery switched off, empty
+// retained entries that remove them.
+function roomDiscoveryOutputs(config: PublishingRoomConfig): RoomOutput[] {
+  if (areaId(config.area) === "") return [];
+  return roomDiscovery(discoveryConfig(config), targetIds(config))
+    .map((entry) => (roomPublishesDiscovery(config) ? entry : {topic: entry.topic, payload: "", retain: true}));
+}
+
+// What the room publishes as the flows start and as it stops: its old
+// circadian entries cleared, then with discovery on, its entries, and when it
+// publishes at all, its availability, so Home Assistant shows its entities as
+// available only while it runs. Removing its entries when discovery is off
+// waits for the startup message: under the area scheme, another room could
+// publish them.
 export function roomStartingOutputs(config: PublishingRoomConfig): RoomOutput[] {
-  const discovery = roomPublishesDiscovery(config) ? roomDiscovery(discoveryConfig(config), targetIds(config)) : [];
-  return [...discovery, ...(roomPublishesState(config) ? [roomAvailabilityMessage(config.area, true)] : [])];
+  const entries = roomPublishesDiscovery(config) ? roomDiscoveryOutputs(config) : [];
+  return [...oldCircadianClears(config), ...entries, ...(roomPublishesState(config) ? [roomAvailabilityMessage(config.area, true)] : [])];
+}
+
+// At the startup message: as at the flows start, and with discovery off,
+// its entries removed.
+function roomStartupOutputs(config: PublishingRoomConfig): RoomOutput[] {
+  return [...oldCircadianClears(config), ...roomDiscoveryOutputs(config), ...(roomPublishesState(config) ? [roomAvailabilityMessage(config.area, true)] : [])];
 }
 
 export function roomStoppingOutputs(config: PublishSettings): RoomOutput[] {
   return roomPublishesState(config) ? [roomAvailabilityMessage(config.area, false)] : [];
-}
-
-
-function onOff(payload: unknown): boolean | null {
-  const requested = typeof payload === "string" ? payload.trim().toUpperCase() : "";
-  return requested === "ON" ? true : requested === "OFF" ? false : null;
-}
-
-// The set topics the room reads, what each payload means as a room event,
-// and the trace reason when it means nothing.
-function setTopics(area: string, ownTimesToo: boolean) {
-  const topics = [
-    {name: "circadian-set", topic: circadianCommandTopic(area), invalid: "not-on-or-off",
-      event: (payload: unknown) => {
-        const enabled = onOff(payload);
-        return enabled === null ? null : {kind: "circadian", enabled};
-      }},
-    {name: "sleep-set", topic: sleepCommandTopic(area), invalid: "not-on-or-off",
-      event: (payload: unknown) => {
-        const enabled = onOff(payload);
-        return enabled === null ? null : {kind: "sleep", enabled};
-      }},
-    {name: "wake-time-set", topic: scheduleCommandTopic(area, "wake-time"), invalid: "not-a-time",
-      event: (payload: unknown) => {
-        const wakeTime = timeEntityValue(payload);
-        return wakeTime === null ? null : {kind: "schedule", wakeTime};
-      }},
-    {name: "bed-time-set", topic: scheduleCommandTopic(area, "bed-time"), invalid: "not-a-time",
-      event: (payload: unknown) => {
-        const bedTime = timeEntityValue(payload);
-        return bedTime === null ? null : {kind: "schedule", bedTime};
-      }}
-  ];
-  // Following the house, the room's own wake and bed set topics are not read.
-  return ownTimesToo ? topics : topics.filter(({name}) => name !== "wake-time-set" && name !== "bed-time-set");
-}
-
-// MQTT the room reads, as room events: the set topics of its Home Assistant
-// entities (circadian lighting and sleep, ON or OFF; wake and bed times).
-// Read only while the room publishes, as the entities are only discovered
-// then; a bare MQTT message, or one a flow tagged as observed, is accepted.
-// Anything else passes through unchanged.
-export function roomInbound(msg: RoomMessage, config: PublishSettings): {msg: RoomMessage; traces: TraceEntry[]} {
-  const event = msg.lighting || {};
-  const set = roomPublishesState(config) && (!event.kind || event.kind === "observed" || event.kind === "command-observed")
-    ? setTopics(config.area, ownTimes(config)).find(({topic}) => topic === msg.topic)
-    : undefined;
-  if (!set) return {msg, traces: []};
-  if (msg.retain === true || event.retained === true) {
-    return {
-      msg: {...msg, lighting: {kind: "ignored"}},
-      traces: [{event: set.name, outcome: "ignored", reason: "retained-message", details: {}}]
-    };
-  }
-  const mapped = set.event(msg.payload);
-  if (mapped) return {msg: {...msg, lighting: mapped}, traces: []};
-  return {
-    msg: {...msg, lighting: {kind: "ignored"}},
-    traces: [{
-      event: set.name,
-      outcome: "ignored",
-      reason: set.invalid,
-      details: {payload: typeof msg.payload === "string" ? msg.payload : null}
-    }]
-  };
 }
 
 // A light's retained control state: in-control, overridden or manual.
@@ -196,45 +134,20 @@ function controlMessage(config: RoomConfig, state: RoomState, targetId: string):
   };
 }
 
-// The room's transition with its MQTT side: incoming MQTT becomes room
-// events, and the controller's decisions are published. At startup, the
-// discovery entry (or its removal), availability and circadian state come
-// first and every light's control state last; a circadian change publishes
-// the circadian state before the lights are restyled; any light whose control
-// state changed has it published after the commands.
+// The room's transition with its MQTT side. At startup, the discovery
+// entries (or their removal) and availability come first and every light's
+// control state last; any light whose control state changed has it
+// published after the commands.
 export function publishRoom(
   saved: Partial<RoomState> | undefined,
   msg: RoomMessage,
   config: PublishingRoomConfig,
   now?: Date | string | number
 ) {
-  const inbound = roomInbound(msg, config);
-  const result = transitionRoom(saved, inbound.msg, config, now);
-  const kind = inbound.msg.lighting?.kind;
+  const result = transitionRoom(saved, msg, config, now);
+  const kind = msg.lighting?.kind;
   const publishes = roomPublishesState(config);
-  const before: RoomOutput[] = [];
-  if (kind === "startup") {
-    before.push(...roomDiscoveryOutputs(config));
-    if (publishes) {
-      before.push(roomAvailabilityMessage(config.area, true));
-      before.push(circadianStateMessage(config.area, result.state.circadianEnabled));
-      before.push(sleepStateMessage(config.area, result.state.sleeping));
-      if (ownTimes(config)) before.push(...scheduleStateMessages(config.area, result.state.schedule));
-    }
-    // Following the house, the room's own time state is cleared, every
-    // start, whatever was published before (their entities went with the
-    // discovery above).
-    if (!ownTimes(config) && areaId(config.area) !== "") {
-      const ownTimeTopics = [scheduleStateTopic(config.area, "wake-time"), scheduleStateTopic(config.area, "bed-time")];
-      before.push(...ownTimeTopics.map((topic) => ({topic, payload: "", retain: true})));
-    }
-  } else if (kind === "circadian" && publishes) {
-    before.push(circadianStateMessage(config.area, result.state.circadianEnabled));
-  } else if (kind === "sleep" && publishes) {
-    before.push(sleepStateMessage(config.area, result.state.sleeping));
-  } else if (kind === "schedule" && publishes && ownTimes(config)) {
-    before.push(...scheduleStateMessages(config.area, result.state.schedule));
-  }
+  const before: RoomOutput[] = kind === "startup" ? roomStartupOutputs(config) : [];
   const controls = publishes
     ? config.targets
       .filter((target) => kind === "startup" || result.controlChanged.includes(target.id))
@@ -242,7 +155,6 @@ export function publishRoom(
     : [];
   return {
     ...result,
-    outputs: [...before, ...result.outputs, ...controls],
-    traces: [...inbound.traces, ...result.traces]
+    outputs: [...before, ...result.outputs, ...controls]
   };
 }

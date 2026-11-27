@@ -1,11 +1,8 @@
 "use strict";
 
 import type {TraceEntry} from "./bounded-trace";
-import type {CircadianLighting} from "./circadian";
-import type {DaySchedule} from "./circadian-schedule";
-import {requestedSchedule, savedSchedule, withActiveSchedule} from "./room-schedule";
-import {alreadyStyled, lightCommand, lightValues, readLightReport, setsLightValues, type LightCommand, type LightReport} from "./z2m-light";
-import {NOT_TRUE_OR_FALSE, describeValue, enableValue} from "./enable-input";
+import type {LightStyle} from "./light-styling";
+import {alreadyStyled, lightCommand, lightValues, readLightReport, setsLightValues, type LightReport} from "./z2m-light";
 import {ECHO_WINDOW_MS, checkCommandEcho, checkStateReport, parsePayload, rememberCommand, type ExpectedCommand} from "./command-echo";
 
 export {fingerprint, parsePayload, type ExpectedCommand} from "./command-echo";
@@ -14,30 +11,44 @@ export interface RoomTarget {
   id: string;
   stateTopic: string;
   commandTopic: string;
+  // A light that only switches on and off: it is never sent brightness,
+  // colour or a transition.
+  onOffOnly?: boolean;
 }
 
 export interface RoomConfig {
   area: string;
   displayName: string;
   targets: RoomTarget[];
-  initialSleep: boolean;
-  refreshTransitionSeconds: number;
+  // The transition for a light switched on, styled or with an intent's
+  // values. A restyle of a light already on uses the style's own.
   initialTransitionSeconds: number;
-  // How a light should look at a given moment; the node builds it from its
-  // schedule and light settings.
-  lighting: CircadianLighting;
-  // The wake and bed times that lighting follows, as configured. Absent means
-  // the default day.
-  schedule?: DaySchedule;
 }
+
+// How lights should look, as a style source (such as the circadian lighting
+// policy) last said: values null means style nothing. It stands until
+// `until`, so a source that stopped stops affecting lights.
+export interface RoomStyle {
+  values: LightStyle | null;
+  transitionSeconds: number;
+  until: string;
+  source: string;
+}
+
+// Two rules awaiting the person's confirmation for 6.0.0, each one switch:
+// whether an intent's values alone make a light manual, as before 6.0 (now
+// only manual: true does), and whether an intent's refresh: true still
+// restyles with the style's transition (removed in 6.0).
+export const VALUES_MAKE_MANUAL = false;
+export const INTENT_REFRESH = false;
 
 export interface RoomObservation extends LightReport {
   observedAt: string;
 }
 
 
-// Who controls a light. A target with no entry is "in-control": circadian may
-// style and refresh it. "overridden": another owner (an activity, a scene)
+// Who controls a light. A target with no entry is "in-control": a style may
+// restyle it. "overridden": another owner (an activity, a scene)
 // holds it until released. "manual": a person changed it.
 export type TargetControlState = "in-control" | "overridden" | "manual";
 export type TargetControl = {state: "manual"} | {state: "overridden"; owner: string};
@@ -51,26 +62,44 @@ export const REMOVED_LIGHT_UNITS = "removed-light-units";
 // the node warns.
 export const INVALID_LIGHT_VALUES = "invalid-light-values";
 
+// Traced when an intent gives values for a light that only switches on and
+// off: they are left out, and the node warns.
+export const ON_OFF_ONLY = "on-off-only";
+
+// The settings a room had for circadian lighting before 6.0, now the
+// circadian lighting policy's. A room whose saved settings still have any of
+// them hasn't been migrated: it is an invalid configuration, so it can't
+// quietly run unstyled. Empty, as a new 6.0 room has them, means absent.
+export const MOVED_CIRCADIAN_SETTINGS = [
+  "houseSchedule", "wakeTime", "bedTime", "maxBrightnessPct", "maxColorTempKelvin", "sleepBrightnessPct",
+  "sleepColorTempKelvin", "refreshTransitionSeconds", "refreshSeconds", "initialSleep",
+  // A room saved by 2.x and never re-saved has only these, ignored since 3.0.
+  "latitude", "longitude", "minBrightnessPct", "minColorTempKelvin"
+] as const;
+
+export function movedCircadianSettings(config: Record<string, unknown>): string[] {
+  return MOVED_CIRCADIAN_SETTINGS.filter((key) => config[key] !== undefined && config[key] !== null && config[key] !== "");
+}
+
+// Traced when the room is sent circadian, sleep or schedule messages, which
+// the circadian lighting policy takes since 6.0: ignored, and the node warns.
+export const MOVED_TO_CIRCADIAN = "moved-to-circadian";
+
 export interface RoomState {
   observed: Record<string, RoomObservation>;
   desired: Record<string, boolean>;
   control: Record<string, TargetControl>;
   expected: Record<string, ExpectedCommand[]>;
-  circadianEnabled: boolean;
-  sleeping: boolean;
-  // The wake and bed times in use, and the configured times they were based
-  // on. A "schedule" message changes a time until the node is deployed with
-  // a different setting for it, which then applies.
-  schedule: DaySchedule;
-  scheduleSetting: DaySchedule;
+  // The style last received, or none yet.
+  style: RoomStyle | null;
   // When a person last set each light: a person or manual intent, or someone
   // else's command seen on the light's command topic (epoch ms).
   personAt: Record<string, number>;
   // Lights the room hasn't been told about since it started with nothing
   // saved (a first deploy, or a redeploy or restart without a context
   // store), when it can't know which were held or set by a person. It leaves
-  // them as they are, with no periodic restyle, until an intent or release
-  // names them or circadian lighting is switched on.
+  // them as they are, with no restyle, until an intent or release names them
+  // or a style takes lights back (circadian lighting switched on).
   untold: string[];
   // When the room last restyled each light after someone else's bare ON
   // (epoch ms): at most one such restyle per light per echo window.
@@ -91,14 +120,18 @@ export interface LightingEvent {
   person?: boolean;
   owner?: string;
   source?: string;
+  // Before 6.0, styled a light with the restyle transition (see
+  // INTENT_REFRESH).
   refresh?: boolean;
   retained?: boolean;
-  enabled?: boolean;
   // On a motion OFF: when the room went vacant (ISO time).
   vacantSince?: string;
-  // On a "schedule" message: new wake or bed times, "HH:MM".
-  wakeTime?: string;
-  bedTime?: string;
+  // On a "style": how lights should look (values null: style nothing),
+  // the transition for lights already on, when it goes stale, and whether to
+  // take back the lights a person set.
+  transitionSeconds?: number;
+  until?: string;
+  takeBack?: boolean;
 }
 
 export interface RoomMessage {
@@ -136,9 +169,7 @@ export function createRoomState(
     expected: Object.fromEntries(
       Object.entries(saved.expected || {}).map(([target, entries]) => [target, entries.map((entry) => ({...entry}))])
     ),
-    circadianEnabled: saved.circadianEnabled !== false,
-    sleeping: saved.sleeping === undefined ? config.initialSleep : saved.sleeping === true,
-    ...savedSchedule(config, saved),
+    style: savedStyle(saved.style),
     personAt: Object.fromEntries(Object.entries(saved.personAt || {})
       .filter(([, at]) => Number.isFinite(at))),
     untold: Array.isArray(saved.untold)
@@ -149,17 +180,22 @@ export function createRoomState(
   };
 }
 
-// A circadian light command for this moment.
-export function adaptivePayload(
-  lightState: string,
-  isRefresh: boolean,
-  sleeping: boolean,
-  now: Date,
-  config: RoomConfig
-): LightCommand {
-  if (lightState === "OFF") return {state: lightState};
-  return lightCommand(lightState, config.lighting.styleAt(now, sleeping),
-    isRefresh ? config.refreshTransitionSeconds : config.initialTransitionSeconds);
+// A style as received or saved, or null if it isn't one. State saved before
+// 6.0 has none.
+function savedStyle(style: unknown): RoomStyle | null {
+  if (!style || typeof style !== "object") return null;
+  const entry = style as Partial<RoomStyle>;
+  const values = entry.values && typeof entry.values === "object" &&
+    Number.isFinite(entry.values.brightnessPct) && Number.isFinite(entry.values.colorTempKelvin) && entry.values.colorTempKelvin > 0
+    ? {brightnessPct: entry.values.brightnessPct, colorTempKelvin: entry.values.colorTempKelvin}
+    : null;
+  if (typeof entry.until !== "string" || !Number.isFinite(Date.parse(entry.until))) return null;
+  return {
+    values,
+    transitionSeconds: Number.isFinite(entry.transitionSeconds) ? Number(entry.transitionSeconds) : 0,
+    until: entry.until,
+    source: typeof entry.source === "string" && entry.source ? entry.source : "style"
+  };
 }
 
 export function transitionRoom(
@@ -172,9 +208,6 @@ export function transitionRoom(
   const nowMs = now.getTime();
   const state = createRoomState(config, saved);
   if (saved === undefined) state.untold = config.targets.map((target) => target.id);
-  // The settings with lighting on the times in use; a schedule change
-  // below replaces it.
-  let active = withActiveSchedule(config, state);
   const targetById = Object.fromEntries(config.targets.map((target) => [target.id, target]));
   const traces: TraceEntry[] = [];
   const outputs: RoomOutput[] = [];
@@ -228,21 +261,42 @@ export function transitionRoom(
     };
   }
 
-  function refreshCommands(source: string): RoomOutput[] {
-    if (!state.circadianEnabled) return [];
+  function onOffOnly(targetId: string): boolean {
+    return targetById[targetId]?.onOffOnly === true;
+  }
+
+  // The style in force: one with values that hasn't gone stale.
+  function currentStyle(): LightStyle | null {
+    const style = state.style;
+    return style?.values && Date.parse(style.until) > nowMs ? style.values : null;
+  }
+
+  // A style command for a light, over a transition; null for a light that
+  // only switches on and off, or with no style in force.
+  function styled(targetId: string, transitionSeconds: number): Record<string, unknown> | null {
+    const style = currentStyle();
+    return style && !onOffOnly(targetId) ? lightCommand("ON", style, transitionSeconds) : null;
+  }
+
+  // Each light that is on and the room's to style, moved to the style in
+  // force over the style's transition.
+  function restyleCommands(source: string): RoomOutput[] {
+    const style = currentStyle();
+    if (!style || !state.style) return [];
     const commands: Array<RoomOutput | null> = [];
     for (const target of config.targets) {
       if (!intendedOn(target.id) || controlOf(target.id) !== "in-control") continue;
+      if (onOffOnly(target.id)) continue;
       if (state.untold.includes(target.id)) {
         trace("refresh", "skipped", "not-told-since-start", {target: target.id});
         continue;
       }
       // Nothing to change when the light last reported exactly this style.
-      if (alreadyStyled(active.lighting.styleAt(now, state.sleeping), state.observed[target.id])) {
+      if (alreadyStyled(style, state.observed[target.id])) {
         trace("refresh", "skipped", "already-at-level", {target: target.id});
         continue;
       }
-      commands.push(command(target.id, adaptivePayload("ON", true, state.sleeping, now, active), source));
+      commands.push(command(target.id, lightCommand("ON", style, state.style.transitionSeconds), source));
     }
     return commands.filter((entry): entry is RoomOutput => entry !== null);
   }
@@ -287,13 +341,18 @@ export function transitionRoom(
         setControl(targetId, null, "off");
       } else if (owner) {
         setControl(targetId, {state: "overridden", owner}, "owner-intent");
-      } else if (event.manual === true || (manualValues && event.source !== "activity")) {
+      } else if (event.manual === true || (VALUES_MAKE_MANUAL && manualValues && event.source !== "activity")) {
         setControl(targetId, {state: "manual"}, "manual-intent");
       }
 
       let payload: Record<string, unknown>;
       if (resolvedState === "OFF") {
         payload = {state: "OFF"};
+      } else if (manualValues && onOffOnly(targetId)) {
+        // Nothing to set on a light that only switches: left out, and the
+        // node warns.
+        trace("intent", "accepted", ON_OFF_ONLY, {target: targetId, dropped: Object.keys(manualValues)});
+        payload = {state: "ON"};
       } else if (manualValues) {
         // The intent's values in the light's own units (z2m-light).
         const device = lightValues(manualValues);
@@ -303,10 +362,11 @@ export function transitionRoom(
         if (!Object.hasOwn(payload, "transition")) {
           payload.transition = config.initialTransitionSeconds;
         }
-      } else if (state.circadianEnabled && controlOf(targetId) === "in-control") {
-        payload = adaptivePayload("ON", event.refresh === true, state.sleeping, now, active);
       } else {
-        payload = {state: "ON"};
+        // A bare ON: the style in force for a light the room controls,
+        // otherwise just on.
+        const transition = INTENT_REFRESH && event.refresh === true && state.style ? state.style.transitionSeconds : config.initialTransitionSeconds;
+        payload = (controlOf(targetId) === "in-control" ? styled(targetId, transition) : null) ?? {state: "ON"};
       }
       state.desired[targetId] = resolvedState === "ON";
       told(targetId);
@@ -368,9 +428,9 @@ export function transitionRoom(
           setControl(target.id, null, "external-off");
         } else if (requestedState === "ON") {
           state.desired[target.id] = true;
-          if (setsLightValues(payload)) {
+          if (setsLightValues(payload) && !onOffOnly(target.id)) {
             setControl(target.id, {state: "manual"}, "external-values");
-          } else if (state.circadianEnabled && controlOf(target.id) === "in-control") {
+          } else if (currentStyle() && !onOffOnly(target.id) && controlOf(target.id) === "in-control") {
             // At most one restyle per light per echo window, whatever comes
             // back: a bare ON delivered twice (two subscriptions, or a QoS
             // redelivery) can't make the room answer itself in a loop.
@@ -378,11 +438,7 @@ export function transitionRoom(
             if (last !== undefined && nowMs - last >= 0 && nowMs - last < ECHO_WINDOW_MS) {
               trace("external-command", "suppressed", "restyled-recently", {target: target.id});
             } else {
-              const corrective = command(
-                target.id,
-                adaptivePayload("ON", false, state.sleeping, now, active),
-                "external-bare-on"
-              );
+              const corrective = command(target.id, styled(target.id, config.initialTransitionSeconds), "external-bare-on");
               if (corrective) {
                 outputs.push(corrective);
                 state.restyledAt[target.id] = nowMs;
@@ -402,42 +458,32 @@ export function transitionRoom(
         });
       }
     }
-  } else if ((event.kind === "circadian" || event.kind === "sleep") && enableValue(event.enabled) === null) {
-    // Refused, never read as off: the node warns.
-    trace(event.kind, "ignored", NOT_TRUE_OR_FALSE, {enabled: describeValue(event.enabled)});
-  } else if (event.kind === "circadian") {
-    const previous = state.circadianEnabled;
-    state.circadianEnabled = event.enabled === true;
-    if (previous !== state.circadianEnabled) {
-      trace("circadian", "changed", null, {enabled: state.circadianEnabled});
-    }
-    if (state.circadianEnabled) {
-      // Switching circadian lighting on takes the lights back, so the room
-      // has been told about every light.
-      for (const target of config.targets) told(target.id);
-      // Enabling circadian takes back manual lights; other owners keep theirs.
-      for (const target of config.targets) {
-        if (controlOf(target.id) === "manual") setControl(target.id, null, "circadian-enabled");
-      }
-      outputs.push(...refreshCommands("circadian-enabled"));
-    }
-  } else if (event.kind === "sleep") {
-    const previous = state.sleeping;
-    state.sleeping = event.enabled === true;
-    if (previous !== state.sleeping) trace("sleep", "changed", null, {enabled: state.sleeping});
-    outputs.push(...refreshCommands("sleep-policy"));
-  } else if (event.kind === "schedule") {
-    const next = requestedSchedule(state.schedule, event);
+  } else if (event.kind === "circadian" || event.kind === "sleep" || event.kind === "schedule") {
+    // The circadian lighting policy's since 6.0: the node warns.
+    trace(event.kind, "ignored", MOVED_TO_CIRCADIAN);
+  } else if (event.kind === "style") {
+    const previous = state.style;
+    const next = savedStyle({...event, source: event.source});
     if (!next) {
-      trace("schedule", "ignored", "invalid-times", {wakeTime: event.wakeTime, bedTime: event.bedTime});
-    } else if (next.wakeTime !== state.schedule.wakeTime || next.bedTime !== state.schedule.bedTime) {
-      state.schedule = next;
-      active = withActiveSchedule(config, state);
-      trace("schedule", "changed", null, {...next});
-      outputs.push(...refreshCommands("schedule-changed"));
+      trace("style", "ignored", "not-a-style");
+    } else {
+      state.style = next;
+      // Traced when it starts or stops styling, or comes from someone else,
+      // not at every interval.
+      if (!previous || (previous.values === null) !== (next.values === null) || previous.source !== next.source) {
+        trace("style", "changed", null, {source: next.source, styling: next.values !== null});
+      }
+      if (event.takeBack === true) {
+        // The one time a style changes who controls a light: circadian
+        // lighting switched on takes back what a person set, and the room
+        // has then been told about every light. Other owners keep theirs.
+        for (const target of config.targets) {
+          told(target.id);
+          if (controlOf(target.id) === "manual") setControl(target.id, null, "taken-back");
+        }
+      }
+      outputs.push(...restyleCommands(next.source));
     }
-  } else if (event.kind === "refresh") {
-    outputs.push(...refreshCommands("periodic-refresh"));
   } else if (event.kind === "release") {
     // Hand overridden lights back; an owner name releases only that owner's lights.
     const targets = Array.isArray(event.targets) ? event.targets : config.targets.map((target) => target.id);
@@ -447,8 +493,10 @@ export function transitionRoom(
       if (!targetById[targetId] || entry?.state !== "overridden" || (owner && entry.owner !== owner)) continue;
       setControl(targetId, null, "released");
       told(targetId);
-      if (state.circadianEnabled && intendedOn(targetId)) {
-        const restyle = command(targetId, adaptivePayload("ON", true, state.sleeping, now, active), event.source || "release");
+      // Back in the room's style, over the style's own transition.
+      const style = intendedOn(targetId) && state.style ? styled(targetId, state.style.transitionSeconds) : null;
+      if (style) {
+        const restyle = command(targetId, style, event.source || "release");
         if (restyle) outputs.push(restyle);
       }
     }
@@ -485,8 +533,9 @@ export function transitionRoom(
     // The lights whose control state changed, in configured order.
     controlChanged: config.targets.map((target) => target.id).filter((id) => controlChanged.has(id)),
     status: {
-      circadianEnabled: state.circadianEnabled,
-      sleeping: state.sleeping,
+      // Whether a style is in force, and whose it is.
+      styled: currentStyle() !== null,
+      styleSource: state.style?.source ?? null,
       onCount,
       manualCount,
       overriddenCount,
