@@ -1,0 +1,72 @@
+<script type="text/javascript">
+  RED.nodes.registerType("home-z2m-light", {
+    category: "home automation",
+    color: "#e2d96e",
+    defaults: {
+      name: {value: ""},
+      // The room's id for this light: no default, it names the user's own.
+      target: {value: "", required: true, validate: function (v) { return String(v || "").trim() !== ""; }},
+      baseTopic: {value: "zigbee2mqtt", required: true, validate: function (v) {
+        var base = String(v || "").trim().replace(/^\/+|\/+$/g, "");
+        return base !== "" && !/[+#]/.test(base);
+      }},
+      // No default: it names the user's own light or group.
+      friendlyName: {value: "", required: true, validate: function (v) {
+        var name = String(v || "").trim().replace(/^\/+|\/+$/g, "");
+        return name !== "" && !/[+#]/.test(name);
+      }},
+      group: {value: false}
+    },
+    inputs: 1,
+    outputs: 2,
+    outputLabels: ["to the light (MQTT out)", "to the room lighting controller"],
+    icon: "font-awesome/fa-lightbulb-o",
+    label: function () { return this.name || this.friendlyName || "zigbee2mqtt light"; },
+    paletteLabel: "zigbee2mqtt light"
+  });
+</script>
+
+<script type="text/html" data-template-name="home-z2m-light">
+  <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
+  <div class="form-row"><label for="node-input-target">Target</label><input type="text" id="node-input-target" placeholder="the room's id for this light"></div>
+  <div class="form-row"><label for="node-input-baseTopic">Base topic</label><input type="text" id="node-input-baseTopic"></div>
+  <div class="form-row"><label for="node-input-friendlyName">Friendly name</label><input type="text" id="node-input-friendlyName" placeholder="the light's or group's name in Zigbee2MQTT"></div>
+  <div class="form-row"><label for="node-input-group">Zigbee2MQTT group</label><input type="checkbox" id="node-input-group" style="display:inline-block; width:auto;"></div>
+</script>
+
+<script type="text/html" data-help-name="home-z2m-light">
+  <p>Connects one Zigbee2MQTT light, or a Zigbee2MQTT group of lights, to a <b>room lighting controller</b>, over
+    Zigbee2MQTT's MQTT messages: no function nodes, and never Home Assistant. Use one per light in the room's targets.</p>
+  <h3>Wiring</h3>
+  <ol>
+    <li>An <b>MQTT in</b> node subscribed to <code>&lt;base&gt;/&lt;friendly name&gt;/#</code> (output: auto-detect)
+      → this node. That covers the light's state, its <code>/set</code> topic (to see other people's commands) and its
+      availability.</li>
+    <li>The room controller's second output (its light commands) → this node. One wire can feed every light's node:
+      each acts only on its own <b>Target</b>.</li>
+    <li>This node's first output → an <b>MQTT out</b> node on the same broker, with no topic set.</li>
+    <li>This node's second output (readings) → the room controller.</li>
+  </ol>
+  <h3>What it does</h3>
+  <p>It turns the room's commands into Zigbee2MQTT's <code>/set</code> payloads (brightness 1-254, colour temperature
+    in mireds, the transition), exactly as the room sent them before 6.0, and the light's reports into readings in
+    percent and kelvin. It tells its own commands from someone else's: an exact echo on <code>/set</code> is its own;
+    a bare ON or OFF arriving while one of its own with that power hasn't come back is its own, changed on the way;
+    anything else is someone else's, which the room may take as a person's change. When the room restyles a light that
+    already shows that style, it sends nothing and tells the room so. When the room starts, it asks the light to report
+    (<code>/get</code>).</p>
+  <p>Availability (<code>/availability</code>) is passed on and shown by the room, but changes nothing.</p>
+  <h3>Groups</h3>
+  <p>Tick <b>Zigbee2MQTT group</b> for a group. Commands are the same. Zigbee2MQTT works out a group's state itself,
+    from what it sent and its members' reports, so a group's report follows a command at once. A group has no
+    availability and can't be asked to report: at the room's startup, the node passes on the group's last state if it
+    has one.</p>
+  <h3>Settings</h3>
+  <dl class="message-properties">
+    <dt>Target</dt><dd>The light's id in the room controller's Targets JSON.</dd>
+    <dt>Base topic</dt><dd>Zigbee2MQTT's base topic, <code>zigbee2mqtt</code> unless you changed it.</dd>
+    <dt>Friendly name</dt><dd>The light's or group's name in Zigbee2MQTT.</dd>
+  </dl>
+  <p>For a light that isn't Zigbee2MQTT's, see the neutral light contract in the README: any flow that answers the
+    room's <code>msg.light</code> commands with <code>msg.light</code> readings works in this node's place.</p>
+</script>

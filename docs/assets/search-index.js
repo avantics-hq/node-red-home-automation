@@ -1576,6 +1576,75 @@ window.DOCS_SEARCH = [
   "text": "waiting for the device (grey ring) until the first reading. online (green) or offline (grey ring) after an availability message. After a report: the position, such as 60% , or the end state, or position unknown ; while moving it is prefixed with the motion, such as closing · 60% ."
  },
  {
+  "title": "Zigbee2MQTT light",
+  "description": "Message shapes, output ports and settings for the adapter between a room lighting controller and a Zigbee2MQTT light or group.",
+  "url": "node-z2m-light.html",
+  "text": "Message shapes, output ports and settings for the adapter between a room lighting controller and a Zigbee2MQTT light or group."
+ },
+ {
+  "title": "Zigbee2MQTT light",
+  "section": "Neutral commands in, Zigbee2MQTT out",
+  "description": "The zigbee2mqtt light node (type home-z2m-light ; canvas label: its name, its friendly name, or “zigbee2mqtt l",
+  "url": "node-z2m-light.html#summary",
+  "text": "The zigbee2mqtt light node (type home-z2m-light ; canvas label: its name, its friendly name, or “zigbee2mqtt light”) translates a room lighting controller’s neutral light commands into Zigbee2MQTT’s /set payloads, and the light’s reports into neutral readings. Use one per light in the room’s targets. It also tells the room’s own commands from someone else’s, and skips a restyle the light already shows; both depend on Zigbee2MQTT’s units, so they are done here rather than in the room. Looking for wiring? Follow Wire the room . For a light that isn’t Zigbee2MQTT’s, see the neutral light contract on the room lighting controller page."
+ },
+ {
+  "title": "Zigbee2MQTT light",
+  "section": "Inputs",
+  "description": "Input messages From Message Effect Room controller, output 2 msg.light = {kind: \"command\", target, state, brig",
+  "url": "node-z2m-light.html#inputs",
+  "text": "Input messages From Message Effect Room controller, output 2 msg.light = {kind: \"command\", target, state, brightnessPct?, colorTempKelvin?, transitionSeconds?, extra?, restyle?, source, id} For its own Target only: published on zigbee2mqtt/<device>/set . Others are ignored, so one wire can feed every light’s node. Room controller, output 2 msg.light = {kind: \"observe\", target} For a light: {\"state\": \"\"} on zigbee2mqtt/<device>/get , asking it to report. For a group: its last state as a reading, if it has one. MQTT in on zigbee2mqtt/<device>/# The light’s state on zigbee2mqtt/<device> A reading on output 2. MQTT in on zigbee2mqtt/<device>/# A command on zigbee2mqtt/<device>/set Its own echo is dropped; someone else’s becomes an external reading. Retained messages are ignored. MQTT in on zigbee2mqtt/<device>/# zigbee2mqtt/<device>/availability An availability reading. Not for a group. Topics are shown with the default base topic; <device> is the friendly name. Messages on other topics are ignored."
+ },
+ {
+  "title": "Zigbee2MQTT light",
+  "section": "Outputs",
+  "description": "Two output ports Port Message Connect to 1 · To the light {topic: \"zigbee2mqtt/<device>/set\", payload, retain:",
+  "url": "node-z2m-light.html#outputs",
+  "text": "Two output ports Port Message Connect to 1 · To the light {topic: \"zigbee2mqtt/<device>/set\", payload, retain: false} , or /get An MQTT out node with no topic set. 2 · To the room msg.light readings: observed , external , echo-changed , skipped , availability The room lighting controller’s input. An observed reading is {kind: \"observed\", target, on, brightnessPct?, colorTempKelvin?, fields, showsLast, observedAt} : the values are the light’s, converted back to percent and kelvin; fields lists what it has reported since start ( brightness , colorTemp ); showsLast says it shows exactly the last command sent, in Zigbee2MQTT’s own units. observedAt is when the report arrived."
+ },
+ {
+  "title": "Zigbee2MQTT light",
+  "section": "Settings",
+  "description": "Editor settings and exact defaults Setting / property Default Meaning Name / name Empty The canvas label. Targ",
+  "url": "node-z2m-light.html#settings",
+  "text": "Editor settings and exact defaults Setting / property Default Meaning Name / name Empty The canvas label. Target / target None: required The light’s id in the room controller’s Targets JSON. Base topic / baseTopic zigbee2mqtt Zigbee2MQTT’s base topic. It cannot contain + or # . Friendly name / friendlyName None: required The light’s or group’s name in Zigbee2MQTT. It cannot contain + or # . Zigbee2MQTT group / group Off On for a Zigbee2MQTT group of lights rather than one light."
+ },
+ {
+  "title": "Zigbee2MQTT light",
+  "section": "Device payloads",
+  "description": "Each command becomes the payload the room controller sent before 6.0, field for field and in the same order: t",
+  "url": "node-z2m-light.html#device-topics",
+  "text": "Each command becomes the payload the room controller sent before 6.0, field for field and in the same order: the state, any other fields the intent gave (an effect, say), brightness (1-254, from percent; 0 % is 1, the dimmest), color_temp (mireds, from kelvin), then transition unless the intent set one. An OFF is {\"state\":\"OFF\"} alone. A styled ON, as published {\"state\":\"ON\",\"brightness\":64,\"color_temp\":400,\"transition\":1} A restyle ( restyle: true , sent only for a light already on) is not published when the light’s last report already shows exactly those values; the node answers {kind: \"skipped\", target, id, observedAt} with the time of that report. Any other command is always published."
+ },
+ {
+  "title": "Zigbee2MQTT light",
+  "section": "Its own commands and someone else’s",
+  "description": "Its own: a command on /set exactly as it sent one in the last 5 seconds, even seen twice. Its own, changed on ",
+  "url": "node-z2m-light.html#echo",
+  "text": "Its own: a command on /set exactly as it sent one in the last 5 seconds, even seen twice. Its own, changed on the way: an ON or OFF arriving while one of its own with that power hasn’t come back, as when a function cut it to {\"state\":\"ON\"} : an echo-changed reading, never someone else’s. Someone else’s: anything else: {kind: \"external\", target, state, setsValues, observedAt} , where setsValues says it sets brightness, colour or an effect. The room may take it as a person’s change."
+ },
+ {
+  "title": "Zigbee2MQTT light",
+  "section": "Groups",
+  "description": "A group takes the same commands. Zigbee2MQTT works out a group’s state itself, from what it sent and its membe",
+  "url": "node-z2m-light.html#groups",
+  "text": "A group takes the same commands. Zigbee2MQTT works out a group’s state itself, from what it sent and its members’ reports, so the group’s report follows a command at once. A group has no availability and can’t be asked to report, so observe passes on its last state instead."
+ },
+ {
+  "title": "Zigbee2MQTT light",
+  "section": "Availability",
+  "description": "zigbee2mqtt/<device>/availability becomes {kind: \"availability\", target, online} on output 2. The room shows i",
+  "url": "node-z2m-light.html#availability",
+  "text": "zigbee2mqtt/<device>/availability becomes {kind: \"availability\", target, online} on output 2. The room shows it on the light’s control sensor and in its status, and changes nothing because of it. It needs Zigbee2MQTT’s availability setting on."
+ },
+ {
+  "title": "Zigbee2MQTT light",
+  "section": "Status",
+  "description": "waiting for the device (or group · waiting for its state ), grey ring, until the first report. on · 25% 2500K ",
+  "url": "node-z2m-light.html#status",
+  "text": "waiting for the device (or group · waiting for its state ), grey ring, until the first report. on · 25% 2500K (green) or off (grey) after a report. offline (grey ring) after an availability message saying so."
+ },
+ {
   "title": "Shelly switch",
   "description": "Message shapes, output ports, modes and settings for the adapter for one switch channel of a Shelly Gen2-or-later relay, over the device’s own MQTT API.",
   "url": "node-shelly-switch.html",

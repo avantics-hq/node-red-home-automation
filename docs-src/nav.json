@@ -55,6 +55,7 @@
     "items": [
       {"label": "Shelly cover", "href": "node-shelly-cover.html"},
       {"label": "Zigbee2MQTT cover", "href": "node-z2m-cover.html"},
+      {"label": "Zigbee2MQTT light", "href": "node-z2m-light.html"},
       {"label": "Shelly switch", "href": "node-shelly-switch.html"}
     ]
   },
