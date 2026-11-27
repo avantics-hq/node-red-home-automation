@@ -17,6 +17,7 @@ import {
   motionStoppingOutputs,
   type MotionPublishingConfig
 } from "../lib/motion-publishing";
+import {NOT_TRUE_OR_FALSE} from "../lib/enable-input";
 import {ID_SCHEMES, discoveryPrefixSetting} from "../lib/ha-discovery";
 import {optionalBooleanSetting, optionalChoiceSetting} from "../lib/settings";
 import {publishingArea} from "../lib/topic-names";
@@ -139,8 +140,20 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
         lifecycle.publish(send, motionStateOutputs(publishing, result.state));
       }
       updateStatus(result.status);
+      // A refused enable or pause is shown, never read as off: on the status
+      // until the next input, and in the log once per input per deploy.
+      const refused = result.traces.find(({reason}) => reason === NOT_TRUE_OR_FALSE);
+      if (refused) {
+        const {source, payload} = refused.details as {source: string; payload: string};
+        if (!warnedRefused.has(source)) {
+          warnedRefused.add(source);
+          node.warn(`${source} takes only true or false: ${payload} was refused, and nothing changed`);
+        }
+        node.status({fill: "yellow", shape: "ring", text: `refused ${source} ${payload}: send true or false`});
+      }
       return result;
     }
+    const warnedRefused = new Set<string>();
 
     // With a configured context store (see the README) the node's state
     // survives a redeploy or restart, but timers never do: a pending

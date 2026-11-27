@@ -12,6 +12,7 @@ import {
 } from "../lib/room-controller";
 import {scheduledLighting} from "../lib/circadian";
 import {resolveSchedule} from "../lib/circadian-schedule";
+import {NOT_TRUE_OR_FALSE} from "../lib/enable-input";
 import type {LightLevels} from "../lib/light-styling";
 import {publishingLifecycle} from "./publishing-lifecycle";
 import {publishRoom, roomRetainedTopics, roomStartingOutputs, roomStoppingOutputs, type RoomPublishingConfig} from "../lib/room-publishing";
@@ -159,8 +160,21 @@ const registerRoomController: NodeInitializer = (RED) => {
         node.warn("lighting values left out: brightnessPct must be a number and colorTempKelvin a number above 0");
       }
       updateStatus(result.status);
+      // A refused circadian or sleep switch is shown, never read as off: on
+      // the status until the next input, and in the log once per kind per
+      // deploy.
+      const refused = result.traces.find(({reason}) => reason === NOT_TRUE_OR_FALSE);
+      if (refused) {
+        const enabled = String((refused.details as {enabled: string}).enabled);
+        if (!warnedRefused.has(refused.event)) {
+          warnedRefused.add(refused.event);
+          node.warn(`${refused.event}'s enabled takes only true or false: ${enabled} was refused, and nothing changed`);
+        }
+        node.status({fill: "yellow", shape: "ring", text: `refused ${refused.event} ${enabled}: send true or false`});
+      }
       return result;
     }
+    const warnedRefused = new Set<string>();
     let warnedLegacyUnits = false;
     let warnedInvalidValues = false;
 

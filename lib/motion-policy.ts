@@ -1,7 +1,9 @@
 "use strict";
 
 import type {TraceEntry} from "./bounded-trace";
+import {NOT_TRUE_OR_FALSE, describeValue, enableValue} from "./enable-input";
 import {jsonSetting, keptOverride, numberSetting} from "./settings";
+
 
 // Motion handles occupancy, illuminance and whether it is enabled. Wall
 // switches belong to the switch policy; the room controller keeps motion from
@@ -60,10 +62,6 @@ export type MotionEffect =
   | {kind: "cancel-off-timer"}
   | {kind: "schedule-off-timer"; delayMs: number; generation: number}
   | {kind: "send"; message: LightingIntent};
-
-export function booleanOn(value: unknown): boolean {
-  return value === true || (typeof value === "string" && value.toLowerCase() === "on");
-}
 
 function finiteNumber(value: unknown): number | null {
   const number = Number(value);
@@ -205,9 +203,12 @@ export function transitionMotion(
   const source = input.source;
   const payload = input.payload;
 
-  if (source === "global-enabled") {
+  if ((source === "global-enabled" || source === "area-enabled" || source === "pause") && enableValue(payload) === null) {
+    // Refused, never read as off: the node warns and says so on its status.
+    trace(source === "pause" ? "pause" : "enabled", "ignored", NOT_TRUE_OR_FALSE, {source, payload: describeValue(payload)});
+  } else if (source === "global-enabled") {
     const previous = nextGlobalEnabled;
-    nextGlobalEnabled = booleanOn(payload);
+    nextGlobalEnabled = payload === true;
     if (previous !== nextGlobalEnabled) {
       trace("enabled", "changed", null, {scope: "global", enabled: nextGlobalEnabled});
     }
@@ -220,7 +221,7 @@ export function transitionMotion(
     if (!owner) {
       trace("pause", "ignored", "owner-required");
     } else {
-      const pause = payload === true || booleanOn(payload);
+      const pause = payload === true;
       const held = state.pausedBy.some((entry) => entry.owner === owner);
       const others = state.pausedBy.filter((entry) => entry.owner !== owner);
       const until = now + (config.maxPauseSeconds ?? DEFAULT_MAX_PAUSE_SECONDS) * 1000;
@@ -230,7 +231,7 @@ export function transitionMotion(
     }
   } else if (source === "area-enabled") {
     const previous = state.areaEnabled;
-    state.areaEnabled = booleanOn(payload);
+    state.areaEnabled = payload === true;
     if (previous !== state.areaEnabled) {
       trace("enabled", "changed", null, {scope: "area", enabled: state.areaEnabled});
     }

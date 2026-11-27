@@ -81,14 +81,17 @@
   <dl class="message-properties">
     <dt>occupancy</dt><dd><code>msg.payload.occupied</code>, from the occupancy fusion node.</dd>
     <dt>illuminance</dt><dd>the light level in lux.</dd>
-    <dt>area-enabled</dt><dd>ON or OFF for this node; <code>global-enabled</code> for every motion node.</dd>
+    <dt>area-enabled</dt><dd><code>true</code> or <code>false</code> for this node; <code>global-enabled</code> for every
+      motion node. Any other value, such as <code>"ON"</code> (accepted before 6.0), is refused: nothing changes, the
+      node logs a warning once per deploy and shows it on its status.</dd>
     <dt>delay</dt><dd>a new vacancy time, in <b>seconds</b>, the same unit as <b>Vacancy seconds</b>.</dd>
     <dt>illuminance-cut-off</dt><dd>a new lux cutoff.</dd>
     <dt>pause</dt><dd><code>true</code> pauses motion lighting, <code>false</code> releases it, for the owner in
       <code>msg.owner</code> (for example a cover's name), which is required. A pause lasts at most the
       <b>Maximum pause</b> unless sent again, so a lost release can't stop motion lighting for good. Motion lighting acts only while no owner holds a pause,
       and a pause cancels a pending vacancy timer, as switching it off does. A pause never changes the enables,
-      which are the user's own: wire a cover's <i>moving</i> output here to pause motion while it moves.</dd>
+      which are the user's own: wire a cover's <i>moving</i> output here to pause motion while it moves. Any value but
+      <code>true</code> or <code>false</code> is refused, as for the enables.</dd>
   </dl>
   <p>A <code>delay</code> or <code>illuminance-cut-off</code> message overrides the setting, and lasts across
     restarts until the node is deployed with a different <b>Vacancy seconds</b> or <b>Lux cutoff</b>, which then
