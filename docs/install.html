@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Install · Node-RED Home Automation</title>
+<meta name="description" content="">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar"><a class="brand" href="index.html"><span class="mark" aria-hidden="true">HA</span>Node-RED Home Automation</a><span class="version">5.0.0</span><button class="menu-button" id="menu-button" aria-controls="menu-drawer" aria-expanded="false">Menu</button><div class="search"><label class="sr-only" for="doc-search">Search the documentation</label><input id="doc-search" type="search" placeholder="Search the documentation…" autocomplete="off" aria-controls="search-results"><p class="sr-only" id="search-status" role="status"></p><div class="search-results" id="search-results" hidden></div></div><a class="source" href="https://github.com/avantics-hq/node-red-home-automation">Source ↗</a></header>
+<dialog id="menu-drawer" aria-labelledby="drawer-title"><div class="drawer-head"><strong id="drawer-title">Documentation</strong><button id="menu-close" autofocus>Close</button></div><nav class="doc-nav" aria-label="Documentation"><div class="nav-group"><p class="nav-label">Get started</p><a href="index.html">Introduction</a><a href="install.html" aria-current="page">Install</a><a href="guide-room-lighting.html">Your first room</a></div><div class="nav-group"><p class="nav-label">Guides</p><a href="guide-motion-occupancy.html">Motion and occupancy</a><a href="guide-wall-switches.html">Wall switches</a><a href="guide-house-schedule.html">House schedule</a><a href="guide-covers.html">Covers</a><a href="home-theatre.html">Home theatre</a><a href="guide-home-assistant.html">Home Assistant</a><a href="guide-device-adapters.html">Device adapters</a></div><div class="nav-group"><p class="nav-label">Lighting nodes</p><a href="node-room-controller.html">Room lighting controller</a><a href="node-circadian-policy.html">Circadian lighting policy</a><a href="node-motion-policy.html">Motion lighting policy</a><a href="node-occupancy-fusion.html">Occupancy fusion</a><a href="node-switch-policy.html">Switch lighting policy</a><a href="node-house-schedule.html">House schedule node</a><a href="node-house-schedule-mqtt.html">House schedule MQTT</a></div><div class="nav-group"><p class="nav-label">Cover nodes</p><a href="node-cover-controller.html">Cover controller</a><a href="node-cover-group.html">Cover group</a></div><div class="nav-group"><p class="nav-label">Home theatre nodes</p><a href="node-theatre-activity-controller.html">Theatre activity controller</a><a href="node-theatre-state-contract.html">Theatre state contract</a><a href="node-display-mode-controller.html">Display mode controller</a><a href="node-avr-controller.html">AVR controller</a><a href="node-source-capability-controller.html">Source capability controller</a><a href="node-backlighting-controller.html">Backlighting controller</a><a href="node-activity-lighting-controller.html">Activity lighting controller</a></div><div class="nav-group"><p class="nav-label">Adapter nodes</p><a href="node-shelly-cover.html">Shelly cover</a><a href="node-z2m-cover.html">Zigbee2MQTT cover</a><a href="node-shelly-switch.html">Shelly switch</a></div><div class="nav-group"><p class="nav-label">Contracts</p><a href="contract-theatre-mqtt.html">Theatre MQTT contract</a><a href="contract-examples.html">Contract examples</a></div><div class="nav-group"><p class="nav-label">Project</p><a href="releases.html">Releases and upgrading</a><a href="roadmap.html">Roadmap</a><a href="https://github.com/avantics-hq/node-red-home-automation/blob/main/CONTRIBUTING.md">Contributing ↗</a></div></nav></dialog>
+<div class="layout"><aside class="sidebar"><nav class="doc-nav" aria-label="Documentation"><div class="nav-group"><p class="nav-label">Get started</p><a href="index.html">Introduction</a><a href="install.html" aria-current="page">Install</a><a href="guide-room-lighting.html">Your first room</a></div><div class="nav-group"><p class="nav-label">Guides</p><a href="guide-motion-occupancy.html">Motion and occupancy</a><a href="guide-wall-switches.html">Wall switches</a><a href="guide-house-schedule.html">House schedule</a><a href="guide-covers.html">Covers</a><a href="home-theatre.html">Home theatre</a><a href="guide-home-assistant.html">Home Assistant</a><a href="guide-device-adapters.html">Device adapters</a></div><div class="nav-group"><p class="nav-label">Lighting nodes</p><a href="node-room-controller.html">Room lighting controller</a><a href="node-circadian-policy.html">Circadian lighting policy</a><a href="node-motion-policy.html">Motion lighting policy</a><a href="node-occupancy-fusion.html">Occupancy fusion</a><a href="node-switch-policy.html">Switch lighting policy</a><a href="node-house-schedule.html">House schedule node</a><a href="node-house-schedule-mqtt.html">House schedule MQTT</a></div><div class="nav-group"><p class="nav-label">Cover nodes</p><a href="node-cover-controller.html">Cover controller</a><a href="node-cover-group.html">Cover group</a></div><div class="nav-group"><p class="nav-label">Home theatre nodes</p><a href="node-theatre-activity-controller.html">Theatre activity controller</a><a href="node-theatre-state-contract.html">Theatre state contract</a><a href="node-display-mode-controller.html">Display mode controller</a><a href="node-avr-controller.html">AVR controller</a><a href="node-source-capability-controller.html">Source capability controller</a><a href="node-backlighting-controller.html">Backlighting controller</a><a href="node-activity-lighting-controller.html">Activity lighting controller</a></div><div class="nav-group"><p class="nav-label">Adapter nodes</p><a href="node-shelly-cover.html">Shelly cover</a><a href="node-z2m-cover.html">Zigbee2MQTT cover</a><a href="node-shelly-switch.html">Shelly switch</a></div><div class="nav-group"><p class="nav-label">Contracts</p><a href="contract-theatre-mqtt.html">Theatre MQTT contract</a><a href="contract-examples.html">Contract examples</a></div><div class="nav-group"><p class="nav-label">Project</p><a href="releases.html">Releases and upgrading</a><a href="roadmap.html">Roadmap</a><a href="https://github.com/avantics-hq/node-red-home-automation/blob/main/CONTRIBUTING.md">Contributing ↗</a></div></nav></aside><main id="main" tabindex="-1">
+<nav class="breadcrumb" aria-label="Breadcrumb"><a href="index.html">Docs</a><span aria-hidden="true">/</span><span>Get started</span><span aria-hidden="true">/</span><span>Install</span></nav><p class="page-kind">Get started</p><h1>Install</h1><p class="lead">Add the package to Node-RED from the palette manager, npm or a release tarball, then set up a file context store so the nodes keep their state across deploys and restarts.</p>
+<details class="mobile-toc"><summary>On this page</summary><a href="#before">Before you start</a><a href="#palette">Add it from the palette manager</a><a href="#npm">Add it with npm</a><a href="#tarball">Add it from a release tarball</a><a href="#examples">Import an example flow</a><a href="#context-store">Set up a file context store</a><a href="#mqtt">Connect the broker and send a startup message</a><a href="#security">Configuration and security</a><a href="#next">Next</a></details>
+<div class="meta"><span class="tag">Guide</span><span class="tag">Get started</span><span class="tag"><code>@avantics/node-red-home-automation</code></span></div>
+<section id="before"><h2>Before you start</h2>
+<p>The package declares what it needs in its <code>package.json</code>. Check both before you add it.</p>
+<div class="table-wrap" role="region" aria-label="Requirements; scroll horizontally on a phone" tabindex="0"><table><caption>Requirements</caption><thead><tr><th scope="col">Needs</th><th scope="col">Version</th><th scope="col">Declared in</th></tr></thead><tbody>
+<tr><td>Node-RED</td><td>5.0.0 or newer</td><td><code>node-red.version</code>: <code>&gt;=5.0.0</code></td></tr>
+<tr><td>Node.js</td><td>24 or newer</td><td><code>engines.node</code>: <code>&gt;=24</code></td></tr>
+</tbody></table></div>
+<aside class="callout neutral"><strong>Node-RED 5 runs on older Node.js than this package.</strong><p>Node-RED 5 itself accepts Node.js 22.9, but this package needs Node.js 24 or newer. Check the Node.js version that runs your Node-RED before you add the package.</p></aside>
+<p>For the nodes that talk to devices or publish state, you also need an MQTT broker and an <strong>MQTT broker</strong> config node in Node-RED. Home Assistant is optional: it is a panel that shows state and sends requests, never the path to a device.</p>
+</section>
+<section id="palette"><h2>Add it from the palette manager</h2>
+<ol class="step-list">
+<li><strong>Open the palette manager.</strong><p>In the Node-RED editor, choose <strong>Manage palette → Install</strong>.</p></li>
+<li><strong>Search for the package.</strong><p>Search for <code>@avantics/node-red-home-automation</code> and install it.</p></li>
+<li><strong>Find the nodes.</strong><p>They appear in the <strong>home automation</strong> category of the palette.</p></li>
+</ol>
+</section>
+<section id="npm"><h2>Add it with npm</h2>
+<p>Run this from your Node-RED user directory (usually <code>~/.node-red</code>), then restart Node-RED:</p>
+<div class="code-block"><div class="code-label"><span>Terminal · Node-RED user directory</span></div><pre><code>npm install @avantics/node-red-home-automation</code></pre></div>
+<p>To pin a version, name it, then restart Node-RED. Each version is listed on the <a href="https://github.com/avantics-hq/node-red-home-automation/releases">GitHub releases page</a>.</p>
+<div class="code-block"><div class="code-label"><span>Terminal · pin a version</span></div><pre><code>npm install @avantics/node-red-home-automation@&lt;version&gt;</code></pre></div>
+<aside class="callout neutral"><strong>Check before updating.</strong><p>This package is under active development. Pin the version you use, read the release notes and check your flows after an update. A major version can require changes to saved flows: the <a href="https://github.com/avantics-hq/node-red-home-automation#600">6.0.0 notes</a> list what to migrate.</p></aside>
+</section>
+<section id="tarball"><h2>Add it from a release tarball</h2>
+<p>Each <a href="https://github.com/avantics-hq/node-red-home-automation/releases">GitHub Release</a> also attaches the package tarball and its SHA-256 checksum. Check the checksum of the file you downloaded against the one in the release, then add it in either way:</p>
+<ul>
+<li>In the editor, choose <strong>Manage palette → Install → Upload module</strong> and pick the tarball.</li>
+<li>From your Node-RED user directory, install the tarball with npm and restart Node-RED.</li>
+</ul>
+<div class="code-block"><div class="code-label"><span>Terminal · Node-RED user directory</span></div><pre><code>npm install /path/to/avantics-node-red-home-automation-&lt;version&gt;.tgz</code></pre></div>
+</section>
+<section id="examples"><h2>Import an example flow</h2>
+<p>Add the nodes from the <strong>home automation</strong> palette category, then configure the area, device hosts, MQTT topics, source mappings and timing limits for your home. To start from a wired flow instead, choose <strong>Import → Examples</strong> in the editor and pick one of these from the package:</p>
+<div class="table-wrap" role="region" aria-label="Example flows in the package; scroll horizontally on a phone" tabindex="0"><table><caption>Example flows in the package</caption><thead><tr><th scope="col">Example</th><th scope="col">What it shows</th></tr></thead><tbody>
+<tr><td>Room lighting</td><td>Motion and illuminance feed occupancy fusion and the motion policy, a wall switch feeds the switch policy, and a circadian lighting policy styles the room; all send intents to the room lighting controller.</td></tr>
+<tr><td>House schedule</td><td>A house schedule shared by two rooms through their circadian lighting policies, with the optional house schedule MQTT node changing its times.</td></tr>
+<tr><td>Shelly switch</td><td>A wall switch on a Shelly Gen2 relay in detached mode driving a room’s lights through the switch policy, with no function nodes.</td></tr>
+<tr><td>Cover control</td><td>A position cover owned by the cover controller, connected to a Zigbee2MQTT cover through the zigbee2mqtt cover adapter. Its one function node pauses motion lighting while the cover moves.</td></tr>
+<tr><td>Cover pair</td><td>Two covers moved as one by a cover group, which reports ready only when both confirm.</td></tr>
+<tr><td>Shelly cover</td><td>A Shelly Gen2 device in cover mode, owned by the cover controller, with no function nodes.</td></tr>
+<tr><td>Home theatre equipment</td><td>The AVR, display, source capability and backlighting controllers, each taking an intent and reporting target state.</td></tr>
+<tr><td>Home theatre activity</td><td>The theatre state contract and activity controller planning each target and collecting every controller’s state, with activity lighting.</td></tr>
+</tbody></table></div>
+<p>The examples use synthetic names and inject nodes in place of devices. Replace the injects with your MQTT in nodes and point the outputs at your broker before you rely on them. The files are also in <a href="https://github.com/avantics-hq/node-red-home-automation/tree/main/examples"><code>examples/</code></a> on GitHub.</p>
+</section>
+<section id="context-store"><h2>Set up a file context store</h2>
+<p>The nodes keep what they are doing in Node-RED’s node context. By default Node-RED keeps context in memory and deletes a node’s context whenever the node stops: on a full deploy, on a “Modified flows” deploy of its flow (which restarts every node in that flow, changed or not), on a “Modified nodes” deploy of the node itself, and on every restart.</p>
+<p>Configure the file context store so it survives. In <code>settings.js</code> in your Node-RED user directory, set:</p>
+<div class="code-block"><div class="code-label"><span>settings.js</span></div><pre><code>contextStorage: {
+    default: { module: "localfilesystem" }
+},</code></pre></div>
+<p>Then restart Node-RED. The file store writes changes to disk every 30 seconds by default, so a change made just before Node-RED stops can still be lost.</p>
+<p>Without a context store, after a node is redeployed or Node-RED restarts:</p>
+<ul>
+<li><strong>A room forgets which lights are held or manual.</strong> Every light an activity held, or a person set by hand, is back under the room’s control, so the next style restyles them.</li>
+<li><strong>Changes made at runtime go back to the node’s settings.</strong> For example motion lighting’s enable, vacancy delay and lux cutoff, a circadian policy’s circadian lighting, sleep, and wake and bed times, and the house schedule’s times, set from Home Assistant or a message.</li>
+<li><strong>The theatre starts its counts again.</strong> Its counters and operational SLO samples restart, and the activity controller no longer knows the current activity. The activity is unknown, and the devices are left alone, until the next request. Working the activity out from what the devices report after a cold start is <a href="https://github.com/avantics-hq/node-red-home-automation/issues/179">issue #179</a>.</li>
+<li><strong>Work in progress is not recovered.</strong> A motion off-timer that was running, or a theatre device change still being confirmed, is gone. The node starts afresh and goes by what it next observes.</li>
+<li><strong>Old retained topics are not cleared.</strong> A node can’t remember what it published, so after you change an area, base topic, discovery prefix or targets, the old retained topics and Home Assistant entities stay until you remove them yourself.</li>
+</ul>
+</section>
+<section id="mqtt"><h2>Connect the broker and send a startup message</h2>
+<p>A node that publishes state hands its MQTT messages to an MQTT out node on your broker. Two settings make that reliable.</p>
+<ol class="step-list">
+<li><strong>Send each publishing node a startup message once, a few seconds after a deploy.</strong><p>The example flows use an inject node set to fire once after 3 seconds. By then the MQTT broker node has usually connected; a message sent before it connects is dropped, along with the discovery and state it carried. The room example sends <code>msg.lighting = {kind: "startup"}</code>; each node’s reference page gives its own startup message.</p></li>
+<li><strong>Set the broker node’s availability messages.</strong><p>Each publishing node sends a retained <code>online</code> once the flows have started and <code>offline</code> when it stops. On a full deploy, a restart or a shutdown, Node-RED stops the MQTT out node at the same moment, so those messages can’t get through. Set the MQTT broker node’s <strong>Birth message</strong> to <code>online</code>, and its <strong>Close message</strong> and <strong>Will message</strong> to <code>offline</code>, all retained, on the same availability topic; with several publishing nodes, the broker can cover one of them.</p></li>
+</ol>
+<aside class="callout neutral"><strong>Removing a node’s entities.</strong><p>Deleting a publishing node clears its Home Assistant entities and retained state only when you deploy with “Modified nodes” or “Modified flows”. After a full deploy, delete the device in Home Assistant instead: Settings → Devices &amp; services → Devices, open the device, then Delete.</p></aside>
+</section>
+<section id="security"><h2>Configuration and security</h2>
+<p>The repository contains no home-network addresses, home coordinates or credentials. Device hosts are settings you provide where a node needs them.</p>
+<p>The display mode controller stores its TV pre-shared key as a Node-RED credential. Keep credentials in Node-RED’s encrypted credential store rather than in flow fields or repository files.</p>
+<p>Report a suspected vulnerability privately, using the process in <a href="https://github.com/avantics-hq/node-red-home-automation/blob/main/SECURITY.md"><code>SECURITY.md</code></a>, not through a public issue.</p>
+</section>
+<section id="next"><h2>Next</h2>
+<p>Start with one room. The covers and home theatre guides build on the same pattern: one controller owns each device’s commands.</p>
+<div class="cards">
+<a class="card" href="guide-room-lighting.html"><h3>Light your first room</h3><p>Combine motion, a wall switch and a circadian policy in one room lighting controller.</p><span class="go">Follow the room lighting guide →</span></a>
+<a class="card" href="guide-covers.html"><h3>Wire a cover</h3><p>Connect a blind, shutter or curtain and confirm what the motor actually did.</p><span class="go">Follow the covers guide →</span></a>
+</div>
+<p>For the receiver, display and sources, see <a href="home-theatre.html">Home theatre</a>.</p>
+</section>
+<p class="caption">Sources: <code>package.json</code> (<code>engines</code>, <code>node-red.version</code>); README “Requirements”, “Install”, “Upgrading from 2.x”, “Recommended setup: a file context store” and “Configuration and security”; <code>examples/*.json</code>.</p>
+<nav class="pager" aria-label="Adjacent pages"><a href="index.html"><small>Previous</small>← Introduction</a><a href="guide-room-lighting.html"><small>Continue</small>Light your first room →</a></nav>
+<footer class="page-footer"><span>Package 5.0.0 · MIT</span><a href="https://github.com/avantics-hq/node-red-home-automation#readme">Read the README ↗</a></footer>
+</main><aside class="toc" aria-label="On this page"><p>On this page</p><a href="#before">Before you start</a><a href="#palette">Add it from the palette manager</a><a href="#npm">Add it with npm</a><a href="#tarball">Add it from a release tarball</a><a href="#examples">Import an example flow</a><a href="#context-store">Set up a file context store</a><a href="#mqtt">Connect the broker and send a startup message</a><a href="#security">Configuration and security</a><a href="#next">Next</a></aside></div>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>
