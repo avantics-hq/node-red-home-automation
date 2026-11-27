@@ -14,19 +14,21 @@ export function run() {
       stateTopic: "demo/lighting/ceiling/state",
       commandTopic: "demo/lighting/ceiling/set"
     }],
-    initialSleep: false,
-    refreshTransitionSeconds: 30,
     initialTransitionSeconds: 1
   };
   const schedule = resolveSchedule("07:00", "23:00");
-  // The node builds the circadian lighting from its schedule and light
-  // settings; the room controller only asks it how a light should look.
-  configuration.lighting = scheduledLighting(schedule, {
+  const now = "2026-03-20T10:00:00Z";
+  // A circadian lighting policy sends the room how lights should look now; the
+  // room uses it for lights it controls.
+  const values = scheduledLighting(schedule, {
     sleepBrightnessPct: 5,
     maxBrightnessPct: 100,
     sleepColorTempKelvin: 1800,
     maxColorTempKelvin: 5000
-  });
+  }).styleAt(new Date(now), false);
+  const style = {
+    lighting: {kind: "style", source: "circadian", values, transitionSeconds: 30, until: "2026-03-20T10:03:00Z"}
+  };
   const input = {
     lighting: {
       kind: "intent",
@@ -35,7 +37,9 @@ export function run() {
       source: "motion"
     }
   };
-  const result = transitionRoom(undefined, input, configuration, "2026-03-20T10:00:00Z");
+  const styled = transitionRoom(undefined, style, configuration, now);
+  assert.equal(styled.outputs.length, 0);
+  const result = transitionRoom(styled.state, input, configuration, now);
   const outputs = result.outputs.map(({topic, payload, retain, lighting_command}) => ({
     topic,
     payload,
@@ -46,6 +50,7 @@ export function run() {
   assert.equal(outputs.length, 1);
   assert.equal(outputs[0].topic, "demo/lighting/ceiling/set");
   assert.equal(outputs[0].payload.state, "ON");
+  assert.equal(typeof outputs[0].payload.brightness, "number");
   assert.equal(outputs[0].lighting_command.source, "motion");
 
   return {
@@ -54,9 +59,9 @@ export function run() {
       targets: configuration.targets.map(({id}) => id),
       schedule
     },
-    inputs: [input],
+    inputs: [style, input],
     outputs,
-    invariant: "The room controller is the only transport command owner and records the policy source."
+    invariant: "The room controller is the only transport command owner and records the policy source; a style only shapes how its lights look."
   };
 }
 

@@ -1,7 +1,7 @@
 <!--{
  "title": "Light your first room",
  "kind": "Guides / Room lighting",
- "lead": "Wire one room’s lights to the room lighting controller, let motion and wall switches ask it for light, and get circadian brightness and colour temperature that leave a person’s own change alone.",
+ "lead": "Wire one room’s lights to the room lighting controller, let motion and wall switches ask it for light, and add a circadian lighting policy for brightness and colour temperature over the day that leave a person’s own change alone.",
  "description": "",
  "htmlTitle": "Light your first room · Node-RED Home Automation"
 }-->
@@ -28,6 +28,7 @@
 <tr><td>occupancy fusion output 1</td><td>motion policy input</td><td>Occupancy becomes a lighting intent. Illuminance goes to the motion policy too.</td></tr>
 <tr><td>motion policy output 1</td><td>Controller input</td><td>Motion ON and OFF intents for the policy’s targets.</td></tr>
 <tr><td>switch policy output</td><td>Controller input</td><td>Wall-switch presses, marked as a person’s.</td></tr>
+<tr><td>circadian lighting policy output 1</td><td>Controller input</td><td>The style for lights nobody has set otherwise. Without it the room just switches lights on and off.</td></tr>
 <tr><td>Controller output</td><td>MQTT out</td><td>Light commands on each light’s command topic. Pass them through unchanged.</td></tr>
 <tr><td>MQTT in, each light’s state topic</td><td>Controller input</td><td>The light’s own reports, tagged <code>observed</code>, confirm what it did.</td></tr>
 <tr><td>MQTT in, each light’s command topic</td><td>Controller input</td><td>Commands from anyone else, tagged <code>command-observed</code>, show a person’s change.</td></tr>
@@ -55,7 +56,7 @@ return msg;</code></pre></div>
 <p>The policies send <code>msg.lighting</code> intents. You can send the same from an Inject or Function node to try the room before any sensor is wired.</p>
 <div class="code-block"><div class="code-label"><span>Inject → controller · switch the room’s light on</span></div><pre><code>msg.lighting = {kind: "intent", targets: ["main"], state: "ON", source: "motion"};
 return msg;</code></pre></div>
-<p><code>state</code> is <code>"ON"</code>, <code>"OFF"</code> or <code>"TOGGLE"</code>; without <code>targets</code>, the intent applies to every light. While circadian lighting is on and the light is <code>in-control</code>, an ON intent without values gets the circadian style for this moment, with the <strong>Initial transition seconds</strong>. Otherwise it sends a bare ON.</p>
+<p><code>state</code> is <code>"ON"</code>, <code>"OFF"</code> or <code>"TOGGLE"</code>; without <code>targets</code>, the intent applies to every light. When the light is <code>in-control</code> and the room has a style (from a circadian lighting policy), an ON intent without values gets that style, with the <strong>Turn-on transition seconds</strong>. Otherwise it sends a bare ON.</p>
 <p>To ask for a particular level, add <code>values</code> in the package’s own units:</p>
 <div class="code-block"><div class="code-label"><span>Function → controller · a set level</span></div><pre><code>msg.lighting = {
   kind: "intent",
@@ -76,28 +77,30 @@ return msg;</code></pre></div>
 return msg;</code></pre></div>
 </section>
 <section id="circadian"><h2>Circadian brightness and colour</h2>
-<p>Circadian lighting is on unless you switch it off. Its levels follow the controller’s <strong>Wake time</strong> and <strong>Bed time</strong> (24-hour <code>HH:MM</code>, default 07:00 and 23:00):</p>
+<p>Circadian styling is its own node, the <strong>circadian lighting policy</strong> (<code>home-circadian-lighting-policy</code>). Wire its first output into the room controller, as the example does; one policy can style several rooms, or each area can have its own. Its levels follow its <strong>Wake time</strong> and <strong>Bed time</strong> (24-hour <code>HH:MM</code>, default 07:00 and 23:00):</p>
 <ul>
 <li>they rise to the daytime level over the hour after waking;</li>
 <li>they stay at the daytime brightness and colour through the day;</li>
 <li>they wind down to the sleep settings over the three hours before bed, and stay there until you wake.</li>
 </ul>
 <p>A bed time after midnight, or a wake time later than the bed time, works. Times are the Node-RED host’s local time; Docker containers default to UTC, so set the container’s <code>TZ</code> if the host should follow a local timezone.</p>
-<p>Every <strong>Refresh interval seconds</strong>, the controller restyles lights that are on and under its control, over the <strong>Refresh transition seconds</strong>, and skips a light that already reports that style.</p>
-<div class="code-block"><div class="code-label"><span>Inject → controller · switch circadian lighting or sleep</span></div><pre><code>msg.lighting = {kind: "circadian", enabled: false};
+<p>The policy sends the room a <em>style</em> once the flows start, every <strong>Restyle interval</strong>, and at once when circadian lighting, sleep or the times change. The room restyles lights that are on and under its control, over the <strong>Restyle transition</strong>, and skips a light that already reports that style. A style is never a request to change a light: it doesn’t switch lights on or off, and it never reaches a light a person set or an activity holds. If the policy stops, rooms stop styling within three intervals.</p>
+<div class="code-block"><div class="code-label"><span>Inject → circadian lighting policy · switch circadian lighting or sleep</span></div><pre><code>msg.lighting = {kind: "circadian", enabled: false};
 // or: msg.lighting = {kind: "sleep", enabled: true};
 return msg;</code></pre></div>
-<p>Sleep mode holds the lights at the sleep settings, whatever the time. To share one wake and bed time across rooms, choose a house schedule as the room’s <strong>Schedule</strong>; see <a href="guide-house-schedule.html">House schedule</a>.</p>
+<p><code>enabled</code> is <code>true</code> or <code>false</code>; anything else is refused with a warning. Sleep mode holds the lights at the sleep settings, whatever the time. To share one wake and bed time across rooms, choose a house schedule as the policy’s <strong>Schedule</strong>; see <a href="guide-house-schedule.html">House schedule</a>.</p>
+<p>A light that only switches on and off can be marked <code>"onOffOnly": true</code> in Targets JSON: it is never sent brightness, colour or a transition, and styles skip it.</p>
+<aside class="callout"><strong>From 5.x: migrate each room.</strong><p>A room controller saved before 6.0 still has its circadian settings, which moved to the policy, and shows as an invalid configuration until migrated. Add a circadian lighting policy wired into the room, copy the room’s old settings into it (its edit dialog lists them), then open the room and click <strong>Done</strong>. See the README’s 6.0.0 notes.</p></aside>
 </section>
 <section id="manual"><h2>Leave a person’s change alone</h2>
-<p>Each light has one control state, and the refresh only touches lights that are <code>in-control</code>:</p>
+<p>Each light has one control state, and a style only touches lights that are <code>in-control</code>:</p>
 <div class="table-wrap" role="region" aria-label="Control states; scroll horizontally on a phone" tabindex="0"><table><caption>Control states</caption><thead><tr><th scope="col">State</th><th scope="col">Means</th><th scope="col">Back to in-control when</th></tr></thead><tbody>
-<tr><td><code>in-control</code></td><td>Circadian lighting may style and refresh the light. The default.</td><td>—</td></tr>
-<tr><td><code>manual</code></td><td>A person changed the light: an intent with <code>manual: true</code>, an intent with values that isn’t from an activity, or a command with values seen on its command topic.</td><td>It is switched off, or circadian lighting is switched on.</td></tr>
+<tr><td><code>in-control</code></td><td>The room styles the light with the style it is sent. The default.</td><td>—</td></tr>
+<tr><td><code>manual</code></td><td>A person changed the light: an intent with <code>manual: true</code>, or a command with values seen on its command topic. An intent’s values alone don’t make a light manual.</td><td>It is switched off, or circadian lighting is switched on.</td></tr>
 <tr><td><code>overridden</code></td><td>Another owner, such as an activity or a scene, holds the light.</td><td>Its owner releases it, or the owner or a person switches it off.</td></tr>
 </tbody></table></div>
 <p>A held light ignores motion ON and OFF and owner-less values; it changes only for an intent with an <code>owner</code>, a person (<code>manual: true</code>, <code>person: true</code>, an external command, or a change seen at the light), or a release. The switch policy marks its presses with <code>person: true</code>, so a wall switch always reaches the light. A dashboard acting for a person should set one of these too.</p>
-<p>The controller also keeps a light a person set after the room went vacant: motion’s OFF doesn’t switch it straight off. Here “a person” means an intent with <code>manual: true</code> or <code>person: true</code> (the switch policy sends <code>person: true</code> with every press), or someone else’s command seen on the light’s command topic. An intent that only carries values makes the light manual but does not protect it from motion’s OFF; a flow acting for a person should set <code>manual: true</code> or <code>person: true</code>.</p>
+<p>The controller also keeps a light a person set after the room went vacant: motion’s OFF doesn’t switch it straight off. Here “a person” means an intent with <code>manual: true</code> or <code>person: true</code> (the switch policy sends <code>person: true</code> with every press), or someone else’s command seen on the light’s command topic. An intent that only carries values neither makes the light manual nor protects it from motion’s OFF; a flow acting for a person should set <code>manual: true</code> or <code>person: true</code>.</p>
 <div class="code-block"><div class="code-label"><span>Function → controller · hold lights for an activity, then release them</span></div><pre><code>msg.lighting = {
   kind: "intent", targets: ["main"], state: "ON",
   source: "activity", owner: "film",
@@ -107,32 +110,31 @@ return msg;</code></pre></div>
 // later:
 // msg.lighting = {kind: "release", targets: ["main"], owner: "film"};
 return msg;</code></pre></div>
-<p>With <code>preserveManual: true</code>, lights a person set are skipped. A release without <code>targets</code> releases all of that owner’s lights; released lights that are on are restyled as a refresh would. The activity lighting controller does this for you in a <a href="home-theatre.html">home theatre</a>.</p>
+<p>With <code>preserveManual: true</code>, lights a person set are skipped. A release without <code>targets</code> releases all of that owner’s lights; released lights that are on are restyled with the room’s style, over the style’s own transition. The activity lighting controller does this for you in a <a href="home-theatre.html">home theatre</a>.</p>
 </section>
 <section id="settings"><h2>Settings that matter first</h2>
 <div class="table-wrap" role="region" aria-label="First settings; scroll horizontally on a phone" tabindex="0"><table><caption>First settings</caption><thead><tr><th scope="col">Setting</th><th scope="col">Default</th><th scope="col">Set it to</th></tr></thead><tbody>
 <tr><td>Targets JSON</td><td><code>[]</code></td><td>Your lights’ ids and topics.</td></tr>
-<tr><td>Wake time / Bed time</td><td>07:00 / 23:00</td><td>When the room should start brightening and finish winding down. Or choose a <strong>Schedule</strong>.</td></tr>
-<tr><td>Daytime brightness % / Daytime kelvin</td><td>100 / 6500</td><td>The daytime level.</td></tr>
-<tr><td>Sleep brightness % / Sleep kelvin</td><td>1 / 2200</td><td>The night and sleep level.</td></tr>
-<tr><td>Initial transition seconds</td><td>1</td><td>How fast a light fades in when switched on.</td></tr>
-<tr><td>Refresh transition seconds / Refresh interval seconds</td><td>60 / 60</td><td>How gently and how often the room follows the circadian curve. The interval is at least 10 seconds.</td></tr>
-<tr><td>Initial sleep mode</td><td>Off</td><td>Whether the room starts in sleep mode.</td></tr>
+<tr><td>Turn-on transition seconds (room)</td><td>1</td><td>How fast a light fades in when switched on.</td></tr>
+<tr><td>Wake time / Bed time (policy)</td><td>07:00 / 23:00</td><td>When the lights should start brightening and finish winding down. Or choose a <strong>Schedule</strong>.</td></tr>
+<tr><td>Daytime brightness % / Daytime kelvin (policy)</td><td>100 / 6500</td><td>The daytime level.</td></tr>
+<tr><td>Sleep brightness % / Sleep kelvin (policy)</td><td>1 / 2200</td><td>The night and sleep level.</td></tr>
+<tr><td>Restyle transition / Restyle interval (policy)</td><td>60 / 60 seconds</td><td>How gently and how often the room follows the circadian curve. The interval is at least 10 seconds.</td></tr>
+<tr><td>Start in sleep mode (policy)</td><td>Off</td><td>Whether the policy starts in sleep mode.</td></tr>
 <tr><td>Area, Publish state over MQTT, Home Assistant discovery</td><td>Empty, off, off</td><td>Leave off for a first room. The area is needed only when publishing; see <a href="guide-home-assistant.html">Home Assistant</a>.</td></tr>
 </tbody></table></div>
 </section>
 <section id="check"><h2>Check the result</h2>
-<p>The controller’s status shows the mode and the counts, for example <code>circadian · 1 on · 0 manual</code>. The dot is yellow whenever a light is manual or the chosen house schedule is missing; otherwise it is green while circadian lighting is on and grey while it is off.</p>
+<p>The controller’s status shows whether it has a style and the counts, for example <code>styled · 1 on · 0 manual</code>. The dot is yellow whenever a light is manual; otherwise it is green while it has a style and grey without one. The circadian lighting policy’s own status shows the style it sends, such as <code>day · 80% 4100K</code>, <code>sleep</code> or <code>off</code>.</p>
 <div class="table-wrap" role="region" aria-label="Read the status; scroll horizontally on a phone" tabindex="0"><table><caption>Read the status</caption><thead><tr><th scope="col">What you see</th><th scope="col">What it means</th></tr></thead><tbody>
-<tr><td><code>circadian</code></td><td>Circadian lighting is on.</td></tr>
-<tr><td><code>sleep</code></td><td>Circadian lighting is on and sleep mode holds the sleep settings.</td></tr>
-<tr><td><code>manual only</code></td><td>Circadian lighting is off.</td></tr>
-<tr><td><code>… 1 manual</code> (yellow dot)</td><td>A person set a light; the refresh leaves it alone.</td></tr>
+<tr><td><code>styled</code></td><td>The room has a style in force from a circadian lighting policy.</td></tr>
+<tr><td><code>unstyled</code></td><td>No style: no policy is wired in, circadian lighting is off, or the last style ran out.</td></tr>
+<tr><td><code>invalid configuration</code></td><td>A room saved before 6.0 not yet migrated; see above.</td></tr>
+<tr><td><code>… 1 manual</code> (yellow dot)</td><td>A person set a light; styles leave it alone.</td></tr>
 <tr><td><code>… 1 overridden</code></td><td>An owner such as an activity holds a light.</td></tr>
-<tr><td><code>schedule missing: own times</code></td><td>The chosen house schedule wasn’t there at start; the room uses its own times.</td></tr>
 </tbody></table></div>
 <p>Wire a Debug node to the controller’s output, as the example does. Each command has the light’s command topic, a payload such as <code>{state: "ON", brightness, color_temp, transition}</code>, and <code>msg.lighting_command</code> naming the target and the source that asked for it.</p>
-<aside class="callout neutral"><strong>After a restart without a context store,</strong><p>the room leaves every light as it is: the refresh restyles a light only once an intent or release names it, someone switches it on with a bare ON, or circadian lighting is switched on. To bring a light that is on back into step, switch circadian lighting on, or let motion or a wall switch name it.</p></aside>
+<aside class="callout neutral"><strong>After a restart without a context store,</strong><p>the room leaves every light as it is: a style restyles a light only once an intent or release names it, someone switches it on with a bare ON, or circadian lighting is switched on. To bring a light that is on back into step, switch circadian lighting on, or let motion or a wall switch name it.</p></aside>
 <p class="caption">Sources: README Room lighting, Room light control and Recommended setup; room lighting controller editor settings and help; examples/Room lighting.json; observation tagging and status text from the room lighting controller source.</p>
 </section>
 <nav class="pager" aria-label="Adjacent pages"><a href="index.html"><small>Previous</small>← Introduction</a><a href="guide-motion-occupancy.html"><small>Continue</small>Motion and occupancy →</a></nav>
