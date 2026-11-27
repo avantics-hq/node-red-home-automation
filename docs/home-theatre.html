@@ -60,6 +60,7 @@
 <tr><td>AVR controller output 3</td><td>MQTT out</td><td>Optional receiver state and Home Assistant discovery.</td></tr>
 </tbody></table></div>
 <p>After a deploy, send the display and AVR controllers <code>{kind: "startup"}</code> on their own property (<code>msg.display</code>, <code>msg.avr</code>), so they read their devices again rather than trusting saved state. The state contract announces itself once the flows start, and again at <code>msg.theatreStateContract = {kind: "startup"}</code>.</p>
+<p>Set the state contract’s <strong>Area</strong>. With <strong>Base topic</strong> empty it is required, because it makes the default base topic <code>home/&lt;area&gt;/theatre</code>; a contract saved before node IDs with discovery on needs it too. Otherwise it is optional. The contract in the imported <code>Home theatre activity.json</code> example has no area, so it shows <i>invalid configuration</i> until you set one; put the same area in the <i>request tv activity</i> inject’s topic.</p>
 </section>
 <section id="routing"><h2>Route commands by target</h2>
 <p>The activity controller sends <code>msg.theatreCommand = {target, kind, requestId, generation, …}</code>, with <code>kind</code> <code>intent</code> for a new request or <code>refresh</code> to re-confirm, and the activity’s wanted values for that target. Your flow delivers each one to the matching controller: one switch node on <code>msg.theatreCommand.target</code> with five outputs, and a change node per target that moves <code>msg.theatreCommand</code> to the controller’s property.</p>
@@ -104,7 +105,7 @@ msg.payload = {requestId: "example-request-1", activity: "tv"};
 return msg;</code></pre></div>
 <ul class="rule-list">
 <li><strong>A new request ID is a new request.</strong><p>The contract gives it the next generation, and the newest request wins: the activity in hand is reported <code>superseded</code>.</p></li>
-<li><strong>The same request again is a duplicate.</strong><p>It is passed on unchanged and starts nothing new. Reusing a request ID for a different activity is an error.</p></li>
+<li><strong>The latest request again is a duplicate.</strong><p>Sent again with the same request ID, it is passed on unchanged and starts nothing new. Only the latest request is compared: an older request ID sent again is a new request. Reusing the latest request ID for a different activity is an error.</p></li>
 <li><strong>An invalid request is an error on the message.</strong><p>An unknown activity or a malformed request ID is reported against the message, where a Catch node can see it.</p></li>
 </ul>
 <p>With <strong>Home Assistant discovery</strong> on, the contract adds a <i>Requested activity</i> selector that publishes the same request with a request ID of its own. The topics and payloads are listed in the <a href="contract-theatre-mqtt.html">Theatre MQTT contract</a>.</p>
@@ -137,7 +138,7 @@ return msg;</code></pre></div>
 <p>When someone changes the display, receiver, source or backlight by hand after an activity is ready, that controller reports a manual override instead of sending a correcting command. The activity controller’s phase becomes <code>manual_override</code>, with availability <code>degraded</code>. A newer request takes over again.</p>
 <ul class="rule-list">
 <li><strong>Restart with saved state.</strong><p>Node-RED keeps a node’s state across a restart only with a context store configured; see the README’s <a href="https://github.com/avantics-hq/node-red-home-automation#recommended-setup-a-file-context-store">file context store</a> setup. A controller then re-reads its devices rather than replaying old commands.</p></li>
-<li><strong>Restart with nothing saved.</strong><p>The activity controller reads every target. If fresh display, receiver, source and backlight readings match exactly one profile, it adopts that activity without sending a command. With missing or ambiguous evidence, the activity is <code>unknown</code> and the phase <code>idle</code>, and nothing is commanded until the next request: a redeploy never switches a running activity off.</p></li>
+<li><strong>Restart with nothing saved.</strong><p>The activity controller has no activity: its phase is <code>idle</code> and its current activity <code>unknown</code>, and nothing is commanded until the next request, so a redeploy never switches a running activity off. A <code>msg.theatre = {kind: "startup"}</code> puts it in <code>recovering</code> and sends every target a refresh with no request; controllers with nothing saved don’t answer it, so once the refreshes run out it returns to <code>idle</code> and <code>unknown</code> (event <code>recovery_unknown</code>). It does not adopt a running activity from the devices after such a start: that is a known limit, <a href="https://github.com/avantics-hq/node-red-home-automation/issues/179">issue #179</a>. Send a request to take over again.</p></li>
 <li><strong>A target that restarted alone.</strong><p>It takes the activity’s wanted values from the next refresh and only reads its device: ready if the device already matches, or a manual override with reason <code>adopted-mismatch</code> if it doesn’t, sending nothing until the next request.</p></li>
 </ul>
 </section>
@@ -172,7 +173,7 @@ msg.display = {kind: "observed", device: "projector", power: "on"};</code></pre>
 <p>For projector mode, the display controller opens the screen, a Shelly Gen2 cover at <strong>Screen controller host</strong>, after the projector has warmed up. Switching between TV and projector is make before break, so a playing source keeps a picture.</p>
 <ul class="rule-list">
 <li><strong>Empty (the default for a new node).</strong><p>The screen’s own open command, confirmed when the screen reports itself fully open. This also suits a screen that isn’t calibrated for positions.</p></li>
-<li><strong>A position from 1 to 100.</strong><p>The percentage of its travel to open to, confirmed within <strong>Screen position tolerance</strong> (default <code>2</code>). A screen that doesn’t know its position is closed first; if it still has none, the request fails with <code>screen-not-calibrated</code>. Calibrate the screen, or clear the setting.</p></li>
+<li><strong>A position above 0, up to 100.</strong><p>The percentage of its travel to open to, confirmed within <strong>Screen position tolerance</strong> (default <code>2</code>). A screen that doesn’t know its position is closed first; if it still has none, the request fails with <code>screen-not-calibrated</code>. Calibrate the screen, or clear the setting.</p></li>
 <li><strong>Other modes close it.</strong><p>With the screen’s own close, which runs to the end and restores a position the screen has lost.</p></li>
 </ul>
 <p>A node saved with a position keeps it.</p>

@@ -75,7 +75,9 @@ test("each reference page documents every editor setting of its node, and no oth
       if (value === undefined || value === null) continue;
       // "_DEFAULT_" is the editor's marker for a name cleared when added.
       const expected = value === "" || value === "_DEFAULT_" ? ["Empty", "None"] : [typeof value === "string" ? value : JSON.stringify(value)];
-      assert.ok(expected.some((text) => cell.includes(text)), `${page.file}: ${key} defaults to ${JSON.stringify(value)}, the page says "${cell}"`);
+      // A whole token, so 120 doesn't pass for a page that says 12.
+      const token = (text: string) => new RegExp(`(?<![\\w.-])${text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w.-])`);
+      assert.ok(expected.some((text) => token(text).test(cell)), `${page.file}: ${key} defaults to ${JSON.stringify(value)}, the page says "${cell}"`);
     }
   }
 });
