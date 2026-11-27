@@ -11,7 +11,7 @@
 <ul>
 <li><strong>Lights you reach over MQTT.</strong> Each light needs a topic it reports its state on and a topic it takes commands on, for example a Zigbee2MQTT light’s <code>zigbee2mqtt/&lt;device&gt;</code> and <code>zigbee2mqtt/&lt;device&gt;/set</code>, where <code>&lt;device&gt;</code> is the light’s name in Zigbee2MQTT. The controller speaks the Zigbee2MQTT light payload: <code>state</code> ON or OFF, with <code>brightness</code> and <code>color_temp</code>.</li>
 <li><strong>An MQTT broker node in Node-RED</strong> that reaches the same broker as your lights.</li>
-<li><strong>Node-RED 5.0.0 or newer and Node.js 22.9 or newer.</strong></li>
+<li><strong>Node-RED 5.0.0 or newer and Node.js 24 or newer.</strong></li>
 <li><strong>A file context store (recommended).</strong> Without one, a restart or a redeploy makes the room forget which lights a person set, and a motion node counts the room as vacant from then.</li>
 </ul>
 <p>To add the file context store, set this in <code>settings.js</code> in your Node-RED user directory, then restart Node-RED:</p>

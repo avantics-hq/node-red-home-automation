@@ -222,7 +222,7 @@ Example: [`Cover control.json`](https://github.com/avantics-hq/node-red-home-aut
 
 ## Requirements
 
-- Node.js 22.9 or newer
+- Node.js 24 or newer
 - Node-RED 5.0.x
 
 ## Install
