@@ -970,3 +970,20 @@ test("echo orderings never turn our own command into a manual light", () => {
   result = seen(result.state, styled, 100);
   assert.equal(control(result), "in-control", "echo after its state report, with a bare ON between");
 });
+
+test("the circadian and sleep switches take only true or false from a flow: \"on\" and the like are refused and change nothing", () => {
+  const start = publishRoom(undefined, {lighting: {kind: "sleep", enabled: true}}, config, new Date("2026-06-21T12:00:00Z"));
+  for (const kind of ["circadian", "sleep"]) {
+    for (const enabled of ["on", "ON", "off", "true", 1, null, undefined]) {
+      const result = publishRoom(start.state, {lighting: {kind, enabled: enabled as unknown as boolean /* as a flow may send */}}, config, new Date("2026-06-21T12:01:00Z"));
+      assert.deepEqual([result.state.circadianEnabled, result.state.sleeping], [true, true], `${kind} ${String(enabled)}`);
+      assert.deepEqual(result.traces.map(({event, outcome, reason}) => [event, outcome, reason]), [[kind, "ignored", "not-true-or-false"]]);
+      // No light is commanded; only the unchanged state may be published again.
+      assert.deepEqual(result.outputs.filter(({lighting_command}) => lighting_command), []);
+      assert.ok(result.outputs.every(({payload}) => payload === "ON"), JSON.stringify(result.outputs));
+    }
+  }
+  // Home Assistant's ON and OFF still arrive, as true and false, through the set topics.
+  const fromHa = publishRoom(start.state, {topic: "home/kitchen/sleep/set", payload: "OFF"}, config, new Date("2026-06-21T12:02:00Z"));
+  assert.equal(fromHa.state.sleeping, false);
+});

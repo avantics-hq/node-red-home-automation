@@ -120,7 +120,7 @@ function scheduled(result: ReturnType<typeof transitionMotion>) {
 }
 
 test("a vacancy while motion is disabled schedules no off-timer", () => {
-  let area = transitionMotion(undefined, {source: "area-enabled", payload: "off"}, config, true, 1000);
+  let area = transitionMotion(undefined, {source: "area-enabled", payload: false}, config, true, 1000);
   area = transitionMotion(area.state, {source: "occupancy", payload: {occupied: false}}, config, true, 2000);
   assert.equal(scheduled(area), undefined);
   assert.equal(area.state.offTimerDueAt, null);
@@ -138,7 +138,7 @@ test("an off-timer that fires after motion is disabled globally emits nothing", 
   const nodeB = transitionMotion(undefined, {source: "occupancy", payload: {occupied: false}}, config, true, 1000);
   const timer = scheduled(nodeB);
   assert.ok(timer);
-  const nodeA = transitionMotion(undefined, {source: "global-enabled", payload: "off"}, config, true, 2000);
+  const nodeA = transitionMotion(undefined, {source: "global-enabled", payload: false}, config, true, 2000);
   assert.equal(nodeA.globalEnabled, false);
 
   const fired = transitionMotion(nodeB.state, {source: "off-timer", generation: timer.generation}, config, nodeA.globalEnabled, 31_000);
@@ -149,21 +149,31 @@ test("an off-timer that fires after motion is disabled globally emits nothing", 
   assert.equal(suppressed?.reason, "disabled");
 });
 
-test("ON in any case enables motion; other values disable it", () => {
-  for (const payload of ["ON", "On", "on", true]) {
-    const result = transitionMotion(undefined, {source: "area-enabled", payload}, config, true, 1000);
-    assert.equal(result.status.enabled, true, String(payload));
-    assert.equal(transitionMotion(undefined, {source: "global-enabled", payload}, config, false, 1000).globalEnabled, true);
+test("enable and pause inputs take only true or false: anything else, such as \"on\", is refused and changes nothing", () => {
+  for (const source of ["area-enabled", "global-enabled"]) {
+    const on = transitionMotion(undefined, {source, payload: true}, config, false, 1000);
+    const off = transitionMotion(undefined, {source, payload: false}, config, true, 1000);
+    assert.equal(source === "global-enabled" ? on.globalEnabled : on.state.areaEnabled, true, source);
+    assert.equal(source === "global-enabled" ? off.globalEnabled : off.state.areaEnabled, false, source);
   }
-  for (const payload of ["OFF", "off", false, "true", 1]) {
-    assert.equal(transitionMotion(undefined, {source: "area-enabled", payload}, config, true, 1000).status.enabled, false);
+  for (const payload of ["ON", "On", "on", "OFF", "off", "true", 1, 0, null, undefined]) {
+    // Disabled first, so a refused "on" can't be mistaken for working, and a refused "off" for off.
+    const area = transitionMotion({areaEnabled: false}, {source: "area-enabled", payload}, config, true, 1000);
+    assert.equal(area.state.areaEnabled, false, String(payload));
+    assert.deepEqual(area.traces.map(({reason}) => reason), ["not-true-or-false"], String(payload));
+    const enabledArea = transitionMotion({areaEnabled: true}, {source: "area-enabled", payload}, config, true, 1000);
+    assert.equal(enabledArea.state.areaEnabled, true, `${String(payload)} never reads as off`);
+    assert.equal(transitionMotion(undefined, {source: "global-enabled", payload}, config, false, 1000).globalEnabled, false);
+    assert.equal(transitionMotion(undefined, {source: "global-enabled", payload}, config, true, 1000).globalEnabled, true);
+    const pause = transitionMotion(undefined, {source: "pause", payload, owner: "blind"}, config, true, 1000);
+    assert.deepEqual([pause.state.pausedBy, pause.traces.map(({reason}) => reason)], [[], ["not-true-or-false"]], String(payload));
   }
 });
 
 test("re-enabling motion switches nothing off; a later vacancy schedules OFF as before", () => {
-  let result = transitionMotion(undefined, {source: "area-enabled", payload: "off"}, config, true, 1000);
+  let result = transitionMotion(undefined, {source: "area-enabled", payload: false}, config, true, 1000);
   result = transitionMotion(result.state, {source: "occupancy", payload: {occupied: false}}, config, true, 2000);
-  result = transitionMotion(result.state, {source: "area-enabled", payload: "ON"}, config, true, 3000);
+  result = transitionMotion(result.state, {source: "area-enabled", payload: true}, config, true, 3000);
   assert.equal(sendEffects(result).length, 0);
   assert.equal(scheduled(result), undefined);
 
@@ -243,7 +253,7 @@ test("a pause holds motion lighting for its owner, apart from the user's enable"
   assert.deepEqual(sendEffects(run(result.state, {source: "occupancy", payload: {occupied: true}}, 3000)), [], "no intent while paused");
 
   // Two owners: motion resumes only when both have released.
-  result = run(result.state, {source: "pause", payload: "ON", owner: "curtain"}, 4000);
+  result = run(result.state, {source: "pause", payload: true, owner: "curtain"}, 4000);
   result = run(result.state, {source: "pause", payload: false, owner: "blind"}, 5000);
   assert.deepEqual([result.state.pausedBy.map(({owner}) => owner), result.status.enabled], [["curtain"], false]);
   result = run(result.state, {source: "pause", payload: false, owner: "curtain"}, 6000);

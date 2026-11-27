@@ -101,7 +101,8 @@ export function motionInbound(
   if (enabledSet) {
     const requested = text.toUpperCase();
     if (requested !== "ON" && requested !== "OFF") return ignored("not-on-or-off", {payload: text});
-    return {input: {source: "area-enabled", payload: requested}, traces: []};
+    // Home Assistant's ON and OFF, as the node's own true and false.
+    return {input: {source: "area-enabled", payload: requested === "ON"}, traces: []};
   }
   const seconds = text === "" ? NaN : Number(text);
   if (!Number.isFinite(seconds) || seconds < 0 || seconds > MAX_DELAY_SECONDS) return ignored("not-a-delay", {payload: text});

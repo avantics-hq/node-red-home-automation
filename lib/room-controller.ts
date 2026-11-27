@@ -5,6 +5,7 @@ import type {CircadianLighting} from "./circadian";
 import type {DaySchedule} from "./circadian-schedule";
 import {requestedSchedule, savedSchedule, withActiveSchedule} from "./room-schedule";
 import {alreadyStyled, lightCommand, lightValues, readLightReport, setsLightValues, type LightCommand, type LightReport} from "./z2m-light";
+import {NOT_TRUE_OR_FALSE, describeValue, enableValue} from "./enable-input";
 import {ECHO_WINDOW_MS, checkCommandEcho, checkStateReport, parsePayload, rememberCommand, type ExpectedCommand} from "./command-echo";
 
 export {fingerprint, parsePayload, type ExpectedCommand} from "./command-echo";
@@ -403,6 +404,9 @@ export function transitionRoom(
         });
       }
     }
+  } else if ((event.kind === "circadian" || event.kind === "sleep") && enableValue(event.enabled) === null) {
+    // Refused, never read as off: the node warns.
+    trace(event.kind, "ignored", NOT_TRUE_OR_FALSE, {enabled: describeValue(event.enabled)});
   } else if (event.kind === "circadian") {
     const previous = state.circadianEnabled;
     state.circadianEnabled = event.enabled === true;
