@@ -673,6 +673,20 @@ test("motion node: a pause that runs out wakes the policy, which acts on a vacan
   assert.deepEqual((node.sent as Array<[{lighting?: {state: string}}, null]>).map(([message]) => message.lighting?.state), ["OFF"]);
 });
 
+test("motion node: a pause longer than setTimeout can wait is waited for in parts, never in a loop", async (t) => {
+  // 40 days: longer than setTimeout's 2^31-1 ms, which would fire at once.
+  const delays: number[] = [];
+  const realSetTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = ((handler: () => void, ms?: number) => { delays.push(Number(ms)); return realSetTimeout(handler, Math.min(Number(ms) || 0, 1_000_000)); }) as typeof setTimeout;
+  t.after(() => { globalThis.setTimeout = realSetTimeout; });
+  const node = new (runtime(registerMotion).Constructor)({...motionConfig, id: "motion-long-pause", maxPauseSeconds: 40 * 86_400});
+  t.after(() => close(node));
+  await receive(node, {source: "pause", payload: true, owner: "scene:Bath"});
+  await wait(30);
+  assert.ok(delays.length > 0 && delays.every((ms) => ms <= 2 ** 31 - 1), JSON.stringify(delays));
+  assert.equal(traces(node).filter(({event}) => event === "pause").length, 1, "no wake-up loop");
+});
+
 test("motion adapter started with nothing saved sends its off intent after the vacancy delay", async (t) => {
   const {Constructor} = runtime(registerMotion);
   const node = new Constructor({...motionConfig, id: "motion-cold"});

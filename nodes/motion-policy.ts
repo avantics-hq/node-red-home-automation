@@ -43,6 +43,9 @@ interface MotionPolicyNode extends Node {}
 type MotionStatus = ReturnType<typeof transitionMotion>["status"];
 
 
+// The longest wait setTimeout takes: anything longer fires at once.
+const MAX_TIMEOUT_MS = 2 ** 31 - 1;
+
 const registerMotionPolicy: NodeInitializer = (RED) => {
   function HomeMotionLightingPolicy(this: MotionPolicyNode, config: MotionPolicyConfig) {
     RED.nodes.createNode(this, config);
@@ -94,7 +97,9 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
     }
 
     // Wakes the policy when the first pause runs out, so motion resumes then
-    // (and acts on a vacancy meanwhile) rather than at the next message.
+    // (and acts on a vacancy meanwhile) rather than at the next message. A
+    // wait longer than setTimeout takes (about 24.8 days) is split: it wakes
+    // at the longest and arms again.
     function armPauseTimer(state: Partial<MotionState> | undefined) {
       clearTimeout(pauseTimer);
       pauseTimer = undefined;
@@ -103,7 +108,7 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
       pauseTimer = setTimeout(guarded(node, () => {
         pauseTimer = undefined;
         process({source: "pause-check"}, node.send.bind(node));
-      }), Math.max(0, Math.min(...ends) - Date.now()) + 1);
+      }), Math.min(MAX_TIMEOUT_MS, Math.max(0, Math.min(...ends) - Date.now()) + 1));
     }
 
     // The enable state and delay in use, by the reducer's own rule: a saved

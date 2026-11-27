@@ -34,9 +34,9 @@ export interface MotionState {
   offTimerDueAt: number | null;
   // When the room went vacant and the pending off-timer started.
   offTimerArmedAt: number | null;
-  // When the room went vacant, until it is occupied again or its lights are
-  // switched off: a vacancy that comes while motion is paused or disabled is
-  // acted on when motion resumes.
+  // When the room went vacant, until it is occupied again or motion's own
+  // off intent has gone: a vacancy that comes while motion is paused or
+  // disabled is acted on when motion resumes.
   vacantSince: number | null;
   // Who is pausing motion lighting now, such as a moving cover, and until
   // when (epoch ms). Motion acts only while nobody is; this is apart from the
