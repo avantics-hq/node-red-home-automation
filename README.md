@@ -274,10 +274,42 @@ also attaches the package tarball and its SHA-256 checksum. Install a downloaded
 tarball through **Manage palette → Install → Upload module**, or with:
 
 ```sh
-npm install /path/to/avantics-node-red-home-automation-6.0.0.tgz
+npm install /path/to/avantics-node-red-home-automation-6.1.0.tgz
 ```
 
 Add the installed nodes from the **home automation** section of the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.
+
+### 6.1.0
+
+Nothing to migrate from 6.0.0, but check one wiring change: publishing nodes
+now announce themselves when MQTT out connects.
+
+**Wire a Status node watching MQTT out into each publishing node.** Node-RED's
+MQTT broker node connects after the flows start and drops anything sent before
+then, so in 6.0.0 the Home Assistant discovery and availability a node announced
+as the flows started could be lost after a restart or a full deploy (#185). A
+message from a Status node whose scope is your MQTT out node now counts as the
+node's startup message when it reports "connected", including after every
+reconnect. An existing startup inject keeps working. The examples now use the
+Status node.
+
+**Room owners hold lights on or off, stack, and give lights back.** An owner,
+such as an activity or the coming scene node, now keeps a light it switches
+off held off, so motion leaves it alone. Owners stack per light: the newest
+holds a shared light and hands it to the one beneath when it releases. When the
+last owner lets go, a light the room was running is the room's again, a light
+that was off goes off, and a light a person set gets its values back and stays
+manual. In a home theatre, a light a person changed during an activity and a
+later request took back now gets the person's values back when the activity
+ends.
+
+Also fixed:
+
+- **Zigbee2MQTT light nodes** no longer log an error for every command meant for
+  another light in the same room (#184).
+- **Zigbee2MQTT groups:** the docs recommend `retain: true` under the group in
+  Zigbee2MQTT's `configuration.yaml`, so the room has a group's state after a
+  restart (#186).
 
 ### 6.0.0
 
