@@ -20,6 +20,7 @@ import registerOccupancy from "../nodes/occupancy-fusion";
 import registerRoom from "../nodes/room-controller";
 import registerCircadian from "../nodes/circadian-policy";
 import registerHouse from "../nodes/house-schedule";
+import registerZ2mLight from "../nodes/z2m-light";
 import registerHouseMqtt from "../nodes/house-schedule-mqtt";
 import registerShellyCover from "../nodes/shelly-cover";
 import registerShellySwitch from "../nodes/shelly-switch";
@@ -219,7 +220,7 @@ test("enable inputs: a value other than true or false is refused visibly, once i
   assert.equal((motion.context().get("state") as {areaEnabled: boolean}).areaEnabled, false);
   assert.match(String((motion.statuses.at(-1) as {text: string}).text), /^disabled/);
 
-  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
+  const targets = "[{\"id\":\"main\"}]";
   const room = new (runtime(registerRoom).Constructor)({targets, area: "", publishState: false, discovery: false});
   t.after(() => close(room));
   // Circadian switches are the circadian lighting policy's since 6.0: a room ignores them, with one warning.
@@ -315,7 +316,7 @@ test("room adapter publishes startup messages and standard traces", async (t) =>
   const node = new Constructor({
     area: "kitchen",
     displayName: "Kitchen",
-    targets: "[{\"id\":\"cooking\",\"stateTopic\":\"home/kitchen/light/group/cooking\",\"commandTopic\":\"home/kitchen/light/group/cooking/set\"}]",
+    targets: "[{\"id\":\"cooking\"}]",
     initialTransitionSeconds: 1
   });
   t.after(() => close(node));
@@ -327,8 +328,9 @@ test("room adapter publishes startup messages and standard traces", async (t) =>
   const commanded = await receive<SendEnvelope>(node, {
     lighting: {kind: "intent", targets: ["cooking"], state: "OFF", source: "test"}
   });
-  const commandPayload = commanded[0]?.[0]?.[0]?.payload as {state?: string} | undefined;
-  assert.equal(commandPayload?.state, "OFF");
+  // Output 2: the neutral command, for the light's adapter.
+  const command = (commanded[0] as unknown as Array<Array<{light?: {kind: string; target: string; state: string}}> | null>)[1]?.[0]?.light;
+  assert.deepEqual([command?.kind, command?.target, command?.state], ["command", "cooking", "OFF"]);
   assert.deepEqual(
     await receive<SendEnvelope>(node, {
       topic: "home/kitchen/light/group/cooking/set",
@@ -345,8 +347,9 @@ test("room adapter publishes startup messages and standard traces", async (t) =>
   assert.equal(node.errors.length, 0);
 });
 
-test("room adapter: a room saved before 6.0 is an invalid configuration until migrated to a circadian lighting policy", () => {
-  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
+test("room adapter: a room saved before 6.0 is an invalid configuration until migrated to a circadian lighting policy and light adapters", () => {
+  const targets = "[{\"id\":\"main\"}]";
+  const oldTargets = "[{\"id\":\"main\",\"stateTopic\":\"z2m/main\",\"commandTopic\":\"z2m/main/set\"}]";
   const {Constructor} = runtime(registerRoom);
   // As saved by 5.x (the editor wrote every circadian setting), and by 2.2.x (coordinates, no times).
   for (const saved of [
@@ -356,8 +359,13 @@ test("room adapter: a room saved before 6.0 is an invalid configuration until mi
     // Not closed: an invalid node registers no close handler.
     const node = new Constructor({area: "room", displayName: "Room", targets, ...saved});
     assert.equal((node.statuses.at(-1) as {text?: string}).text, "invalid configuration");
-    assert.match(String(node.errors[0]), /circadian lighting moved to its own node in 6\.0: add a circadian lighting policy wired to this room/);
+    assert.match(String(node.errors[0]), /saved before 6\.0: circadian lighting moved to its own node \(add a circadian lighting policy wired to this room/);
   }
+  // Its lights' topics alone, or with the circadian settings: both moves named.
+  const lights = new Constructor({area: "room", displayName: "Room", targets: oldTargets});
+  assert.match(String(lights.errors[0]), /saved before 6\.0: its lights are reached through light adapters \(add a zigbee2mqtt light for main\); then open and save this room/);
+  const both = new Constructor({area: "room", displayName: "Room", targets: oldTargets, wakeTime: "07:00"});
+  assert.match(String(both.errors[0]), /circadian lighting moved .*, and its lights are reached through light adapters/);
   // Migrated (the old settings cleared, as saving the dialog does), it runs.
   const migrated = new Constructor({area: "room", displayName: "Room", targets, wakeTime: "", bedTime: "", maxBrightnessPct: "", initialSleep: ""});
   assert.deepEqual(migrated.errors, []);
@@ -1292,7 +1300,7 @@ test("a room controller with publishing off and no area still commands its light
   const node = new (runtime(registerRoom).Constructor)({
     publishState: false,
     discovery: false,
-    targets: "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]"
+    targets: "[{\"id\":\"main\"}]"
   });
   t.after(() => close(node));
   assert.deepEqual(node.errors, []);
@@ -1301,14 +1309,17 @@ test("a room controller with publishing off and no area still commands its light
     lighting: {kind: "intent", targets: ["main"], state: "ON", source: "motion"}
   });
   const circadian = await receive<Array<Array<{topic?: string}>>>(node, {lighting: {kind: "circadian", enabled: false}});
-  const topics = [...startup, ...on, ...circadian].flat(2).map((message) => message.topic);
-  assert.deepEqual(topics, ["room/light/main/set"], "only the light's own command topic");
-  assert.equal((on.flat(2).find((message) => message.topic === "room/light/main/set") as {payload?: Record<string, unknown>}).payload?.state, "ON");
+  // Nothing on output 1 (publications); its light's command and reading request on output 2, for its adapter.
+  const outputs = (sent: unknown[], port: number) => sent.flatMap((envelope) => (envelope as Array<unknown[] | null>)[port] ?? []);
+  assert.deepEqual([...startup, ...on, ...circadian].flatMap((envelope) => outputs([envelope], 0)), [], "nothing published");
+  assert.deepEqual(outputs(startup, 1), [{payload: undefined, light: {kind: "observe", target: "main"}}]);
+  assert.deepEqual((outputs(on, 1) as Array<{light: {kind: string; target: string; state: string}}>).map(({light}) => [light.kind, light.target, light.state]),
+    [["command", "main", "ON"]]);
 });
 
 test("publish settings: the area is required only when something named after it is published", async (t) => {
   const room = runtime(registerRoom).Constructor;
-  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
+  const targets = "[{\"id\":\"main\"}]";
   // A saved flow from before the settings: both count as on, so it needs an area.
   for (const settings of [{}, {publishState: true, discovery: false}, {publishState: false, discovery: true}]) {
     const node = new room({targets, ...settings});
@@ -1339,7 +1350,7 @@ test("publish settings: the area is required only when something named after it 
 
 test("publish settings: null and a missing field mean on; only false means off", async (t) => {
   const room = runtime(registerRoom).Constructor;
-  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
+  const targets = "[{\"id\":\"main\"}]";
   const discoveryOf = async (settings: Record<string, unknown>) => {
     const node = new room({targets, area: "hall", ...settings});
     t.after(() => close(node));
@@ -1388,7 +1399,7 @@ test("the display's projector fallback reads \"true\" as on", async (t) => {
 
 test("discovery basics: the room checks a publishing area and uses its discovery prefix", async (t) => {
   const room = runtime(registerRoom).Constructor;
-  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
+  const targets = "[{\"id\":\"main\"}]";
   for (const settings of [{publishState: true, discovery: false}, {publishState: false, discovery: true}]) {
     const node = new room({targets, area: "!!!", ...settings});
     assert.deepEqual(node.errors.map(String), ["invalid configuration: area must contain a letter or digit"], JSON.stringify(settings));
@@ -1411,7 +1422,7 @@ test("discovery basics: the room checks a publishing area and uses its discovery
 });
 
 test("availability: publishing nodes send a retained offline as they stop", async () => {
-  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
+  const targets = "[{\"id\":\"main\"}]";
   const sentOnClose = async (node: RuntimeNode) => {
     const before = node.sent.length;
     await close(node);
@@ -1419,7 +1430,7 @@ test("availability: publishing nodes send a retained offline as they stop", asyn
   };
   const room = runtime(registerRoom).Constructor;
   assert.deepEqual(await sentOnClose(new room({targets, area: "hall", publishState: true, discovery: true})),
-    [[[{topic: "home/hall/lighting/availability", payload: "offline", retain: true}]]]);
+    [[[{topic: "home/hall/lighting/availability", payload: "offline", retain: true}], null, null]]);
   assert.deepEqual(await sentOnClose(new room({targets, area: "hall", publishState: false, discovery: false})), [],
     "a room that publishes nothing sends nothing");
 
@@ -1430,7 +1441,7 @@ test("availability: publishing nodes send a retained offline as they stop", asyn
 
 test("availability: a node redeployed on its own is available again without a startup message", async (t) => {
   const availability = (node: RuntimeNode) => JSON.stringify(node.sent).match(/"topic":"[^"]*\/availability","payload":"(online|offline)"/g) ?? [];
-  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
+  const targets = "[{\"id\":\"main\"}]";
   const roomRuntime = runtime(registerRoom);
   const roomConfig = {targets, area: "hall", publishState: true, discovery: true};
   const before = new roomRuntime.Constructor(roomConfig);
@@ -1471,7 +1482,7 @@ test("availability: a node redeployed on its own is available again without a st
 });
 
 test("ID schemes: a saved node keeps its area-named entities; a new node names them after itself", async (t) => {
-  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
+  const targets = "[{\"id\":\"main\"}]";
   const room = runtime(registerRoom).Constructor;
   const discoveryOf = async (settings: Record<string, unknown>) => {
     const node = new room({targets, area: "hall", publishState: true, discovery: true, ...settings});
@@ -1504,7 +1515,7 @@ test("ID schemes: a saved node keeps its area-named entities; a new node names t
 });
 
 test("ID schemes: after an area change, a node clears the retained topics it no longer publishes", async (t) => {
-  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
+  const targets = "[{\"id\":\"main\"}]";
   const topicsCleared = async (idScheme: string | null) => {
     const room = runtime(registerRoom, {}, STORE).Constructor;
     const settings = {id: "r1", targets, publishState: true, discovery: true, idScheme};
@@ -1534,7 +1545,7 @@ test("ID schemes: after an area change, a node clears the retained topics it no 
 });
 
 test("discovery: a room announces its Home Assistant entries when the flows start, without a startup message, and again after a modified deploy", async (t) => {
-  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
+  const targets = "[{\"id\":\"main\"}]";
   const roomRuntime = runtime(registerRoom);
   const entries = (sent: unknown[]) => (sent as Array<Array<Array<{topic: string; payload: unknown}>>>)
     .flatMap((envelope) => envelope[0] ?? [])
@@ -1602,7 +1613,7 @@ test("discovery: a theatre state contract announces its Home Assistant entries w
 });
 
 test("ID schemes: after a redeploy that changes the area, the old topics are cleared once the flows start", async (t) => {
-  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
+  const targets = "[{\"id\":\"main\"}]";
   const roomRuntime = runtime(registerRoom, {}, STORE);
   const settings = {id: "r5", idScheme: "node", targets, publishState: true, discovery: true};
   const first = new roomRuntime.Constructor({...settings, area: "hall"});
@@ -1651,10 +1662,10 @@ test("entity cleanup: a deleted node clears what it published; a disabled or red
     const before = node.sent.length;
     node.emit("close", removed, () => resolve(node.sent.slice(before)));
   });
-  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
+  const targets = "[{\"id\":\"main\"}]";
   const roomRuntime = runtime(registerRoom);
   const roomConfig = {id: "r1", idScheme: "node", targets, area: "hall", publishState: true, discovery: true};
-  const offline = [[[{topic: "home/hall/lighting/availability", payload: "offline", retain: true}]]];
+  const offline = [[[{topic: "home/hall/lighting/availability", payload: "offline", retain: true}], null, null]];
 
   const redeployed = new roomRuntime.Constructor(roomConfig);
   await receive(redeployed, {lighting: {kind: "startup"}});
@@ -1692,7 +1703,7 @@ test("entity cleanup: a deleted node clears what it published; a disabled or red
 });
 
 test("entity cleanup: switching Publish state off clears the room's state topics at its next start", async (t) => {
-  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
+  const targets = "[{\"id\":\"main\"}]";
   const room = runtime(registerRoom, {}, STORE).Constructor;
   const publishing = new room({id: "r2", targets, area: "hall", publishState: true, discovery: false});
   await receive(publishing, {lighting: {kind: "startup"}});
@@ -2364,21 +2375,25 @@ test("shelly cover node: device messages become cover readings, and cover comman
 });
 
 test("room node: lighting values in Zigbee2MQTT's units (removed in 6.0) are left out, with one warning", async (t) => {
-  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
+  const targets = "[{\"id\":\"main\"}]";
   const node = new (runtime(registerRoom).Constructor)({id: "removed-units", targets, area: "", publishState: false, discovery: false});
   t.after(() => close(node));
-  const send = async (values: Record<string, unknown>) => ((await receive<SendEnvelope>(node, {lighting: {kind: "intent", state: "ON", manual: true, values}}))[0]?.[0] ?? [])
-    .map((message) => message.payload);
-  // The package's own units, converted for the light.
-  assert.deepEqual(await send({brightnessPct: 50, colorTempKelvin: 2500}), [{state: "ON", brightness: 127, color_temp: 400, transition: 1}]);
+  // The neutral command on output 2, for the light's adapter.
+  const send = async (values: Record<string, unknown>) => (((await receive<SendEnvelope>(node, {lighting: {kind: "intent", state: "ON", manual: true, values}}))[0] as unknown as
+    Array<Array<{light: Record<string, unknown>}> | null>)[1] ?? []).map(({light}) => {
+    const {kind: _kind, target: _target, source: _source, id: _id, ...rest} = light;
+    return rest;
+  });
+  // The package's own units, as they are: the light's adapter converts them.
+  assert.deepEqual(await send({brightnessPct: 50, colorTempKelvin: 2500}), [{state: "ON", brightnessPct: 50, colorTempKelvin: 2500, transitionSeconds: 1}]);
   assert.deepEqual(node.warnings, []);
   // Zigbee2MQTT's own units never reach the light, and one warning however often.
-  assert.deepEqual(await send({brightness: 64, color_temp: 400}), [{state: "ON", transition: 1}]);
+  assert.deepEqual(await send({brightness: 64, color_temp: 400}), [{state: "ON", transitionSeconds: 1}]);
   await send({brightness: 64});
   assert.equal(node.warnings.length, 1);
   assert.match(String(node.warnings[0]), /removed in 6\.0.*brightnessPct .* colorTempKelvin/);
   // Beside the new fields: the new ones apply, the old ones are left out.
-  assert.deepEqual(await send({brightness: 10, brightnessPct: 50}), [{state: "ON", brightness: 127, transition: 1}]);
+  assert.deepEqual(await send({brightness: 10, brightnessPct: 50}), [{state: "ON", brightnessPct: 50, transitionSeconds: 1}]);
   // An unusable new value is left out with its own warning.
   await send({colorTempKelvin: 0});
   assert.equal(node.warnings.length, 2);
@@ -2516,5 +2531,40 @@ test("activity lighting warns once per deploy when a profile gives values to a l
   }
   assert.equal(node.warnings.length, 1, "once per deploy");
   assert.match(String(node.warnings[0]), /^lamp reports no brightness or colour, so the activity confirms it by its being on/);
+});
+
+test("a room and a zigbee2mqtt light node, wired as in the examples: commands, readings, availability shown, readings passed on", async (t) => {
+  type Envelope = Array<Array<Record<string, unknown>> | Record<string, unknown> | null>;
+  const room = new (runtime(registerRoom).Constructor)({id: "room-l", targets: "[{\"id\":\"main\"}]", area: "hall", publishState: true, discovery: false});
+  const light = new (runtime(registerZ2mLight).Constructor)({id: "light-l", target: "main", baseTopic: "z2m", friendlyName: "hall-main"});
+  t.after(() => close(room));
+  assert.deepEqual([room.errors, light.errors], [[], []]);
+  const port = (sent: unknown[], index: number) => sent.flatMap((envelope) => {
+    const out = (envelope as Envelope)[index];
+    return out === null || out === undefined ? [] : Array.isArray(out) ? out : [out];
+  });
+
+  const startup = await receive<Envelope>(room, {lighting: {kind: "startup"}});
+  const get = await receive<Envelope>(light, port(startup, 1)[0]!);
+  assert.deepEqual(port(get, 0), [{topic: "z2m/hall-main/get", payload: {state: ""}, retain: false}], "asked to report");
+
+  const on = await receive<Envelope>(room, {lighting: {kind: "intent", targets: ["main"], state: "ON", source: "wall", manual: true, values: {brightnessPct: 25}}});
+  const published = await receive<Envelope>(light, port(on, 1)[0]!);
+  assert.deepEqual(port(published, 0), [{topic: "z2m/hall-main/set", payload: {state: "ON", brightness: 64, transition: 1}, retain: false}]);
+
+  // The light reports: the room gets the reading, and passes it on, with the light's control state, for activity lighting.
+  const report = await receive<Envelope>(light, {topic: "z2m/hall-main", payload: {state: "ON", brightness: 64}});
+  const roomAnswer = await receive<Envelope>(room, port(report, 1)[0]!);
+  const passed = port(roomAnswer, 2)[0] as {light: Record<string, unknown>};
+  assert.deepEqual([passed.light.kind, passed.light.target, passed.light.on, passed.light.showsLast, passed.light.control, passed.light.manual],
+    ["observed", "main", true, true, "manual", true]);
+
+  // Offline: shown on the control state and the status; nothing else changes.
+  const offline = await receive<Envelope>(light, {topic: "z2m/hall-main/availability", payload: {state: "offline"}});
+  const shown = await receive<Envelope>(room, port(offline, 1)[0]!);
+  assert.deepEqual(port(shown, 0), [{topic: "home/hall/lighting/main/control", payload: {state: "manual", owner: null, available: false}, retain: true}]);
+  assert.deepEqual(port(shown, 1), [], "no command");
+  assert.match(String((room.statuses.at(-1) as {text: string}).text), /· 1 offline$/);
+  assert.equal((room.context().get("state") as {control: Record<string, {state: string}>}).control.main?.state, "manual");
 });
 

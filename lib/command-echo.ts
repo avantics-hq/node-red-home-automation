@@ -20,6 +20,12 @@ export interface ExpectedCommand {
   // The command topic echo has been seen. The entry is kept until it
   // expires, so a duplicate or late echo of the same command is still ours.
   echoed?: boolean;
+  // The room's id for the command, when it gave one.
+  id?: string;
+  // A restyle the light's adapter may still skip: kept, but not counted
+  // towards the queue's limit until the adapter says it sent it
+  // (commandSent), and dropped if it says it skipped it (commandSkipped).
+  tentative?: boolean;
 }
 
 export function parsePayload(payload: unknown): unknown {
@@ -45,10 +51,25 @@ function live(queue: ExpectedCommand[] | undefined, nowMs: number): ExpectedComm
   return (queue || []).filter((entry) => entry.expires > nowMs).map((entry) => ({...entry}));
 }
 
-// Remember a command just sent.
-export function rememberCommand(queue: ExpectedCommand[] | undefined, payload: unknown, nowMs: number): ExpectedCommand[] {
+// At most ECHO_QUEUE_LIMIT entries, tentative ones aside: the oldest go.
+function trimmed(queue: ExpectedCommand[]): ExpectedCommand[] {
+  let excess = queue.filter((entry) => entry.tentative !== true).length - ECHO_QUEUE_LIMIT;
+  return queue.filter((entry) => {
+    if (excess > 0 && entry.tentative !== true) {
+      excess -= 1;
+      return false;
+    }
+    return true;
+  });
+}
+
+// Remember a command just sent: with an id, the room's own; tentative for a
+// restyle its adapter may skip.
+export function rememberCommand(queue: ExpectedCommand[] | undefined, payload: unknown, nowMs: number,
+  {id, tentative = false}: {id?: string; tentative?: boolean} = {}): ExpectedCommand[] {
   const next = live(queue, nowMs);
-  const entry: ExpectedCommand = {fingerprint: fingerprint(payload), expires: nowMs + ECHO_WINDOW_MS};
+  const entry: ExpectedCommand = {fingerprint: fingerprint(payload), expires: nowMs + ECHO_WINDOW_MS,
+    ...(id !== undefined ? {id} : {}), ...(tentative ? {tentative: true} : {})};
   const requested = payload && typeof payload === "object"
     ? String((payload as Record<string, unknown>).state || "").toUpperCase()
     : "";
@@ -57,7 +78,21 @@ export function rememberCommand(queue: ExpectedCommand[] | undefined, payload: u
     entry.power = entry.on;
   }
   next.push(entry);
-  return next.slice(-ECHO_QUEUE_LIMIT);
+  return trimmed(next);
+}
+
+// A tentative command its adapter sent after all: now an ordinary entry.
+export function commandSent(queue: ExpectedCommand[] | undefined, id: string, nowMs: number): ExpectedCommand[] {
+  return trimmed(live(queue, nowMs).map((entry) => {
+    if (entry.id !== id) return entry;
+    const {tentative: _tentative, ...sent} = entry;
+    return sent;
+  }));
+}
+
+// A tentative command its adapter skipped: as if never sent.
+export function commandSkipped(queue: ExpectedCommand[] | undefined, id: string, nowMs: number): ExpectedCommand[] {
+  return live(queue, nowMs).filter((entry) => entry.id !== id);
 }
 
 // What a state report means against the power commands still pending:

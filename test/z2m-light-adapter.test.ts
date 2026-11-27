@@ -92,7 +92,7 @@ test("its own echo is its own; a bare ON or OFF changed on the way is its own; a
   assert.deepEqual(seen(sent.state, {state: "ON", brightness: 10}, 0.1, {retain: true}).readings, [], "retained: ignored");
 });
 
-test("availability is passed on; a group has none, and answers observe with its last state rather than /get", () => {
+test("availability is passed on; a group has none, and isn't asked to report", () => {
   const online = transitionZ2mLight(undefined, {topic: "z2m/test-light/availability", payload: '{"state":"offline"}'}, config, at(0));
   assert.deepEqual(online.readings, [{kind: "availability", target: "ceiling", online: false}]);
   assert.deepEqual(transitionZ2mLight(undefined, {topic: "z2m/test-light/availability", payload: "online"}, config, at(0)).readings,
@@ -103,12 +103,12 @@ test("availability is passed on; a group has none, and answers observe with its 
   // A group: the same commands; no /get; no availability; its state (Zigbee2MQTT's own) as a reading.
   const groupCommand = transitionZ2mLight(undefined, command({brightnessPct: 25}), group, at(0));
   assert.deepEqual(groupCommand.publications, [{topic: "z2m/test-light/set", payload: {state: "ON", brightness: 64}, retain: false}]);
-  assert.deepEqual(transitionZ2mLight(undefined, {light: {kind: "observe", target: "ceiling"}}, group, at(0)), {
-    state: transitionZ2mLight(undefined, {}, group, at(0)).state, publications: [], readings: [],
-    traces: [{event: "observe", outcome: "answered", reason: "group-has-no-get", details: {}}], ignored: false});
+  const observed = transitionZ2mLight(undefined, {light: {kind: "observe", target: "ceiling"}}, group, at(0));
+  assert.deepEqual([observed.publications, observed.readings, observed.traces.map(({reason}) => reason)], [[], [], ["group-has-no-get"]]);
   const reported = transitionZ2mLight(groupCommand.state, {topic: "z2m/test-light", payload: {state: "ON", brightness: 64}}, group, at(0.05));
   assert.equal((reported.readings[0] as {showsLast: boolean}).showsLast, true, "Zigbee2MQTT's own group state follows the command at once");
-  assert.deepEqual(transitionZ2mLight(reported.state, {light: {kind: "observe", target: "ceiling"}}, group, at(1)).readings.map(({kind}) => kind), ["observed"]);
+  // Asked again, it still says nothing: Zigbee2MQTT sends the group's state as it changes.
+  assert.deepEqual(transitionZ2mLight(reported.state, {light: {kind: "observe", target: "ceiling"}}, group, at(1)).readings, []);
   assert.deepEqual(transitionZ2mLight(undefined, {topic: "z2m/test-light/availability", payload: "offline"}, group, at(0)).readings, []);
 });
 

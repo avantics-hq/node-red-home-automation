@@ -9,7 +9,7 @@ import {houseRetainedTopics} from "../lib/house-schedule-publishing";
 const config: RoomConfig = {
   area: "kitchen",
   displayName: "Kitchen",
-  targets: [{id: "cooking", stateTopic: "k/cooking", commandTopic: "k/cooking/set"}],
+  targets: [{id: "cooking"}],
   initialTransitionSeconds: 1
 };
 const now = new Date("2026-06-21T12:00:00Z");
@@ -33,7 +33,8 @@ test("the room controller decides about lights only; publishing adds the topics"
   // The controller reports which lights' control changed; publishing names the topic.
   const overridden = transitionRoom(undefined, {lighting: {kind: "intent", state: "ON", targets: ["cooking"], owner: "theatre"}}, config, now);
   assert.deepEqual(overridden.controlChanged, ["cooking"]);
-  assert.ok(overridden.outputs.every(({topic}) => topic === "k/cooking/set"));
+  assert.deepEqual(overridden.outputs, [], "its light command goes to the light's adapter, not to MQTT");
+  assert.deepEqual(overridden.commands.map(({kind, target}) => [kind, target]), [["command", "cooking"]]);
 });
 
 test("as the flows start, the room clears its old circadian entries, announces its own, then its availability", () => {

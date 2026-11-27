@@ -156,9 +156,8 @@ export function transitionZ2mLight(
     if (light.target !== target) return {state, publications, readings, traces, ignored: true};
     if (light.kind === "observe") {
       if (config.group) {
-        // A group can't be asked: its last state, if Zigbee2MQTT has sent one.
-        if (state.report) readings.push(observedReading(state.report));
-        trace("observe", "answered", "group-has-no-get");
+        // A group can't be asked: Zigbee2MQTT sends its state as it changes.
+        trace("observe", "ignored", "group-has-no-get");
       } else {
         publications.push({topic: topics.get, payload: {state: ""}, retain: false});
         trace("observe", "sent");
@@ -174,6 +173,7 @@ export function transitionZ2mLight(
         state.expected = rememberCommand(state.expected, payload, nowMs);
         state.last = {payload, id: String(command.id)};
         publications.push({topic: topics.set, payload, retain: false});
+        if (command.restyle === true) readings.push({kind: "sent", target, id: String(command.id)});
         trace("command", "sent", null, {id: command.id, source: command.source, state: payload.state});
       }
     }

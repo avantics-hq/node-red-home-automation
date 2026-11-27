@@ -58,6 +58,9 @@ export type LightReading =
   // A restyle the adapter didn't send, as the light already shows it. Its
   // time is the light's last real report's.
   | {kind: "skipped"; target: string; id: string; observedAt: string}
+  // A restyle the adapter did send. Every restyle is answered, sent or
+  // skipped, so the room knows which to wait for.
+  | {kind: "sent"; target: string; id: string}
   // Whether the light is reachable. Shown, never acted on.
   | {kind: "availability"; target: string; online: boolean};
 
@@ -65,5 +68,5 @@ export function isLightReading(value: unknown): value is LightReading {
   if (!value || typeof value !== "object") return false;
   const reading = value as {kind?: unknown; target?: unknown};
   return typeof reading.target === "string" &&
-    ["observed", "external", "echo-changed", "skipped", "availability"].includes(String(reading.kind));
+    ["observed", "external", "echo-changed", "skipped", "sent", "availability"].includes(String(reading.kind));
 }

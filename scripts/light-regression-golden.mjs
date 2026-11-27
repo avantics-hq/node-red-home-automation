@@ -8,14 +8,18 @@
 // few histories to read when one differs.
 //
 // Usage: npm run build, then
-//   node scripts/light-regression-golden.mjs <dist of the earlier build> [<ref>]
-// The earlier build is ac01c34's (the room before the adapters).
+//   node scripts/light-regression-golden.mjs <dist of the earlier build> [<ref>] [<seed>,<seed>…]
+// The earlier build is ac01c34's (the room before the adapters). The seeds
+// listed last are histories with intended differences in the room's
+// decisions (see test/light-regression.test.ts): their decisions are kept in
+// full, so the test can check each difference is one of those intended.
 import {writeFileSync} from "node:fs";
 import {resolve} from "node:path";
 import {pathToFileURL} from "node:url";
 
 const oldDist = resolve(process.argv[2] ?? "dist");
 const ref = process.argv[3] ?? "ac01c34";
+const fullSeeds = new Set((process.argv[4] ?? "").split(",").filter(Boolean).map(Number));
 const {publishRoom} = await import(pathToFileURL(resolve(oldDist, "lib/room-publishing.js")).href);
 const {START, generateHistories, fingerprintOf} = await import(pathToFileURL(resolve("dist/test/light-regression/histories.js")).href);
 
@@ -94,7 +98,8 @@ const golden = {
   base: ref,
   note: "Fingerprints of every /set publication and of the room's decisions, per generated history, from the room before the light adapters. Made by scripts/light-regression-golden.mjs.",
   histories: results.map(({seed, sets, decisions}) => ({seed, sets: fingerprintOf(sets), decisions: fingerprintOf(decisions), publications: sets.length})),
-  samples: results.slice(0, 3).map(({seed, sets}) => ({seed, sets}))
+  samples: results.slice(0, 3).map(({seed, sets}) => ({seed, sets})),
+  decisions: results.filter(({seed}) => fullSeeds.has(seed)).map(({seed, decisions}) => ({seed, decisions}))
 };
 writeFileSync(resolve("test/fixtures/light-regression.json"), JSON.stringify(golden, null, 1) + "\n");
 console.log(`${results.length} histories, ${results.reduce((sum, {sets}) => sum + sets.length, 0)} /set publications recorded against ${ref}.`);

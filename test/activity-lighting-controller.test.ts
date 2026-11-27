@@ -10,8 +10,8 @@ import {
   type ActivityLightingEvent,
   type ActivityLightingState
 } from "../lib/activity-lighting-controller";
-import {type RoomConfig, type RoomState} from "../lib/room-controller";
-import {publishRoom} from "../lib/room-publishing";
+import {type RoomState} from "../lib/room-controller";
+import {publishRoom, type TopicRoomConfig} from "./helpers/room-with-lights";
 
 const config: ActivityLightingConfig = {
   profiles: {
@@ -187,7 +187,7 @@ test("a new profile releases only the lights it no longer styles", () => {
 });
 
 test("activity lighting holds its room lights through refresh and hands them back", () => {
-  const roomConfig: RoomConfig = {
+  const roomConfig: TopicRoomConfig = {
     area: "lounge",
     displayName: "Lounge",
     targets: [
