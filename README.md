@@ -271,12 +271,13 @@ these after upgrading from 5.x; each shows itself rather than failing silently:
   saved before 5.0 and never re-saved, with only its 0-98 **minVolume** and
   **maxVolume**, is an invalid configuration naming the dB setting to set,
   rather than getting the default bounds, which could be louder than its old
-  cap. In the editor such a node shows as invalid until its dB bounds are set.
+  cap. In the editor such a node shows as invalid until its dB bounds are set,
+  and deploying it from the editor keeps it invalid rather than dropping the
+  old bounds.
 - **`projectorMeterHost` is no longer read.** Set **Projector power meter
-  host** (`projectorPowerMeterHost`). A flow file that still names only the old
-  key is an invalid configuration saying so. The editor no longer keeps the old
-  key, so a node opened and deployed from the editor without the new one runs
-  with no built-in meter: wire its third output to a meter, or set the host.
+  host** (`projectorPowerMeterHost`). A node that still names only the old key
+  is an invalid configuration saying so, in the editor and when deployed, until
+  the new host is set.
 
 ### 5.0.0
 

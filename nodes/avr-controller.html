@@ -24,6 +24,15 @@
       // In dB (the receiver's 80 is 0 dB).
       minVolumeDb: {value: -80, validate: volumeBound},
       maxVolumeDb: {value: -20, validate: volumeBound},
+      // The 0-98 bounds of a node saved before 5.0, removed in 6.0 but kept
+      // here, with no form row, so the editor carries them: the editor keeps
+      // only the properties named here, and without them a deploy from the
+      // editor would leave the node with no bounds at all, which the runtime
+      // would give the default bounds, possibly louder than the old cap.
+      // With them, the node stays an invalid configuration until its dB
+      // bounds are set.
+      minVolume: {value: ""},
+      maxVolume: {value: ""},
       // The receiver published nothing before these settings, so both start off.
       publishState: {value: false},
       discovery: {value: false},
@@ -49,6 +58,11 @@
       }
       $("#node-input-publishState, #node-input-discovery").on("change", follow);
       follow();
+    },
+    // Once the dB bounds are set, the removed 0-98 ones go.
+    oneditsave: function () {
+      if (given($("#node-input-minVolumeDb").val())) this.minVolume = "";
+      if (given($("#node-input-maxVolumeDb").val())) this.maxVolume = "";
     },
     inputs: 1,
     outputs: 3,
