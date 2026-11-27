@@ -34,6 +34,10 @@ export interface MotionState {
   offTimerDueAt: number | null;
   // When the room went vacant and the pending off-timer started.
   offTimerArmedAt: number | null;
+  // When the room went vacant, until it is occupied again or its lights are
+  // switched off: a vacancy that comes while motion is paused or disabled is
+  // acted on when motion resumes.
+  vacantSince: number | null;
   // Who is pausing motion lighting now, such as a moving cover, and until
   // when (epoch ms). Motion acts only while nobody is; this is apart from the
   // enables, which are the user's own and are never changed by a pause.
@@ -117,7 +121,8 @@ export function createMotionState(
     delaySecondsSetting: config.defaultDelaySeconds,
     offTimerGeneration: Number(saved.offTimerGeneration) || 0,
     offTimerDueAt: Number(saved.offTimerDueAt) || null,
-    offTimerArmedAt: Number(saved.offTimerArmedAt) || null
+    offTimerArmedAt: Number(saved.offTimerArmedAt) || null,
+    vacantSince: Number(saved.vacantSince) || null
   };
 }
 
@@ -149,6 +154,9 @@ export function transitionMotion(
   const effects: MotionEffect[] = [];
   const traces: TraceEntry[] = [];
   let nextGlobalEnabled = globalEnabled !== false;
+  // Whether motion could act before this input, counting a pause that has
+  // just run out, so its running out resumes motion like a release.
+  const wasEnabled = state.areaEnabled && nextGlobalEnabled && state.pausedBy.length === 0;
 
   // A pause past its time counts as released, even if its owner never said.
   for (const pause of state.pausedBy.filter(({until}) => until <= now)) {
@@ -256,6 +264,7 @@ export function transitionMotion(
       : {};
     const occupied = payloadRecord.occupied === true;
     if (occupied) {
+      state.vacantSince = null;
       cancelOffTimer("occupancy-detected");
       const darkEnough = state.illuminance === null || state.illuminance <= state.illuminanceCutoff;
       const shouldEmit = enabled() && darkEnough;
@@ -271,6 +280,7 @@ export function transitionMotion(
         targets: config.onTargets
       });
     } else {
+      state.vacantSince = now;
       if (enabled()) scheduleOffTimer();
       else cancelOffTimer("motion-disabled");
       trace("occupancy", enabled() ? "schedule-off" : "suppressed", enabled() ? null : "disabled", {
@@ -314,8 +324,12 @@ export function transitionMotion(
       const vacantSince = new Date(state.offTimerArmedAt ?? now).toISOString();
       state.offTimerDueAt = null;
       state.offTimerArmedAt = null;
+      state.vacantSince = null;
       emitIntent(lightingIntent(config.offTargets, "OFF", "motion", {vacantSince}), "off-timer");
     }
+  } else if (source === "pause-check") {
+    // The node's own wake-up as a pause runs out: dropped above, and motion
+    // resumes below.
   } else if (source === "cold-start") {
     // Started with nothing saved: a first deploy, or a redeploy or restart
     // without a context store, when a running off-timer was lost. Whether the
@@ -326,6 +340,16 @@ export function transitionMotion(
     trace("start", enabled() ? "schedule-off" : "suppressed", enabled() ? "no-saved-state" : "disabled", {targets: config.offTargets});
   } else if (source.startsWith("switch")) {
     trace("message", "ignored", "wall switches belong to the switch policy", {source});
+  }
+
+  // Motion resumed (a pause released or run out, or enabled again) in a room
+  // that went vacant meanwhile: the vacancy delay starts now, and the off
+  // intent names when the room went vacant.
+  if (!wasEnabled && enabled() && state.vacantSince !== null && state.offTimerDueAt === null) {
+    const vacantSince = state.vacantSince;
+    scheduleOffTimer();
+    state.offTimerArmedAt = vacantSince;
+    trace("off-timer", "scheduled", "resumed-vacant", {vacantSince: new Date(vacantSince).toISOString()});
   }
 
   return {

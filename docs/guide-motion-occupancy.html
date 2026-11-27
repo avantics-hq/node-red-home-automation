@@ -70,7 +70,7 @@ return msg;</code></pre></div>
 <tr><td><code>"global-enabled"</code></td><td><code>true</code> or <code>false</code></td><td>The user’s switch for every motion policy at once. It is not published.</td></tr>
 <tr><td><code>"pause"</code></td><td><code>true</code> pauses, <code>false</code> releases; <code>msg.owner</code> is required</td><td>Other flows, such as a moving cover. Each owner holds its own pause, and motion lighting resumes once every owner has released it or its pause has run out (<strong>Maximum pause</strong>, sent again to renew).</td></tr>
 </tbody></table></div>
-<p>Motion lighting acts only while both enables are on and no owner holds a pause. Switching it off or pausing it cancels a pending vacancy countdown.</p>
+<p>Motion lighting acts only while both enables are on and no owner holds a pause. Switching it off or pausing it cancels a pending vacancy countdown. If the room goes vacant meanwhile, the countdown starts when motion resumes, so lights left on during a pause, an activity or a scene still go off in an empty room.</p>
 <div class="code-block"><div class="code-label"><span>Cover controller output 3 → Function → motion policy · pause while moving</span></div><pre><code>msg.source = "pause";
 msg.owner = "study blind"; // a name of its own for each pauser
 return msg; // keep the boolean payload</code></pre></div>
