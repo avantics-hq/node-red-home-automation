@@ -26,9 +26,6 @@ export interface ActivityLightingConfig {
   owner: string;
   confirmationTimeoutMs: number;
   maxAttempts: number;
-  // The room's lights marked onOffOnly: confirmed by on or off alone, as
-  // they report no brightness or colour.
-  onOffOnlyTargets?: string[];
 }
 
 export interface ActivityLightingDesired {
@@ -79,6 +76,11 @@ export interface ActivityLightingState {
   adoptedGeneration: number | null;
   // The generation a request carried on from (see carryOn).
   carried?: Carried | null;
+  // The value fields each light has reported since the node started, such
+  // as brightness or color_temp. A light that has reported none of a
+  // profile's fields, as one that only switches on and off, is confirmed by
+  // being on; once it has reported one, it is held to the values.
+  reported?: Record<string, string[]>;
 }
 
 export type ActivityLightingEvent =
@@ -139,13 +141,15 @@ function stable(value: unknown): unknown {
 
 // Whether a light's report shows the profile's values. Reports come in the
 // light's own units, so the profile's are converted first (z2m-light).
-// Traced when a light is on but reports none of the profile's values: the
-// node warns that it may belong in On/off-only targets.
+// Traced when a light the profile gives values to has never reported any of
+// them since start, so it is confirmed by being on: the node warns once.
 export const VALUES_NOT_REPORTED = "values-not-reported";
 
-function reportsNoneOf(profileValues: Record<string, unknown>, actual: Record<string, unknown>): boolean {
+// Whether a light has reported any of the profile's fields since start; true
+// when the profile sets none, as then there is nothing but on to check.
+function reportsAnyOf(profileValues: Record<string, unknown>, reported: readonly string[]): boolean {
   const expected = Object.keys(lightValues(profileValues).values);
-  return expected.length > 0 && expected.every((key) => !Object.hasOwn(actual, key));
+  return expected.length === 0 || expected.some((key) => reported.includes(key));
 }
 
 function valuesMatch(profileValues: Record<string, unknown>, actual: Record<string, unknown>): boolean {
@@ -210,26 +214,8 @@ export function normaliseActivityLightingConfig(
     profiles: normaliseLightingProfiles(config.profiles),
     owner: textSetting(config.owner, "owner", "activity"),
     confirmationTimeoutMs: Math.max(1000, numberSetting(config.confirmationTimeoutMs, "confirmation timeout", 15000)),
-    maxAttempts: Math.max(1, Math.floor(numberSetting(config.maxAttempts, "max attempts", 2))),
-    onOffOnlyTargets: onOffOnlyTargets(config.onOffOnlyTargets)
+    maxAttempts: Math.max(1, Math.floor(numberSetting(config.maxAttempts, "max attempts", 2)))
   };
-}
-
-// The on/off-only targets setting: target names, or none.
-export function onOffOnlyTargets(value: unknown): string[] {
-  if (value === undefined || value === null) return [];
-  if (!Array.isArray(value) || value.some((target) => typeof target !== "string" || !TARGET_NAME.test(target))) {
-    throw new Error("on/off-only targets must be a list of target names");
-  }
-  return [...value] as string[];
-}
-
-// Each profile that gives values to a light that only switches, which the
-// room leaves out: the node warns once per deploy.
-export function valuesForOnOffOnly(config: Pick<ActivityLightingConfig, "profiles" | "onOffOnlyTargets">): Array<{profile: string; target: string}> {
-  const onOff = new Set(config.onOffOnlyTargets ?? []);
-  return Object.entries(config.profiles).flatMap(([profile, {targets, values}]) =>
-    Object.keys(values).length ? targets.filter((target) => onOff.has(target)).map((target) => ({profile, target})) : []);
 }
 
 function initialState(
@@ -257,7 +243,9 @@ function initialState(
     failure: saved.failure && typeof saved.failure === "object" ? {...saved.failure} : null,
     blockedGeneration: Number.isInteger(saved.blockedGeneration) ? saved.blockedGeneration! : null,
     adoptedGeneration: savedAdoptedGeneration(saved),
-    carried: savedCarried(saved)
+    carried: savedCarried(saved),
+    reported: Object.fromEntries(Object.entries(saved.reported || {})
+      .filter(([, fields]) => Array.isArray(fields)).map(([target, fields]) => [target, fields.map(String)]))
   };
 }
 
@@ -371,13 +359,15 @@ export function transitionActivityLighting(
         counts.preserved += 1;
         continue;
       }
-      // A light that only switches has nothing to match but being on.
-      if (!config.onOffOnlyTargets?.includes(target) && !valuesMatch(profile.values, observation.values)) {
-        // On, but reporting none of the values at all: most likely a light
-        // that only switches, marked onOffOnly on the room but not here.
-        if (reportsNoneOf(profile.values, observation.values)) {
-          trace("observation", "confirming", VALUES_NOT_REPORTED, {target});
-        }
+      // A light that has never reported any of the profile's fields (one
+      // that only switches on and off) is confirmed by being on, and traced so
+      // the node can say its values may not apply.
+      if (!reportsAnyOf(profile.values, state.reported?.[target] ?? [])) {
+        trace("observation", "confirmed", VALUES_NOT_REPORTED, {target});
+        counts.matched += 1;
+        continue;
+      }
+      if (!valuesMatch(profile.values, observation.values)) {
         if (isAdopted(state)) {
           // An adopted request the lights don't match: someone else's, and
           // never re-applied.
@@ -485,6 +475,12 @@ export function transitionActivityLighting(
       trace("observation", "ignored", "out-of-order", {target: observation.target});
       return;
     }
+    // What it reports since start: which fields, for the profiles' values.
+    const fields = observation.values && typeof observation.values === "object" ? Object.keys(observation.values) : [];
+    const known = state.reported?.[observation.target] ?? [];
+    if (fields.some((field) => !known.includes(field))) {
+      state.reported = {...state.reported, [observation.target]: [...new Set([...known, ...fields])]};
+    }
     state.observed[observation.target] = {
       target: observation.target,
       on: observation.on === true,
@@ -557,6 +553,8 @@ export function transitionActivityLighting(
     trace("refresh", "observing", "ready", {profile: state.desired.profile});
   } else if (event.kind === "startup" || event.kind === "refresh") {
     state.observed = {};
+    // Since start: what each light reports is learned again.
+    if (event.kind === "startup") state.reported = {};
     state.pending = null;
     if (state.desired) {
       if (profileFor(state, config).targets.length === 0) reconcile();

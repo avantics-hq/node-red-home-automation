@@ -3,8 +3,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  onOffOnlyTargets,
-  valuesForOnOffOnly,
   normaliseActivityLightingConfig,
   normaliseLightingProfiles,
   transitionActivityLighting,
@@ -378,29 +376,26 @@ test("after carrying on, readings for the replaced generation still count", () =
   assert.deepEqual([result.state.phase, result.events[0]?.theatre.generation], ["ready", 2]);
 });
 
-test("an on/off-only light confirms by being on, and a profile giving it values is reported", () => {
-  const onOff: ActivityLightingConfig = {...config, onOffOnlyTargets: ["lamp"]};
-  const observe = (state: Partial<ActivityLightingState>, cfg: ActivityLightingConfig, target: string, values: Record<string, unknown>, seconds: number) =>
-    transitionActivityLighting(state, {activityLighting: {kind: "observed", generation: 1, target, on: true, values, observedAt: at(seconds).toISOString()}}, cfg, at(seconds));
-  for (const [cfg, expected] of [[config, "confirming"], [onOff, "ready"]] as const) {
-    let result = transitionActivityLighting(undefined, {activityLighting: {kind: "intent", requestId: "tv-1", generation: 1, profile: "tv"}}, cfg, at(0));
-    result = observe(result.state, cfg, "wall", {brightness: 64, color_temp: 400}, 1);
-    // The lamp reports only that it is on: it has no brightness or colour to show.
-    result = observe(result.state, cfg, "lamp", {}, 1.1);
-    assert.equal(result.state.phase, expected, cfg === onOff ? "on/off only: confirmed by being on" : "otherwise: waits for the values");
-  }
-  assert.deepEqual(valuesForOnOffOnly(onOff), [{profile: "tv", target: "lamp"}]);
-  assert.deepEqual(valuesForOnOffOnly(config), []);
-  assert.deepEqual(normaliseActivityLightingConfig({...config, onOffOnlyTargets: undefined}).onOffOnlyTargets, []);
-  assert.throws(() => onOffOnlyTargets("lamp"), /list of target names/);
-  assert.throws(() => onOffOnlyTargets([1]), /list of target names/);
-});
+test("each light is judged by what it reports: one that never reported the profile's fields confirms by being on, one that has is held to the values", () => {
+  const observe = (state: Partial<ActivityLightingState>, target: string, values: Record<string, unknown>, seconds: number) =>
+    transitionActivityLighting(state, {activityLighting: {kind: "observed", generation: 1, target, on: true, values, observedAt: at(seconds).toISOString()}}, config, at(seconds));
+  const start = transitionActivityLighting(undefined, {activityLighting: {kind: "intent", requestId: "tv-1", generation: 1, profile: "tv"}}, config, at(0));
+  let result = observe(start.state, "wall", {brightness: 64, color_temp: 400}, 1);
+  // The lamp reports only that it is on: it has never reported brightness or colour.
+  result = observe(result.state, "lamp", {}, 1.1);
+  assert.equal(result.state.phase, "ready", "confirmed by being on");
+  assert.deepEqual(result.traces.filter(({reason}) => reason === "values-not-reported").map(({details}) => details), [{target: "lamp"}]);
+  assert.deepEqual(result.state.reported, {wall: ["brightness", "color_temp"]});
 
-test("a light that is on but reports none of the profile's values is traced, so the node can say it may be on/off only", () => {
-  let result = transitionActivityLighting(undefined, {activityLighting: {kind: "intent", requestId: "tv-1", generation: 1, profile: "tv"}}, config, at(0));
-  result = transitionActivityLighting(result.state, {activityLighting: {kind: "observed", generation: 1, target: "wall", on: true, values: {}, observedAt: at(1).toISOString()}}, config, at(1));
-  assert.deepEqual(result.traces.filter(({reason}) => reason === "values-not-reported").map(({details}) => details), [{target: "wall"}]);
-  // Values that are there but differ are an ordinary mismatch, not this.
-  result = transitionActivityLighting(result.state, {activityLighting: {kind: "observed", generation: 1, target: "wall", on: true, values: {brightness: 200, color_temp: 300}, observedAt: at(2).toISOString()}}, config, at(2));
-  assert.deepEqual(result.traces.filter(({reason}) => reason === "values-not-reported"), []);
+  // A lamp that has reported brightness since start is held to the values: off by one, it isn't confirmed.
+  let held = observe(start.state, "wall", {brightness: 64, color_temp: 400}, 1);
+  held = observe(held.state, "lamp", {brightness: 200}, 1.1);
+  assert.notEqual(held.state.phase, "ready");
+  held = observe(held.state, "lamp", {}, 1.2);
+  assert.notEqual(held.state.phase, "ready", "it reported brightness once, so a report without it doesn't confirm");
+  assert.deepEqual(held.traces.filter(({reason}) => reason === "values-not-reported"), []);
+
+  // A restart learns again.
+  const restarted = transitionActivityLighting(held.state, {activityLighting: {kind: "startup"}}, config, at(5));
+  assert.deepEqual(restarted.state.reported, {});
 });

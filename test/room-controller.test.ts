@@ -910,7 +910,6 @@ test("a bare ON is styled with the style in force; with none, values null, or a 
   assert.deepEqual(on(stale, later(180_000)), {state: "ON"}, "run out: the policy stopped");
 });
 
-// Pending the person's confirmation (VALUES_MAKE_MANUAL): if 5.x's rule is kept, flip the constant and this test.
 test("an intent's values alone don't make a light manual; manual: true does", () => {
   let result = publishRoom(fresh(), {lighting: {kind: "intent", targets: ["cooking"], state: "ON", source: "scene", values: {brightnessPct: 30}}}, config, now);
   assert.equal(result.state.control.cooking, undefined, "values alone: still the room's");
@@ -921,9 +920,9 @@ test("an intent's values alone don't make a light manual; manual: true does", ()
   assert.equal(result.state.control.cooking?.state, "manual");
 });
 
-// Pending the person's confirmation (INTENT_REFRESH): if refresh: true is kept, flip the constant and this test.
+// refresh: true was removed in 6.0: the intent is styled over the room's turn-on transition, as any bare ON.
 test("refresh: true no longer changes an intent's transition", () => {
-  const refreshed = publishRoom(fresh(), {lighting: {kind: "intent", targets: ["dining"], state: "ON", source: "motion", refresh: true}}, config, now);
+  const refreshed = publishRoom(fresh(), {lighting: {kind: "intent", targets: ["dining"], state: "ON", source: "motion", refresh: true} as RoomMessage["lighting"]}, config, now);
   assert.equal(payload(refreshed, 0).transition, config.initialTransitionSeconds);
 });
 

@@ -35,12 +35,6 @@ export interface RoomStyle {
   source: string;
 }
 
-// Two rules awaiting the person's confirmation for 6.0.0, each one switch:
-// whether an intent's values alone make a light manual, as before 6.0 (now
-// only manual: true does), and whether an intent's refresh: true still
-// restyles with the style's transition (removed in 6.0).
-export const VALUES_MAKE_MANUAL = false;
-export const INTENT_REFRESH = false;
 
 export interface RoomObservation extends LightReport {
   observedAt: string;
@@ -120,9 +114,6 @@ export interface LightingEvent {
   person?: boolean;
   owner?: string;
   source?: string;
-  // Before 6.0, styled a light with the restyle transition (see
-  // INTENT_REFRESH).
-  refresh?: boolean;
   retained?: boolean;
   // On a motion OFF: when the room went vacant (ISO time).
   vacantSince?: string;
@@ -341,7 +332,9 @@ export function transitionRoom(
         setControl(targetId, null, "off");
       } else if (owner) {
         setControl(targetId, {state: "overridden", owner}, "owner-intent");
-      } else if (event.manual === true || (VALUES_MAKE_MANUAL && manualValues && event.source !== "activity")) {
+      } else if (event.manual === true) {
+        // Only a person's change makes a light manual: since 6.0, an intent's
+        // values alone don't.
         setControl(targetId, {state: "manual"}, "manual-intent");
       }
 
@@ -365,8 +358,7 @@ export function transitionRoom(
       } else {
         // A bare ON: the style in force for a light the room controls,
         // otherwise just on.
-        const transition = INTENT_REFRESH && event.refresh === true && state.style ? state.style.transitionSeconds : config.initialTransitionSeconds;
-        payload = (controlOf(targetId) === "in-control" ? styled(targetId, transition) : null) ?? {state: "ON"};
+        payload = (controlOf(targetId) === "in-control" ? styled(targetId, config.initialTransitionSeconds) : null) ?? {state: "ON"};
       }
       state.desired[targetId] = resolvedState === "ON";
       told(targetId);

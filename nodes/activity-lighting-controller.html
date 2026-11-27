@@ -10,9 +10,7 @@
       profiles: {value: "{}", required: true, validate: function (v) { try { var parsed = JSON.parse(v); return Boolean(parsed) && typeof parsed === "object" && !Array.isArray(parsed) && Object.keys(parsed).length > 0; } catch (e) { return false; } }},
       owner: {value: "activity", required: true},
       confirmationTimeoutMs: {value: 15000, required: true, validate: RED.validators.number()},
-      maxAttempts: {value: 2, required: true, validate: RED.validators.number()},
-      // The room's targets marked onOffOnly: none unless set.
-      onOffOnlyTargets: {value: "[]", validate: function (v) { try { var parsed = JSON.parse(v || "[]"); return Array.isArray(parsed) && parsed.every(function (t) { return typeof t === "string"; }); } catch (e) { return false; } }}
+      maxAttempts: {value: 2, required: true, validate: RED.validators.number()}
     },
     inputs: 1,
     outputs: 2,
@@ -29,7 +27,6 @@
   <div class="form-row"><label for="node-input-owner">Owner</label><input type="text" id="node-input-owner" placeholder="activity"></div>
   <div class="form-row"><label for="node-input-confirmationTimeoutMs">Confirm ms</label><input type="number" id="node-input-confirmationTimeoutMs"></div>
   <div class="form-row"><label for="node-input-maxAttempts">Attempts</label><input type="number" id="node-input-maxAttempts"></div>
-  <div class="form-row"><label for="node-input-onOffOnlyTargets">On/off-only targets</label><input type="text" id="node-input-onOffOnlyTargets" placeholder="[]"></div>
 </script>
 
 <script type="text/html" data-help-name="home-activity-lighting-controller">
@@ -43,12 +40,11 @@
     controller converts them for the light, and a light's report (in its own units) is compared after the same
     conversion. Zigbee2MQTT's own <code>brightness</code> and <code>color_temp</code> were removed in 6.0: a profile
     using them is an invalid configuration.</p>
-  <p><b>On/off-only targets</b>: a JSON list of the room's targets marked <code>onOffOnly</code>, such as
-    <code>["lamp"]</code>. Such a light reports no brightness or colour, so the activity confirms it once it is on,
-    rather than waiting for values it can't show. The room leaves out any values a profile gives it, and this node
-    logs a warning once per deploy naming the profile and light. List the same lights as the room's
-    <code>onOffOnly</code> targets: a light marked only on the room never confirms here, and this node warns once per
-    deploy when a light is on but reports none of the profile's values.</p>
+  <p>Each light is judged by what it reports. A light that has reported none of a profile's fields since the node
+    started (no brightness, no colour temperature), as one that only switches on and off, is confirmed by being on;
+    once it has reported one, it is held to the profile's values. A profile that gives values to a light that has never
+    reported them gets one warning per deploy: they may not apply. Mark such a light <code>onOffOnly</code> on the
+    room, and the room won't send them.</p>
   <p>While a profile is active, its lights are overridden in the room controller under <b>Owner</b>
     (default <code>activity</code>), so the room's style (from a circadian lighting policy) leaves the activity's alone. When a new profile
     no longer includes a light, including a switch to an off profile with no targets, the node emits

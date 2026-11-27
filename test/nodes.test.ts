@@ -2503,24 +2503,18 @@ test("circadian node: deleted, it tells rooms to stop styling at once; following
   assert.deepEqual((follower.context().get("state") as {schedule: unknown}).schedule, {wakeTime: "07:00", bedTime: "22:15"});
 });
 
-test("activity lighting warns once at deploy when a profile gives values to a light marked on/off only", async (t) => {
-  const node = new (runtime(registerActivityLighting).Constructor)({area: "lounge", owner: "activity", onOffOnlyTargets: "[\"lamp\"]",
+test("activity lighting warns once per deploy when a profile gives values to a light that reports none", async (t) => {
+  const node = new (runtime(registerActivityLighting).Constructor)({area: "lounge", owner: "activity",
     profiles: JSON.stringify({off: {targets: [], values: {}}, tv: {targets: ["wall", "lamp"], values: {brightnessPct: 25}}}), confirmationTimeoutMs: 15000, maxAttempts: 2});
   t.after(() => close(node));
-  assert.deepEqual(node.errors, []);
-  assert.deepEqual(node.warnings.map(String), ["lighting values for a light marked on/off only are left out by the room: tv → lamp"]);
-  const unset = new (runtime(registerActivityLighting).Constructor)({area: "lounge", owner: "activity",
-    profiles: JSON.stringify({off: {targets: [], values: {}}, tv: {targets: ["wall", "lamp"], values: {brightnessPct: 25}}}), confirmationTimeoutMs: 15000, maxAttempts: 2});
-  t.after(() => close(unset));
-  assert.deepEqual(unset.warnings, []);
-  // The lamp marked on the room but not here: on, with no values, it can't confirm, and the node says why, once.
+  assert.deepEqual([node.errors, node.warnings], [[], []]);
   for (const at of [1, 2]) {
-    await receive(unset, {activityLighting: {kind: "intent", requestId: `tv-${at}`, generation: at, profile: "tv"}});
+    await receive(node, {activityLighting: {kind: "intent", requestId: `tv-${at}`, generation: at, profile: "tv"}});
     // The wall reports the profile's level; the lamp only that it is on.
-    await receive(unset, {activityLighting: {kind: "observed", generation: at, target: "wall", on: true, values: {brightness: 64}, observedAt: new Date().toISOString()}});
-    await receive(unset, {activityLighting: {kind: "observed", generation: at, target: "lamp", on: true, values: {}, observedAt: new Date().toISOString()}});
+    await receive(node, {activityLighting: {kind: "observed", generation: at, target: "wall", on: true, values: {brightness: 64}, observedAt: new Date().toISOString()}});
+    await receive(node, {activityLighting: {kind: "observed", generation: at, target: "lamp", on: true, values: {}, observedAt: new Date().toISOString()}});
   }
-  assert.equal(unset.warnings.length, 1);
-  assert.match(String(unset.warnings[0]), /^lamp is on but reports no brightness or colour.*add it to On\/off-only targets/);
+  assert.equal(node.warnings.length, 1, "once per deploy");
+  assert.match(String(node.warnings[0]), /^lamp reports no brightness or colour, so the activity confirms it by its being on/);
 });
 

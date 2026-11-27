@@ -9,8 +9,6 @@ import type {
 } from "node-red";
 import {
   normaliseLightingProfiles,
-  onOffOnlyTargets,
-  valuesForOnOffOnly,
   VALUES_NOT_REPORTED,
   transitionActivityLighting,
   type ActivityLightingConfig,
@@ -25,7 +23,6 @@ interface ActivityLightingNodeConfig extends NodeDef {
   profiles?: string;
   owner?: string;
   confirmationTimeoutMs?: number | string;
-  onOffOnlyTargets?: string;
   maxAttempts?: number | string;
 }
 
@@ -45,18 +42,11 @@ const registerActivityLightingController: NodeInitializer = (RED) => {
         profiles: normaliseLightingProfiles(jsonSetting(config.profiles, "profiles", {})),
         owner: textSetting(config.owner, "owner", "activity"),
         confirmationTimeoutMs: numberSetting(config.confirmationTimeoutMs, "confirmation timeout", 15000),
-        maxAttempts: numberSetting(config.maxAttempts, "max attempts", 2),
-        onOffOnlyTargets: onOffOnlyTargets(jsonSetting(config.onOffOnlyTargets, "on/off-only targets", []))
+        maxAttempts: numberSetting(config.maxAttempts, "max attempts", 2)
       };
     } catch (error) {
       invalidConfig(node, error);
       return;
-    }
-    // The room leaves these values out, so say so once per deploy.
-    const ignored = valuesForOnOffOnly(controllerConfig);
-    if (ignored.length) {
-      node.warn("lighting values for a light marked on/off only are left out by the room: " +
-        ignored.map(({profile, target}) => `${profile} → ${target}`).join(", "));
     }
 
     function updateStatus(status: ActivityLightingStatus) {
@@ -100,13 +90,13 @@ const registerActivityLightingController: NodeInitializer = (RED) => {
       }
       updateStatus(result.status);
       schedule(result.state);
-      // Once per deploy: a light that is on but reports none of the values,
-      // most likely one marked onOffOnly on the room but not here.
+      // Once per deploy: a light the profile gives values to that reports
+      // none of them, confirmed by being on.
       const unreported = result.traces.find(({reason}) => reason === VALUES_NOT_REPORTED);
       if (unreported && !warnedUnreported) {
         warnedUnreported = true;
-        node.warn(`${String((unreported.details as {target: string}).target)} is on but reports no brightness or colour, so the activity ` +
-          "can't confirm it: if it only switches on and off, add it to On/off-only targets, as on the room");
+        node.warn(`${String((unreported.details as {target: string}).target)} reports no brightness or colour, so the activity confirms it ` +
+          "by its being on, and the profile's values for it may not apply: a light that only switches on and off can be marked onOffOnly on the room");
       }
       return result;
     }

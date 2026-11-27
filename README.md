@@ -309,14 +309,19 @@ that rooms in its area published before 6.0, migrated or not, then announces
 its own in the same batch, so Home Assistant can give them the old entity IDs.
 The room clears its own as it starts too. A 5.x room deleted rather than
 migrated is invalid, so it clears nothing: remove its retained topics and
-entities yourself. A room without
+entities yourself. A room inside a subflow isn't found this way yet
+([#171](https://github.com/avantics-hq/node-red-home-automation/issues/171)):
+migrate it and send it a startup message before you add its policy, so it
+clears its own old entities first. A room without
 a circadian policy just switches its lights on and off. Two further room
 changes come with it:
 
 - **A light can be marked on/off only** with `"onOffOnly": true` in the room's
   targets: it is never sent brightness, colour or a transition, and values for
-  it are left out with a warning. Activity lighting's new **On/off-only
-  targets** setting lets an activity confirm such a light by its being on.
+  it are left out with a warning. Activity lighting judges each light by what it
+  reports: one that has never reported brightness or colour temperature since
+  start is confirmed by being on, with a warning once per deploy if a profile
+  gives it values.
 - **An intent's values alone no longer make a light manual**: only
   `manual: true` does (a wall switch's double press sends it). Before 6.0, an
   owner-less intent with values made the light manual, so circadian lighting
