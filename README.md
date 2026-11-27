@@ -215,6 +215,7 @@ A cover group moves several covers as one, such as the left and right of a
 curtain: it sends each member the request on that member's own output, labelled
 from its Members setting, and reports ready only when every member confirms,
 or, if only some do, which did what.
+Example: [`Cover pair.json`](https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/Cover%20pair.json).
 
 A Shelly Gen2 or later device in cover mode wires straight to a cover
 controller through the Shelly cover adapter, with no function nodes: an MQTT in

@@ -22,9 +22,9 @@
 </script>
 
 <script type="text/html" data-help-name="home-house-schedule">
-  <p>One wake and bed time shared by every room lighting controller whose <b>Schedule</b> is this one. Rooms that keep
-    their own times (a child's room, say) choose none.</p>
-  <p>The rooms hear of every change as it happens, without wires. Times change from a message or from Home Assistant
+  <p>One wake and bed time shared by every circadian lighting policy whose <b>Schedule</b> is this one. A policy
+    that keeps its own times (for a child's room, say) chooses none.</p>
+  <p>The policies hear of every change as it happens, without wires. Times change from a message or from Home Assistant
     through a <i>house schedule MQTT</i> node; a time changed that way lasts until this schedule is deployed with a
     different <b>Wake time</b> or <b>Bed time</b>, which then applies.</p>
   <p>The <b>Name</b> labels it and names its topics, <code>home/&lt;name&gt;/schedule/...</code>.</p>
