@@ -71,6 +71,22 @@ way; other rewrites can still be misread.
 | `home-motion-lighting-policy` | Converts occupancy and illuminance into lighting intent. A `delay` message (in seconds) or `illuminance-cut-off` message overrides its settings until they are changed and redeployed. |
 | `home-switch-lighting-policy` | Converts raw edges or pre-classified button actions into lighting intent while exposing input freshness and availability. |
 | `home-room-lighting-controller` | Owns the room's light commands, adaptive styling, manual and held lights, and lighting state. |
+| `home-shelly-switch` | Connects one switch channel of a Shelly Gen2+ relay as the device is set up: a detached wall switch's presses to the switch policy, or the relay as the light. |
+
+A Shelly Gen2 or later relay behind a wall switch wires straight in through the
+Shelly switch adapter, with no function nodes: an MQTT in node on the device's
+`<prefix>/#` feeds it, and its first output goes to an MQTT out node. It reads
+the device's own configuration for its channel (with `Shelly.GetConfig`, the
+reply addressed under the device's prefix so the same MQTT in node receives it)
+at startup and whenever the device comes online, and shows what it found. In
+detached mode, where the relay stays on to power smart bulbs, the switch's
+presses go to the switch policy: a toggle switch's on/off as edges, with the
+device's status as the baseline, and a push button's single, double or long
+presses as actions. The relay is never commanded, and a relay that reports off
+is flagged, as the bulbs have lost power. In any other mode the relay is the
+light: the node reports its state and takes on and off. Its **Mode** setting
+overrides what was read, and decides when the configuration can't be read.
+Example: [`Shelly switch.json`](https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/Shelly%20switch.json).
 
 One house schedule can set the wake and bed times for many rooms. It is a
 configuration node, like an MQTT broker: choose it as a room controller's
@@ -99,7 +115,6 @@ on output 2. Example: [`Home theatre equipment.json`](https://github.com/avantic
 | `home-display-mode-controller` | Coordinates TV, projector, and screen transitions. |
 | `home-source-capability-controller` | Gates source readiness on fresh availability, active-device, application or playback evidence. |
 | `home-backlighting-controller` | Owns TV-backlight power with observation-gated confirmation. |
-| `home-shelly-switch` | Connects one switch of a Shelly Gen2+ relay or plug, over its own MQTT API, to the backlighting controller, to the display controller as the projector's power meter, or to both. |
 
 The display controller reads the projector's power from any meter or adapter:
 send `msg.display = {kind: "observed", device: "projector", power: "on"}`
@@ -108,19 +123,6 @@ built-in Shelly meter is optional. Without one, it asks for a reading on output
 3 whenever it needs one; wire that to your meter, unless the meter reports on
 its own at least once per query timeout. A device that doesn't report fails
 the request with reason `no-reading`. The node's help has the details.
-
-A Shelly Gen2 or later relay or plug wires straight in through the Shelly
-switch adapter, with no function nodes: an MQTT in node on the device's
-`<prefix>/#` feeds it, and its first output goes to an MQTT out node. For TV
-backlighting, wire the backlighting controller's commands into it and its
-second output back: it sends `on`, `off` and `status_update` on
-`<prefix>/command/switch:<id>`, and turns the switch's output into the
-controller's on or off reading. As the projector's power meter, wire the
-display controller's third output into it and its third output back: each
-query asks the device for a fresh status, and its measured power (`apower`)
-goes to the display as `watts`. While the device is offline, a command or query
-fails at once with reason `offline`. Example:
-[`Shelly switch.json`](https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/Shelly%20switch.json).
 
 For projector mode it opens the screen to its **Screen viewing position**, or,
 left empty (the default for a new node), by the screen's own open command,

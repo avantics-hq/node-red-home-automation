@@ -161,6 +161,9 @@ return null;</code></pre></div>
 </ul>
 <p>Node context is kept in memory unless you set up a context store, so a restart or redeploy clears the baseline, and the room controller forgets which lights a person set. See <a href="https://github.com/avantics-hq/node-red-home-automation#recommended-setup-a-file-context-store">Recommended setup: a file context store</a>.</p>
 </section>
+<section id="shelly-switch"><h2>A wall switch through the shelly switch node</h2>
+<p>A wall switch wired to a Gen2-or-later relay in <strong>detached</strong> mode keeps the relay on to power smart bulbs and reports each press over MQTT. The <strong>shelly switch</strong> node turns those reports into this policy’s inputs, with no function nodes: a toggle switch’s flips as edges (the device’s status first, as the baseline), a push button’s presses as actions, and the device going offline or online as availability. It reads the device’s mode and input type itself. See <a href="guide-device-adapters.html#shelly-switch">Wire a shelly switch</a>.</p>
+</section>
 <section id="settings"><h2>Settings</h2>
 <div class="table-wrap" role="region" aria-label="switch policy settings; scroll horizontally on a phone" tabindex="0"><table><caption>switch policy settings</caption><thead><tr><th scope="col">Setting</th><th scope="col">Default</th><th scope="col">What it does</th></tr></thead><tbody>
 <tr><td><strong>Name</strong></td><td>empty</td><td>Names the node on the canvas; when empty, the label comes from the Area.</td></tr>

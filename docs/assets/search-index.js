@@ -215,6 +215,13 @@ window.DOCS_SEARCH = [
  },
  {
   "title": "Wire wall switches",
+  "section": "A wall switch through the shelly switch node",
+  "description": "A wall switch wired to a Gen2-or-later relay in detached mode keeps the relay on to power smart bulbs and repo",
+  "url": "guide-wall-switches.html#shelly-switch",
+  "text": "A wall switch wired to a Gen2-or-later relay in detached mode keeps the relay on to power smart bulbs and reports each press over MQTT. The shelly switch node turns those reports into this policy’s inputs, with no function nodes: a toggle switch’s flips as edges (the device’s status first, as the baseline), a push button’s presses as actions, and the device going offline or online as availability. It reads the device’s mode and input type itself. See Wire a shelly switch ."
+ },
+ {
+  "title": "Wire wall switches",
   "section": "Settings",
   "description": "switch policy settings Setting Default What it does Name empty Names the node on the canvas; when empty, the l",
   "url": "guide-wall-switches.html#settings",
@@ -477,16 +484,16 @@ window.DOCS_SEARCH = [
  {
   "title": "Connect a device",
   "section": "Wire a shelly switch",
-  "description": "The shelly switch node connects one switch of a Gen2-or-later relay or plug, over the device’s own MQTT API. I",
+  "description": "The shelly switch node connects one switch channel of a Gen2-or-later relay, over the device’s own MQTT API, u",
   "url": "guide-device-adapters.html#shelly-switch",
-  "text": "The shelly switch node connects one switch of a Gen2-or-later relay or plug, over the device’s own MQTT API. It can switch TV backlighting for the backlighting controller , report a projector’s power to the display mode controller as its power meter, or both. It has three outputs: the device’s MQTT messages, readings for the backlighting controller, and readings for the display controller. shelly switch settings Setting Default What to set MQTT topic prefix None: required The device’s topic prefix: its device ID unless a custom prefix is set on the device. It cannot contain + or # . Switch ID 0 0 , or the number of another switch on a device with more than one. Use one node per switch. Prepare the device. Turn MQTT on with Enable MQTT Control (the default); without it the device ignores the commands. Keep RPC status notifications on (also the default). Only devices with power metering report power. Subscribe to the whole prefix. One MQTT in node on <prefix>/# feeds the adapter, and its first output goes to an MQTT out node with no topic set. For backlighting, wire the backlighting controller’s commands into the adapter and the adapter’s second output back to the controller. set_power is sent as on or off ; the switch’s output comes back as the controller’s on or off reading. As the projector’s power meter, leave the display controller’s Projector power meter host empty, wire its third output (projector power queries) into the adapter, and the adapter’s third output back to the display controller. The measured power goes as watts , read against the display’s on and standby watts. Offline is said at once. While the device is offline, a backlighting command or a power query is answered straight away as failed with reason offline , rather than at the controller’s timeout. Back online, the adapter asks the device for a fresh status."
+  "text": "The shelly switch node connects one switch channel of a Gen2-or-later relay, over the device’s own MQTT API, used the way the device is set up. It reads the device’s configuration for its channel at startup and whenever the device comes online, and shows what it found in its status. shelly switch settings Setting Default What to set MQTT topic prefix None: required The device’s topic prefix: its device ID unless a custom prefix is set on the device. It cannot contain + or # . Switch ID 0 0 , or the number of another switch on a device with more than one. Use one node per switch. Mode As the device is set up Leave it to read the device’s own configuration, or set detached or relay to override it. Set it when the configuration can’t be read. Subscribe to the whole prefix. One MQTT in node on <prefix>/# feeds the adapter, and its first output goes to an MQTT out node with no topic set. The configuration request’s reply is addressed under the same prefix, so nothing more is needed. Detached: the switch drives the room. The relay stays on to power smart bulbs. Wire the adapter’s second output to a switch lighting policy : a toggle switch’s flips become edges, with the device’s status as the baseline, and a push button’s single, double or long presses become actions. The relay is never commanded, and a relay that reports off is flagged in the status: the bulbs have lost power. Any other mode: the relay is the light. The adapter reports the relay’s on/off state, with whether a person changed it at the switch, and takes on and off. No node of this package reads that state yet. No configuration, no guess. If the device doesn’t answer within 10 seconds, the status says configuration unreadable: set Mode , and nothing is passed on until the Mode setting says how."
  },
  {
   "title": "Connect a device",
   "section": "Choose an adapter",
   "description": "shelly cover A Gen2-or-later relay device in cover mode, calibrated on the device. Position covers only. One M",
   "url": "guide-device-adapters.html#choose",
-  "text": "shelly cover A Gen2-or-later relay device in cover mode, calibrated on the device. Position covers only. One MQTT in node on <prefix>/# . zigbee2mqtt cover A Zigbee cover paired with Zigbee2MQTT. Position covers, or open, close and stop only. Two MQTT in nodes: the device topic and its availability. shelly switch A Gen2-or-later relay or plug: TV backlighting on and off, a projector’s power meter, or both. One MQTT in node on <prefix>/# . For any other device, the controller’s neutral commands and readings are the contract to map to."
+  "text": "shelly cover A Gen2-or-later relay device in cover mode, calibrated on the device. Position covers only. One MQTT in node on <prefix>/# . zigbee2mqtt cover A Zigbee cover paired with Zigbee2MQTT. Position covers, or open, close and stop only. Two MQTT in nodes: the device topic and its availability. shelly switch A Gen2-or-later relay behind a wall switch: in detached mode, the switch’s presses for the switch policy; otherwise, the relay as the light. One MQTT in node on <prefix>/# . For any other device, the controller’s neutral commands and readings are the contract to map to."
  },
  {
   "title": "Connect a device",

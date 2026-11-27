@@ -2381,20 +2381,24 @@ test("zigbee2mqtt cover node: state reports become cover readings, and cover com
   assert.equal((unset.statuses.at(-1) as {text?: string}).text, "invalid configuration");
 });
 
-// The adapter has no timers, so nothing to close.
-test("shelly switch node: commands become MQTT publications, and status readings go to the backlighting and display outputs", async () => {
-  const node = new (runtime(registerShellySwitch).Constructor)({id: "w1", topicPrefix: "shellyplus1pm-test", channel: "0"});
+test("shelly switch node: reads the device's configuration once the flows start, then passes a detached switch's flips to the switch policy", async (t) => {
+  const switchRuntime = runtime(registerShellySwitch);
+  const node = new switchRuntime.Constructor({id: "w1", topicPrefix: "shellyplus1-test", channel: "0"});
+  t.after(() => close(node));
   assert.deepEqual(node.errors, []);
-  const command = await receive<SendEnvelope>(node, {backlightingCommand: {operation: "set_power", requestId: "r", generation: 2, power: "on", attempt: 1}});
-  assert.deepEqual((command[0]?.[0] as Array<{topic: string; payload: string}>).map(({topic, payload}) => [topic, payload]),
-    [["shellyplus1pm-test/command/switch:0", "on"]]);
-  const reported = await receive<SendEnvelope>(node, {topic: "shellyplus1pm-test/status/switch:0", payload: {id: 0, output: true, apower: 31.5}});
-  const backlighting = reported[0]?.[1] as Array<{backlighting?: {kind: string; generation: number; power: string}}> | undefined;
-  const display = reported[0]?.[2] as Array<{display?: {kind: string; device: string; watts: number}}> | undefined;
-  assert.deepEqual(backlighting?.map(({backlighting: b}) => [b?.kind, b?.generation, b?.power]), [["observed", 2, "on"]]);
-  assert.deepEqual(display?.map(({display: d}) => [d?.kind, d?.device, d?.watts]), [["observed", "projector", 31.5]]);
-  assert.equal((node.statuses.at(-1) as {text?: string}).text, "on · 31.5 W");
+  switchRuntime.events.emit("flows:started");
+  const asked = ((node.sent[0] as SendEnvelope)[0] ?? []) as Array<{topic: string; payload: string}>;
+  assert.deepEqual(asked.map(({topic}) => topic), ["shellyplus1-test/rpc", "shellyplus1-test/command"]);
+  const request = JSON.parse(asked[0]!.payload) as {id: number; src: string};
+  await receive(node, {topic: `${request.src}/rpc`, payload: {id: request.id, result: {"switch:0": {in_mode: "detached"}, "input:0": {type: "switch"}}}});
+  assert.equal((node.statuses.at(-1) as {text?: string}).text, "detached, switch input");
+  const flipped = await receive<SendEnvelope>(node, {topic: "shellyplus1-test/events/rpc", payload: {method: "NotifyStatus", params: {"input:0": {id: 0, state: true}}}});
+  const toPolicy = flipped[0]?.[1] as Array<{source?: string; payload?: {state: boolean}}> | undefined;
+  assert.deepEqual(toPolicy?.map(({source, payload}) => [source, payload?.state]), [["switch", true]]);
+  // Detached: a relay command is never sent.
+  assert.deepEqual(await receive(node, {switchCommand: {power: "off"}}), []);
   // No device prefix: invalid configuration, not a guess.
+  // (It never started, so there is nothing to close.)
   const unset = new (runtime(registerShellySwitch).Constructor)({id: "w2"});
   assert.equal((unset.statuses.at(-1) as {text?: string}).text, "invalid configuration");
 });

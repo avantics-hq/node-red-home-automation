@@ -2,177 +2,196 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import {transitionBacklighting, type BacklightingState} from "../lib/backlighting-controller";
-import {transitionDisplay, type DisplayConfig, type DisplayState} from "../lib/display-mode-controller";
 import {
   normaliseShellySwitchConfig,
   transitionShellySwitch,
+  CONFIG_TIMEOUT_MS,
+  type ShellySwitchConfig,
   type ShellySwitchMessage,
   type ShellySwitchState
 } from "../lib/shelly-switch";
+import {transitionSwitchPolicy, type SwitchPolicyConfig, type SwitchPolicyEffect, type SwitchPolicyState} from "../lib/switch-policy";
 
-const config = normaliseShellySwitchConfig({topicPrefix: "shellyplus1pm-test", channel: 0});
+const auto = normaliseShellySwitchConfig({topicPrefix: "shellyplus1-test", channel: 0});
 const at = (seconds: number): Date => new Date(Date.parse("2026-11-27T10:00:00Z") + seconds * 1000);
 
-function apply(state: Partial<ShellySwitchState> | undefined, msg: ShellySwitchMessage, seconds = 0) {
+function apply(state: Partial<ShellySwitchState> | undefined, msg: ShellySwitchMessage, seconds = 0, config: ShellySwitchConfig = auto) {
   return transitionShellySwitch(state, msg, config, at(seconds));
 }
-const status = (fields: Record<string, unknown>) => ({topic: "shellyplus1pm-test/status/switch:0", payload: JSON.stringify({id: 0, ...fields})});
-const notify = (change: Record<string, unknown>) =>
-  ({topic: "shellyplus1pm-test/events/rpc", payload: {method: "NotifyStatus", params: {ts: 1, "switch:0": {id: 0, ...change}}}});
-const backlightingCommand = (operation: string, generation = 3, power = "on") =>
-  ({backlightingCommand: {operation, requestId: `r-${generation}`, generation, power, attempt: 1}});
-const query = (generation = 5) =>
-  ({payload: "query", display_command: {device: "projector", operation: "query_power", requestId: "p", generation, attempt: 1}});
-const sent = (result: ReturnType<typeof apply>) => result.publications.map(({topic, payload}) => [topic, payload]);
-
-test("the settings name the device's prefix and switch, with no default device", () => {
-  assert.deepEqual(normaliseShellySwitchConfig({topicPrefix: " dev/ ", channel: "2"}), {topicPrefix: "dev", channel: 2});
-  assert.throws(() => normaliseShellySwitchConfig({}), /topic prefix is required/);
-  assert.throws(() => normaliseShellySwitchConfig({topicPrefix: "a", channel: "1.5"}), /whole number/);
+const startup = {shellySwitch: {kind: "startup"}};
+// The device's answer to this node's Shelly.GetConfig request, on <src>/rpc.
+const configReply = (id: number, inMode: string, inputType: string) => ({
+  topic: "shellyplus1-test/home-automation-switch-0/rpc",
+  payload: JSON.stringify({id, src: "shellyplus1-test", dst: "shellyplus1-test/home-automation-switch-0",
+    result: {"switch:0": {id: 0, in_mode: inMode}, "input:0": {id: 0, type: inputType}}})
 });
+const deviceStatus = (input: boolean | null, output: boolean) =>
+  ({topic: "shellyplus1-test/status", payload: {"switch:0": {id: 0, output, source: "init"}, "input:0": {id: 0, state: input}}});
+const notify = (params: Record<string, unknown>) => ({topic: "shellyplus1-test/events/rpc", payload: {method: "NotifyStatus", params: {ts: 1, ...params}}});
+const pushed = (event: string, component = "input:0") =>
+  ({topic: "shellyplus1-test/events/rpc", payload: {method: "NotifyEvent", params: {ts: 1, events: [{component, id: 0, event, ts: 1}]}}});
 
-test("the backlighting controller's commands and the display's power query become the switch's MQTT control commands", () => {
-  assert.deepEqual(sent(apply(undefined, backlightingCommand("set_power", 3, "on"))), [["shellyplus1pm-test/command/switch:0", "on"]]);
-  assert.deepEqual(sent(apply(undefined, backlightingCommand("set_power", 3, "off"))), [["shellyplus1pm-test/command/switch:0", "off"]]);
-  // observe and the power query ask for a fresh status, not the last one.
-  assert.deepEqual(sent(apply(undefined, backlightingCommand("observe"))), [["shellyplus1pm-test/command/switch:0", "status_update"]]);
-  assert.deepEqual(sent(apply(undefined, query())), [["shellyplus1pm-test/command/switch:0", "status_update"]]);
-  assert.deepEqual(sent(apply(undefined, {display_command: {device: "screen", operation: "query_position", generation: 1}})), []);
-  const second = normaliseShellySwitchConfig({topicPrefix: "dev", channel: 1});
-  assert.deepEqual(transitionShellySwitch(undefined, backlightingCommand("observe"), second, at(0)).publications[0]?.topic, "dev/command/switch:1");
-});
-
-test("the output reads as backlighting power with the last command's generation, and the power as the projector's watts", () => {
-  // Before any backlighting command there is no generation to tag a reading with.
-  let result = apply(undefined, status({output: true, apower: 140.2}), 1);
-  assert.deepEqual(result.backlighting, []);
-  assert.deepEqual(result.display, [{display: {kind: "observed", device: "projector", watts: 140.2, source: "switch", observedAt: at(1).toISOString()}}]);
-  result = apply(result.state, backlightingCommand("observe", 7), 2);
-  result = apply(result.state, status({output: false, apower: 0}), 2.5);
-  assert.deepEqual(result.backlighting, [{backlighting: {kind: "observed", generation: 7, power: "off", observedAt: at(2.5).toISOString()}}]);
-  // A change carries only what changed: an output change is a backlighting reading, a power change a meter reading.
-  const output = apply(result.state, notify({output: true}), 3);
-  assert.deepEqual([output.backlighting.length, output.display.length], [1, 0]);
-  const power = apply(output.state, notify({apower: 12}), 4);
-  assert.deepEqual([power.backlighting.length, power.display.map(({display}) => display.kind === "observed" && display.watts)], [0, [12]]);
-  // A relay without metering reports no power, so nothing goes to the display.
-  assert.deepEqual(apply(undefined, status({output: true}), 5).display, []);
-});
-
-test("offline, a command or query fails at once; back online, the node asks for a fresh status", () => {
-  let result = apply(undefined, {topic: "shellyplus1pm-test/online", payload: "false"});
-  assert.equal(result.status.text, "offline");
-  result = apply(result.state, backlightingCommand("set_power", 9), 1);
-  assert.deepEqual([result.publications, result.backlighting], [[], [{backlighting: {kind: "command_result", generation: 9, ok: false, reason: "offline"}}]]);
-  result = apply(result.state, query(4), 1);
-  assert.deepEqual([result.publications, result.display], [[], [{display: {kind: "transport_failed", device: "projector", operation: "query_power", generation: 4, reason: "offline"}}]]);
-  result = apply(result.state, {topic: "shellyplus1pm-test/online", payload: true}, 2);
-  assert.deepEqual(sent(result), [["shellyplus1pm-test/command/switch:0", "status_update"]]);
-  // Anything else, such as its own command echoed back, is ignored.
-  assert.deepEqual(sent(apply(result.state, {topic: "shellyplus1pm-test/command/switch:0", payload: "on"})), []);
-});
-
-// A relay as its MQTT API behaves, enough for round trips: on, off and
-// status_update, with a load drawing `load()` watts while it is on.
-function relay(load: () => number) {
-  const device = {output: false};
-  const full = () => ({topic: "shellyplus1pm-test/status/switch:0", payload: JSON.stringify({id: 0, output: device.output, apower: device.output ? load() : 0})});
-  return {
-    device,
-    receive(payload: string) {
-      if (payload === "on" || payload === "off") {
-        device.output = payload === "on";
-        return [notify({output: device.output})];
-      }
-      return payload === "status_update" ? [full()] : [];
-    }
-  };
+// A node that has read its device's configuration.
+function setUp(inMode: string, inputType: string, config: ShellySwitchConfig = auto) {
+  const started = apply(undefined, startup, 0, config);
+  return apply(started.state, configReply(started.state.requestId, inMode, inputType), 0.1, config);
 }
 
-test("a round trip through the real backlighting controller: switched on, confirmed from the relay's own report", () => {
-  const backlightingConfig = {pollMs: 1000, confirmationTimeoutMs: 5000, maxAttempts: 2};
-  const {device, receive} = relay(() => 30);
-  let lights: ReturnType<typeof transitionBacklighting> | undefined;
-  let adapter: Partial<ShellySwitchState> | undefined;
-  const queue: Array<{to: "lights" | "adapter" | "device"; message: unknown}> = [];
-  const run = (seconds: number) => {
-    while (queue.length) {
-      const {to, message} = queue.shift()!;
-      if (to === "lights") {
-        lights = transitionBacklighting(lights?.state as Partial<BacklightingState> | undefined, {backlighting: message as never}, backlightingConfig, at(seconds));
-        for (const command of lights.commands) queue.push({to: "adapter", message: {backlightingCommand: command}});
-      } else if (to === "adapter") {
-        const result = apply(adapter, message as ShellySwitchMessage, seconds);
-        adapter = result.state;
-        for (const {backlighting} of result.backlighting) queue.push({to: "lights", message: backlighting});
-        for (const {payload} of result.publications) queue.push({to: "device", message: payload});
-      } else {
-        for (const reply of receive(message as string)) queue.push({to: "adapter", message: reply});
-      }
-    }
-  };
-  queue.push({to: "lights", message: {kind: "intent", requestId: "tv-1", generation: 1, power: "on"}});
-  run(0);
-  for (let seconds = 1; seconds <= 6 && lights!.state.phase !== "ready"; seconds += 1) {
-    queue.push({to: "lights", message: {kind: "tick", generation: 1}});
-    run(seconds);
-  }
-  assert.equal(device.output, true);
-  assert.equal(lights!.state.phase, "ready");
-  assert.equal(lights!.events.at(-1)?.theatre.status, "ready");
+test("the settings name the device's prefix and switch, and a mode that defaults to auto", () => {
+  assert.deepEqual(normaliseShellySwitchConfig({topicPrefix: " dev/ ", channel: "1"}), {topicPrefix: "dev", channel: 1, mode: "auto"});
+  assert.equal(normaliseShellySwitchConfig({topicPrefix: "dev", mode: "relay"}).mode, "relay");
+  assert.throws(() => normaliseShellySwitchConfig({}), /topic prefix is required/);
+  assert.throws(() => normaliseShellySwitchConfig({topicPrefix: "dev", mode: "fancy"}), /auto, detached or relay/);
 });
 
-test("a round trip through the real display controller: the relay's meter is the projector's power, read on each query", () => {
-  const displayConfig: DisplayConfig = {screenOpenPosition: null, screenTolerance: 2, pollMs: 1000, queryTimeoutMs: 1000, tvTimeoutMs: 4000,
-    screenTimeoutMs: 5000, projectorWarmupMs: 6000, projectorMinimumWarmupMs: 2000, projectorShutdownConfirmMs: 2000, projectorCooldownMs: 5000,
-    maxAttempts: 2, projectorOnWatts: 20, projectorOffWatts: 10};
-  // The projector stays plugged into the relay; its infrared toggle starts the lamp, which then draws 155 W.
-  const lamp = {on: false};
-  const {receive} = relay(() => (lamp.on ? 155 : 2));
-  receive("on");
-  const tv = {power: "on"};
-  const screen = {position: 0};
-  let display: ReturnType<typeof transitionDisplay> | undefined;
-  let adapter: Partial<ShellySwitchState> | undefined;
-  const queue: Array<{to: "display" | "adapter" | "device"; message: unknown}> = [];
-  const run = (seconds: number) => {
-    while (queue.length) {
-      const {to, message} = queue.shift()!;
-      if (to === "display") {
-        display = transitionDisplay(display?.state as Partial<DisplayState> | undefined, {display: message as never}, displayConfig, at(seconds));
-        for (const command of display.commands) {
-          // The display's own transports, answering under the command's generation.
-          const answer = (values: Record<string, unknown>) => queue.push({to: "display", message: {kind: "observed", generation: command.generation, source: "test", ...values}});
-          if (command.device === "projector" && command.operation === "query_power") queue.push({to: "adapter", message: {payload: "query", display_command: command}});
-          else if (command.device === "projector" && command.operation === "power_toggle") lamp.on = !lamp.on;
-          else if (command.device === "tv") {
-            if (command.operation === "set_power") tv.power = String(command.power);
-            answer({device: "tv", power: tv.power});
-          } else if (command.device === "screen") {
-            if (command.operation === "open") screen.position = 100;
-            if (command.operation === "close") screen.position = 0;
-            answer({device: "screen", position: screen.position, state: screen.position === 100 ? "open" : "closed"});
-          }
-        }
-      } else if (to === "adapter") {
-        const result = apply(adapter, message as ShellySwitchMessage, seconds);
-        adapter = result.state;
-        for (const {display: reading} of result.display) queue.push({to: "display", message: reading});
-        for (const {payload} of result.publications) queue.push({to: "device", message: payload});
-      } else {
-        for (const reply of receive(message as string)) queue.push({to: "adapter", message: reply});
-      }
-    }
-  };
-  queue.push({to: "display", message: {kind: "intent", requestId: "projector-1", generation: 1, mode: "projector"}});
-  run(0);
-  for (let seconds = 1; seconds <= 20 && display!.state.phase !== "ready" && display!.state.phase !== "failed"; seconds += 1) {
-    queue.push({to: "display", message: {kind: "tick", generation: 1}});
-    run(seconds);
+test("at startup it asks the device for its configuration, with the reply addressed under its own prefix, and for a baseline", () => {
+  const result = apply(undefined, startup);
+  const [request, status] = result.publications;
+  assert.equal(request?.topic, "shellyplus1-test/rpc");
+  assert.deepEqual(JSON.parse(request!.payload), {id: 1, src: "shellyplus1-test/home-automation-switch-0", method: "Shelly.GetConfig"});
+  assert.deepEqual(status, {topic: "shellyplus1-test/command", payload: "status_update"});
+  assert.equal(result.status.text, "reading the device's configuration");
+});
+
+test("the device's configuration sets the mode: detached with a switch or a button input, or the relay as the light", () => {
+  assert.equal(setUp("detached", "switch").status.text, "detached, switch input");
+  assert.equal(setUp("detached", "button").status.text, "detached, button input");
+  assert.equal(setUp("follow", "switch").status.text, "follow, switch input");
+  assert.equal(setUp("momentary", "button").status.text, "momentary, button input");
+  // A reply to someone else's request is not ours.
+  const started = apply(undefined, startup);
+  assert.equal(apply(started.state, configReply(99, "detached", "switch")).status.text, "reading the device's configuration");
+});
+
+test("a configuration that can't be read isn't guessed: the status says so, and the Mode setting decides", () => {
+  // No reply in time.
+  let result = apply(undefined, startup);
+  result = apply(result.state, {shellySwitch: {kind: "tick"}}, CONFIG_TIMEOUT_MS / 1000);
+  assert.deepEqual(result.status, {text: "configuration unreadable: set Mode", fill: "red"});
+  // Nothing goes to the switch policy while the mode is unknown.
+  assert.deepEqual(apply(result.state, notify({"input:0": {id: 0, state: true}}), 11).readings, []);
+  // An error reply.
+  const started = apply(undefined, startup);
+  const failed = apply(started.state, {topic: "shellyplus1-test/home-automation-switch-0/rpc", payload: {id: 1, error: {code: -103, message: "x"}}});
+  assert.equal(failed.status.text, "configuration unreadable: set Mode");
+  // The setting overrides.
+  const detached = normaliseShellySwitchConfig({topicPrefix: "shellyplus1-test", mode: "detached"});
+  let overridden = apply(undefined, startup, 0, detached);
+  overridden = apply(overridden.state, {shellySwitch: {kind: "tick"}}, 10, detached);
+  assert.equal(overridden.status.text, "detached (set)");
+  assert.deepEqual(apply(overridden.state, notify({"input:0": {id: 0, state: true}}), 11, detached).readings,
+    [{source: "switch", payload: {state: true}, observedAt: at(11).toISOString()}]);
+});
+
+test("detached with a switch input: the status is a baseline, then each change an edge for the switch policy", () => {
+  let result = setUp("detached", "switch");
+  result = apply(result.state, deviceStatus(false, true), 1);
+  assert.deepEqual(result.readings, [{source: "switch", payload: {state: false}, baseline: true, observedAt: at(1).toISOString()}]);
+  result = apply(result.state, notify({"input:0": {id: 0, state: true}}), 2);
+  assert.deepEqual(result.readings, [{source: "switch", payload: {state: true}, observedAt: at(2).toISOString()}]);
+  // A status that arrived before the configuration still becomes the baseline once the mode is known.
+  const started = apply(undefined, startup);
+  const early = apply(started.state, deviceStatus(true, true), 0.05);
+  assert.deepEqual(early.readings, []);
+  assert.deepEqual(apply(early.state, configReply(1, "detached", "switch"), 0.1).readings,
+    [{source: "switch", payload: {state: true}, baseline: true, observedAt: at(0.1).toISOString()}]);
+});
+
+test("detached with a button input: pushes become single, double and long actions", () => {
+  const ready = setUp("detached", "button");
+  for (const [event, action] of [["single_push", "single"], ["double_push", "double"], ["long_push", "long"]] as const) {
+    assert.deepEqual(apply(ready.state, pushed(event), 3).readings, [{source: "switch-action", payload: {action}, observedAt: at(3).toISOString()}], event);
   }
-  assert.equal(display!.state.phase, "ready", JSON.stringify(display!.state.failure));
-  assert.equal(display!.state.observed.projector?.power, "on");
-  assert.equal(display!.state.observed.projector?.watts, 155);
-  assert.equal(tv.power, "standby");
+  // Other events, and another input's, are not presses of this switch.
+  assert.deepEqual(apply(ready.state, pushed("btn_down"), 3).readings, []);
+  assert.deepEqual(apply(ready.state, pushed("single_push", "input:1"), 3).readings, []);
+  // A button's state is null: no edge.
+  assert.deepEqual(apply(ready.state, deviceStatus(null, true), 3).readings, []);
+});
+
+test("detached, the relay is never commanded, and a relay found off warns that the bulbs have no power", () => {
+  let result = setUp("detached", "switch");
+  result = apply(result.state, {switchCommand: {power: "off"}}, 1);
+  assert.deepEqual(result.publications, []);
+  assert.equal(result.traces.at(-1)?.reason, "detached");
+  result = apply(result.state, notify({"switch:0": {id: 0, output: false, source: "button"}}), 2);
+  assert.deepEqual(result.readings, []);
+  assert.deepEqual(result.status, {text: "detached, switch input · relay off: bulbs unpowered", fill: "yellow"});
+});
+
+test("not detached, the relay is the light: its state is reported, a change at the switch as a person's, and on/off is sent", () => {
+  let result = setUp("follow", "switch");
+  result = apply(result.state, notify({"switch:0": {id: 0, output: true, source: "switch"}}), 1);
+  assert.deepEqual(result.readings, [{switchState: {kind: "observed", on: true, person: true, observedAt: at(1).toISOString()}}]);
+  result = apply(result.state, {switchCommand: {power: "off"}}, 2);
+  assert.deepEqual(result.publications, [{topic: "shellyplus1-test/command/switch:0", payload: "off"}]);
+  result = apply(result.state, notify({"switch:0": {id: 0, output: false, source: "MQTT"}}), 2.1);
+  assert.deepEqual(result.readings, [{switchState: {kind: "observed", on: false, person: false, observedAt: at(2.1).toISOString()}}]);
+  // Its input's changes and pushes don't go to the switch policy.
+  assert.deepEqual(apply(result.state, notify({"input:0": {id: 0, state: true}}), 3).readings, []);
+});
+
+test("offline and online: availability for the switch policy, and back online the configuration is read again", () => {
+  let result = setUp("detached", "switch");
+  result = apply(result.state, {topic: "shellyplus1-test/online", payload: "false"}, 1);
+  assert.deepEqual([result.readings, result.status.text], [[{source: "switch-availability", payload: "offline"}], "offline"]);
+  result = apply(result.state, {topic: "shellyplus1-test/online", payload: true}, 2);
+  assert.deepEqual(result.readings, [{source: "switch-availability", payload: "online"}]);
+  assert.deepEqual(result.publications.map(({topic}) => topic), ["shellyplus1-test/rpc", "shellyplus1-test/command"]);
+  // Relay mode: availability as the relay's.
+  const relay = apply(setUp("flip", "switch").state, {topic: "shellyplus1-test/online", payload: false}, 1);
+  assert.deepEqual(relay.readings, [{switchState: {kind: "availability", online: false}}]);
+  // Its own request echoed back is ignored.
+  assert.deepEqual(apply(result.state, {topic: "shellyplus1-test/rpc", payload: {id: 2, method: "Shelly.GetConfig"}}).readings, []);
+});
+
+test("a round trip through the real switch policy: wall switch presses become lighting intents", () => {
+  const policyConfig: SwitchPolicyConfig = {targets: ["ceiling"], switchWindowMs: 500, switchFreshnessMs: 60_000};
+  const sends = (effects: SwitchPolicyEffect[]) => effects.flatMap((effect) => (effect.kind === "send" ? [effect.message.lighting] : []));
+  const run = (inputType: string, events: Array<[number, ShellySwitchMessage]>) => {
+    let adapter = setUp("detached", inputType).state as Partial<ShellySwitchState>;
+    let policy: Partial<SwitchPolicyState> | undefined = transitionSwitchPolicy(undefined, {source: "switch-startup"}, policyConfig, at(0).getTime()).state;
+    const intents: unknown[] = [];
+    type Timer = {generation: number; switchAt: number; dueAt: number};
+    const pending: {timer: Timer | null} = {timer: null};
+    const feed = (input: Record<string, unknown>, ms: number) => {
+      const result = transitionSwitchPolicy(policy, input as never, policyConfig, ms);
+      policy = result.state;
+      intents.push(...sends(result.effects));
+      for (const effect of result.effects) {
+        if (effect.kind === "schedule-switch-timer") pending.timer = {generation: effect.generation, switchAt: effect.switchAt, dueAt: ms + effect.delayMs};
+        if (effect.kind === "cancel-switch-timer") pending.timer = null;
+      }
+    };
+    for (const [seconds, message] of events) {
+      const ms = at(seconds).getTime();
+      const due = pending.timer;
+      if (due && due.dueAt <= ms) {
+        pending.timer = null;
+        feed({source: "switch-timer", generation: due.generation, switchAt: due.switchAt}, due.dueAt);
+      }
+      const result = apply(adapter, message, seconds);
+      adapter = result.state;
+      for (const reading of result.readings) feed(reading as Record<string, unknown>, ms);
+    }
+    return intents;
+  };
+  // A switch-type input: the baseline, then one flip (a toggle) and, later, two quick flips (full brightness).
+  const flips = run("switch", [
+    [1, deviceStatus(false, true)],
+    [2, notify({"input:0": {id: 0, state: true}})],
+    [5, notify({"input:0": {id: 0, state: false}})],
+    [5.2, notify({"input:0": {id: 0, state: true}})],
+    [8, deviceStatus(true, true)]
+  ]);
+  assert.deepEqual(flips, [
+    {kind: "intent", targets: ["ceiling"], state: "TOGGLE", source: "wall", person: true},
+    {kind: "intent", targets: ["ceiling"], state: "ON", source: "wall", person: true, manual: true, values: {brightnessPct: 100}}
+  ]);
+  // A button-type input: a single push toggles, a double push is full brightness.
+  const pushes = run("button", [[1, pushed("single_push")], [3, pushed("double_push")], [4, pushed("long_push")]]);
+  assert.deepEqual(pushes, [
+    {kind: "intent", targets: ["ceiling"], state: "TOGGLE", source: "wall", person: true},
+    {kind: "intent", targets: ["ceiling"], state: "ON", source: "wall", person: true, manual: true, values: {brightnessPct: 100}}
+  ]);
 });
