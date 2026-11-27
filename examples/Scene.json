@@ -1,0 +1,224 @@
+[
+  {
+    "id": "example-scene-comment",
+    "type": "comment",
+    "name": "Scene example",
+    "info": "One scene, \"Exercise mode\": while it is on, it holds the room's main light off and its tv socket on, and pauses motion lighting. It ends by request, by its safety timer (4 hours), or when the trainer's power falls below 20 W for this flow's end trigger.\n\nWire output 1 to your room lighting controller, whose Targets JSON names main and tv (mark the socket \"onOffOnly\": true), and output 2 to your motion lighting policy. To start and stop it from Home Assistant, give it an area, switch on Publish state and Home Assistant discovery, wire output 3 to an MQTT out node and an MQTT in node on home/<area>/scene/exercise_mode/set into it. Replace the \"trainer power\" inject with your power reading: the switch and change nodes are the end trigger, so the condition is yours to set.\n\nWhen it ends, the room gives each light back what it was before the scene, and motion lighting resumes.",
+    "x": 150,
+    "y": 40,
+    "wires": []
+  },
+  {
+    "id": "example-scene-startup",
+    "type": "inject",
+    "name": "startup",
+    "props": [
+      {
+        "p": "scene",
+        "v": "{\"kind\":\"startup\"}",
+        "vt": "json"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": true,
+    "onceDelay": 3,
+    "topic": "",
+    "x": 130,
+    "y": 100,
+    "wires": [
+      [
+        "example-scene-scene"
+      ]
+    ]
+  },
+  {
+    "id": "example-scene-start",
+    "type": "inject",
+    "name": "start",
+    "props": [
+      {
+        "p": "scene",
+        "v": "{\"kind\":\"start\"}",
+        "vt": "json"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 130,
+    "y": 140,
+    "wires": [
+      [
+        "example-scene-scene"
+      ]
+    ]
+  },
+  {
+    "id": "example-scene-end",
+    "type": "inject",
+    "name": "end",
+    "props": [
+      {
+        "p": "scene",
+        "v": "{\"kind\":\"end\"}",
+        "vt": "json"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 130,
+    "y": 180,
+    "wires": [
+      [
+        "example-scene-scene"
+      ]
+    ]
+  },
+  {
+    "id": "example-scene-power",
+    "type": "inject",
+    "name": "trainer power",
+    "props": [
+      {
+        "p": "payload",
+        "v": "5",
+        "vt": "num"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 140,
+    "y": 240,
+    "wires": [
+      [
+        "example-scene-below"
+      ]
+    ]
+  },
+  {
+    "id": "example-scene-below",
+    "type": "switch",
+    "name": "below 20 W",
+    "property": "payload",
+    "propertyType": "msg",
+    "rules": [
+      {
+        "t": "lt",
+        "v": "20",
+        "vt": "num"
+      }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 1,
+    "x": 330,
+    "y": 240,
+    "wires": [
+      [
+        "example-scene-to-end"
+      ]
+    ]
+  },
+  {
+    "id": "example-scene-to-end",
+    "type": "change",
+    "name": "end: trainer off",
+    "rules": [
+      {
+        "t": "set",
+        "p": "scene",
+        "pt": "msg",
+        "to": "{\"kind\":\"end\",\"by\":\"trainer off\"}",
+        "tot": "json"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 520,
+    "y": 240,
+    "wires": [
+      [
+        "example-scene-scene"
+      ]
+    ]
+  },
+  {
+    "id": "example-scene-scene",
+    "type": "home-scene",
+    "name": "Exercise mode",
+    "safetyHours": 4,
+    "lights": "[{\"target\":\"main\",\"state\":\"OFF\"},{\"target\":\"tv\",\"state\":\"ON\"}]",
+    "area": "",
+    "publishState": false,
+    "discovery": false,
+    "discoveryPrefix": "homeassistant",
+    "idScheme": "node",
+    "x": 720,
+    "y": 160,
+    "wires": [
+      [
+        "example-scene-rooms"
+      ],
+      [
+        "example-scene-motion"
+      ],
+      [
+        "example-scene-mqtt"
+      ]
+    ]
+  },
+  {
+    "id": "example-scene-rooms",
+    "type": "debug",
+    "name": "to your room lighting controller",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "x": 990,
+    "y": 120,
+    "wires": []
+  },
+  {
+    "id": "example-scene-motion",
+    "type": "debug",
+    "name": "to your motion lighting policy",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "x": 980,
+    "y": 160,
+    "wires": []
+  },
+  {
+    "id": "example-scene-mqtt",
+    "type": "debug",
+    "name": "to the MQTT out node",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "x": 960,
+    "y": 200,
+    "wires": []
+  }
+]

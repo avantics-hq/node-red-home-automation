@@ -24,6 +24,7 @@ Most home automations translate an event directly into a command. This package a
 - **Honest source readiness:** model controllable, externally controlled, and unavailable playback sources without claiming success from an input selection alone.
 - **Owned theatre atmosphere:** apply activity lighting only to active, non-manual room lights and confirm TV backlighting independently.
 - **Bounded receiver volume:** coordinate absolute and relative requests through one transport owner while preserving later physical adjustments.
+- **Scenes that hand everything back:** turn on "Exercise mode" or "Bath" from Home Assistant, and when it ends, by request, a safety timer or a condition in your flow, each light goes back to what it was and motion lighting resumes.
 - **Recoverable automation:** adopt one fresh, uniquely matching physical activity after lost state; otherwise report the activity as unknown and leave the devices alone until the next request.
 
 ![Architecture diagram. Motion and presence sensors and illuminance feed occupancy-fusion and motion-lighting-policy; wall switch presses come from the shelly-switch adapter to switch-lighting-policy. Both policies send intents to room-lighting-controller, and circadian-lighting-policy, which follows a house-schedule configuration node without wires, sends it a style. The room sends neutral light commands to each light's adapter (z2m-light) and takes back its readings. A cover-controller, which a cover-group can drive, does the same through the z2m-cover and shelly-cover adapters, and pauses motion lighting while a cover moves. Theatre activities: theatre-state-contract passes activity intents to theatre-activity-controller; your flow routes each theatreCommand by target to the equipment controllers (AVR, display mode, source capability, backlighting), which command the AV devices, or to activity-lighting-controller, which holds room lights; both report target state back. The adapters and the theatre contract use the MQTT broker, which carries device topics to and from the Zigbee2MQTT and Shelly devices. Home Assistant is only the panel: it shows state and sends set messages over MQTT.](https://avantics-hq.github.io/node-red-home-automation/images/architecture.svg)
@@ -33,7 +34,7 @@ commands, and reports done only when fresh observations confirm them.
 
 ## Included nodes
 
-The nodes come in four groups. Each group has an importable example flow
+The nodes come in five groups. Each group has an importable example flow
 (**Import → Examples** in the Node-RED editor).
 
 ### Room lighting
@@ -119,6 +120,38 @@ Example: [`House schedule.json`](https://github.com/avantics-hq/node-red-home-au
 |---|---|
 | `home-house-schedule` | A configuration node: one wake and bed time for every circadian lighting policy that uses it. |
 | `home-house-schedule-mqtt` | Publishes a house schedule for Home Assistant and changes it from Home Assistant. |
+
+### Scenes
+
+A scene, such as "Exercise mode" or "Bath", takes some of a room's lights for
+a while: it holds each on or off with the values it gives them, and pauses
+motion lighting. It ends by request, by its safety timer (4 hours by default;
+0 turns it off), or when your flow sends it an end, such as when a trainer's
+power falls. Each room then gives its lights back what they were (see "Room
+light control"): a light the room was running is the room's again, on or off
+as it was, in the room's style as it is now; one that was off goes off; one a
+person had set gets their values back. A light a person changes during the
+scene stays theirs. Scenes stack: a newer scene holding the same light hands it
+back to the older one when it ends.
+
+Wire the scene's first output to each room lighting controller whose lights it
+sets, its second to each motion lighting policy to pause, and, to start and
+stop it from Home Assistant, its third to MQTT out, with an MQTT in node on
+`home/<area>/scene/<name>/set` into it. Its lights are listed by their ids in
+the room's Targets JSON; a socket is a target marked `"onOffOnly": true`:
+
+```json
+[{"target": "main", "state": "OFF"}, {"target": "tv", "state": "ON"},
+ {"target": "lamp", "state": "ON", "brightnessPct": 30, "colorTempKelvin": 2700}]
+```
+
+Start it with `msg.scene = {kind: "start"}` and end it with
+`msg.scene = {kind: "end", by: "trainer off"}` (`by` is optional and shows
+on its status). Example: [`Scene.json`](https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/Scene.json).
+
+| Node | Purpose |
+|---|---|
+| `home-scene` | One scene: holds room lights on or off and pauses motion while on, and hands everything back when it ends; a Home Assistant switch starts and stops it. |
 
 ### Home theatre equipment
 

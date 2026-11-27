@@ -1,0 +1,141 @@
+<script type="text/javascript">
+  (function () {
+    // Whether the node publishes, from the open dialog or its saved settings.
+    function publishes(node) {
+      function on(value) { return value === true || value === "true"; }
+      var state = $("#node-input-publishState");
+      var discovery = $("#node-input-discovery");
+      return state.length ? state.prop("checked") || discovery.prop("checked") : on(node.publishState) || on(node.discovery);
+    }
+    // The lights as lib/scene.ts reads them: a light's id in its room, ON or
+    // OFF, and for an ON light optional brightnessPct (0-100) and
+    // colorTempKelvin (above 0); each light once.
+    function validLights(v) {
+      try {
+        var lights = JSON.parse(v);
+        if (!Array.isArray(lights)) return false;
+        var seen = {};
+        return lights.every(function (light) {
+          if (!light || typeof light !== "object" || Array.isArray(light)) return false;
+          var target = typeof light.target === "string" ? light.target.trim() : "";
+          var state = String(light.state || "").toUpperCase();
+          if (!target || seen[target] || (state !== "ON" && state !== "OFF")) return false;
+          seen[target] = true;
+          return Object.keys(light).every(function (key) {
+            var value = light[key];
+            if (key === "target" || key === "state") return true;
+            if (state === "OFF" || typeof value !== "number" || !isFinite(value)) return false;
+            if (key === "brightnessPct") return value >= 0 && value <= 100;
+            if (key === "colorTempKelvin") return value > 0;
+            return false;
+          });
+        });
+      } catch (e) { return false; }
+    }
+    RED.nodes.registerType("home-scene", {
+      category: "home automation",
+      color: "#e2d96e",
+      defaults: {
+        // No default: it names the scene to its rooms, motion policies and
+        // Home Assistant.
+        name: {value: "", required: true, validate: function (v) { return /[a-z0-9]/i.test(String(v || "")); }},
+        lights: {value: "[]", required: true, validate: validLights},
+        safetyHours: {value: 4, required: true, validate: function (v) { var n = Number(v); return String(v).trim() !== "" && isFinite(n) && n >= 0; }},
+        area: {value: "", validate: function (v) { return !publishes(this) || /[a-z0-9]/i.test(String(v || "")); }},
+        // Off until switched on.
+        publishState: {value: false},
+        discovery: {value: false},
+        discoveryPrefix: {value: "homeassistant", required: true, validate: function (v) { var prefix = String(v || "").trim().replace(/^\/+|\/+$/g, ""); return Boolean(prefix) && !/[+#]/.test(prefix); }},
+        idScheme: {value: "node"}
+      },
+      oneditprepare: function () {
+        function on(value) { return value === true || value === "true"; }
+        $("#node-input-publishState").prop("checked", on(this.publishState));
+        $("#node-input-discovery").prop("checked", on(this.discovery));
+        // Discovery describes the published state, so it needs it.
+        function publishing() {
+          var state = $("#node-input-publishState").prop("checked");
+          if (!state) $("#node-input-discovery").prop("checked", false);
+          $("#node-input-discovery").prop("disabled", !state);
+        }
+        $("#node-input-publishState, #node-input-discovery").on("change", publishing);
+        publishing();
+      },
+      inputs: 1,
+      outputs: 3,
+      outputLabels: ["to room lighting controllers", "to motion lighting policies", "MQTT publications"],
+      icon: "font-awesome/fa-magic",
+      label: function () { return this.name || "scene"; },
+      paletteLabel: "scene"
+    });
+  })();
+</script>
+
+<script type="text/html" data-template-name="home-scene">
+  <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name" placeholder="Bath, for example"></div>
+  <div class="form-row"><label for="node-input-lights">Lights</label><input type="text" id="node-input-lights" placeholder='[{"target":"main","state":"OFF"}]'></div>
+  <div class="form-row"><label for="node-input-safetyHours">Safety timer (hours)</label><input type="number" id="node-input-safetyHours" min="0" step="0.25"> <span>(0: off)</span></div>
+  <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area"></div>
+  <div class="form-row"><label for="node-input-publishState">Publish state over MQTT</label><input type="checkbox" id="node-input-publishState" style="display:inline-block; width:auto;"></div>
+  <div class="form-row"><label for="node-input-discovery">Home Assistant discovery</label><input type="checkbox" id="node-input-discovery" style="display:inline-block; width:auto;"> <span>(needs Publish state)</span></div>
+  <div class="form-row"><label for="node-input-discoveryPrefix">Discovery prefix</label><input type="text" id="node-input-discoveryPrefix"></div>
+</script>
+
+<script type="text/html" data-help-name="home-scene">
+  <p>One scene, such as <i>Bath</i> or <i>Exercise mode</i>. While it is on, it holds some of a room's lights on or
+    off with the values it gives them, and pauses motion lighting. When it ends, it lets them go, and each room gives
+    its lights back what they were before the scene (or to a scene that is still on beneath it). It reaches lights
+    only through room lighting controllers, and never through Home Assistant.</p>
+  <h3>Wiring</h3>
+  <ol>
+    <li>Output 1 → each <b>room lighting controller</b> whose lights it sets.</li>
+    <li>Output 2 → each <b>motion lighting policy</b> it should pause while on.</li>
+    <li>Output 3 → an <b>MQTT out</b> node, when it publishes its switch for Home Assistant, with an <b>MQTT in</b>
+      node on <code>home/&lt;area&gt;/scene/&lt;name&gt;/set</code> into this node.</li>
+  </ol>
+  <h3>Inputs</h3>
+  <dl class="message-properties">
+    <dt>scene <span class="property-type">object</span></dt>
+    <dd><code>{kind: "start"}</code> turns it on (on again: a fresh safety timer, its lights left as they are);
+      <code>{kind: "end", by}</code> ends it, with <code>by</code> (optional) shown as what ended it. An end
+      trigger, such as a trainer's power falling, is a flow that sends this end when its condition is met.
+      <code>{kind: "startup"}</code> announces its switch again.</dd>
+    <dt>payload <span class="property-type">string</span></dt>
+    <dd><code>ON</code> or <code>OFF</code> on its set topic, from Home Assistant: a start, or an end by
+      <code>home-assistant</code>.</dd>
+  </dl>
+  <h3>Outputs</h3>
+  <ol class="node-ports">
+    <li>Room lighting controllers: an owner intent per light as it starts,
+      <code>{lighting: {kind: "intent", targets: [id], state, values?, owner: "scene:&lt;name&gt;", source: "scene"}}</code>,
+      and a release as it ends, <code>{lighting: {kind: "release", owner, targets, source: "scene"}}</code>.</li>
+    <li>Motion lighting policies: <code>{source: "pause", payload: true, owner}</code> as it starts and every minute
+      while on, and <code>payload: false</code> as it ends.</li>
+    <li>MQTT publications: its switch's state, availability and discovery.</li>
+  </ol>
+  <h3>Settings</h3>
+  <dl class="message-properties">
+    <dt>Name</dt><dd>Required. It names the scene to its rooms and motion policies (owner
+      <code>scene:&lt;name&gt;</code>), and in its topics and Home Assistant. Give each scene its own.</dd>
+    <dt>Lights</dt><dd>A JSON array, one entry per light: <code>target</code> (the light's id in its room
+      controller's Targets JSON), <code>state</code> <code>ON</code> or <code>OFF</code>, and for an ON light
+      <code>brightnessPct</code> (0-100) and <code>colorTempKelvin</code> (optional). A socket is a room target with
+      on/off only: give it just its state. For example
+      <code>[{"target": "main", "state": "OFF"}, {"target": "tv", "state": "ON"}]</code>.</dd>
+    <dt>Safety timer</dt><dd>Hours until it ends itself, so a forgotten scene doesn't hold the room: 4 by
+      default; 0 turns it off.</dd>
+    <dt>Area, Publish state, Home Assistant discovery</dt><dd>Off unless switched on: a switch entity for the scene
+      that shows whether it is on and turns it on and off, on <code>home/&lt;area&gt;/scene/&lt;name&gt;/…</code>.</dd>
+  </dl>
+  <h3>Rules</h3>
+  <ul>
+    <li>Scenes stack: a newer scene holding a light another scene holds takes it, and hands it back to the older
+      one when it ends. Ending the older one first leaves the light with the newer.</li>
+    <li>A person changing a light the scene holds makes it theirs: the scene's end leaves it alone.</li>
+    <li>On while the flows restart (with a context store), it stays on, with its timer; if its time ran out
+      meanwhile, it ends as they start. Deleted while on, it lets its lights and motion go.</li>
+  </ul>
+  <h3>Status</h3>
+  <p><b>on · 3h 59m left</b> (green) while on; <b>off · ended by timer</b>, <b>request</b>,
+    <b>home-assistant</b> or what the end gave; <b>off</b> before it has run.</p>
+</script>

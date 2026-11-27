@@ -352,6 +352,61 @@ window.DOCS_SEARCH = [
   "text": "Read the outcome What you see What it means house schedule MQTT status wake 07:00 · bed 23:00 The times the schedule is using now. It updates at every change. Policy status day · 80% 4100K or sleep The policy is styling its rooms by the times in use. Policy status … schedule missing: own times The policy names a schedule that is not running, as when it was deleted from the flows file. It keeps its own times until you choose a schedule or none. Retained home/<name>/schedule/wake-time/state and bed-time/state The MQTT node published the times; watch them with an MQTT client or a Debug node on its output. A change restyles only the lights a room has been told about since it started. A light that nothing has named since a start with nothing saved can keep its start-time style; switch circadian lighting on, or let motion or a wall switch name it. Sources: README Room lighting, Room light control, Upgrading from 2.x and Recommended setup: a file context store; house schedule, house schedule MQTT and circadian lighting policy editor help and source; House schedule example flow."
  },
  {
+  "title": "Scenes",
+  "description": "Turn on “Exercise mode” or “Bath”: the room’s lights and sockets change and motion lighting pauses. When the scene ends, by request, a safety timer or something you choose, everything goes back.",
+  "url": "guide-scenes.html",
+  "text": "Turn on “Exercise mode” or “Bath”: the room’s lights and sockets change and motion lighting pauses. When the scene ends, by request, a safety timer or something you choose, everything goes back."
+ },
+ {
+  "title": "Scenes",
+  "section": "Before you wire it",
+  "description": "A scene ( home-scene ) takes some of a room’s lights for a while. It holds each on or off with the values you ",
+  "url": "guide-scenes.html#before",
+  "text": "A scene ( home-scene ) takes some of a room’s lights for a while. It holds each on or off with the values you give it, and pauses motion lighting, so motion doesn’t switch the bath lights off or the exercise light back on. When it ends, each room gives its lights back what they were before the scene. You need a room lighting controller for the room, with each light and socket in its Targets JSON. A socket is a target marked \"onOffOnly\": true , through its own adapter. To pause motion lighting, a motion lighting policy wired into that room. To start and stop it from Home Assistant, an MQTT broker node, as for the other publishing nodes (see Home Assistant )."
+ },
+ {
+  "title": "Scenes",
+  "section": "Wire a scene",
+  "description": "Import Scene from the examples (Import → Examples → @avantics/node-red-home-automation), or add a scene node f",
+  "url": "guide-scenes.html#wiring",
+  "text": "Import Scene from the examples (Import → Examples → @avantics/node-red-home-automation), or add a scene node from the palette. Scene connections From To Carries Scene output 1 Each room lighting controller whose lights it sets Owner intents as it starts, releases as it ends. Scene output 2 Each motion lighting policy to pause An owner pause, renewed every minute, lifted as it ends. Scene output 3 MQTT out Its Home Assistant switch, when it publishes. MQTT in on home/<area>/scene/<name>/set Scene input Home Assistant’s ON and OFF. Name it. The name is how its rooms, its motion policies and Home Assistant know it, so give each scene its own: Exercise mode , Bath . List its lights. One entry per light or socket, by its id in the room’s Targets JSON: Exercise mode · main light off, TV socket on [{\"target\": \"main\", \"state\": \"OFF\"}, {\"target\": \"tv\", \"state\": \"ON\"}] Bath · two lights dimmed warm [{\"target\": \"ceiling\", \"state\": \"ON\", \"brightnessPct\": 30, \"colorTempKelvin\": 2700}, {\"target\": \"mirror\", \"state\": \"ON\", \"brightnessPct\": 50}] Brightness is 0-100 % and colour temperature in kelvin; a light given neither just switches on. A scene with no lights only pauses motion. Set its safety timer. It ends itself after 4 hours by default, so a scene left on doesn’t hold the room overnight. 0 turns the timer off. Start and end it. Send msg.scene = {kind: \"start\"} and msg.scene = {kind: \"end\"} from your flow, or use its Home Assistant switch (below)."
+ },
+ {
+  "title": "Scenes",
+  "section": "End it when something happens",
+  "description": "A scene can end on a condition, such as the trainer’s power falling, the bath lights being switched off or a d",
+  "url": "guide-scenes.html#end-trigger",
+  "text": "A scene can end on a condition, such as the trainer’s power falling, the bath lights being switched off or a door opening. The condition lives in your flow: when it is met, send the scene an end, with what ended it. Change node · after a switch node passing power below 20 W msg.scene = {kind: \"end\", by: \"trainer off\"}; The scene shows off · ended by trainer off . An end while it is off does nothing, so a condition that stays true can keep sending it. The example flow builds this from a switch node and a change node."
+ },
+ {
+  "title": "Scenes",
+  "section": "What happens when it ends",
+  "description": "Each room gives each light back what it was when the scene took it: A light the room was running is the room’s",
+  "url": "guide-scenes.html#hand-back",
+  "text": "Each room gives each light back what it was when the scene took it: A light the room was running is the room’s again, on or off as it was, in the room’s style as it is now: a bath from 20:00 to 21:30 gets the 21:30 style, not 20:00’s. A light that was off goes off. A light a person had set gets their brightness and colour back, and stays theirs. A light a person changed during the scene is theirs: the scene’s end leaves it alone. Motion lighting resumes when its pause lifts. With the room vacant, motion switches lights off as it normally would."
+ },
+ {
+  "title": "Scenes",
+  "section": "Two scenes at once",
+  "description": "Scenes stack. If Bath starts while Exercise mode holds the same light, Bath takes it; when Bath ends, the ligh",
+  "url": "guide-scenes.html#stacking",
+  "text": "Scenes stack. If Bath starts while Exercise mode holds the same light, Bath takes it; when Bath ends, the light goes back to what Exercise mode asked for, not to the room. If Exercise mode ends first, the light stays with Bath, and goes back to the room when Bath ends. Lights only one scene holds follow that scene. Each scene pauses motion under its own name, so motion resumes only when both have ended."
+ },
+ {
+  "title": "Scenes",
+  "section": "Start and stop it from Home Assistant",
+  "description": "Switch publishing on. Give the scene an area, and switch on Publish state over MQTT and Home Assistant discove",
+  "url": "guide-scenes.html#home-assistant",
+  "text": "Switch publishing on. Give the scene an area, and switch on Publish state over MQTT and Home Assistant discovery . Wire output 3 to an MQTT out node. Wire its set topic back in. An MQTT in node on home/<area>/scene/<name>/set into the scene, where <name> is its name in lower case with other characters as _ ( exercise_mode ). Home Assistant then shows a switch for the scene: on while it is on, off once it ends by any route. Switching it off ends the scene “by home-assistant”."
+ },
+ {
+  "title": "Scenes",
+  "section": "Restarts and deploys",
+  "description": "A scene keeps its state in its node context, which lasts across restarts and full deploys only with a context ",
+  "url": "guide-scenes.html#restarts",
+  "text": "A scene keeps its state in its node context, which lasts across restarts and full deploys only with a context store (see Install ). With one, a scene that was on is still on, with its timer; if the timer ran out meanwhile, the scene ends as the flows start. Without one, the scene and its rooms both start with nothing saved: the scene is off, and the rooms no longer know it held their lights, so the lights stay as they are until something changes them. Deleting a scene while it is on lets its lights and motion go, when you deploy with “Modified nodes” or “Modified flows”."
+ },
+ {
   "title": "Wire a cover",
   "description": "Connect a blind, shutter or curtain through the shelly cover adapter node. Then add presets, manual control and a group without losing sight of what the motor actually did.",
   "url": "guide-covers.html",
@@ -983,6 +1038,61 @@ window.DOCS_SEARCH = [
   "description": "The node status shows the times in use, wake HH:MM · bed HH:MM (green), and updates at every change.",
   "url": "node-house-schedule-mqtt.html#status",
   "text": "The node status shows the times in use, wake HH:MM · bed HH:MM (green), and updates at every change."
+ },
+ {
+  "title": "Scene",
+  "description": "Message shapes, output ports and settings for a scene: lights held on or off and motion paused while it is on, all handed back when it ends.",
+  "url": "node-scene.html",
+  "text": "Message shapes, output ports and settings for a scene: lights held on or off and motion paused while it is on, all handed back when it ends."
+ },
+ {
+  "title": "Scene",
+  "section": "Take the room for a while, then hand it back",
+  "description": "The scene node (type home-scene ; canvas label: its name, or “scene”) is one scene, such as Bath or Exercise m",
+  "url": "node-scene.html#summary",
+  "text": "The scene node (type home-scene ; canvas label: its name, or “scene”) is one scene, such as Bath or Exercise mode . While it is on, it holds some of a room’s lights on or off with the values it gives them, and pauses motion lighting. When it ends, by request, by its safety timer or by a message your flow sends when its own condition is met, it lets them go, and each room gives its lights back what they were. It reaches lights only through room lighting controllers , so it works with any light adapter and never commands a device through Home Assistant. Looking for a walkthrough? Follow Scenes ."
+ },
+ {
+  "title": "Scene",
+  "section": "Inputs",
+  "description": "Input messages Message Shape Effect Start msg.scene = {kind: \"start\"} Turns it on. On again: a fresh safety ti",
+  "url": "node-scene.html#inputs",
+  "text": "Input messages Message Shape Effect Start msg.scene = {kind: \"start\"} Turns it on. On again: a fresh safety timer and a renewed pause; its lights are left as they are, so a person’s change during the scene stands. End msg.scene = {kind: \"end\", by?} Ends it. by , optional, is shown as what ended it, such as \"trainer off\" ; without it, request . Ignored, with a trace, when it is off. End trigger The end above, sent by your flow The condition is your flow’s: a switch node on a power reading, a light switched off, a door opened. See End it when something happens . Home Assistant ON or OFF on home/<area>/scene/<name>/set A start, or an end by home-assistant . Read only while it publishes; retained messages are ignored. Startup msg.scene = {kind: \"startup\"} Announces its switch again, and renews its pause while on. Anything else is ignored, with a trace."
+ },
+ {
+  "title": "Scene",
+  "section": "Outputs",
+  "description": "Three output ports Port Message Connect to 1 · To rooms As it starts, one owner intent per light: {lighting: {",
+  "url": "node-scene.html#outputs",
+  "text": "Three output ports Port Message Connect to 1 · To rooms As it starts, one owner intent per light: {lighting: {kind: \"intent\", targets: [id], state, values?, owner: \"scene:<name>\", source: \"scene\"}} . As it ends: {lighting: {kind: \"release\", owner, targets, source: \"scene\"}} . Each room lighting controller whose lights it sets. 2 · To motion {source: \"pause\", payload: true, owner} as it starts and every minute while on; payload: false as it ends. Each motion lighting policy to pause while it is on. 3 · MQTT publications Its switch’s state ( ON or OFF ), availability and discovery, retained. An MQTT out node, when it publishes."
+ },
+ {
+  "title": "Scene",
+  "section": "Settings",
+  "description": "Editor settings and exact defaults Setting / property Default Meaning Name / name None: required Names the sce",
+  "url": "node-scene.html#settings",
+  "text": "Editor settings and exact defaults Setting / property Default Meaning Name / name None: required Names the scene to its rooms and motion policies (owner scene:<name> ), in its topics and in Home Assistant. Give each scene its own. Lights / lights [] A JSON array, one entry per light: target (the light’s id in its room controller’s Targets JSON), state ON or OFF , and for an ON light brightnessPct (0-100) and colorTempKelvin (above 0), both optional. A socket is a room target marked on/off only: give it just its state. Empty: the scene only pauses motion. Safety timer / safetyHours 4 Hours until it ends itself, so a forgotten scene doesn’t hold the room. 0 turns it off. Area / area Empty Required only while it publishes: it names its topics, home/<area>/scene/<name>/… . Publish state over MQTT / publishState Off Its state, availability and set topic. Home Assistant discovery / discovery Off A switch entity for the scene. Needs Publish state. Discovery prefix / discoveryPrefix homeassistant Home Assistant’s discovery prefix. Scenes use node-based Home Assistant identifiers ( idScheme = \"node\" ), so renaming its area keeps its entity. That is not an editor setting. Lights · a main light off, a TV socket on, a lamp dimmed warm [{\"target\": \"main\", \"state\": \"OFF\"}, {\"target\": \"tv\", \"state\": \"ON\"}, {\"target\": \"lamp\", \"state\": \"ON\", \"brightnessPct\": 30, \"colorTempKelvin\": 2700}]"
+ },
+ {
+  "title": "Scene",
+  "section": "What it holds, and what it hands back",
+  "description": "Through the room: each light is held under the scene’s owner, so motion, wall switches without a person’s mark",
+  "url": "node-scene.html#rules",
+  "text": "Through the room: each light is held under the scene’s owner, so motion, wall switches without a person’s mark, and the circadian style leave it alone while the scene is on, on or off. See owners stack . Handed back: when it ends, each room gives a light back what it was before the scene: on or off as it was, in the room’s style as it is now, or a person’s own values if they had set it. Scenes stack: a newer scene holding a light another holds takes it, and hands it back to the older one when it ends. Ending the older one first leaves the light with the newer. A person’s change stands: a person changing a light the scene holds makes it theirs; the scene’s end leaves it alone. Motion: paused under the scene’s owner, renewed every minute, so it lapses within the motion policy’s maximum pause (10 minutes by default) if the scene node goes away. Ending the scene lifts its pause; another owner’s pause stands. Restarts: its state is kept in its node context. With a context store, a scene on when the flows stopped is still on when they start, with its timer; if its time ran out meanwhile, it ends as they start. Its lights aren’t asked again: the rooms still hold them. Deleted while on: it lets its lights and motion go, when you deploy with “Modified nodes” or “Modified flows”, while the rooms and motion policies are still running."
+ },
+ {
+  "title": "Scene",
+  "section": "Home Assistant",
+  "description": "With an area, Publish state over MQTT and Home Assistant discovery on, Home Assistant gets a switch named afte",
+  "url": "node-scene.html#publishing",
+  "text": "With an area, Publish state over MQTT and Home Assistant discovery on, Home Assistant gets a switch named after the scene. It shows whether the scene is on, and switching it sends ON or OFF to home/<area>/scene/<name>/set : wire an MQTT in node on that topic into the scene. Its availability is home/<area>/scene/<name>/availability ; set the MQTT broker node’s Birth, Close and Will messages as for the other publishing nodes (see Home Assistant ). <name> in topics is the scene’s name in lower case with other characters as _ : exercise_mode ."
+ },
+ {
+  "title": "Scene",
+  "section": "Status",
+  "description": "on · 3h 59m left (green dot) while on, or on with the timer off. off · ended by timer (grey dot), or by reques",
+  "url": "node-scene.html#status",
+  "text": "on · 3h 59m left (green dot) while on, or on with the timer off. off · ended by timer (grey dot), or by request , home-assistant , deleted or what the end gave. off (grey ring) before it has run."
  },
  {
   "title": "Cover controller",
