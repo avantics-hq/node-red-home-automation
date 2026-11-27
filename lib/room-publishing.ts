@@ -93,10 +93,28 @@ export function roomPublishesDiscovery(config: PublishSettings): boolean {
   return roomPublishesState(config) && config.discovery !== false;
 }
 
-// What the room publishes as it starts and as it stops, when it publishes at
-// all, so Home Assistant shows its entities as available only while it runs.
-export function roomStartingOutputs(config: PublishSettings): RoomOutput[] {
-  return roomPublishesState(config) ? [roomAvailabilityMessage(config.area, true)] : [];
+// The room's Home Assistant discovery at a startup message: its entries, or
+// with discovery switched off, empty retained entries that remove them; and
+// following the house, its own time entities cleared.
+function roomDiscoveryOutputs(config: PublishingRoomConfig): RoomOutput[] {
+  if (areaId(config.area) === "") return [];
+  const outputs: RoomOutput[] = roomDiscovery(discoveryConfig(config), targetIds(config))
+    .map((entry) => (roomPublishesDiscovery(config) ? entry : {topic: entry.topic, payload: "", retain: true}));
+  if (!ownTimes(config)) {
+    outputs.push(...roomTimeDiscoveryTopics(discoveryConfig(config)).map((topic) => ({topic, payload: "", retain: true})));
+  }
+  return outputs;
+}
+
+// What the room publishes as the flows start and as it stops: with discovery
+// on, its entries, as motion and occupancy announce theirs, so Home
+// Assistant has them without a startup message; and when it publishes at
+// all, its availability, so Home Assistant shows its entities as available
+// only while it runs. Removing entries when discovery is off stays with the
+// startup message, as before.
+export function roomStartingOutputs(config: PublishingRoomConfig): RoomOutput[] {
+  const discovery = roomPublishesDiscovery(config) ? roomDiscovery(discoveryConfig(config), targetIds(config)) : [];
+  return [...discovery, ...(roomPublishesState(config) ? [roomAvailabilityMessage(config.area, true)] : [])];
 }
 
 export function roomStoppingOutputs(config: PublishSettings): RoomOutput[] {
@@ -196,27 +214,18 @@ export function publishRoom(
   const publishes = roomPublishesState(config);
   const before: RoomOutput[] = [];
   if (kind === "startup") {
-    if (areaId(config.area) !== "") {
-      // Discovery switched off: empty retained entries remove the entities
-      // from Home Assistant.
-      for (const entry of roomDiscovery(discoveryConfig(config), targetIds(config))) {
-        before.push(roomPublishesDiscovery(config) ? entry : {topic: entry.topic, payload: "", retain: true});
-      }
-    }
+    before.push(...roomDiscoveryOutputs(config));
     if (publishes) {
       before.push(roomAvailabilityMessage(config.area, true));
       before.push(circadianStateMessage(config.area, result.state.circadianEnabled));
       before.push(sleepStateMessage(config.area, result.state.sleeping));
       if (ownTimes(config)) before.push(...scheduleStateMessages(config.area, result.state.schedule));
     }
-    // Following the house, the room's own time entities and their state are
-    // cleared, every start, whatever was published before.
+    // Following the house, the room's own time state is cleared, every
+    // start, whatever was published before (their entities went with the
+    // discovery above).
     if (!ownTimes(config) && areaId(config.area) !== "") {
-      const ownTimeTopics = [
-        ...roomTimeDiscoveryTopics(discoveryConfig(config)),
-        scheduleStateTopic(config.area, "wake-time"),
-        scheduleStateTopic(config.area, "bed-time")
-      ];
+      const ownTimeTopics = [scheduleStateTopic(config.area, "wake-time"), scheduleStateTopic(config.area, "bed-time")];
       before.push(...ownTimeTopics.map((topic) => ({topic, payload: "", retain: true})));
     }
   } else if (kind === "circadian" && publishes) {

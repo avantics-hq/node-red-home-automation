@@ -5,7 +5,7 @@ import test from "node:test";
 import {scheduledLighting} from "../lib/circadian";
 import {resolveSchedule} from "../lib/circadian-schedule";
 import {transitionRoom, type RoomConfig} from "../lib/room-controller";
-import {publishRoom, roomInbound} from "../lib/room-publishing";
+import {publishRoom, roomInbound, roomStartingOutputs} from "../lib/room-publishing";
 import {houseRetainedTopics} from "../lib/house-schedule-publishing";
 
 const config: RoomConfig = {
@@ -70,6 +70,26 @@ test("a room following the house has no time entities of its own, ignores its ow
   assert.ok(!fromHouse.outputs.some(({topic}) => /wake|bed/.test(String(topic))), "and no time state is published for it");
   // A room on its own times is as before.
   assert.ok(publishRoom(undefined, {lighting: {kind: "startup"}}, config, now).outputs.some(({topic}) => topic === "home/kitchen/wake-time/state"));
+});
+
+test("as the flows start, the room announces its discovery entries, as the startup message does, then its availability", () => {
+  const topics = (settings: typeof config & {timesFrom?: "house"; discovery?: boolean; publishState?: boolean}) =>
+    roomStartingOutputs(settings).map(({topic, payload}) => (payload === "" ? "clear " : "") + topic);
+  const entries = (settings: typeof config & {timesFrom?: "house"}) => publishRoom(undefined, {lighting: {kind: "startup"}}, settings, now).outputs
+    .filter(({topic}) => String(topic).endsWith("/config")).map(({topic}) => String(topic));
+  assert.deepEqual(topics(config), [...entries(config), "home/kitchen/lighting/availability"]);
+  assert.equal(topics(config).length, 6);
+  // Following the house: no time entities, as at the startup message, which also clears them.
+  const house = {...config, timesFrom: "house" as const};
+  assert.deepEqual(topics(house), [
+    "homeassistant/switch/kitchen_circadian_lighting/config",
+    "homeassistant/switch/kitchen_sleep/config",
+    "homeassistant/sensor/kitchen_cooking_control/config",
+    "home/kitchen/lighting/availability"
+  ]);
+  // Discovery off: nothing announced; the startup message still removes the entries.
+  assert.deepEqual(topics({...config, discovery: false}), ["home/kitchen/lighting/availability"]);
+  assert.deepEqual(topics({...config, publishState: false}), []);
 });
 
 test("a house and a room of the same name don't share topics: the room's clear leaves the house's alone", () => {
