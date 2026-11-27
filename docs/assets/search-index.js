@@ -1683,7 +1683,7 @@ window.DOCS_SEARCH = [
   "section": "Readiness and availability",
   "description": "These are two different questions on two topics. <base>/readiness says whether the theatre is ready: unknown ,",
   "url": "contract-theatre-mqtt.html#readiness-availability",
-  "text": "These are two different questions on two topics. <base>/readiness says whether the theatre is ready: unknown , available , degraded or unavailable . Ready requires all mandatory targets. Before 6.0 this value was on <base>/availability . <base>/availability says whether the contract node is running: online once the flows have started, offline as it stops. Home Assistant shows the theatre entities as available only while it is online . On a full deploy, a restart or a shutdown, Node-RED stops the MQTT out node at the same moment, so set the MQTT broker node's Birth message to online and its Close message and Will message to offline , all retained, on <base>/availability ."
+  "text": "These are two different questions on two topics. <base>/readiness says whether the theatre is ready: unknown , available , degraded or unavailable . Ready requires all mandatory targets. Before 4.0 this value was on <base>/availability . <base>/availability says whether the contract node is running: online once the flows have started, offline as it stops. Home Assistant shows the theatre entities as available only while it is online . On a full deploy, a restart or a shutdown, Node-RED stops the MQTT out node at the same moment, so set the MQTT broker node's Birth message to online and its Close message and Will message to offline , all retained, on <base>/availability ."
  },
  {
   "title": "Theatre MQTT contract",
