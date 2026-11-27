@@ -30,9 +30,14 @@
         return {id: String(target.id), stateTopic: target.stateTopic, commandTopic: target.commandTopic, z2m: z2m};
       });
     }
-    // The targets as 6.0 has them: ids, and onOffOnly.
+    // The targets as 6.0 has them: ids, and onOffOnly, for every light whose
+    // topics were Zigbee2MQTT's. A light whose topics weren't keeps them: the
+    // room stays refused, naming it, until its adapter is set up by hand and
+    // its topics removed, so it can't be lost silently.
     function neutralTargets(targets) {
+      var flagged = lightPlan(targets).filter(function (entry) { return !entry.z2m; }).map(function (entry) { return entry.id; });
       return targets.map(function (target) {
+        if (target && flagged.indexOf(String(target.id)) >= 0) return target;
         return target && target.onOffOnly === true ? {id: target.id, onOffOnly: true} : {id: target && target.id};
       });
     }
@@ -199,8 +204,10 @@
     <ul id="room-moved-lights-list"></ul>
     <button type="button" class="red-ui-button" id="room-create-lights">Create Zigbee2MQTT light nodes</button>
     It adds and wires one per light (and an MQTT in node on its topics when the room's MQTT out shows the broker).
-    Delete the old MQTT in nodes on the lights' state and command topics. Saving this dialog keeps only each light's id
-    in Targets JSON.
+    Delete the old MQTT in nodes on the lights' state and command topics. Saving this dialog keeps only each
+    Zigbee2MQTT light's id in Targets JSON. A light whose topics aren't Zigbee2MQTT's keeps them, and the room stays
+    an invalid configuration naming it: set up its adapter by hand on the neutral light contract, then remove its
+    topics from Targets JSON.
   </div>
   <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
   <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area" placeholder="needed when publishing"></div>

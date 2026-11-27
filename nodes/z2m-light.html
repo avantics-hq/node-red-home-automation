@@ -59,8 +59,8 @@
   <h3>Groups</h3>
   <p>Tick <b>Zigbee2MQTT group</b> for a group. Commands are the same. Zigbee2MQTT works out a group's state itself,
     from what it sent and its members' reports, so a group's report follows a command at once. A group has no
-    availability and can't be asked to report: at the room's startup, the node passes on the group's last state if it
-    has one.</p>
+    availability and can't be asked to report, so at the room's startup the node sends nothing: the room waits for
+    Zigbee2MQTT's next state for the group. (Passing on an old state could settle a command still on its way.)</p>
   <h3>Settings</h3>
   <dl class="message-properties">
     <dt>Target</dt><dd>The light's id in the room controller's Targets JSON.</dd>

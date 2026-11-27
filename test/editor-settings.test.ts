@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {resolve} from "node:path";
 import test from "node:test";
-import {movedCircadianSettings} from "../lib/room-controller";
+import {movedCircadianSettings, targetsWithTopics} from "../lib/room-controller";
 import {normaliseAvrConfig} from "../lib/avr-controller";
 
 interface Definition {
@@ -394,8 +394,12 @@ test("a 5.x room's lights: each with Zigbee2MQTT topics gets a zigbee2mqtt light
     {id: "already"}
   ]);
   assert.deepEqual(plan.map(({id, z2m}) => [id, z2m]), [["ceiling", {baseTopic: "z2m", friendlyName: "hall ceiling"}], ["lamp", null]]);
-  assert.deepEqual((definition.neutralTargets as (targets: unknown[]) => unknown[])([{id: "ceiling", stateTopic: "x"}, {id: "lamp", stateTopic: "y", onOffOnly: true}]),
+  const neutral = definition.neutralTargets as (targets: unknown[]) => unknown[];
+  assert.deepEqual(neutral([{id: "ceiling", stateTopic: "z2m/c", commandTopic: "z2m/c/set"}, {id: "lamp", stateTopic: "z2m/l", commandTopic: "z2m/l/set", onOffOnly: true}]),
     [{id: "ceiling"}, {id: "lamp", onOffOnly: true}]);
+  // A light whose topics weren't Zigbee2MQTT's keeps them: the room stays refused, naming it, rather than losing it.
+  assert.deepEqual(neutral([{id: "ceiling", stateTopic: "z2m/c", commandTopic: "z2m/c/set"}, {id: "lamp", stateTopic: "home/lamp/state", commandTopic: "home/lamp/command"}]),
+    [{id: "ceiling"}, {id: "lamp", stateTopic: "home/lamp/state", commandTopic: "home/lamp/command"}]);
 });
 
 test("saving a 5.x room's dialog keeps only its lights' ids in Targets JSON", () => {
@@ -431,4 +435,12 @@ test("\"Create Zigbee2MQTT light nodes\" adds a light per Zigbee2MQTT target, wi
   assert.equal(history.length, 1);
   assert.deepEqual((history[0] as {nodes: string[]}).nodes.sort(), [light.id, mqttIn.id].sort());
   assert.equal((history[0] as {links: unknown[]}).links.length, 4);
+});
+
+test("a 5.x room's topic targets survive an editor deploy (Targets JSON is one setting), so the runtime still refuses it until migrated", () => {
+  const definition = editorDefinition("room-controller.html", dialog());
+  const targets = JSON.stringify([{id: "ceiling", stateTopic: "z2m/c", commandTopic: "z2m/c/set"}]);
+  const loaded = asLoaded(definition, {type: "home-room-lighting-controller", area: "", targets, publishState: false, discovery: false});
+  assert.equal(loaded.targets, targets);
+  assert.deepEqual(targetsWithTopics(loaded.targets), ["ceiling"]);
 });

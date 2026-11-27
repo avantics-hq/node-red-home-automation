@@ -18,12 +18,12 @@
 </section>
 <section id="wiring"><h2>Wire the switch to the room</h2>
 <p>One switch policy feeds one room controller. Convert your switch’s reports into one of the messages above on the way in.</p>
-<figure class="diagram"><div class="wiring-flow"><div class="flow-node">MQTT in<small>Switch reports</small></div><span class="arrow" aria-hidden="true">→</span><div class="flow-node">switch policy<small>Presses → lighting intents</small></div><span class="arrow" aria-hidden="true">→</span><div class="flow-node owner controller">Room lighting controller<small>Owns the light commands</small></div><div class="flow-node broker-out" style="grid-column:1 / -1">MQTT out<small>Each light’s command topic, unchanged</small></div></div></figure>
+<figure class="diagram"><div class="wiring-flow"><div class="flow-node">MQTT in<small>Switch reports</small></div><span class="arrow" aria-hidden="true">→</span><div class="flow-node">switch policy<small>Presses → lighting intents</small></div><span class="arrow" aria-hidden="true">→</span><div class="flow-node owner controller">Room lighting controller<small>Owns the light commands</small></div><div class="flow-node broker-out" style="grid-column:1 / -1">Each light’s adapter → MQTT out<small>Each light’s own messages, unchanged</small></div></div></figure>
 <div class="table-wrap" role="region" aria-label="Connections; scroll horizontally on a phone" tabindex="0"><table><caption>Connections</caption><thead><tr><th scope="col">From</th><th scope="col">Connect to</th><th scope="col">Why</th></tr></thead><tbody>
 <tr><td>Switch reports, converted</td><td>switch policy input</td><td><code>msg.source = "switch"</code> with a boolean <code>state</code>, or <code>"switch-action"</code> with the press.</td></tr>
 <tr><td>Switch availability, converted</td><td>switch policy input</td><td><code>msg.source = "switch-availability"</code>, so the policy knows when the switch is offline.</td></tr>
 <tr><td>switch policy output</td><td>Room lighting controller input</td><td>The policy’s only output carries the <code>msg.lighting</code> intents.</td></tr>
-<tr><td>Room lighting controller output</td><td>MQTT out</td><td>Wire the commands unchanged: the controller tells its own commands from other people’s by watching each light’s command topic.</td></tr>
+<tr><td>Room lighting controller output 2</td><td>Each light’s adapter (a zigbee2mqtt light)</td><td>The light commands. Each adapter’s first output goes to MQTT out unchanged: it tells the room’s commands from other people’s by watching the light’s <code>/set</code> topic. See <a href="guide-room-lighting.html#wiring">Wire the room</a>.</td></tr>
 </tbody></table></div>
 <p>A raw switch needs its report turned into a boolean. In a Function node between MQTT in and the policy:</p>
 <div class="code-block"><div class="code-label"><span>Function → switch policy · raw switch report</span></div><pre><code>msg.source = "switch";

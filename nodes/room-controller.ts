@@ -76,7 +76,8 @@ const registerRoomController: NodeInitializer = (RED) => {
         throw new Error("this room was saved before 6.0: " + [
           ...(moved.length ? ["circadian lighting moved to its own node (add a circadian lighting policy wired to this room, " +
             "with its " + moved.join(", ") + ")"] : []),
-          ...(lights.length ? ["its lights are reached through light adapters (add a zigbee2mqtt light for " + lights.join(", ") + ")"] : [])
+          ...(lights.length ? ["its lights are reached through light adapters (add one for " + lights.join(", ") +
+            ": a zigbee2mqtt light, or your own on the neutral light contract, and remove their topics from Targets JSON)"] : [])
         ].join(", and ") + "; then open and save this room");
       }
       // Not set (null, or absent from a flow saved before these settings)

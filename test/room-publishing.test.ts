@@ -68,3 +68,16 @@ test("a house and a room of the same name don't share topics: the room's clear l
   assert.ok(houseTopics.includes("home/hall/schedule/wake-time/state"), houseTopics.join());
   assert.deepEqual(cleared.filter((topic) => houseTopics.includes(topic)), []);
 });
+
+test("a light's availability is shown on its control state and counted in the status, and changes nothing else", () => {
+  const publishing = {...config, publishState: true};
+  const lit = publishRoom(undefined, {lighting: {kind: "intent", state: "ON", targets: ["cooking"], source: "wall", manual: true}}, publishing, now).state;
+  const offline = publishRoom(lit, {light: {kind: "availability", target: "cooking", online: false}}, publishing, now);
+  assert.deepEqual(offline.outputs, [{topic: "home/kitchen/lighting/cooking/control", payload: {state: "manual", owner: null, available: false}, retain: true}]);
+  assert.deepEqual(offline.commands, [], "no command");
+  assert.deepEqual([offline.status.offlineCount, offline.state.control, offline.state.desired], [1, lit.control, lit.desired]);
+  // The same again: nothing to publish.
+  assert.deepEqual(publishRoom(offline.state, {light: {kind: "availability", target: "cooking", online: false}}, publishing, now).outputs, []);
+  const back = publishRoom(offline.state, {light: {kind: "availability", target: "cooking", online: true}}, publishing, now);
+  assert.deepEqual([back.status.offlineCount, (back.outputs[0]!.payload as {available: boolean}).available], [0, true]);
+});

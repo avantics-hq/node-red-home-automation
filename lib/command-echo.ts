@@ -109,10 +109,13 @@ export function checkStateReport(
   nowMs: number
 ): {queue: ExpectedCommand[]; verdict: StateReportVerdict} {
   const next = live(queue, nowMs);
-  const latest = next.filter((entry) => entry.on !== undefined).at(-1);
+  // A tentative restyle isn't pending until its adapter says it sent it: a
+  // skipped one was never sent, so it must never make a report stale.
+  const pending = next.filter((entry) => entry.on !== undefined && entry.tentative !== true);
+  const latest = pending.at(-1);
   const verdict: StateReportVerdict = latest === undefined ? "external" : latest.on === observedOn ? "confirms" : "stale";
   if (verdict === "confirms") {
-    for (const entry of next) delete entry.on;
+    for (const entry of pending) delete entry.on;
   }
   return {queue: next, verdict};
 }

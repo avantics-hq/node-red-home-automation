@@ -753,8 +753,8 @@ msg.lighting = {
 ```
 
 An intent's `values` use the package's own units: `brightnessPct` (0-100) and
-`colorTempKelvin`. The room controller converts them for the light (for a
-Zigbee2MQTT light, to its 1-254 brightness and mireds); other fields, such as
+`colorTempKelvin`. Each light's adapter converts them for the light (a
+zigbee2mqtt light, to its 1-254 brightness and mireds); other fields, such as
 `effect`, are passed on as they are. `brightnessPct: 0` is the dimmest the
 light goes, not off: send `state: "OFF"` to switch it off. A value that isn't a
 number (a numeric string such as `"50"` counts), or a colour temperature of 0
@@ -858,7 +858,7 @@ msg.light = {kind: "observed", target, on: true,
 // Someone else's command on the light (power ON, OFF, TOGGLE or "", and whether it sets values).
 msg.light = {kind: "external", target, state: "ON", setsValues: false, observedAt};
 // One of the room's own commands, seen again changed on the way.
-msg.light = {kind: "echo-changed", target, id, state: "ON"};
+msg.light = {kind: "echo-changed", target, id, state: "ON"};  // id null when the adapter has sent nothing it knows of
 // Every restyle answered: skipped, as the light already shows it (with its last report's time), or sent.
 msg.light = {kind: "skipped", target, id, observedAt};
 msg.light = {kind: "sent", target, id};

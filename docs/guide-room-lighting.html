@@ -19,7 +19,7 @@
 <section id="before"><h2>Before you wire it</h2>
 <p>One room lighting controller owns one room’s lights. In the palette it is <strong>home-room-lighting-controller</strong>; on the canvas it shows as “lighting controller”, or “&lt;area&gt; lighting controller” once you give it an area. It is the only node that sends commands to those lights. The policies in front of it (motion, wall switches, activities) send it requests, called <em>intents</em>, and never command a light themselves.</p>
 <ul>
-<li><strong>Lights you reach over MQTT.</strong> Each light needs a topic it reports its state on and a topic it takes commands on, for example a Zigbee2MQTT light’s <code>zigbee2mqtt/&lt;device&gt;</code> and <code>zigbee2mqtt/&lt;device&gt;/set</code>, where <code>&lt;device&gt;</code> is the light’s name in Zigbee2MQTT. The controller speaks the Zigbee2MQTT light payload: <code>state</code> ON or OFF, with <code>brightness</code> and <code>color_temp</code>.</li>
+<li><strong>Lights you reach over MQTT.</strong> A Zigbee2MQTT light or group, reached through a <a href="node-z2m-light.html">zigbee2mqtt light</a> node per light, which speaks Zigbee2MQTT’s messages on <code>zigbee2mqtt/&lt;device&gt;</code> and <code>zigbee2mqtt/&lt;device&gt;/set</code>, where <code>&lt;device&gt;</code> is the light’s name in Zigbee2MQTT. The controller itself speaks only neutral commands and readings, so another kind of light can be wired on the <a href="node-room-controller.html#light-contract">neutral light contract</a>.</li>
 <li><strong>An MQTT broker node in Node-RED</strong> that reaches the same broker as your lights.</li>
 <li><strong>Node-RED 5.0.0 or newer and Node.js 24 or newer.</strong></li>
 <li><strong>A file context store (recommended).</strong> Without one, a restart or a redeploy makes the room forget which lights a person set, and a motion node counts the room as vacant from then.</li>
@@ -73,7 +73,7 @@ return msg;</code></pre></div>
   values: {brightnessPct: 40, colorTempKelvin: 3000}
 };
 return msg;</code></pre></div>
-<p><code>brightnessPct</code> is 0–100 and <code>colorTempKelvin</code> is in kelvin; the controller converts them for a Zigbee2MQTT light to its 1–254 brightness and mireds. <code>brightnessPct: 0</code> is the dimmest the light goes, not off: send <code>state: "OFF"</code> to switch it off. An intent’s values alone don’t make the light <code>manual</code>; add <code>manual: true</code> for a person’s change, described next.</p>
+<p><code>brightnessPct</code> is 0–100 and <code>colorTempKelvin</code> is in kelvin; each light’s adapter converts them for the light (a zigbee2mqtt light, to its 1–254 brightness and mireds). <code>brightnessPct: 0</code> is the dimmest the light goes, not off: send <code>state: "OFF"</code> to switch it off. An intent’s values alone don’t make the light <code>manual</code>; add <code>manual: true</code> for a person’s change, described next.</p>
 <p>Values alone don’t count as a person’s change. Your flow decides who a request is from; the controller doesn’t guess. When a request comes from a person, for example a dashboard slider, set <code>person: true</code> (or <code>manual: true</code>) on the intent. The controller then records that a person set the light, and motion’s vacancy OFF leaves it on when the person set it after the room went vacant (see <a href="#manual">Leave a person’s change alone</a>).</p>
 <div class="code-block"><div class="code-label"><span>Function → controller · a dashboard slider, from a person</span></div><pre><code>msg.lighting = {
   kind: "intent",
@@ -108,7 +108,7 @@ return msg;</code></pre></div>
 <tr><td><code>overridden</code></td><td>Another owner, such as an activity or a scene, holds the light.</td><td>Its owner releases it, or the owner or a person switches it off.</td></tr>
 </tbody></table></div>
 <p>A held light ignores motion ON and OFF and owner-less values; it changes only for an intent with an <code>owner</code>, a person (<code>manual: true</code>, <code>person: true</code>, an external command, or a change seen at the light), or a release. The switch policy marks its presses with <code>person: true</code>, so a wall switch always reaches the light. A dashboard acting for a person should set one of these too.</p>
-<p>The controller also keeps a light a person set after the room went vacant: motion’s OFF doesn’t switch it straight off. Here “a person” means an intent with <code>manual: true</code> or <code>person: true</code> (the switch policy sends <code>person: true</code> with every press), or someone else’s command seen on the light’s command topic. An intent that only carries values neither makes the light manual nor protects it from motion’s OFF; a flow acting for a person should set <code>manual: true</code> or <code>person: true</code>.</p>
+<p>The controller also keeps a light a person set after the room went vacant: motion’s OFF doesn’t switch it straight off. Here “a person” means an intent with <code>manual: true</code> or <code>person: true</code> (the switch policy sends <code>person: true</code> with every press), or someone else’s command on the light, as its adapter reports it. An intent that only carries values neither makes the light manual nor protects it from motion’s OFF; a flow acting for a person should set <code>manual: true</code> or <code>person: true</code>.</p>
 <div class="code-block"><div class="code-label"><span>Function → controller · hold lights for an activity, then release them</span></div><pre><code>msg.lighting = {
   kind: "intent", targets: ["main"], state: "ON",
   source: "activity", owner: "film",
@@ -122,7 +122,7 @@ return msg;</code></pre></div>
 </section>
 <section id="settings"><h2>Settings that matter first</h2>
 <div class="table-wrap" role="region" aria-label="First settings; scroll horizontally on a phone" tabindex="0"><table><caption>First settings</caption><thead><tr><th scope="col">Setting</th><th scope="col">Default</th><th scope="col">Set it to</th></tr></thead><tbody>
-<tr><td>Targets JSON</td><td><code>[]</code></td><td>Your lights’ ids and topics.</td></tr>
+<tr><td>Targets JSON</td><td><code>[]</code></td><td>Your lights’ ids (and <code>onOffOnly</code> for a light that only switches); their topics are their adapters’.</td></tr>
 <tr><td>Turn-on transition seconds (room)</td><td>1</td><td>How fast a light fades in when switched on.</td></tr>
 <tr><td>Wake time / Bed time (policy)</td><td>07:00 / 23:00</td><td>When the lights should start brightening and finish winding down. Or choose a <strong>Schedule</strong>.</td></tr>
 <tr><td>Daytime brightness % / Daytime kelvin (policy)</td><td>100 / 6500</td><td>The daytime level.</td></tr>

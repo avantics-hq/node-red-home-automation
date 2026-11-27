@@ -54,6 +54,8 @@
 <tr><td>Activity controller output 2</td><td>State contract input</td><td>Activity events and the complete state snapshot to publish.</td></tr>
 <tr><td>Each change node</td><td>Its equipment controller’s input</td><td>The command, moved onto the property that controller reads.</td></tr>
 <tr><td>Each equipment controller’s output 1</td><td>Its device transport</td><td>Commands for the device. Activity lighting’s output 1 goes to the room lighting controller.</td></tr>
+<tr><td>Room lighting controller output 2</td><td>Each light’s adapter (a <a href="node-z2m-light.html">zigbee2mqtt light</a>)</td><td>The light commands; each adapter’s first output to MQTT out and its second back into the room.</td></tr>
+<tr><td>Room lighting controller output 3</td><td>Activity lighting input</td><td>Each light’s reading with whether a person set it, so activity lighting can confirm its lights.</td></tr>
 <tr><td>Each equipment controller’s output 2</td><td>Activity controller input</td><td>Target state as <code>msg.theatre</code>. The controller’s own events on the same wire are ignored by the activity controller.</td></tr>
 <tr><td>Your device readings</td><td>Their equipment controller’s input</td><td>Observations. A controller confirms only from these.</td></tr>
 <tr><td>Display controller output 3</td><td>Your projector meter</td><td>Power queries, when the controller has no meter host. See <a href="#projector-power">projector power</a>.</td></tr>

@@ -367,7 +367,7 @@ test("room adapter: a room saved before 6.0 is an invalid configuration until mi
   }
   // Its lights' topics alone, or with the circadian settings: both moves named.
   const lights = new Constructor({area: "room", displayName: "Room", targets: oldTargets});
-  assert.match(String(lights.errors[0]), /saved before 6\.0: its lights are reached through light adapters \(add a zigbee2mqtt light for main\); then open and save this room/);
+  assert.match(String(lights.errors[0]), /saved before 6\.0: its lights are reached through light adapters \(add one for main: a zigbee2mqtt light, or your own on the neutral light contract, and remove their topics from Targets JSON\); then open and save this room/);
   const both = new Constructor({area: "room", displayName: "Room", targets: oldTargets, wakeTime: "07:00"});
   assert.match(String(both.errors[0]), /circadian lighting moved .*, and its lights are reached through light adapters/);
   // Migrated (the old settings cleared, as saving the dialog does), it runs.

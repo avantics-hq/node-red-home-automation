@@ -75,3 +75,13 @@ test("a tentative restyle doesn't count towards the limit or push out an older c
   assert.deepEqual(commandSkipped(queue, "r", 1000).map(({id}) => id), ["0", "1", "2", "3", "4", "5", "6", "7"], "skipped: as if never sent");
   assert.deepEqual(commandSent(queue, "r", 1000).map(({id}) => id), ["1", "2", "3", "4", "5", "6", "7", "r"], "sent: an ordinary entry, the oldest goes");
 });
+
+test("a tentative restyle never makes a report stale: an OFF arriving before its adapter's answer is someone else's", () => {
+  // The light is on, confirmed; the room sends a restyle; the light reports OFF before the adapter says skipped or sent.
+  let queue = rememberCommand([], {state: "ON"}, 1000, {id: "1"});
+  queue = checkStateReport(queue, true, 1100).queue;
+  queue = rememberCommand(queue, {state: "ON"}, 1200, {id: "2", tentative: true});
+  assert.equal(checkStateReport(queue, false, 1300).verdict, "external", "as before 6.0, when a skipped restyle was never sent");
+  // Once sent, it is pending like any command.
+  assert.equal(checkStateReport(commandSent(queue, "2", 1250), false, 1300).verdict, "stale");
+});
