@@ -9,6 +9,8 @@ import type {
 } from "node-red";
 import {
   normaliseLightingProfiles,
+  onOffOnlyTargets,
+  valuesForOnOffOnly,
   transitionActivityLighting,
   type ActivityLightingConfig,
   type ActivityLightingMessage,
@@ -22,6 +24,7 @@ interface ActivityLightingNodeConfig extends NodeDef {
   profiles?: string;
   owner?: string;
   confirmationTimeoutMs?: number | string;
+  onOffOnlyTargets?: string;
   maxAttempts?: number | string;
 }
 
@@ -41,11 +44,18 @@ const registerActivityLightingController: NodeInitializer = (RED) => {
         profiles: normaliseLightingProfiles(jsonSetting(config.profiles, "profiles", {})),
         owner: textSetting(config.owner, "owner", "activity"),
         confirmationTimeoutMs: numberSetting(config.confirmationTimeoutMs, "confirmation timeout", 15000),
-        maxAttempts: numberSetting(config.maxAttempts, "max attempts", 2)
+        maxAttempts: numberSetting(config.maxAttempts, "max attempts", 2),
+        onOffOnlyTargets: onOffOnlyTargets(jsonSetting(config.onOffOnlyTargets, "on/off-only targets", []))
       };
     } catch (error) {
       invalidConfig(node, error);
       return;
+    }
+    // The room leaves these values out, so say so once per deploy.
+    const ignored = valuesForOnOffOnly(controllerConfig);
+    if (ignored.length) {
+      node.warn("lighting values for a light marked on/off only are left out by the room: " +
+        ignored.map(({profile, target}) => `${profile} → ${target}`).join(", "));
     }
 
     function updateStatus(status: ActivityLightingStatus) {

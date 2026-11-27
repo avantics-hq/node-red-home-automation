@@ -3,6 +3,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  onOffOnlyTargets,
+  valuesForOnOffOnly,
   normaliseActivityLightingConfig,
   normaliseLightingProfiles,
   transitionActivityLighting,
@@ -374,4 +376,22 @@ test("after carrying on, readings for the replaced generation still count", () =
     result = apply(result.state, {kind: "observed", generation: 1, target, on: true, values: {brightness: 64, color_temp: 400}, observedAt: at(seconds).toISOString()}, seconds);
   }
   assert.deepEqual([result.state.phase, result.events[0]?.theatre.generation], ["ready", 2]);
+});
+
+test("an on/off-only light confirms by being on, and a profile giving it values is reported", () => {
+  const onOff: ActivityLightingConfig = {...config, onOffOnlyTargets: ["lamp"]};
+  const observe = (state: Partial<ActivityLightingState>, cfg: ActivityLightingConfig, target: string, values: Record<string, unknown>, seconds: number) =>
+    transitionActivityLighting(state, {activityLighting: {kind: "observed", generation: 1, target, on: true, values, observedAt: at(seconds).toISOString()}}, cfg, at(seconds));
+  for (const [cfg, expected] of [[config, "confirming"], [onOff, "ready"]] as const) {
+    let result = transitionActivityLighting(undefined, {activityLighting: {kind: "intent", requestId: "tv-1", generation: 1, profile: "tv"}}, cfg, at(0));
+    result = observe(result.state, cfg, "wall", {brightness: 64, color_temp: 400}, 1);
+    // The lamp reports only that it is on: it has no brightness or colour to show.
+    result = observe(result.state, cfg, "lamp", {}, 1.1);
+    assert.equal(result.state.phase, expected, cfg === onOff ? "on/off only: confirmed by being on" : "otherwise: waits for the values");
+  }
+  assert.deepEqual(valuesForOnOffOnly(onOff), [{profile: "tv", target: "lamp"}]);
+  assert.deepEqual(valuesForOnOffOnly(config), []);
+  assert.deepEqual(normaliseActivityLightingConfig({...config, onOffOnlyTargets: undefined}).onOffOnlyTargets, []);
+  assert.throws(() => onOffOnlyTargets("lamp"), /list of target names/);
+  assert.throws(() => onOffOnlyTargets([1]), /list of target names/);
 });

@@ -26,6 +26,9 @@ export interface ActivityLightingConfig {
   owner: string;
   confirmationTimeoutMs: number;
   maxAttempts: number;
+  // The room's lights marked onOffOnly: confirmed by on or off alone, as
+  // they report no brightness or colour.
+  onOffOnlyTargets?: string[];
 }
 
 export interface ActivityLightingDesired {
@@ -198,8 +201,26 @@ export function normaliseActivityLightingConfig(
     profiles: normaliseLightingProfiles(config.profiles),
     owner: textSetting(config.owner, "owner", "activity"),
     confirmationTimeoutMs: Math.max(1000, numberSetting(config.confirmationTimeoutMs, "confirmation timeout", 15000)),
-    maxAttempts: Math.max(1, Math.floor(numberSetting(config.maxAttempts, "max attempts", 2)))
+    maxAttempts: Math.max(1, Math.floor(numberSetting(config.maxAttempts, "max attempts", 2))),
+    onOffOnlyTargets: onOffOnlyTargets(config.onOffOnlyTargets)
   };
+}
+
+// The on/off-only targets setting: target names, or none.
+export function onOffOnlyTargets(value: unknown): string[] {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value) || value.some((target) => typeof target !== "string" || !TARGET_NAME.test(target))) {
+    throw new Error("on/off-only targets must be a list of target names");
+  }
+  return [...value] as string[];
+}
+
+// Each profile that gives values to a light that only switches, which the
+// room leaves out: the node warns once per deploy.
+export function valuesForOnOffOnly(config: Pick<ActivityLightingConfig, "profiles" | "onOffOnlyTargets">): Array<{profile: string; target: string}> {
+  const onOff = new Set(config.onOffOnlyTargets ?? []);
+  return Object.entries(config.profiles).flatMap(([profile, {targets, values}]) =>
+    Object.keys(values).length ? targets.filter((target) => onOff.has(target)).map((target) => ({profile, target})) : []);
 }
 
 function initialState(
@@ -341,7 +362,8 @@ export function transitionActivityLighting(
         counts.preserved += 1;
         continue;
       }
-      if (!valuesMatch(profile.values, observation.values)) {
+      // A light that only switches has nothing to match but being on.
+      if (!config.onOffOnlyTargets?.includes(target) && !valuesMatch(profile.values, observation.values)) {
         if (isAdopted(state)) {
           // An adopted request the lights don't match: someone else's, and
           // never re-applied.

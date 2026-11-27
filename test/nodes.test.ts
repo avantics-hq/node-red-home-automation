@@ -2488,3 +2488,15 @@ test("circadian node: deleted, it tells rooms to stop styling at once; following
   assert.deepEqual((follower.context().get("state") as {schedule: unknown}).schedule, {wakeTime: "07:00", bedTime: "22:15"});
 });
 
+test("activity lighting warns once at deploy when a profile gives values to a light marked on/off only", async (t) => {
+  const node = new (runtime(registerActivityLighting).Constructor)({area: "lounge", owner: "activity", onOffOnlyTargets: "[\"lamp\"]",
+    profiles: JSON.stringify({off: {targets: [], values: {}}, tv: {targets: ["wall", "lamp"], values: {brightnessPct: 25}}}), confirmationTimeoutMs: 15000, maxAttempts: 2});
+  t.after(() => close(node));
+  assert.deepEqual(node.errors, []);
+  assert.deepEqual(node.warnings.map(String), ["lighting values for a light marked on/off only are left out by the room: tv → lamp"]);
+  const unset = new (runtime(registerActivityLighting).Constructor)({area: "lounge", owner: "activity",
+    profiles: JSON.stringify({off: {targets: [], values: {}}, tv: {targets: ["wall", "lamp"], values: {brightnessPct: 25}}}), confirmationTimeoutMs: 15000, maxAttempts: 2});
+  t.after(() => close(unset));
+  assert.deepEqual(unset.warnings, []);
+});
+
