@@ -51,6 +51,7 @@
       "home-motion-lighting-policy": "dist/nodes/motion-policy.js",
       "home-switch-lighting-policy": "dist/nodes/switch-policy.js",
       "home-room-lighting-controller": "dist/nodes/room-controller.js",
+      "home-circadian-lighting-policy": "dist/nodes/circadian-policy.js",
       "home-avr-controller": "dist/nodes/avr-controller.js",
       "home-display-mode-controller": "dist/nodes/display-mode-controller.js",
       "home-source-capability-controller": "dist/nodes/source-capability-controller.js",

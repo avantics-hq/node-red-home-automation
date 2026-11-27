@@ -5,7 +5,7 @@
 // deployed with a different setting for them. And the room's lighting on
 // whichever times are in use.
 
-import {DEFAULT_BED_TIME, DEFAULT_WAKE_TIME, clockMinutes, type DaySchedule} from "./circadian-schedule";
+import {DEFAULT_BED_TIME, DEFAULT_WAKE_TIME, type DaySchedule} from "./circadian-schedule";
 import type {RoomConfig, RoomState} from "./room-controller";
 import {keptOverride} from "./settings";
 
@@ -29,14 +29,4 @@ export function withActiveSchedule(config: RoomConfig, state: RoomState): RoomCo
   return {...config, lighting: config.lighting.withSchedule(state.schedule)};
 }
 
-// New times from a "schedule" message, each "HH:MM", with a time left out
-// staying as it is; null if they aren't valid, different times.
-export function requestedSchedule(current: DaySchedule, event: {wakeTime?: unknown; bedTime?: unknown}): DaySchedule | null {
-  const next = {
-    wakeTime: typeof event.wakeTime === "string" ? event.wakeTime.trim() : current.wakeTime,
-    bedTime: typeof event.bedTime === "string" ? event.bedTime.trim() : current.bedTime
-  };
-  const wake = clockMinutes(next.wakeTime);
-  const bed = clockMinutes(next.bedTime);
-  return wake === null || bed === null || wake === bed ? null : next;
-}
+export {requestedSchedule} from "./circadian-schedule";
