@@ -222,7 +222,7 @@ Example: [`Cover control.json`](https://github.com/avantics-hq/node-red-home-aut
 
 ## Requirements
 
-- Node.js 22.9 or newer
+- Node.js 24 or newer
 - Node-RED 5.0.x
 
 ## Install
@@ -244,6 +244,19 @@ npm install /path/to/avantics-node-red-home-automation-5.0.0.tgz
 ```
 
 Add the installed nodes from the **home automation** section of the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.
+
+### 6.0.0
+
+Check these after upgrading from 5.x:
+
+- **Enable inputs take only `true` or `false`.** The motion policy's
+  `area-enabled`, `global-enabled` and `pause`, and the room controller's
+  `{kind: "circadian" | "sleep", enabled}`, no longer read strings such as
+  `"ON"` or `"on"`. Any other value is refused: nothing changes, the node logs
+  a warning once per input per deploy, and its status says what was refused.
+  Before 6.0 the motion policy read "on" in any case as on and anything else as
+  off, and the room read anything but `true` as off. Home Assistant's own `ON`
+  and `OFF` on the `…/set` topics are unchanged: the nodes translate them.
 
 ### 5.0.0
 
