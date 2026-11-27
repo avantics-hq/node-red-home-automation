@@ -8,7 +8,7 @@ import type {
   NodeStatusShape
 } from "node-red";
 import {
-  LEGACY_VOLUME_UNITS,
+  REMOVED_VOLUME_VALUE,
   createAvrState,
   normaliseAvrConfig,
   transitionAvr,
@@ -39,7 +39,8 @@ interface AvrControllerConfig extends NodeDef {
   maxAttempts?: number | string;
   minVolumeDb?: number | string;
   maxVolumeDb?: number | string;
-  // Before 5.0, in the receiver's own 0-98; read when the dB ones are missing.
+  // Before 5.0, in the receiver's own 0-98, removed in 6.0: present without
+  // the dB ones, an invalid configuration.
   minVolume?: number | string;
   maxVolume?: number | string;
   publishState?: boolean | string | null;
@@ -136,7 +137,7 @@ const registerAvrController: NodeInitializer = (RED) => {
       outputs: 3
     });
 
-    let warnedLegacyVolume = false;
+    let warnedRemovedVolume = false;
     function process(msg: AvrMessage, send: Send) {
       const before = observed();
       const result = runReducer(node, {area: controllerConfig.area, component: "avr-controller"},
@@ -147,9 +148,9 @@ const registerAvrController: NodeInitializer = (RED) => {
       }));
       // Once per deploy, so a flow still sending the receiver's own units is
       // told without filling the log.
-      if (!warnedLegacyVolume && result.traces.some(({reason}) => reason === LEGACY_VOLUME_UNITS)) {
-        warnedLegacyVolume = true;
-        node.warn("volume requests with value in the receiver's own 0-98 are deprecated and will stop working in 6.0: " +
+      if (!warnedRemovedVolume && result.events.some(({avr}) => avr.kind === "volume_rejected" && avr.reason === REMOVED_VOLUME_VALUE)) {
+        warnedRemovedVolume = true;
+        node.warn("volume requests with value in the receiver's own 0-98 were removed in 6.0 and are rejected: " +
           "send valueDb (dB, where the receiver's 80 is 0 dB) instead");
       }
       const outputs = [...result.events, ...result.targetStates];

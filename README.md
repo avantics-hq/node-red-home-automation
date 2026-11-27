@@ -247,8 +247,10 @@ Add the installed nodes from the **home automation** section of the Node-RED pal
 
 ### 6.0.0
 
-Check these after upgrading from 5.x:
+Requires Node.js 24, and removes what 5.0 kept working for a release. Check
+these after upgrading from 5.x; each shows itself rather than failing silently:
 
+- **Node.js 24 or newer is required.** Node.js 22 is no longer supported.
 - **Enable inputs take only `true` or `false`.** The motion policy's
   `area-enabled`, `global-enabled` and `pause`, and the room controller's
   `{kind: "circadian" | "sleep", enabled}`, no longer read strings such as
@@ -257,6 +259,24 @@ Check these after upgrading from 5.x:
   Before 6.0 the motion policy read "on" in any case as on and anything else as
   off, and the room read anything but `true` as off. Home Assistant's own `ON`
   and `OFF` on the `…/set` topics are unchanged: the nodes translate them.
+- **Lighting values in Zigbee2MQTT's units are gone.** Intents take only
+  `brightnessPct` (0-100) and `colorTempKelvin`: a `brightness` or `color_temp`
+  in an intent is left out, never sent to the light, and the room controller
+  logs a warning once per deploy. An activity lighting profile using them is an
+  invalid configuration, shown on the node. For example, brightness 64 becomes
+  brightnessPct 25, and color_temp 400 becomes colorTempKelvin 2500.
+- **Receiver volume is only in dB.** A volume request with `value` (the
+  receiver's 0-98) and no `valueDb` is answered `volume_rejected` with reason
+  `removed-volume-value`, and the node logs a warning once per deploy. A node
+  saved before 5.0 and never re-saved, with only its 0-98 **minVolume** and
+  **maxVolume**, is an invalid configuration naming the dB setting to set,
+  rather than getting the default bounds, which could be louder than its old
+  cap. In the editor such a node shows as invalid until its dB bounds are set.
+- **`projectorMeterHost` is no longer read.** Set **Projector power meter
+  host** (`projectorPowerMeterHost`). A flow file that still names only the old
+  key is an invalid configuration saying so. The editor no longer keeps the old
+  key, so a node opened and deployed from the editor without the new one runs
+  with no built-in meter: wire its third output to a meter, or set the host.
 
 ### 5.0.0
 
@@ -611,9 +631,10 @@ Zigbee2MQTT light, to its 1-254 brightness and mireds); other fields, such as
 `effect`, are passed on as they are. `brightnessPct: 0` is the dimmest the
 light goes, not off: send `state: "OFF"` to switch it off. A value that isn't a
 number (a numeric string such as `"50"` counts), or a colour temperature of 0
-or less, is left out with a warning in the log. During 5.x, `brightness` and `color_temp`
-in Zigbee2MQTT's own units are still accepted and passed on unchanged, and the
-room controller logs a warning once per deploy; they stop working in 6.0.
+or less, is left out with a warning in the log. Zigbee2MQTT's own `brightness`
+and `color_temp`, which 5.x still took, were removed in 6.0: they are left out
+and never reach the light, and the room controller logs a warning once per
+deploy.
 
 `home-activity-lighting-controller` does this itself: while a profile is active
 it overrides that profile's lights under its configured owner (default
@@ -678,10 +699,11 @@ msg.avr = {
 Volume is in dB: `valueDb` is the volume for `absolute`, or the change for
 `relative`, and the bounds, results, published state and Home Assistant
 number are in dB too. The controller converts for the receiver (for a Denon,
-whose 0-98 has 80 at 0 dB, -80 to +18 dB in half steps). During 5.x, a request
-with `value` in the receiver's own 0-98, and bounds saved before 5.0 as
-**minVolume** and **maxVolume**, are still read, and the node logs a warning
-once per deploy for such requests; they stop working in 6.0.
+whose 0-98 has 80 at 0 dB, -80 to +18 dB in half steps). A request with
+`value` in the receiver's own 0-98, which 5.x still took, is rejected
+(`volume_rejected`, reason `removed-volume-value`) with a warning in the log,
+and a node whose bounds are still only **minVolume** and **maxVolume** is an
+invalid configuration until its dB bounds are set.
 
 `mode` may be `absolute` or `relative`. The controller resolves relative input
 from fresh observed volume, accumulates rapid requests against the pending

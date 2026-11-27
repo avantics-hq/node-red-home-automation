@@ -42,10 +42,9 @@ export interface RoomObservation extends LightReport {
 export type TargetControlState = "in-control" | "overridden" | "manual";
 export type TargetControl = {state: "manual"} | {state: "overridden"; owner: string};
 
-// Traced when an intent gives brightness or color_temp in Zigbee2MQTT's own
-// units rather than brightnessPct or colorTempKelvin: still accepted during
-// 5.x, and the node warns.
-export const LEGACY_LIGHT_UNITS = "legacy-light-units";
+// Traced when an intent gives brightness or color_temp, Zigbee2MQTT's own
+// units, removed in 6.0: left out of the command, and the node warns.
+export const REMOVED_LIGHT_UNITS = "removed-light-units";
 
 // Traced when an intent's brightnessPct or colorTempKelvin is unusable (not
 // a number, or a kelvin of 0 or less): it is left out of the command, and
@@ -298,8 +297,7 @@ export function transitionRoom(
       } else if (manualValues) {
         // The intent's values in the light's own units (z2m-light).
         const device = lightValues(manualValues);
-        if (device.legacy) trace("intent", "accepted", LEGACY_LIGHT_UNITS, {target: targetId, values: manualValues});
-        if (device.superseded.length) trace("intent", "accepted", "legacy-light-units-ignored", {target: targetId, ignored: device.superseded});
+        if (device.removed.length) trace("intent", "accepted", REMOVED_LIGHT_UNITS, {target: targetId, dropped: device.removed, values: manualValues});
         if (device.invalid.length) trace("intent", "accepted", INVALID_LIGHT_VALUES, {target: targetId, dropped: device.invalid, values: manualValues});
         payload = {state: "ON", ...device.values};
         if (!Object.hasOwn(payload, "transition")) {

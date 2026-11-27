@@ -62,23 +62,22 @@ function numberValue(value: unknown): number | null {
 // The package's own value fields and the Zigbee2MQTT field each becomes.
 const NEUTRAL_FIELDS = {brightnessPct: "brightness", colorTempKelvin: "color_temp"} as const;
 
+// The fields in Zigbee2MQTT's own units that 5.x still took, removed in 6.0.
+export const REMOVED_LIGHT_FIELDS = ["brightness", "color_temp"] as const;
+
 // An intent's or profile's values as Zigbee2MQTT fields: brightnessPct and
 // colorTempKelvin converted; anything else (an effect, say) passed on as it
-// is. brightness and color_temp are Zigbee2MQTT's own units, accepted as
-// they are during 5.x and reported as `legacy` so the node can warn; given
-// with the new field too, the new one wins, whatever the order, and the old
-// one is `superseded`. An unusable brightnessPct or colorTempKelvin is
-// `invalid` and never reaches the device.
+// is. brightness and color_temp, Zigbee2MQTT's own units, are no longer
+// taken: they are `removed`, and never reach the device. An unusable
+// brightnessPct or colorTempKelvin is `invalid`, and never reaches it either.
 export function lightValues(values: Record<string, unknown>): {
   values: Record<string, unknown>;
-  legacy: boolean;
-  superseded: string[];
+  removed: string[];
   invalid: string[];
 } {
   const converted: Record<string, unknown> = {};
-  const superseded: string[] = [];
+  const removed: string[] = [];
   const invalid: string[] = [];
-  let legacy = false;
   const neutral: Record<string, number> = {};
   for (const [field, device] of Object.entries(NEUTRAL_FIELDS) as Array<[keyof typeof NEUTRAL_FIELDS, string]>) {
     if (!Object.hasOwn(values, field)) continue;
@@ -88,16 +87,13 @@ export function lightValues(values: Record<string, unknown>): {
   }
   for (const [key, value] of Object.entries(values)) {
     if (Object.hasOwn(NEUTRAL_FIELDS, key)) continue;
-    if (key === "brightness" || key === "color_temp") {
-      if (Object.hasOwn(neutral, key)) {
-        superseded.push(key);
-        continue;
-      }
-      legacy = true;
+    if ((REMOVED_LIGHT_FIELDS as readonly string[]).includes(key)) {
+      removed.push(key);
+      continue;
     }
     converted[key] = value;
   }
-  return {values: {...converted, ...neutral}, legacy, superseded, invalid};
+  return {values: {...converted, ...neutral}, removed, invalid};
 }
 
 // Command fields that set a light's values rather than just its power.

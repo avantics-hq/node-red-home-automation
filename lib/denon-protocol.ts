@@ -65,8 +65,9 @@ function parseVolume(raw: string): number | null {
   return denon - DENON_ZERO_DB;
 }
 
-// A volume request's value from before 5.0, in the receiver's own 0-98:
-// absolute values convert to dB; relative ones are already a change in dB.
+// A volume in the receiver's own 0-98 as dB: absolute values convert,
+// relative ones are already a change in dB. Used only for a receiver state
+// saved before 5.0, restored once (see createAvrState).
 export function legacyVolumeDb(value: number, mode: "absolute" | "relative"): number {
   return mode === "absolute" ? value - DENON_ZERO_DB : value;
 }

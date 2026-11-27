@@ -267,37 +267,20 @@ function dialog(values: Record<string, unknown> = {}) {
   }), {values});
 }
 
-test("a display node saved before 5.0 keeps its meter host through the editor, and saving moves it to the new name", () => {
-  const $ = dialog();
-  const definition = editorDefinition("display-mode-controller.html", $);
+test("projectorMeterHost, removed in 6.0, is no longer a display editor setting, so a node saved with it loads without it", () => {
+  const definition = editorDefinition("display-mode-controller.html");
+  assert.equal(Object.hasOwn(definition.defaults, "projectorMeterHost"), false);
   const node = asLoaded(definition, {type: "home-display-mode-controller", projectorMeterHost: "meter.example"});
-  assert.equal(node.projectorMeterHost, "meter.example", "kept as loaded, so the runtime still reads it");
-  definition.oneditprepare!.call(node);
-  assert.equal($.values["#node-input-projectorPowerMeterHost"], "meter.example");
-  definition.oneditsave!.call(node);
-  assert.equal(node.projectorMeterHost, "");
-  // Clearing the filled-in host and saving leaves none: the node then reads
-  // the projector's power from the flow.
-  const migrated = asLoaded(definition, {type: "home-display-mode-controller", projectorMeterHost: "meter.example"});
-  definition.oneditprepare!.call(migrated);
-  $.values["#node-input-projectorPowerMeterHost"] = "";
-  definition.oneditsave!.call(migrated);
-  assert.equal(migrated.projectorMeterHost, "");
+  assert.equal(Object.hasOwn(node, "projectorMeterHost"), false);
 });
 
-test("a receiver saved before 5.0 keeps its volume bounds through the editor, isn't invalid, and saving moves them to dB", () => {
-  const $ = dialog();
-  const definition = editorDefinition("avr-controller.html", $);
+test("a receiver saved before 5.0, with only its 0-98 bounds (removed in 6.0), shows as invalid until the dB bounds are set", () => {
+  const definition = editorDefinition("avr-controller.html");
+  assert.deepEqual([Object.hasOwn(definition.defaults, "minVolume"), Object.hasOwn(definition.defaults, "maxVolume")], [false, false]);
   const node = asLoaded(definition, {type: "home-avr-controller", minVolume: 10, maxVolume: 50, publishState: false});
-  assert.deepEqual([node.minVolume, node.maxVolume], [10, 50], "kept as loaded, so the runtime still reads them");
-  const valid = (key: string) => definition.defaults[key]!.required !== true && definition.defaults[key]!.validate!.call(node, node[key]);
-  assert.deepEqual([valid("minVolumeDb"), valid("maxVolumeDb")], [true, true]);
-  definition.oneditprepare!.call(node);
-  assert.deepEqual([$.values["#node-input-minVolumeDb"], $.values["#node-input-maxVolumeDb"]], [-70, -30]);
-  definition.oneditsave!.call(node);
-  assert.deepEqual([node.minVolume, node.maxVolume], ["", ""]);
-  // Neither form, or a non-number, is invalid.
-  assert.equal(definition.defaults.minVolumeDb!.validate!.call({minVolume: ""}, ""), false);
+  assert.deepEqual([node.minVolume, node.maxVolume], [undefined, undefined], "dropped as loaded");
+  const valid = (key: string) => definition.defaults[key]!.validate!.call(node, node[key]);
+  assert.deepEqual([valid("minVolumeDb"), valid("maxVolumeDb")], [false, false]);
   assert.equal(definition.defaults.minVolumeDb!.validate!.call({}, "quiet"), false);
   assert.equal(definition.defaults.minVolumeDb!.validate!.call({}, -60), true);
 });

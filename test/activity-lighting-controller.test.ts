@@ -18,8 +18,8 @@ import {publishRoom} from "../lib/room-publishing";
 const config: ActivityLightingConfig = {
   profiles: {
     off: {targets: [], values: {}},
-    tv: {targets: ["wall", "lamp"], values: {brightness: 64, color_temp: 400}},
-    projector: {targets: ["wall"], values: {brightness: 10}}
+    tv: {targets: ["wall", "lamp"], values: {brightnessPct: 25, colorTempKelvin: 2500}},
+    projector: {targets: ["wall"], values: {brightnessPct: 4}}
   },
   owner: "lounge-activity",
   confirmationTimeoutMs: 5000,
@@ -53,9 +53,9 @@ function intent(
 test("lighting profiles are deployment data with explicit semantic values", () => {
   assert.deepEqual(normaliseLightingProfiles({cinema: {
     targets: ["wall"],
-    values: {brightness: 12, effect: "solid"}
+    values: {brightnessPct: 5, effect: "solid"}
   }}), {
-    cinema: {targets: ["wall"], values: {brightness: 12, effect: "solid"}}
+    cinema: {targets: ["wall"], values: {brightnessPct: 5, effect: "solid"}}
   });
   assert.throws(
     () => normaliseLightingProfiles({cinema: {targets: ["wall", "wall"], values: {}}}),
@@ -71,7 +71,7 @@ test("activity profiles style only active non-manual room lights", () => {
     kind: "intent",
     targets: ["wall", "lamp"],
     state: "ON",
-    values: {brightness: 64, color_temp: 400},
+    values: {brightnessPct: 25, colorTempKelvin: 2500},
     source: "activity",
     owner: "lounge-activity",
     updateOnOnly: true,
@@ -244,7 +244,7 @@ test("release uses the lights actually applied, even after profiles change on a 
   assert.equal(result.commands[0]?.profile, "tv");
 
   // Redeploy with tv edited to [wall]: lamp is still released.
-  const edited = {...config, profiles: {...config.profiles, tv: {targets: ["wall"], values: {brightness: 64}}}};
+  const edited = {...config, profiles: {...config.profiles, tv: {targets: ["wall"], values: {brightnessPct: 25}}}};
   result = transitionActivityLighting(applied, {activityLighting: {kind: "intent", requestId: "off-2", generation: 2, profile: "off"}}, edited, at(10));
   assert.deepEqual(releases(result), [{kind: "release", owner: "lounge-activity", targets: ["wall", "lamp"], source: "activity"}]);
 
@@ -309,8 +309,8 @@ test("an adopted request the lights don't match is a manual override: nothing ap
   assert.equal(result.events.at(-1)?.theatre.classification, "manual_override");
 });
 
-test("a profile in percent and kelvin matches the light's report in its own units, as an old-unit profile still does", () => {
-  for (const values of [{brightnessPct: 25, colorTempKelvin: 2500}, {brightness: 64, color_temp: 400}]) {
+test("a profile in percent and kelvin matches the light's report in its own units", () => {
+  for (const values of [{brightnessPct: 25, colorTempKelvin: 2500}]) {
     const neutral = {...config, profiles: {...config.profiles, tv: {targets: ["wall"], values}}};
     let result = transitionActivityLighting(undefined, {activityLighting: {kind: "intent", requestId: "tv-1", generation: 1, profile: "tv"}}, neutral, at(0));
     assert.deepEqual(result.commands[0]?.lighting?.values, values, "the intent carries the profile's own values");
@@ -323,7 +323,9 @@ test("a profile in percent and kelvin matches the light's report in its own unit
 test("a profile's brightnessPct and colorTempKelvin are checked when deployed", () => {
   const profile = (values: Record<string, unknown>) => normaliseLightingProfiles({tv: {targets: ["wall"], values}});
   assert.doesNotThrow(() => profile({brightnessPct: 0, colorTempKelvin: 2700}));
-  assert.doesNotThrow(() => profile({brightness: 64, color_temp: 400}), "old units still deploy in 5.x");
+  // Zigbee2MQTT's own units were removed in 6.0: an invalid configuration, naming the fields to use.
+  assert.throws(() => profile({brightness: 64, color_temp: 400}), /tv uses brightness and color_temp, removed in 6\.0: use brightnessPct \(0-100\) and colorTempKelvin/);
+  assert.throws(() => profile({brightnessPct: 25, color_temp: 400}), /uses color_temp, removed in 6\.0/);
   for (const [values, message] of [[{brightnessPct: 101}, /brightnessPct must be a number from 0 to 100/], [{brightnessPct: "50"}, /brightnessPct/],
     [{brightnessPct: -1}, /brightnessPct/], [{colorTempKelvin: 0}, /colorTempKelvin must be a number above 0/], [{colorTempKelvin: null}, /colorTempKelvin/]] as const) {
     assert.throws(() => profile(values as Record<string, unknown>), message, JSON.stringify(values));

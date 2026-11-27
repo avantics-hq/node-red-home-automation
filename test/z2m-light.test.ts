@@ -23,23 +23,21 @@ test("value fields mark a command that sets a light's values", () => {
   assert.equal(setsLightValues({state: "ON", transition: 2}), false);
 });
 
-test("light values: the new field wins whatever the order, numeric strings count, and unusable ones never reach the light", () => {
-  // U1: both forms given; the result doesn't depend on key order.
-  const forward = lightValues({brightness: 10, brightnessPct: 50, color_temp: 200, colorTempKelvin: 2500});
-  const backward = lightValues({colorTempKelvin: 2500, color_temp: 200, brightnessPct: 50, brightness: 10});
-  assert.deepEqual(forward.values, {brightness: 127, color_temp: 400});
-  assert.deepEqual(backward.values, forward.values);
-  assert.deepEqual([forward.superseded.sort(), forward.legacy], [["brightness", "color_temp"], false]);
-  // U2: a finite numeric string is a number.
+test("light values: numeric strings count, unusable ones never reach the light, and Zigbee2MQTT's own units are removed", () => {
+  // A finite numeric string is a number.
   assert.deepEqual(lightValues({brightnessPct: "50", colorTempKelvin: " 2500 "}).values, {brightness: 127, color_temp: 400});
-  // Anything else unusable is left out, reported, and never passed on under the new names.
+  // Anything unusable is left out, reported, and never passed on.
   for (const bad of [{brightnessPct: null}, {brightnessPct: NaN}, {brightnessPct: "bright"}, {colorTempKelvin: 0}, {colorTempKelvin: -2700}, {colorTempKelvin: "warm"}]) {
     const result = lightValues({...bad, effect: "candle"});
     assert.deepEqual(result.values, {effect: "candle"}, JSON.stringify(bad));
     assert.deepEqual(result.invalid, Object.keys(bad));
   }
-  // An unusable new value with an old one alongside: the old one is used, as in 5.x.
-  assert.deepEqual(lightValues({brightnessPct: null, brightness: 64}).values, {brightness: 64});
+  // brightness and color_temp (removed in 6.0) are left out and reported, alone or beside the new fields,
+  // in whatever order; the new fields still apply.
+  const old = lightValues({brightness: 64, color_temp: 400, effect: "candle"});
+  assert.deepEqual([old.values, old.removed], [{effect: "candle"}, ["brightness", "color_temp"]]);
+  const both = lightValues({color_temp: 200, colorTempKelvin: 2500, brightness: 10, brightnessPct: 50});
+  assert.deepEqual([both.values, both.removed.sort()], [{brightness: 127, color_temp: 400}, ["brightness", "color_temp"]]);
 });
 
 test("mireds round half up exactly, without float noise", () => {

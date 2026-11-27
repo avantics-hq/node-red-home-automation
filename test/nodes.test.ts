@@ -455,7 +455,7 @@ test("activity lighting adapter preserves ownership and emits target evidence", 
   const node = new Constructor({
     area: "lounge",
     profiles: JSON.stringify({
-      tv: {targets: ["wall", "lamp"], values: {brightness: 64}}
+      tv: {targets: ["wall", "lamp"], values: {brightnessPct: 25}}
     }),
     confirmationTimeoutMs: 15000,
     maxAttempts: 2
@@ -705,7 +705,7 @@ test("activity lighting adapter re-observes a deadline that passed during a rede
   const {Constructor} = runtime(registerActivityLighting, {}, STORE);
   const lightingConfig = {
     area: "lounge",
-    profiles: JSON.stringify({tv: {targets: ["wall"], values: {brightness: 64}}}),
+    profiles: JSON.stringify({tv: {targets: ["wall"], values: {brightnessPct: 25}}}),
     confirmationTimeoutMs: 15000,
     maxAttempts: 1
   };
@@ -782,35 +782,15 @@ function powerToggles(node: RuntimeNode): number {
     .filter((envelope) => envelope[0]?.payload === "power").length;
 }
 
-test("display node: a projector power meter host saved before 5.0 is still read, and the new setting wins", async (t) => {
-  const realFetch = globalThis.fetch;
-  const asked: string[] = [];
-  globalThis.fetch = (async (url: string | URL | Request) => {
-    const key = String(url instanceof Request ? url.url : url);
-    asked.push(key);
-    const body = key.includes("sony") ? {result: [{status: "standby"}], id: 50}
-      : key.includes("Cover.GetStatus") ? {current_pos: 100, state: "stopped"} : {apower: 2};
-    return new Response(JSON.stringify(body), {status: 200});
-  }) as typeof fetch;
-  t.after(() => {
-    globalThis.fetch = realFetch;
-  });
+test("display node: a flow file naming only projectorMeterHost (removed in 6.0) is an invalid configuration that says what to set", async () => {
   const {projectorPowerMeterHost: _new, ...base} = displayConfig;
-  for (const [config, host] of [
-    [{...base, projectorMeterHost: "old-meter.invalid"}, "old-meter.invalid"],
-    [{...base, projectorPowerMeterHost: "", projectorMeterHost: "old-meter.invalid"}, "old-meter.invalid"],
-    [{...base, projectorPowerMeterHost: "   ", projectorMeterHost: "old-meter.invalid"}, "old-meter.invalid"],
-    [{...base, projectorPowerMeterHost: "new-meter.invalid", projectorMeterHost: "old-meter.invalid"}, "new-meter.invalid"]
-  ] as const) {
-    asked.length = 0;
-    const node = new (runtime(registerDisplay, {tvPsk: "synthetic"}).Constructor)(config);
-    assert.deepEqual(node.errors, [], JSON.stringify(config));
-    await receive(node, {display: {kind: "startup"}});
-    await wait(50);
-    assert.ok(asked.some((url) => url.includes(host) && url.includes("Switch.GetStatus")), `${host}: ${asked.join(" ")}`);
-    assert.ok(!asked.some((url) => url.includes("meter.invalid") && !url.includes(host)), asked.join(" "));
-    await close(node);
-  }
+  const old = new (runtime(registerDisplay, {tvPsk: "synthetic"}).Constructor)({...base, projectorMeterHost: "old-meter.invalid"});
+  assert.equal((old.statuses.at(-1) as {text?: string}).text, "invalid configuration");
+  assert.match(String(old.errors[0]), /projectorMeterHost was removed in 6\.0: set Projector power meter host/);
+  // Beside the new setting, the old name is ignored.
+  const both = new (runtime(registerDisplay, {tvPsk: "synthetic"}).Constructor)({...base, projectorPowerMeterHost: "new-meter.invalid", projectorMeterHost: "old-meter.invalid"});
+  assert.deepEqual(both.errors, []);
+  await close(both);
 });
 
 test("display node: with no power meter host, it asks for the projector's power on output 3 and reads what the flow sends", async (t) => {
@@ -938,7 +918,7 @@ test("a flow startup after the construction startup changes nothing but repeats 
   };
   type Loose = Parameters<typeof twice>[1];
   twice("activity", transitionActivityLighting as unknown as Loose, "activityLighting", {
-    profiles: {tv: {targets: ["wall"], values: {brightness: 64}}}, confirmationTimeoutMs: 15000, maxAttempts: 2
+    profiles: {tv: {targets: ["wall"], values: {brightnessPct: 25}}}, confirmationTimeoutMs: 15000, maxAttempts: 2
   }, {profile: "tv"});
   twice("backlighting", transitionBacklighting as unknown as Loose, "backlighting", {
     pollMs: 2000, confirmationTimeoutMs: 15000, maxAttempts: 2
@@ -948,7 +928,7 @@ test("a flow startup after the construction startup changes nothing but repeats 
     pollMs: 2000, confirmationTimeoutMs: 15000, maxAttempts: 2
   }, {sourceId: "streamer", action: "activate"});
   twice("avr", transitionAvr as unknown as Loose, "avr", {
-    area: "lounge", sources: {shield: "SAT/CBL", playstation: "GAME"}, retryMs: 1000, maxAttempts: 3, minVolume: 0, maxVolume: 60
+    area: "lounge", sources: {shield: "SAT/CBL", playstation: "GAME"}, retryMs: 1000, maxAttempts: 3, minVolumeDb: -80, maxVolumeDb: -20
   }, {power: "on", source: "playstation"});
   twice("display", transitionDisplay as unknown as Loose, "display", {
     screenOpenPosition: 82, screenTolerance: 2, pollMs: 1000, queryTimeoutMs: 1000, tvTimeoutMs: 4000,
@@ -1226,7 +1206,7 @@ test("every adapter shows the same badge for a configuration it cannot use, and 
     ["source capability", registerSource, {area: "room", sources: "{not json"}, /JSON/],
     ["theatre activity", registerTheatreActivity, {area: "room", activityProfiles: "{not json"}, /JSON/],
     ["theatre state contract", registerTheatreStateContract, {area: "room", activities: "{not json"}, /./],
-    ["display", registerDisplay, {area: "room", tvHost: "", screenHost: "", projectorMeterHost: ""}, /TV host is required/],
+    ["display", registerDisplay, {area: "room", tvHost: "", screenHost: "", projectorPowerMeterHost: ""}, /TV host is required/],
     ["motion", registerMotion, {area: "room", onTargets: "[1]"}, /targets/],
     ["switch", registerSwitch, {area: "room", targets: "{not json"}, /JSON|targets/]
   ];
@@ -1243,7 +1223,7 @@ test("an emptied or non-numeric number setting is an invalid configuration that 
   // One node per family; the setting is otherwise valid config for that node.
   const cases: Array<[string, NodeInitializer, Record<string, unknown>, string]> = [
     ["receiver", registerAvr, {area: "a", sources: "{}", retryMs: ""}, "retry interval"],
-    ["display", registerDisplay, {area: "a", tvHost: "tv", screenHost: "s", projectorMeterHost: "m", tvTimeoutMs: "  "}, "TV timeout"],
+    ["display", registerDisplay, {area: "a", tvHost: "tv", screenHost: "s", projectorPowerMeterHost: "m", tvTimeoutMs: "  "}, "TV timeout"],
     ["source", registerSource, {area: "a", sources: "{\"streamer\":{\"activation\":\"command\",\"deactivation\":\"command\",\"confirmation\":\"active\"}}", pollMs: "abc"}, "poll interval"],
     ["backlighting", registerBacklighting, {area: "a", maxAttempts: ""}, "max attempts"],
     ["activity lighting", registerActivityLighting, {area: "a", profiles: "{\"off\":{\"targets\":[],\"values\":{}}}", confirmationTimeoutMs: ""}, "confirmation timeout"],
@@ -1388,7 +1368,7 @@ test("publish settings: null and a missing field mean on; only false means off",
 test("an emptied JSON or text setting is an invalid configuration that names the setting", () => {
   const cases: Array<[string, NodeInitializer, Record<string, unknown>, string]> = [
     ["receiver", registerAvr, {sources: ""}, "sources must be valid JSON"],
-    ["display", registerDisplay, {tvHost: "tv", screenHost: " ", projectorMeterHost: "m"}, "screen host is required"],
+    ["display", registerDisplay, {tvHost: "tv", screenHost: " ", projectorPowerMeterHost: "m"}, "screen host is required"],
     ["source", registerSource, {sources: "{broken"}, "sources must be valid JSON"],
     ["activity lighting", registerActivityLighting, {profiles: "{\"off\":{\"targets\":[],\"values\":{}}}", owner: ""}, "owner is required"],
     ["room", registerRoom, {targets: "", publishState: false, discovery: false}, "targets must be valid JSON"],
@@ -1406,7 +1386,7 @@ test("an emptied JSON or text setting is an invalid configuration that names the
 });
 
 test("the display's projector fallback reads \"true\" as on", async (t) => {
-  const node = new (runtime(registerDisplay, {tvPsk: "key"}).Constructor)({tvHost: "tv", screenHost: "s", projectorMeterHost: "m", projectorPowerFallback: "true"});
+  const node = new (runtime(registerDisplay, {tvPsk: "key"}).Constructor)({tvHost: "tv", screenHost: "s", projectorPowerMeterHost: "m", projectorPowerFallback: "true"});
   t.after(() => close(node));
   assert.deepEqual(node.errors, []);
   assert.equal(normaliseDisplayConfig({projectorPowerFallback: "true"}).projectorPowerFallback, true);
@@ -2015,23 +1995,23 @@ test("receiver volume number: a set from Home Assistant takes the receiver's own
   assert.ok(rejected.some((avr) => avr?.kind === "volume_rejected" && avr.reason === "receiver-not-ready"), JSON.stringify(rejected));
 });
 
-test("receiver node: volume bounds and requests saved before 5.0 still work, with one warning", async (t) => {
+test("receiver node: 0-98 bounds and requests (removed in 6.0) are refused visibly, never read", async (t) => {
   const avrRuntime = runtime(registerAvr);
-  // Bounds in the receiver's own 0-98, as an older flow saved them.
-  const node = new avrRuntime.Constructor({id: "a4", area: "den", sources: JSON.stringify({shield: "SAT/CBL"}), minVolume: 10, maxVolume: 50,
-    publishState: true, discovery: true});
+  // Bounds only in the receiver's own 0-98, as a flow saved before 5.0 has them: invalid, not the default bounds.
+  const old = new avrRuntime.Constructor({id: "a4", area: "den", sources: JSON.stringify({shield: "SAT/CBL"}), minVolume: 10, maxVolume: 50});
+  assert.equal((old.statuses.at(-1) as {text?: string}).text, "invalid configuration");
+  assert.match(String(old.errors[0]), /0-98 were removed in 6\.0: set Minimum volume \(dB\)/);
+  // A request with value: rejected, with one warning however often.
+  const node = new avrRuntime.Constructor({id: "a6", area: "den", sources: JSON.stringify({shield: "SAT/CBL"})});
   t.after(() => close(node));
-  avrRuntime.events.emit("flows:started");
-  const number = ((node.sent[0] as SendEnvelope)[2] ?? []).find(({topic}) => topic === "homeassistant/number/nrha_a4_receiver_volume/config");
-  const entry = JSON.parse(String(number?.payload)) as Record<string, unknown>;
-  assert.deepEqual([entry.min, entry.max], [-70, -30]);
   await receive(node, {avr: {kind: "observed", line: "PWON\rZMON\rSISAT/CBL\rMV31\r"}});
-  const send = async (requestId: string, value: number) => (await receive<SendEnvelope>(node, {avr: {kind: "volume", requestId, mode: "absolute", value}}))
-    .flatMap((envelope) => envelope[0] ?? []).map(({payload}) => String(payload));
-  assert.deepEqual(await send("old-1", 60), ["MV50\r"], "bounded by the old maximum");
-  await send("old-2", 40);
+  const send = async (requestId: string) => (await receive<SendEnvelope>(node, {avr: {kind: "volume", requestId, mode: "absolute", value: 40}}));
+  const first = await send("old-1");
+  assert.deepEqual(first.flatMap((envelope) => envelope[0] ?? []), [], "nothing sent to the receiver");
+  assert.ok(first.flatMap((envelope) => envelope[1] ?? []).some((message) => (message as {avr?: {kind?: string; reason?: string}}).avr?.reason === "removed-volume-value"));
+  await send("old-2");
   assert.equal(node.warnings.length, 1, "once per deploy");
-  assert.match(String(node.warnings[0]), /valueDb/);
+  assert.match(String(node.warnings[0]), /removed in 6\.0.*valueDb/);
 });
 
 test("receiver node: a volume saved before 5.0 by a context store is published in dB as it starts", async (t) => {
@@ -2421,23 +2401,23 @@ test("shelly cover node: device messages become cover readings, and cover comman
   assert.equal((unset.statuses.at(-1) as {text?: string}).text, "invalid configuration");
 });
 
-test("room node: lighting values in Zigbee2MQTT's units still work during 5.x, with one warning", async (t) => {
+test("room node: lighting values in Zigbee2MQTT's units (removed in 6.0) are left out, with one warning", async (t) => {
   const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
-  const node = new (runtime(registerRoom).Constructor)({id: "legacy-units", targets, area: "", publishState: false, discovery: false});
+  const node = new (runtime(registerRoom).Constructor)({id: "removed-units", targets, area: "", publishState: false, discovery: false});
   t.after(() => close(node));
   const send = async (values: Record<string, unknown>) => ((await receive<SendEnvelope>(node, {lighting: {kind: "intent", state: "ON", manual: true, values}}))[0]?.[0] ?? [])
     .map((message) => message.payload);
   // The package's own units, converted for the light.
   assert.deepEqual(await send({brightnessPct: 50, colorTempKelvin: 2500}), [{state: "ON", brightness: 127, color_temp: 400, transition: 1}]);
   assert.deepEqual(node.warnings, []);
-  // Zigbee2MQTT's units, passed on as they are, and one warning however often.
-  assert.deepEqual(await send({brightness: 64, color_temp: 400}), [{state: "ON", brightness: 64, color_temp: 400, transition: 1}]);
+  // Zigbee2MQTT's own units never reach the light, and one warning however often.
+  assert.deepEqual(await send({brightness: 64, color_temp: 400}), [{state: "ON", transition: 1}]);
   await send({brightness: 64});
   assert.equal(node.warnings.length, 1);
-  assert.match(String(node.warnings[0]), /brightnessPct .* colorTempKelvin/);
-  // Both forms: the new one wins, and an unusable value is left out with one more warning.
+  assert.match(String(node.warnings[0]), /removed in 6\.0.*brightnessPct .* colorTempKelvin/);
+  // Beside the new fields: the new ones apply, the old ones are left out.
   assert.deepEqual(await send({brightness: 10, brightnessPct: 50}), [{state: "ON", brightness: 127, transition: 1}]);
-  assert.deepEqual(await send({brightnessPct: "lots", colorTempKelvin: 2500}), [{state: "ON", color_temp: 400, transition: 1}]);
+  // An unusable new value is left out with its own warning.
   await send({colorTempKelvin: 0});
   assert.equal(node.warnings.length, 2);
   assert.match(String(node.warnings[1]), /left out/);
