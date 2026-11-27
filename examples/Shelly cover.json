@@ -3,27 +3,16 @@
     "id": "example-shelly-cover-comment",
     "type": "comment",
     "name": "Shelly cover example",
-    "info": "A Shelly Gen2 device in cover mode, owned by the cover controller, with no function nodes. In your flow, replace the injects marked 'from the device' with an MQTT in node subscribed to <prefix>/# (output: auto-detect), and the debug node with an MQTT out node, both on your broker. Set the adapter's MQTT topic prefix to your device's (its device ID unless you set one). The controller's device commands go to the adapter, which sends them to the device as its MQTT control commands; the device's status, change notifications and online state come back through the adapter as the controller's readings.",
+    "info": "A Shelly Gen2 device in cover mode, owned by the cover controller, with no function nodes. In your flow, replace the injects marked 'from the device' with an MQTT in node subscribed to <prefix>/# (output: auto-detect), and the debug node with an MQTT out node, both on your broker. Set the adapter's MQTT topic prefix to your device's (its device ID unless you set one). The controller's device commands go to the adapter, which sends them to the device as its MQTT control commands; the device's status, change notifications and online state come back through the adapter as the controller's readings.\n\nThe \"MQTT out connected\" status node sends the cover controller its startup message each time an MQTT out node connects to the broker, so what it announces reaches it: the broker drops anything sent before it connects. It watches every node on this flow, and the nodes act only on an MQTT out node's connected status; you can scope it to your MQTT out node instead.",
     "x": 150,
     "y": 40,
     "wires": []
   },
   {
-    "id": "example-shelly-cover-startup",
-    "type": "inject",
-    "name": "startup",
-    "props": [
-      {
-        "p": "cover",
-        "v": "{\"kind\":\"startup\"}",
-        "vt": "json"
-      }
-    ],
-    "repeat": "",
-    "crontab": "",
-    "once": true,
-    "onceDelay": 3,
-    "topic": "",
+    "id": "example-shelly-cover-mqtt-connected",
+    "type": "status",
+    "name": "MQTT out connected",
+    "scope": null,
     "x": 130,
     "y": 100,
     "wires": [

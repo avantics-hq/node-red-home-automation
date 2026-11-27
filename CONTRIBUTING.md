@@ -17,14 +17,17 @@ privately, as described in [SECURITY.md](SECURITY.md), not in a public issue.
 3. Make your change and run `npm test` (build, unit tests and contract
    examples). If you changed a node or an example flow, also run the Node-RED
    smoke that CI runs, which loads the packed package and every example flow in
-   an embedded Node-RED:
+   an embedded Node-RED, and the check that a publishing node's announcements
+   reach a real MQTT broker (aedes, run in the same process) once MQTT out
+   connects:
 
    ```sh
    smoke="$(mktemp -d)"
    npm pack --pack-destination "$smoke"
    (cd "$smoke" && npm init -y > /dev/null && \
-     npm install --no-audit --no-fund node-red@5.0.10 ./avantics-node-red-home-automation-*.tgz)
+     npm install --no-audit --no-fund node-red@5.0.10 aedes@0.51.3 ./avantics-node-red-home-automation-*.tgz)
    node scripts/node-red-smoke.mjs "$smoke"
+   node scripts/node-red-mqtt-announce.mjs "$smoke"
    ```
 
 4. Open a pull request against `main` and fill in the template.

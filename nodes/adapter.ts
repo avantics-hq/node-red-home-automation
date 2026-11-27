@@ -17,11 +17,32 @@ export function objectField<T>(msg: InputMessage, key: string): T | undefined {
   return value && typeof value === "object" ? value as T : undefined;
 }
 
+// The status an MQTT out node shows each time its broker connects, as
+// Node-RED's Status node passes it on (Node-RED 5.0.10:
+// nodes/core/network/10-mqtt.js, setStatusConnected; runtime/lib/flows/Flow.js,
+// handleStatus, which adds status.source).
+const MQTT_CONNECTED = "node-red:common.status.connected";
+
+// Whether a message is a Status node's report that an MQTT out node has
+// connected: until then, the broker drops what it is given to publish.
+export function mqttConnected(msg: InputMessage): boolean {
+  const status = objectField<{text?: unknown; source?: {type?: unknown}}>(msg, "status");
+  return status?.text === MQTT_CONNECTED && status.source?.type === "mqtt out";
+}
+
 // Handle each input; an error is reported against the message and ends it.
-export function onInput(node: Node, handle: (msg: InputMessage, send: Send) => void): void {
+// With a startup message, a node that announces itself takes a Status
+// node's "MQTT out connected" as that startup message, so it announces again
+// once the broker can take it; any other status message is ignored.
+export function onInput(node: Node, handle: (msg: InputMessage, send: Send) => void, startup?: Record<string, unknown>): void {
   node.on("input", (msg, send, done) => {
     try {
-      handle(msg as InputMessage, send);
+      const input = msg as InputMessage;
+      if (startup && objectField(input, "status")) {
+        if (mqttConnected(input)) handle(structuredClone(startup) as InputMessage, send);
+      } else {
+        handle(input, send);
+      }
       done();
     } catch (error) {
       // done(error) reports it against the message, once, so a Catch node

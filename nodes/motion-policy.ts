@@ -164,7 +164,7 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
       // else is an input as sent, with a pause's owner.
       const inbound = motionInbound(msg, publishing);
       process(inbound?.input ?? {source: String(msg.source ?? ""), payload: msg.payload, owner: typeof msg.owner === "string" ? msg.owner : undefined}, send, inbound);
-    });
+    }, {source: "startup"});
 
     node.on("close", (_removed: boolean, done: () => void) => {
       clearTimeout(offTimer);

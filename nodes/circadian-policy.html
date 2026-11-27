@@ -137,4 +137,9 @@
       clears the circadian entities older room controllers in its area published, migrated or not, in the same batch,
       so Home Assistant can give the new ones the same entity IDs.</dd>
   </dl>
+  <h3>When MQTT out connects</h3>
+  <p>Wire a <b>Status node</b> whose scope is your MQTT out node into this node. Each time MQTT out shows
+    "connected", this node takes it as its startup message (<code>msg.lighting = {kind: "startup"}</code>) and announces itself again:
+    Node-RED's MQTT broker node drops what it is given before it connects, so what the node sends as the flows
+    start is lost on a first start, a full deploy or a restart. Any other status message is ignored.</p>
 </script>

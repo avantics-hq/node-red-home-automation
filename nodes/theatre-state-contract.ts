@@ -113,7 +113,7 @@ const registerTheatreStateContract: NodeInitializer = (RED) => {
         theatre: objectField<TheatreStateContractMessage["theatre"]>(msg, "theatre"),
         theatreStateContract: objectField<TheatreStateContractMessage["theatreStateContract"]>(msg, "theatreStateContract")
       }, send);
-    });
+    }, {theatreStateContract: {kind: "startup"}});
 
     // Available again as soon as this node runs, as after a redeploy of it
     // alone, rather than waiting for the flow's startup message.

@@ -179,7 +179,7 @@ const registerRoomController: NodeInitializer = (RED) => {
         payload: msg.payload,
         retain: msg.retain === true
       }, send);
-    });
+    }, {lighting: {kind: "startup"}});
   }
 
   RED.nodes.registerType("home-room-lighting-controller", HomeRoomLightingController);

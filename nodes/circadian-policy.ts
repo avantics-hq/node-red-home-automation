@@ -176,7 +176,7 @@ const registerCircadianPolicy: NodeInitializer = (RED) => {
       } else {
         process(lighting ?? {kind: undefined}, send);
       }
-    });
+    }, {lighting: {kind: "startup"}});
 
     tickTimer = setInterval(guarded(node, () => process({kind: "tick"}, node.send.bind(node))), policyConfig.intervalSeconds * 1000);
 

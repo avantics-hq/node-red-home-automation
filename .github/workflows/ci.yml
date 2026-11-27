@@ -44,8 +44,10 @@ jobs:
           npm pack --pack-destination "${smoke}"
           cd "${smoke}"
           npm init -y > /dev/null
-          npm install --no-audit --no-fund node-red@5.0.10 ./avantics-node-red-home-automation-*.tgz
+          npm install --no-audit --no-fund node-red@5.0.10 aedes@0.51.3 ./avantics-node-red-home-automation-*.tgz
           node "${GITHUB_WORKSPACE}/scripts/node-red-smoke.mjs" "${smoke}"
+          # Announcements reach a real broker once MQTT out connects (#185).
+          node "${GITHUB_WORKSPACE}/scripts/node-red-mqtt-announce.mjs" "${smoke}"
 
       - name: Scan secrets
         shell: bash
