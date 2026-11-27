@@ -1,0 +1,3058 @@
+{
+ "base": "ac01c34",
+ "note": "Fingerprints of every /set publication and of the room's decisions, per generated history, from the room before the light adapters. Made by scripts/light-regression-golden.mjs.",
+ "histories": [
+  {
+   "seed": 1,
+   "sets": "0f0dc5f9da9d9ee59598a65b1ba69051",
+   "decisions": "c5004603228c4f367c191c7a1643bd1b",
+   "publications": 42
+  },
+  {
+   "seed": 2,
+   "sets": "2c79f5c55caa512e86b59a5b86bae4ef",
+   "decisions": "a01d1cf4c2066f1755e3053cf554aa4e",
+   "publications": 47
+  },
+  {
+   "seed": 3,
+   "sets": "371ae58acfa57ac75a2e4f736bb30cfd",
+   "decisions": "67574fe15ce8b8e5bdf311843b89b5d7",
+   "publications": 38
+  },
+  {
+   "seed": 4,
+   "sets": "de9ae7808fd99235d46a512e2f854b6f",
+   "decisions": "db24142f3b960bb9c52bb9f2e07f668b",
+   "publications": 24
+  },
+  {
+   "seed": 5,
+   "sets": "4ce82b787a9d5e3fa93ecf7476a49e2c",
+   "decisions": "a3cfbb6c9a54562699a949d12626502f",
+   "publications": 52
+  },
+  {
+   "seed": 6,
+   "sets": "0a3182185b7717e5d8afa5e7600d4060",
+   "decisions": "99de38e4128b7681a6481a4b628146ba",
+   "publications": 29
+  },
+  {
+   "seed": 7,
+   "sets": "b3feb471de200645c75f03458bb22513",
+   "decisions": "f2d244b4a0f5c5eaaba8670151a753a1",
+   "publications": 31
+  },
+  {
+   "seed": 8,
+   "sets": "4881982928dae68d30d15570aeb916a1",
+   "decisions": "21746655fecd91bb23e59837f83d1896",
+   "publications": 42
+  },
+  {
+   "seed": 9,
+   "sets": "0cd5b30b27dc79cae54e04506d32211a",
+   "decisions": "08d5f47c661280b2e47e23aae73483c3",
+   "publications": 34
+  },
+  {
+   "seed": 10,
+   "sets": "14a6715b92a2c37a1c2ab7877ef97d27",
+   "decisions": "b8969d5ab277400234dbb2d53cfbc101",
+   "publications": 43
+  },
+  {
+   "seed": 11,
+   "sets": "851f21a8f31131df5fc7bccc8a2c1363",
+   "decisions": "61b273727725500c70915cdf5b3625cd",
+   "publications": 50
+  },
+  {
+   "seed": 12,
+   "sets": "6df87ba7aee9351a9b415429b944107b",
+   "decisions": "13883782a38498a1cd3000e5b0691bcf",
+   "publications": 68
+  },
+  {
+   "seed": 13,
+   "sets": "355b0b76a796b4a5929fc4f57af1b6a5",
+   "decisions": "a21f2c547aba0ab107036bebe66e7c94",
+   "publications": 50
+  },
+  {
+   "seed": 14,
+   "sets": "9a1c7a36c5c33f09fadd156ee153f026",
+   "decisions": "571ef1691e76975729db0fb848c88dd3",
+   "publications": 43
+  },
+  {
+   "seed": 15,
+   "sets": "1b8c0d9490dcbf7d7a214e2aa1aa6cfb",
+   "decisions": "3da9aea3da08df4fc400030fea54d8d2",
+   "publications": 26
+  },
+  {
+   "seed": 16,
+   "sets": "be70383d004bb827b342316a1ca42f65",
+   "decisions": "c412a44b6b9cf8918f82eafd4467cefb",
+   "publications": 25
+  },
+  {
+   "seed": 17,
+   "sets": "5dc00dcf84739e5e5dad3eac1b25215e",
+   "decisions": "45bcc0381124e04157d97ff47856005a",
+   "publications": 43
+  },
+  {
+   "seed": 18,
+   "sets": "e8c5e709a1423fc085b6fda3f0211310",
+   "decisions": "836ddee3e29e3281a3fa7abbe97243de",
+   "publications": 27
+  },
+  {
+   "seed": 19,
+   "sets": "88a22cfa42f636551929d8dc20be98a3",
+   "decisions": "176d5c47b85c22e52bf46729073eeb7b",
+   "publications": 26
+  },
+  {
+   "seed": 20,
+   "sets": "422acb96d634c11c6e5bf1bc9ec8e22b",
+   "decisions": "96df4d56e5d62485c7f865d72176e1ee",
+   "publications": 44
+  },
+  {
+   "seed": 21,
+   "sets": "5a0386a04fe6bcbabc0050de3275a599",
+   "decisions": "120fd1ea67a130b9d1154a924e93d6dc",
+   "publications": 33
+  },
+  {
+   "seed": 22,
+   "sets": "e73d1d3e683390748e69621973dfd687",
+   "decisions": "2d0760ade57232f95cac969ba3b2e317",
+   "publications": 26
+  },
+  {
+   "seed": 23,
+   "sets": "18d342bb8113c744a194375cf5b687e9",
+   "decisions": "70c4e4d7d16a5dee53599a3fb66bf291",
+   "publications": 56
+  },
+  {
+   "seed": 24,
+   "sets": "b612b04bfa264868015a09fe561137ee",
+   "decisions": "2766a22b73822ee4336056449b004db8",
+   "publications": 35
+  },
+  {
+   "seed": 25,
+   "sets": "f5580ed0d5da803dd13c5436284e4a16",
+   "decisions": "4a278641654009f052d94ec635f645ec",
+   "publications": 34
+  },
+  {
+   "seed": 26,
+   "sets": "8fc93199645d9d82cd8163f7f1fd1d1f",
+   "decisions": "bc76593c60e9d626c3268c9c384d55f2",
+   "publications": 41
+  },
+  {
+   "seed": 27,
+   "sets": "c1b2ae73d03849c4d9ce28d299e140a1",
+   "decisions": "51d51855c86440617844f41b762e040f",
+   "publications": 55
+  },
+  {
+   "seed": 28,
+   "sets": "ae4239fd174d4053fed2bf9005bfbb39",
+   "decisions": "358dfb83767188c683f5f1b4148024ac",
+   "publications": 34
+  },
+  {
+   "seed": 29,
+   "sets": "0de72b88394e02175ea03c0857bd36bd",
+   "decisions": "c089f5df28c82faecfc08e27db334cd4",
+   "publications": 36
+  },
+  {
+   "seed": 30,
+   "sets": "835744a11284077786e49b44f11fdaf9",
+   "decisions": "4ee0ad45c8374aded7c8272821b3983e",
+   "publications": 26
+  },
+  {
+   "seed": 31,
+   "sets": "e3d383d178ecb24e8eba6296fe6a4f68",
+   "decisions": "8676900c7d3fe6bdffa092259919b674",
+   "publications": 27
+  },
+  {
+   "seed": 32,
+   "sets": "9210ab9939e1fad2c0a41804218e2149",
+   "decisions": "d9a353980ee1fa070363ba273676f459",
+   "publications": 24
+  },
+  {
+   "seed": 33,
+   "sets": "4b63c19c4baddd106448dba047417005",
+   "decisions": "a866b76d5bf752ec032490275cd32150",
+   "publications": 60
+  },
+  {
+   "seed": 34,
+   "sets": "4de40fc7e216b62a8107c3341e8263ee",
+   "decisions": "95806d9845d3634384aebade0f40bd96",
+   "publications": 33
+  },
+  {
+   "seed": 35,
+   "sets": "03f76161fd4e81b1b9f4e143cf1b9403",
+   "decisions": "fb330f63a286e32cdbcd3497670561a5",
+   "publications": 43
+  },
+  {
+   "seed": 36,
+   "sets": "ad99a33b89553b03c3236f41b0e17463",
+   "decisions": "9306e8a9400b1dbb72ff5f66b5e3c46f",
+   "publications": 55
+  },
+  {
+   "seed": 37,
+   "sets": "33a42f07d60ce02863e86b4c1efc262f",
+   "decisions": "806276ad2103f175ae37391288f44a81",
+   "publications": 48
+  },
+  {
+   "seed": 38,
+   "sets": "0489a26d1d00c395d1fd1b57b7922a42",
+   "decisions": "1a0bcca1ba42e64329cfe16a3bdbf237",
+   "publications": 50
+  },
+  {
+   "seed": 39,
+   "sets": "2542297714818b3e4bb365700b1d2f63",
+   "decisions": "e6a6076fc9be94c5a72d9ef6feb97a70",
+   "publications": 46
+  },
+  {
+   "seed": 40,
+   "sets": "9d1d2f52cf030c4d3c2383fd207da895",
+   "decisions": "3de4a80a551584c65aeb7dae058bbdf4",
+   "publications": 30
+  },
+  {
+   "seed": 41,
+   "sets": "eea930f44b6bcb69f07f5c3e8bdce13a",
+   "decisions": "42043bfc091d754571250a0819c8e950",
+   "publications": 39
+  },
+  {
+   "seed": 42,
+   "sets": "4294d55d80f8e21fe53df5b33cda36cb",
+   "decisions": "b9597df986f363ab03c1671308bfb3c9",
+   "publications": 43
+  },
+  {
+   "seed": 43,
+   "sets": "a721afa2b380a4da8a8ba389d6a4c422",
+   "decisions": "b35c7fa1b6abe435c1421b704a6c399e",
+   "publications": 47
+  },
+  {
+   "seed": 44,
+   "sets": "0f87ee6198de7984d7a49436a020f43f",
+   "decisions": "e0594fb6a90f00156bcd252ef17543cc",
+   "publications": 29
+  },
+  {
+   "seed": 45,
+   "sets": "00a21f1daad1a767dc26eaf307bee471",
+   "decisions": "ac31de148e0d66d7d3dd568b65b50a4b",
+   "publications": 40
+  },
+  {
+   "seed": 46,
+   "sets": "8df22e1e740a2b7b4d8f7ba642145cc6",
+   "decisions": "c1d429024ecd7b4ec77e7723c09eb642",
+   "publications": 26
+  },
+  {
+   "seed": 47,
+   "sets": "89dd55faa8d95f91af1b18f0e8dc3a94",
+   "decisions": "277d3a52148d69b1354d46a64d46d0d6",
+   "publications": 42
+  },
+  {
+   "seed": 48,
+   "sets": "34a9c22a81577764bbd9474e1e3e9805",
+   "decisions": "4919b7996fef12bd38b1d8657167da1b",
+   "publications": 37
+  },
+  {
+   "seed": 49,
+   "sets": "4a6bb4faa634d822e56f18e72847c3d8",
+   "decisions": "3961a7996311b156e1b7805fa609af47",
+   "publications": 47
+  },
+  {
+   "seed": 50,
+   "sets": "5ca4a7a36abba2d0dff01b736e8bd213",
+   "decisions": "a12be7d0df6117a381b955c2724b2057",
+   "publications": 45
+  },
+  {
+   "seed": 51,
+   "sets": "40776dfd45c6f6958e365c85290a520f",
+   "decisions": "04a3fa9beb64f865362487d3c1c38f06",
+   "publications": 34
+  },
+  {
+   "seed": 52,
+   "sets": "b3ed26d4e0beccdd53bb7cf3b8839041",
+   "decisions": "3c2fff6b82867a29aff565faf275d419",
+   "publications": 28
+  },
+  {
+   "seed": 53,
+   "sets": "d94140fb825dcb05c13e9487edfceb1e",
+   "decisions": "1799c9ff23ef398f40b29011e82bb9dc",
+   "publications": 51
+  },
+  {
+   "seed": 54,
+   "sets": "4b0b00160867a04dbf840091840f488b",
+   "decisions": "1dd277153309babddf831907343d9247",
+   "publications": 45
+  },
+  {
+   "seed": 55,
+   "sets": "b160ce976d169212fd9c7ef6efb9d3d5",
+   "decisions": "4c8a6f83fbd22357c0275126481fff6c",
+   "publications": 22
+  },
+  {
+   "seed": 56,
+   "sets": "36e65613e82b577fadba72727e9de7ef",
+   "decisions": "6766e898344bf5c3468fd13dd8532886",
+   "publications": 40
+  },
+  {
+   "seed": 57,
+   "sets": "3b10cdb90ee7ae96b76ba6669a2c51c9",
+   "decisions": "895c0ff539bb5fa3c730f2c2f5600a1f",
+   "publications": 57
+  },
+  {
+   "seed": 58,
+   "sets": "10ff9c4dae6558cce683993f80658c23",
+   "decisions": "a6fbe9867c684a599afded89fc9265b0",
+   "publications": 26
+  },
+  {
+   "seed": 59,
+   "sets": "750515f19359a828141c7dc6d80e647e",
+   "decisions": "d56de3b1fbb5fad13a254adcf59068cd",
+   "publications": 49
+  },
+  {
+   "seed": 60,
+   "sets": "0f35bedba66163564b6e4502e2dd1c7b",
+   "decisions": "b4faf8459897e8d6d142da73bb0dada6",
+   "publications": 53
+  },
+  {
+   "seed": 61,
+   "sets": "e32c5e345713412933e32202a960b8de",
+   "decisions": "a705c45e081a30ba1ca6555327b7da74",
+   "publications": 53
+  },
+  {
+   "seed": 62,
+   "sets": "54d2a36c38d390ba48803fc146a47638",
+   "decisions": "3c461d9153a82b298dab9286460c81fd",
+   "publications": 45
+  },
+  {
+   "seed": 63,
+   "sets": "e950c6cd639ae684be185bbfeb716f25",
+   "decisions": "2e61169cf7a6076212c3766930f626bd",
+   "publications": 33
+  },
+  {
+   "seed": 64,
+   "sets": "faa810cea79e8b32b97bf28f3076a79d",
+   "decisions": "dd9701ce80d642adaf17185443fc1d4d",
+   "publications": 25
+  },
+  {
+   "seed": 65,
+   "sets": "ac2235d33d18e6b6c4f6a351fdade1be",
+   "decisions": "1f2712468b56ee1e447a6d74f1c1d69d",
+   "publications": 37
+  },
+  {
+   "seed": 66,
+   "sets": "995c0394ac059da9948aaab6039788f9",
+   "decisions": "760fd2ae081781e1a94c76ef11d43975",
+   "publications": 48
+  },
+  {
+   "seed": 67,
+   "sets": "9fb8773314b3ccf723653ab7db53e29d",
+   "decisions": "bb1cfba52b2df58cb7e8e5a38b35b7ad",
+   "publications": 50
+  },
+  {
+   "seed": 68,
+   "sets": "c3129442b318d35cae95d9a4279b3731",
+   "decisions": "cb47236c9e6542b0d2680cceb771842f",
+   "publications": 47
+  },
+  {
+   "seed": 69,
+   "sets": "c27854acb1b782ff727e7899b4bf0ecd",
+   "decisions": "b6896f2ed06f3312d467edf3331b57cb",
+   "publications": 60
+  },
+  {
+   "seed": 70,
+   "sets": "f072a8d713cbbf11b561409ece7cccda",
+   "decisions": "50a24c71dfa98fed5b5d2526112d83f4",
+   "publications": 32
+  },
+  {
+   "seed": 71,
+   "sets": "0fcbbf2a3d339839e97ff3d3b52d0814",
+   "decisions": "011f665920bb30e556828500155dcb14",
+   "publications": 40
+  },
+  {
+   "seed": 72,
+   "sets": "8ee8f8352a29a28e914c366ebafc2625",
+   "decisions": "11808f1241c806f8db16db23a9eaa66a",
+   "publications": 44
+  },
+  {
+   "seed": 73,
+   "sets": "0f7081fdfcd62bad9067d6c927ae6774",
+   "decisions": "54317fc6f0e9f19e23a7ee38f6b3d134",
+   "publications": 41
+  },
+  {
+   "seed": 74,
+   "sets": "c33f4d6e6cb3317ebcb400edd933baf2",
+   "decisions": "6b9f2b824e6856d638ee061b8bab490a",
+   "publications": 48
+  },
+  {
+   "seed": 75,
+   "sets": "af4aa93645f732956eeee42f15713522",
+   "decisions": "20636be672c96cb551f6d8c7064920a3",
+   "publications": 71
+  },
+  {
+   "seed": 76,
+   "sets": "0cffdbe3e1ce6f74cac0304ea831eda4",
+   "decisions": "a7096815f8e78bc10dbc5abb0decb790",
+   "publications": 40
+  },
+  {
+   "seed": 77,
+   "sets": "9d527027b2fdfe0fe16d607719c3396b",
+   "decisions": "d75e1ff3bb8a4a6b969a390f4ad2317f",
+   "publications": 48
+  },
+  {
+   "seed": 78,
+   "sets": "a81ac0c6657410242d857c857c7774da",
+   "decisions": "46d41c590a5fcc92318e642ca649b538",
+   "publications": 52
+  },
+  {
+   "seed": 79,
+   "sets": "a97c4229c534e0c556ab2ac15fb839ae",
+   "decisions": "14b3ab6bad5639dc224268f57c352b44",
+   "publications": 41
+  },
+  {
+   "seed": 80,
+   "sets": "477d6b2c3101cfe5d0a2c0d394dfe708",
+   "decisions": "1a2a0fa71ac66f34fdeb51a68b7a6702",
+   "publications": 64
+  },
+  {
+   "seed": 81,
+   "sets": "de915630b35b16190994125cd6a5ad67",
+   "decisions": "a96630b9ccaab5f1dca79f564878f72e",
+   "publications": 29
+  },
+  {
+   "seed": 82,
+   "sets": "540748c2b518536e7f15f8e2df12868e",
+   "decisions": "e28df9fcd0f9c6bff832236a616f6703",
+   "publications": 39
+  },
+  {
+   "seed": 83,
+   "sets": "f81e1c26777276c993b37d73708ba7cb",
+   "decisions": "5058607255e99c39b264805a073ec688",
+   "publications": 53
+  },
+  {
+   "seed": 84,
+   "sets": "5b5903f94fa38992fc70c747f7a10a8a",
+   "decisions": "43d0d192690165732522540b7e8e7603",
+   "publications": 36
+  },
+  {
+   "seed": 85,
+   "sets": "a58cf9aab0dcbaf1592789164454d866",
+   "decisions": "feea69ddf89e75d90031126c26020c8c",
+   "publications": 47
+  },
+  {
+   "seed": 86,
+   "sets": "1d6d29d2446a1422dc7e5be250c81cf5",
+   "decisions": "2df2a2552bdfa6542e06d989bd7a026d",
+   "publications": 43
+  },
+  {
+   "seed": 87,
+   "sets": "4d72fd1c47c4c8d4bd6e97b35ebcd356",
+   "decisions": "e931d6c5e3e5b462c970385cb31cb7ef",
+   "publications": 29
+  },
+  {
+   "seed": 88,
+   "sets": "ea0bdd1e9746022b78de064c7d687284",
+   "decisions": "59b6d4d437a0c3f4a9d0993179e58fe2",
+   "publications": 32
+  },
+  {
+   "seed": 89,
+   "sets": "897bdc6558a4e63aadc7ae539209b9eb",
+   "decisions": "2cb0a75f08fe853bf1b034177b9ba1e0",
+   "publications": 52
+  },
+  {
+   "seed": 90,
+   "sets": "5164cbe09c5a92f1c21abf45cde86038",
+   "decisions": "06c677abb4ccd68f4e77d320496297f6",
+   "publications": 47
+  },
+  {
+   "seed": 91,
+   "sets": "cc5df1134c3326e143ee366209e1aafb",
+   "decisions": "4106fcfa96f29920c26ad7c674588b08",
+   "publications": 30
+  },
+  {
+   "seed": 92,
+   "sets": "ee5094735a43e24040fd6af0ac7d416a",
+   "decisions": "178d69dac7b875666ef26ed7b3970cf0",
+   "publications": 33
+  },
+  {
+   "seed": 93,
+   "sets": "b03ef8800077f90349a4d0886c59484e",
+   "decisions": "8beba8e405afc5a6294c3a88d1fc2ca3",
+   "publications": 43
+  },
+  {
+   "seed": 94,
+   "sets": "5e97cd6fa8d676e82d3d57e345aefd1d",
+   "decisions": "9731a3ca2bc7079f8be48d903b9b7113",
+   "publications": 60
+  },
+  {
+   "seed": 95,
+   "sets": "a73e690177a6d22fd4e70e230946734b",
+   "decisions": "c19e318261e4b00541590b8c14999f19",
+   "publications": 31
+  },
+  {
+   "seed": 96,
+   "sets": "93f78722103c872a7702b36d50f2e051",
+   "decisions": "865380e26e181cc8546a5d5ed78417e0",
+   "publications": 56
+  },
+  {
+   "seed": 97,
+   "sets": "c7f24a9a8273da626825f5f617b7afb6",
+   "decisions": "4063f5a6024979945028d6926fe98c72",
+   "publications": 44
+  },
+  {
+   "seed": 98,
+   "sets": "be1ef19f62012c7f284606e37188187f",
+   "decisions": "1249f269082dd7bee0acda5d1c6f7bbf",
+   "publications": 50
+  },
+  {
+   "seed": 99,
+   "sets": "f32a6161dba1a90bf412875ce8fa3a6f",
+   "decisions": "2b4832fabcdee3c95f49e7e9671b494d",
+   "publications": 47
+  },
+  {
+   "seed": 100,
+   "sets": "74848068bfb12256cfd8744697dbfd06",
+   "decisions": "a43426ee643a6057cf43f7e48e3b1a07",
+   "publications": 33
+  },
+  {
+   "seed": 101,
+   "sets": "dd8d91dab889f4902003bfc3aa9dfac1",
+   "decisions": "78b4e35b79d3bb37449f486700eb7c14",
+   "publications": 55
+  },
+  {
+   "seed": 102,
+   "sets": "eed1e7cd43bcf37a4a8cde3765f7f3b5",
+   "decisions": "5905a7213dbb5f0d2f501e6e473df1a1",
+   "publications": 45
+  },
+  {
+   "seed": 103,
+   "sets": "ddab2667efcdd3313cecd40fd13fa0cf",
+   "decisions": "5e802a25159c3466dece683f94adde97",
+   "publications": 65
+  },
+  {
+   "seed": 104,
+   "sets": "29e0bc6b0b8f561de0686c099ce7c216",
+   "decisions": "00b0fdb23f0fb1782ba85477fb68654c",
+   "publications": 33
+  },
+  {
+   "seed": 105,
+   "sets": "f0d9f957caf64193dfdd6937f938cbc7",
+   "decisions": "ad1320e42df14a2f901e83211c935454",
+   "publications": 38
+  },
+  {
+   "seed": 106,
+   "sets": "a55588152c963af654476afa7bb19920",
+   "decisions": "8eb25b5db41f451d2f5a8b465167dc76",
+   "publications": 48
+  },
+  {
+   "seed": 107,
+   "sets": "83fce0b91e747b9531bb2199181c3fe1",
+   "decisions": "69d3b0dea8ed37ca7ff529f4b10f9c15",
+   "publications": 42
+  },
+  {
+   "seed": 108,
+   "sets": "cd742a6b471c731343be7b87937806fa",
+   "decisions": "b48aee5b29bf8e420bbf7c61e63a4271",
+   "publications": 38
+  },
+  {
+   "seed": 109,
+   "sets": "d600043ac9bad85d8bcab449d1f44f0b",
+   "decisions": "05eda5c38ee2fcd29e69e5c55ae12b6d",
+   "publications": 40
+  },
+  {
+   "seed": 110,
+   "sets": "4a01fdeb14520924e5e3635b590b4448",
+   "decisions": "c62005e16b513f117aa638419da7839f",
+   "publications": 43
+  },
+  {
+   "seed": 111,
+   "sets": "8f205af101b55fb0887bce436eb68a91",
+   "decisions": "a7821b438c8b4daca45720874ec3487b",
+   "publications": 25
+  },
+  {
+   "seed": 112,
+   "sets": "9cd83b76b838f6c1b4faffc32ee23450",
+   "decisions": "7ab40464a63bc6be368483496ec571c5",
+   "publications": 58
+  },
+  {
+   "seed": 113,
+   "sets": "036f8918a99dd19706c6f5d2cdbd1381",
+   "decisions": "63c0438714288ef41d9007f78728d49d",
+   "publications": 50
+  },
+  {
+   "seed": 114,
+   "sets": "663906ed5e08f68c774dcea7419addb7",
+   "decisions": "72b00732b3f279572891927fca2d0301",
+   "publications": 40
+  },
+  {
+   "seed": 115,
+   "sets": "749eb3f71c041290108241437b2cecfc",
+   "decisions": "927a312ecf808c9718a1370663e0c9f8",
+   "publications": 34
+  },
+  {
+   "seed": 116,
+   "sets": "b82477b540528bdd7cfad511dc8b2d1c",
+   "decisions": "2ef2de4638db0015c0208c8d5fcbc7a9",
+   "publications": 49
+  },
+  {
+   "seed": 117,
+   "sets": "ef5add7680ce066780aeeb660bd261ec",
+   "decisions": "d762be611c88708d0f797196bd9a0c74",
+   "publications": 40
+  },
+  {
+   "seed": 118,
+   "sets": "e304ff8de10d077fb0b5dc7fd54e53d8",
+   "decisions": "2c87552021410027f6cdade580a06ecb",
+   "publications": 40
+  },
+  {
+   "seed": 119,
+   "sets": "3bf000b6c9ab2bf51f62de25b60b409c",
+   "decisions": "08ed77a056535f7ca0526704e361e90f",
+   "publications": 40
+  },
+  {
+   "seed": 120,
+   "sets": "80f162169985fcfa2a9ec7ade9293230",
+   "decisions": "b3e911fa1816080be660cb7a11c90fa5",
+   "publications": 21
+  },
+  {
+   "seed": 121,
+   "sets": "3d3208867607ae4253b3841bf0fd3999",
+   "decisions": "72be30021056682c0dfc6af0eec9bdf2",
+   "publications": 48
+  },
+  {
+   "seed": 122,
+   "sets": "7a72553a2d599795f0435572ff1ecd67",
+   "decisions": "1b88877973d663095323d6181bfc393a",
+   "publications": 57
+  },
+  {
+   "seed": 123,
+   "sets": "0b73a4951e481c9432d042bd56d84bf1",
+   "decisions": "f25880797075fa093fb79c6979e5b8c8",
+   "publications": 32
+  },
+  {
+   "seed": 124,
+   "sets": "75b2e38d388327aa12bd4d3d0cddf169",
+   "decisions": "7f4f750df439991167fc84fc85de5f19",
+   "publications": 36
+  },
+  {
+   "seed": 125,
+   "sets": "832c255fe6e625cdfd4a89e9e9c583c9",
+   "decisions": "950b445263c42ae12f23f68d42ad5f5c",
+   "publications": 51
+  },
+  {
+   "seed": 126,
+   "sets": "bb6e00c319ed632a9a9329a868944fbc",
+   "decisions": "8251723495ba305e9000dbb740d41da2",
+   "publications": 39
+  },
+  {
+   "seed": 127,
+   "sets": "d6d7d812bce05bc4b8e9c31d8e9058dd",
+   "decisions": "b13d61c95a813a7d3cfde3aa87d25eec",
+   "publications": 40
+  },
+  {
+   "seed": 128,
+   "sets": "d666016b3d93567b73f1b2d520eafcc2",
+   "decisions": "e96fa30882cc292709ac2ee52b0bbe89",
+   "publications": 45
+  },
+  {
+   "seed": 129,
+   "sets": "6a8a240a6731278b33ac0a515afd108b",
+   "decisions": "07cb34521a6fb4801a562be9156e7ccc",
+   "publications": 30
+  },
+  {
+   "seed": 130,
+   "sets": "b33f3b6ecf78ed4a9eaf343e5ac2d609",
+   "decisions": "c5ea37e98dec30e22f1ad0ef1668e304",
+   "publications": 37
+  },
+  {
+   "seed": 131,
+   "sets": "c9636d73dc1659d16f753e510a9b9f29",
+   "decisions": "07f598d60c07b728c7eb128787cfd48f",
+   "publications": 49
+  },
+  {
+   "seed": 132,
+   "sets": "5614c57862bee479e4e28ac60fdb36b1",
+   "decisions": "1bf9a16e23c7dcc7ff3ee20cea014d23",
+   "publications": 45
+  },
+  {
+   "seed": 133,
+   "sets": "2809f5301c05ee0a0af3b7f6e9fd1a1a",
+   "decisions": "36514fdbb555423e6b799b1e9a9bc613",
+   "publications": 36
+  },
+  {
+   "seed": 134,
+   "sets": "4e4db89d18b2152151b0909f2c72760d",
+   "decisions": "cb11c01512076efa8e0b4a61e9c577d2",
+   "publications": 55
+  },
+  {
+   "seed": 135,
+   "sets": "6d824e985a1aba7fb08c2b29c34b7387",
+   "decisions": "4b5b940d917aefcee5bb54a4b6285c9c",
+   "publications": 51
+  },
+  {
+   "seed": 136,
+   "sets": "128acc61c1fb5a93f306a32fc02b11dd",
+   "decisions": "eac4aef384e0cf7bcd7089ca40fb897e",
+   "publications": 27
+  },
+  {
+   "seed": 137,
+   "sets": "1463be018bede82e89b665d19ab0c59a",
+   "decisions": "f0729c7d0b0ceac45754576be560ffc6",
+   "publications": 48
+  },
+  {
+   "seed": 138,
+   "sets": "f29781add5df60c0c318850a9d201023",
+   "decisions": "478f99c7a9a1cf12f4f6b9c9dc7e0cc4",
+   "publications": 36
+  },
+  {
+   "seed": 139,
+   "sets": "4026e52e3317538f04c070903675c3b7",
+   "decisions": "1c57c85e83e30cbac09e2739c82e3fe4",
+   "publications": 40
+  },
+  {
+   "seed": 140,
+   "sets": "2a72df5fcddab9fcc66df856484305de",
+   "decisions": "685e78a19c3aa44cce3946f0efd82853",
+   "publications": 53
+  },
+  {
+   "seed": 141,
+   "sets": "dabf5dc26a962b53de34e4e8eecae25f",
+   "decisions": "8c6ae50f60deb97c599cdbcbdadbb419",
+   "publications": 40
+  },
+  {
+   "seed": 142,
+   "sets": "7f9106cad008c0047915e6a13a812bfc",
+   "decisions": "055f3f3577ee409b0771a760bba34a83",
+   "publications": 38
+  },
+  {
+   "seed": 143,
+   "sets": "3bfed75b63872a6d1d9c7cfdc244e62f",
+   "decisions": "f707d940ff3778d56336feffc1ec1a8e",
+   "publications": 57
+  },
+  {
+   "seed": 144,
+   "sets": "4ac6e7cd9db8681c5c71a630ceb74923",
+   "decisions": "5f925a7c2645db0753d9bf3946b06ef3",
+   "publications": 61
+  },
+  {
+   "seed": 145,
+   "sets": "82ff27e3519cd2a9e37d6ecf29e6f618",
+   "decisions": "1224c7b6dd518b3e0200c200bcec78c2",
+   "publications": 32
+  },
+  {
+   "seed": 146,
+   "sets": "07ef806ff2f846ab63a1f2011a07c6f0",
+   "decisions": "a42004bf782126b36d31c2e5cf727532",
+   "publications": 31
+  },
+  {
+   "seed": 147,
+   "sets": "cf187397a62a6fc2f085fd5123c2ad97",
+   "decisions": "5de910258359229f7a83a45cfa054200",
+   "publications": 69
+  },
+  {
+   "seed": 148,
+   "sets": "d155a37165bf304a9c2c4ab94857c4fa",
+   "decisions": "5d9b52265db812ddb3ef8d54e85a1e02",
+   "publications": 64
+  },
+  {
+   "seed": 149,
+   "sets": "f71396af09fe49368fdef7c6e3091aa9",
+   "decisions": "09c8358d18bd397cc8948086412431c2",
+   "publications": 47
+  },
+  {
+   "seed": 150,
+   "sets": "76192f44c69b2bf31827693b77bb07f1",
+   "decisions": "a71406eb9bda3a6a2da9d71dc77c7527",
+   "publications": 32
+  },
+  {
+   "seed": 151,
+   "sets": "2a0206d21086b31c350f54eee3ee81c5",
+   "decisions": "cf56c28b1552aacd4287853c5af1a63a",
+   "publications": 42
+  },
+  {
+   "seed": 152,
+   "sets": "f9f3bd8ca7480378c8506516dfe4518b",
+   "decisions": "7f2d84c7d45e31a41654daa4ee95e61f",
+   "publications": 47
+  },
+  {
+   "seed": 153,
+   "sets": "c522c896ef991b7e7ec4cb47d9d11b91",
+   "decisions": "db21aaedf7af107a170136f4cf7c1abc",
+   "publications": 52
+  },
+  {
+   "seed": 154,
+   "sets": "1f372afa3ef75b8ffaf8024c4169e64a",
+   "decisions": "7032139f5e479395b1f8d84b19fb6c2d",
+   "publications": 36
+  },
+  {
+   "seed": 155,
+   "sets": "60fd8825fb4ac3fce9c0014c36106956",
+   "decisions": "a43b5768dd92d9b378392149ae7d2e7c",
+   "publications": 41
+  },
+  {
+   "seed": 156,
+   "sets": "09cfed76ab934353c8fff029fea7ae51",
+   "decisions": "795e27e53ad401e297c9623329b15978",
+   "publications": 43
+  },
+  {
+   "seed": 157,
+   "sets": "be9a708080d209e5f0367d6a43923654",
+   "decisions": "6602bb1eb39a5b340c7953b66e725c3a",
+   "publications": 41
+  },
+  {
+   "seed": 158,
+   "sets": "3738e102582735db725bc116cf766b18",
+   "decisions": "e628cf3ee918de258f61087bbdc0ff73",
+   "publications": 31
+  },
+  {
+   "seed": 159,
+   "sets": "2b489ee58b73a9005807a8c84fe5ea6c",
+   "decisions": "c008ceb9995ec848fbf5113bc23a1438",
+   "publications": 54
+  },
+  {
+   "seed": 160,
+   "sets": "92a4df76bfe16c5d8b1180fb0ee0ade0",
+   "decisions": "26c26cdaebd1199b5bd804d8ba9d3780",
+   "publications": 48
+  },
+  {
+   "seed": 161,
+   "sets": "e7f37882e59fb24540a58c81120f2ec2",
+   "decisions": "8e723c818f0cec152db01f0b57d4c301",
+   "publications": 45
+  },
+  {
+   "seed": 162,
+   "sets": "24cf926e81abba9eca7c47f8a0d8a430",
+   "decisions": "716708eab29268bbcff9ae904e5bdc3a",
+   "publications": 40
+  },
+  {
+   "seed": 163,
+   "sets": "0644ccd15b0800efaaf35bf4972b2afa",
+   "decisions": "15628b518aceed112cca4fdbbd842790",
+   "publications": 32
+  },
+  {
+   "seed": 164,
+   "sets": "beb238222c7a81487e74dd108e4c6eb5",
+   "decisions": "0c1d16a79b429e80a8de00d175fb67d3",
+   "publications": 47
+  },
+  {
+   "seed": 165,
+   "sets": "9db7a8359dbbd295f38bec34048c1a6c",
+   "decisions": "1f5035a8155fc0410bc05011845d46a2",
+   "publications": 64
+  },
+  {
+   "seed": 166,
+   "sets": "02bdf37f98009b0ad565dd1e917ff431",
+   "decisions": "6b6b104ca28302b63fa55577590138a2",
+   "publications": 54
+  },
+  {
+   "seed": 167,
+   "sets": "73edc39f987cf11d38bfb84e379861d7",
+   "decisions": "6addbd2e3d6a9c37ebf11df4edd85e9d",
+   "publications": 52
+  },
+  {
+   "seed": 168,
+   "sets": "17daa3fae65816a566ad3f7b98c39823",
+   "decisions": "9c92e8827b5667f37b9af6acf9986b8b",
+   "publications": 43
+  },
+  {
+   "seed": 169,
+   "sets": "cbd7ce356da6513236c838b7f8ee0607",
+   "decisions": "4e807485239436b237d6f063c1241f44",
+   "publications": 57
+  },
+  {
+   "seed": 170,
+   "sets": "f3de208ff1034211f6867ca7388a6023",
+   "decisions": "7a9955e9c137235884970e5a728076d8",
+   "publications": 38
+  },
+  {
+   "seed": 171,
+   "sets": "59dd1194dda3905d67eee3d5d427f03a",
+   "decisions": "b169c8c8bfcb8dfdd6d4bbadcec56587",
+   "publications": 46
+  },
+  {
+   "seed": 172,
+   "sets": "d5b5553d393bb03d6ea275a23218fab1",
+   "decisions": "fddd8be3c95cd4bbf14790ae22887dee",
+   "publications": 23
+  },
+  {
+   "seed": 173,
+   "sets": "3b9f0fd7ee5442317ce8064e4ecc118e",
+   "decisions": "e029446a4533fd8ae5ff39fc684b7a62",
+   "publications": 44
+  },
+  {
+   "seed": 174,
+   "sets": "f52775395addd2a8ecf2b562b54d6513",
+   "decisions": "d93067a89186b701b46de318de043ea7",
+   "publications": 42
+  },
+  {
+   "seed": 175,
+   "sets": "c54a6d0446660d19b99931c69d68a2bf",
+   "decisions": "68c6e3f6d2579ea90b91d369a9f09684",
+   "publications": 45
+  },
+  {
+   "seed": 176,
+   "sets": "fe7f63375f1e9a91b1ebadb13d0a8483",
+   "decisions": "07becc9e10cd12191e4ed1c52463e4d5",
+   "publications": 40
+  },
+  {
+   "seed": 177,
+   "sets": "036fa1090618cece88b34be784d6acc3",
+   "decisions": "f7f6039488e3a24ab167b68fdc0ecc70",
+   "publications": 36
+  },
+  {
+   "seed": 178,
+   "sets": "ea0ff72cc246778e7339f8e36f2f4b31",
+   "decisions": "468772d10a7800b839f213a8eb0c24f2",
+   "publications": 32
+  },
+  {
+   "seed": 179,
+   "sets": "303758f3d7d0aa52b79a7c59137ca653",
+   "decisions": "02547a0ccc8fc6dad6f470ce64ea54c6",
+   "publications": 32
+  },
+  {
+   "seed": 180,
+   "sets": "2768f17a9e730579c6eff994046f5ede",
+   "decisions": "8dbaf78c4957aef5fe9af8a24dcb0b41",
+   "publications": 42
+  },
+  {
+   "seed": 181,
+   "sets": "891ba1cc47e29b4820cc7268e93cadb6",
+   "decisions": "99dd937665eeed47466d8b10840775ca",
+   "publications": 36
+  },
+  {
+   "seed": 182,
+   "sets": "b739e91092f34d2720a1a15a0b32ed17",
+   "decisions": "d4dadaef2657401c8e192ea24011fed9",
+   "publications": 38
+  },
+  {
+   "seed": 183,
+   "sets": "2c26b4bc96cd1b02b160660a29767dea",
+   "decisions": "e0bcd04365d4fe02fc1e70fd3301af40",
+   "publications": 33
+  },
+  {
+   "seed": 184,
+   "sets": "a8503a5cd2101d5263f58b57ee75cf7d",
+   "decisions": "8da81cd5761f648bd10ff79fd19b6d5f",
+   "publications": 37
+  },
+  {
+   "seed": 185,
+   "sets": "560d54344e3cc18d489d0990ed913381",
+   "decisions": "00105ce53007e1ca649b6b28a50eec97",
+   "publications": 41
+  },
+  {
+   "seed": 186,
+   "sets": "25c59737ecc765de6a7637078107df19",
+   "decisions": "af203933db7f46e662c4f9430add8b98",
+   "publications": 65
+  },
+  {
+   "seed": 187,
+   "sets": "9991a7086e4a27d39b2ffe9f7da9ea9f",
+   "decisions": "200581ddac4e132e65f93e3f0538d8f5",
+   "publications": 44
+  },
+  {
+   "seed": 188,
+   "sets": "7f680423df4fd77c524a8206db518e08",
+   "decisions": "87aa361867cc35254049b8ff7a9ab86a",
+   "publications": 43
+  },
+  {
+   "seed": 189,
+   "sets": "c464c2da22fc4bbeb9ca76735ff439b5",
+   "decisions": "67a2af1fae93387862ecddc4bdd5fdbf",
+   "publications": 21
+  },
+  {
+   "seed": 190,
+   "sets": "7e96a4c67e297508248f2a2a4fc71beb",
+   "decisions": "6bf48debeac45cd88518200b32bead6a",
+   "publications": 60
+  },
+  {
+   "seed": 191,
+   "sets": "88dc6b65b7d890948e39d5ed975ff58a",
+   "decisions": "cecd45562c7913bffd44a5b7048de282",
+   "publications": 38
+  },
+  {
+   "seed": 192,
+   "sets": "4ae22a402a545b324178c7c10d758b13",
+   "decisions": "d1ee2b8e1f30483ca4d1a219521e32bc",
+   "publications": 44
+  },
+  {
+   "seed": 193,
+   "sets": "23a9aec67751efe74badb7fd73d2ca5b",
+   "decisions": "878908e2d49b212b9cf830ff44b72c50",
+   "publications": 62
+  },
+  {
+   "seed": 194,
+   "sets": "440bb74a987a6c90941a7d20f2be24c6",
+   "decisions": "65e4c467906cb52105172b0f6088b285",
+   "publications": 29
+  },
+  {
+   "seed": 195,
+   "sets": "ff45517bc72df5a99ede764caac72653",
+   "decisions": "ff7f555e30a2e115a3a6b1711e8a6d45",
+   "publications": 26
+  },
+  {
+   "seed": 196,
+   "sets": "0477d215e46740200dd3166de18d0d55",
+   "decisions": "6bc391e0035db0a8f73e42e050259eef",
+   "publications": 47
+  },
+  {
+   "seed": 197,
+   "sets": "8c39783ace06a3d318a7f0d844a78b65",
+   "decisions": "f39f56bb4d443f3bc1f60f62e9e398f9",
+   "publications": 41
+  },
+  {
+   "seed": 198,
+   "sets": "c5b804fc1e10225f12557d8f14b0aefb",
+   "decisions": "a4b906987cfd0eddcc0fa4493c4814b1",
+   "publications": 44
+  },
+  {
+   "seed": 199,
+   "sets": "5d7240a95cb98e0cda9db07a01bbf200",
+   "decisions": "2b720bf4e8d4381e57e7b171d21fd305",
+   "publications": 25
+  },
+  {
+   "seed": 200,
+   "sets": "e879be772429e24251c3b1ca8f240a2d",
+   "decisions": "2f0099de57b59e333917700b9607f24a",
+   "publications": 34
+  },
+  {
+   "seed": 201,
+   "sets": "7d2811caf6db4506d82692a889cb5db6",
+   "decisions": "041caa58a7af64e69fd0d70488014c7b",
+   "publications": 38
+  },
+  {
+   "seed": 202,
+   "sets": "8597b50286a478cd2a66905890e5c267",
+   "decisions": "920af471694987b1babeb27428a35cd9",
+   "publications": 23
+  },
+  {
+   "seed": 203,
+   "sets": "17a97d1664e2e2ac814d9c75c3f234c5",
+   "decisions": "4bec96d19f41bc1558552e557c292091",
+   "publications": 54
+  },
+  {
+   "seed": 204,
+   "sets": "eb3927deb2fdaddb7086869e888264eb",
+   "decisions": "4c4c08cba4596f5efcaae2c211577cc1",
+   "publications": 61
+  },
+  {
+   "seed": 205,
+   "sets": "0a3186bc351ca775e0cb62032b08612b",
+   "decisions": "b76c1a6b99fc8ac85af99c533242f6a9",
+   "publications": 55
+  },
+  {
+   "seed": 206,
+   "sets": "b2ff8528c8f6105a76653bf3469bebe7",
+   "decisions": "970e9a4f2a5af541d54571b689016486",
+   "publications": 26
+  },
+  {
+   "seed": 207,
+   "sets": "9000b921849eb2e476fae639b6e03b44",
+   "decisions": "bad1fb41ae230574086aef466e406a63",
+   "publications": 75
+  },
+  {
+   "seed": 208,
+   "sets": "8a5cf8c468235e019f38dc787cf8451a",
+   "decisions": "96fb75ff906f2fd9e6181cac2489d0e6",
+   "publications": 40
+  },
+  {
+   "seed": 209,
+   "sets": "5c09fb1017c81994cdbe77bd0a5c7201",
+   "decisions": "982b99377129545b003993fcf520548f",
+   "publications": 46
+  },
+  {
+   "seed": 210,
+   "sets": "3f2550d360c187615936ac748e7a9f43",
+   "decisions": "2f983b31f4dc78ef7126aec0d6b30742",
+   "publications": 72
+  },
+  {
+   "seed": 211,
+   "sets": "348f7d1e9196eed0277a3ab9dd5a56aa",
+   "decisions": "15a6802cd8068bdc3ab422e6e067367b",
+   "publications": 44
+  },
+  {
+   "seed": 212,
+   "sets": "d2d50319af405664c620911c7e4ba3d2",
+   "decisions": "03a03e694636d091de0e1294cdc35946",
+   "publications": 36
+  },
+  {
+   "seed": 213,
+   "sets": "ab09d4f2c3977a8a13ebe219ba26c059",
+   "decisions": "0a4aefc548a8809ec0483cc679f3f1ab",
+   "publications": 53
+  },
+  {
+   "seed": 214,
+   "sets": "9ae6faabea966e4909a7983447cba1ff",
+   "decisions": "b507adcfb410207ac58a59d012c650c3",
+   "publications": 35
+  },
+  {
+   "seed": 215,
+   "sets": "77261866380ac5cd32c59ada091bab6d",
+   "decisions": "886319b399697e46d4b3f4bf7e8f00e9",
+   "publications": 45
+  },
+  {
+   "seed": 216,
+   "sets": "8da41ccc70e5e4e6de1ce5a49dba11ed",
+   "decisions": "f8cc3760d9fd28d551dd803c97f17cf9",
+   "publications": 30
+  },
+  {
+   "seed": 217,
+   "sets": "79adc7c050bdf38190135a8f3b0a4c94",
+   "decisions": "4bdfe551f70f18730f48166ea4a231f5",
+   "publications": 45
+  },
+  {
+   "seed": 218,
+   "sets": "37813aa9995cf667eaddd719ff394ea8",
+   "decisions": "a519d145ba6ab648b79f84d893ae0dd9",
+   "publications": 31
+  },
+  {
+   "seed": 219,
+   "sets": "dbf88bf42c7a260b62370ff50e28e03e",
+   "decisions": "7b0392d63b06152100544a2c45e54508",
+   "publications": 47
+  },
+  {
+   "seed": 220,
+   "sets": "f1042a0619f52075086558b2e42a9387",
+   "decisions": "aac050d3ed161ec4331bad73daa29f87",
+   "publications": 47
+  },
+  {
+   "seed": 221,
+   "sets": "4a557fade76373813f6ca9bee7f9837d",
+   "decisions": "9c73afcc2748af01546a881e1fa54640",
+   "publications": 45
+  },
+  {
+   "seed": 222,
+   "sets": "fb16f4b719884e60a9a37037a3bc0b80",
+   "decisions": "95a911d0f1231d770fc7555280dbf285",
+   "publications": 49
+  },
+  {
+   "seed": 223,
+   "sets": "8836c5c4516dc7b74d485ead8384bf9d",
+   "decisions": "e10eb3fc5cbce7c823db1b15900d6a20",
+   "publications": 50
+  },
+  {
+   "seed": 224,
+   "sets": "d58046e9a8a17dd73fc27850a5c61b7f",
+   "decisions": "3728b88cc462bb4354b4c5858335baa6",
+   "publications": 54
+  },
+  {
+   "seed": 225,
+   "sets": "97ddb0aa930ccd3b24e414636f58be59",
+   "decisions": "636e50d7cf891095d04dadba1c0d508d",
+   "publications": 41
+  },
+  {
+   "seed": 226,
+   "sets": "fc6ee18b27e581deb29999d3f6e90a2e",
+   "decisions": "0241385db3c0ea0277ae93a29b671705",
+   "publications": 47
+  },
+  {
+   "seed": 227,
+   "sets": "8ba52cdf39e0746d8a4dfa46961cf2f2",
+   "decisions": "c56bfc00bd44e52ef27bc103fed35612",
+   "publications": 31
+  },
+  {
+   "seed": 228,
+   "sets": "afb17d8ce7bb9d53c513ad577d17547e",
+   "decisions": "a06b67b9b50e757c51685dbda4145212",
+   "publications": 47
+  },
+  {
+   "seed": 229,
+   "sets": "5c1e1dd522f4a0f36037de6b9446c18f",
+   "decisions": "4f5df2c384fc80d216399e2b38c2d90b",
+   "publications": 33
+  },
+  {
+   "seed": 230,
+   "sets": "0a0aa58e0c06f9faca28c52f72aa78e6",
+   "decisions": "8f8422b739b5f5401c9b166e7c28e8ff",
+   "publications": 36
+  },
+  {
+   "seed": 231,
+   "sets": "07c75eb493645dbd20723737bfa6a5dd",
+   "decisions": "90d01e64e4bb318fd383e384455725eb",
+   "publications": 60
+  },
+  {
+   "seed": 232,
+   "sets": "de4587ae435072c7a93510767133f599",
+   "decisions": "6552af691308d9078c6287407d30576a",
+   "publications": 33
+  },
+  {
+   "seed": 233,
+   "sets": "0ef3e4effaf779e68a2a2313e863fb1a",
+   "decisions": "24c12e447cd0a59e3709a76963ccbdb0",
+   "publications": 52
+  },
+  {
+   "seed": 234,
+   "sets": "65968f9225c7297c090fc939153fb0cc",
+   "decisions": "ac597bddf17a56e19988dd53403e1ef8",
+   "publications": 47
+  },
+  {
+   "seed": 235,
+   "sets": "35307ec2e0b743d6991aa2e44abbb936",
+   "decisions": "38bc68c65c66c4037b836d9f66956900",
+   "publications": 45
+  },
+  {
+   "seed": 236,
+   "sets": "a4618b024de64694a5bb60cc713decc4",
+   "decisions": "8dd83cf8c18bd075bd4ffb4b0d764df1",
+   "publications": 40
+  },
+  {
+   "seed": 237,
+   "sets": "e8fcf1d36e775e7abf80f3aca398e0ca",
+   "decisions": "2a9eb9498f69b59e540b057cfaef3765",
+   "publications": 44
+  },
+  {
+   "seed": 238,
+   "sets": "fd3eccb0f177d7e325bc6eed30b60076",
+   "decisions": "ffdbb14ccde85b2e78b7137f6ba8f30d",
+   "publications": 43
+  },
+  {
+   "seed": 239,
+   "sets": "286e7fceb16246e3e515e9efe0e30da0",
+   "decisions": "6b09e66dbdcb86f06d98d452ae5e0a1d",
+   "publications": 33
+  },
+  {
+   "seed": 240,
+   "sets": "deba0465a46a902d8613803e2024434d",
+   "decisions": "1189e26cc63fcd6e6da3d18c03fd16de",
+   "publications": 58
+  },
+  {
+   "seed": 241,
+   "sets": "2df7cf18c5b43a0e774c09700d67dcc8",
+   "decisions": "8922f6739d5fb05a595663696ab746c1",
+   "publications": 30
+  },
+  {
+   "seed": 242,
+   "sets": "e97912271b15a3509e17db2c49491062",
+   "decisions": "28e2465d1d2224f76f75651e77c3685d",
+   "publications": 25
+  },
+  {
+   "seed": 243,
+   "sets": "b1b1193177f9afcdfc95fd1a25e8672b",
+   "decisions": "96f1163caca8025b3a9b02e99ec085d6",
+   "publications": 40
+  },
+  {
+   "seed": 244,
+   "sets": "d4d74ce89511d8514fc32ef69b997d35",
+   "decisions": "fc0f01343df58eee5dfe5da2e6d172b2",
+   "publications": 40
+  },
+  {
+   "seed": 245,
+   "sets": "5b4c2005552c0f42674ebf481a3d517f",
+   "decisions": "2ba6d69ba861ce162146b3e09d58a863",
+   "publications": 12
+  },
+  {
+   "seed": 246,
+   "sets": "35e6703d6dd094f36cf2662a99145862",
+   "decisions": "499b2f5ec8d766650de9986734a259bf",
+   "publications": 43
+  },
+  {
+   "seed": 247,
+   "sets": "f1089eb61ccbcb7cb5edb154bb83ee42",
+   "decisions": "7c64025b2d8efdaa30b57ead1f4291e8",
+   "publications": 54
+  },
+  {
+   "seed": 248,
+   "sets": "c3a1e57b38facae8913a770c15b23b25",
+   "decisions": "6a9a3669d0d5879b43bf3b4023a7c3cc",
+   "publications": 45
+  },
+  {
+   "seed": 249,
+   "sets": "7c84cbcebb62783b975ee1058ac2d9d6",
+   "decisions": "9c16a5baa0456fcb5ccc014c7d405c5a",
+   "publications": 33
+  },
+  {
+   "seed": 250,
+   "sets": "923a27c5c51829b57ba2be40a28c44bf",
+   "decisions": "5004204ec019073deaed0fa6d3439096",
+   "publications": 42
+  },
+  {
+   "seed": 251,
+   "sets": "5ae637e8434de8677718d38ce206a4ff",
+   "decisions": "0b11e117e6f85c3328e79e4f1028fb9d",
+   "publications": 33
+  },
+  {
+   "seed": 252,
+   "sets": "c6fedbc65f534cdb8726a30bb6211422",
+   "decisions": "cf345c94945a3bde93ecfc50a726764d",
+   "publications": 34
+  },
+  {
+   "seed": 253,
+   "sets": "972e2af33f3aafc85778dda24e74ecce",
+   "decisions": "70327ab666c9e518341286a855d37122",
+   "publications": 54
+  },
+  {
+   "seed": 254,
+   "sets": "ded15281ceb7c84a8381af952832f715",
+   "decisions": "d17bfeb34520b7dceb6fdb365bb7a378",
+   "publications": 41
+  },
+  {
+   "seed": 255,
+   "sets": "45215c7d6bba15218bde63be80673498",
+   "decisions": "a6813e7f98f0cfecf05a60ccb81926be",
+   "publications": 37
+  },
+  {
+   "seed": 256,
+   "sets": "fed7445d3f4e7d0a5b7b9fcffacadda9",
+   "decisions": "732cea470052b769116956d2cdf3a18e",
+   "publications": 47
+  },
+  {
+   "seed": 257,
+   "sets": "dd5c2877f0c3be6aa12deabcd00d7b42",
+   "decisions": "e7a1fbc0aad8c548281adb931b8d5c87",
+   "publications": 41
+  },
+  {
+   "seed": 258,
+   "sets": "bbcc22dd84f5a96f334aca9f444b2d5e",
+   "decisions": "24ee2a9973f8908c4b468a539ff561fe",
+   "publications": 38
+  },
+  {
+   "seed": 259,
+   "sets": "14bf332b283415cc5f1f6e2d6bddd101",
+   "decisions": "a8ee93f67b851849a41466f6d99ea967",
+   "publications": 44
+  },
+  {
+   "seed": 260,
+   "sets": "a3480c3f742549bf2ee0c2646d40b2df",
+   "decisions": "6e9317c41bf1464c6b0dec82b31b0804",
+   "publications": 51
+  },
+  {
+   "seed": 261,
+   "sets": "0fa5120c54c2c24ec664df7d09b10820",
+   "decisions": "43d9fc9d08a3dd3e0d662b3295afaf8e",
+   "publications": 34
+  },
+  {
+   "seed": 262,
+   "sets": "9ffbb8aa13d87d4035599751129bc366",
+   "decisions": "276ceac42b878366d1e1e648d035c3d2",
+   "publications": 37
+  },
+  {
+   "seed": 263,
+   "sets": "3fef4201faab8016fed4055d02327cb9",
+   "decisions": "2be4f49e3c2cda6840d479310ee1b97f",
+   "publications": 50
+  },
+  {
+   "seed": 264,
+   "sets": "6fc32ed7f7f9232b1a016320752d4669",
+   "decisions": "e1a052c2bc192196c6706aa54b6abe1b",
+   "publications": 40
+  },
+  {
+   "seed": 265,
+   "sets": "762683646595c8c2676446316cfc622d",
+   "decisions": "5f14d0477243478dc9ec5d3fe411d2f6",
+   "publications": 30
+  },
+  {
+   "seed": 266,
+   "sets": "d71f5b78e8b23fe2e8999405306af0dc",
+   "decisions": "e140c31460805bbeb5964e738ada0ba4",
+   "publications": 55
+  },
+  {
+   "seed": 267,
+   "sets": "1351efff120c991e4afa0b2c34dbaf3c",
+   "decisions": "1521e35087b1cbdd3aead0cc12f4345b",
+   "publications": 31
+  },
+  {
+   "seed": 268,
+   "sets": "bf6a8a93eba291ea37f146b843c5cd7a",
+   "decisions": "a7af161670587bffca1b2cd35e8acd83",
+   "publications": 34
+  },
+  {
+   "seed": 269,
+   "sets": "e3db92fdd8ccef62193d5eb8145f139f",
+   "decisions": "da244faafd4895ba74cf07859e32b3c0",
+   "publications": 42
+  },
+  {
+   "seed": 270,
+   "sets": "6e7ca59b5689b8eb6f88ec0cff83a9f7",
+   "decisions": "3d4d3711e11eb086fa1b933edbda634f",
+   "publications": 52
+  },
+  {
+   "seed": 271,
+   "sets": "79c819b059a2f0599b919ab82c494a68",
+   "decisions": "cf072a6c9f001dc66b8a0bdfeafd8e15",
+   "publications": 44
+  },
+  {
+   "seed": 272,
+   "sets": "93d573a6a31e709bfe27fc0a394b178a",
+   "decisions": "b47203564949e0a8568e1bf256a4bde1",
+   "publications": 48
+  },
+  {
+   "seed": 273,
+   "sets": "e8479c07d498aaf4ed912092291e7929",
+   "decisions": "bfd39a69fdbd74bc708093aef7e7aa86",
+   "publications": 42
+  },
+  {
+   "seed": 274,
+   "sets": "b331dc44279e367eea69bd307f55752f",
+   "decisions": "e41543e10f831919d9f2cc569a310f21",
+   "publications": 50
+  },
+  {
+   "seed": 275,
+   "sets": "6849992b83a782efd03e9aae58d7ee10",
+   "decisions": "8fa847620e823d7f035918251b59406e",
+   "publications": 35
+  },
+  {
+   "seed": 276,
+   "sets": "e8d6b781998ff582e17237fa90f48a67",
+   "decisions": "6f33685e979c1948dc06253f574230f9",
+   "publications": 28
+  },
+  {
+   "seed": 277,
+   "sets": "6419bbccde92759762b74ba279a4ff02",
+   "decisions": "14aadb366bb6a928046a68cd86c8a0d1",
+   "publications": 28
+  },
+  {
+   "seed": 278,
+   "sets": "ace2b208a8c47c245925fb17635045ac",
+   "decisions": "b2de742a467634f1d2cd7a1b9b4bd55c",
+   "publications": 49
+  },
+  {
+   "seed": 279,
+   "sets": "2e5aeca5935cefbd65314ebe1bded66d",
+   "decisions": "b8403ca77399cd14a90d003c7d19df15",
+   "publications": 34
+  },
+  {
+   "seed": 280,
+   "sets": "5a2c681ea624c9008b4603d601be4628",
+   "decisions": "a87f05ebccacc94171fa885503aed748",
+   "publications": 40
+  },
+  {
+   "seed": 281,
+   "sets": "c4e02aa88b43c2a6a0acbd05f21b7d40",
+   "decisions": "8f7989ed4e81c4a5c334d82d510e8df4",
+   "publications": 27
+  },
+  {
+   "seed": 282,
+   "sets": "11407237f6efe3fe24a714616db1d609",
+   "decisions": "6169daf10252abfb8475afa8e24a7be0",
+   "publications": 43
+  },
+  {
+   "seed": 283,
+   "sets": "03cad4a71e34fff458f5d58318667118",
+   "decisions": "9de925b45cc8ee4688679f8bf1a51c4a",
+   "publications": 46
+  },
+  {
+   "seed": 284,
+   "sets": "cd716fe1ac362621c6303093af16ee1d",
+   "decisions": "3cae708c6be4a41d4c1389a6f95993a2",
+   "publications": 35
+  },
+  {
+   "seed": 285,
+   "sets": "ea7c263b963bdfdc5131a539f0186f19",
+   "decisions": "4e6f1f937ab3f43cf45357ef7e3d60fc",
+   "publications": 42
+  },
+  {
+   "seed": 286,
+   "sets": "bf2fcf5c963a3b5dab0ef68424a98036",
+   "decisions": "eed29066efde0e5455ef029c22111055",
+   "publications": 53
+  },
+  {
+   "seed": 287,
+   "sets": "361de0f4a6260c4145b4b86fbbe592e6",
+   "decisions": "944517939ba6def4c6eb8d3ea7a4bf4c",
+   "publications": 24
+  },
+  {
+   "seed": 288,
+   "sets": "14d028302e8d9ca373d3c24f0b985316",
+   "decisions": "a1749759d6d50b901d7f0ed3f3a458ac",
+   "publications": 32
+  },
+  {
+   "seed": 289,
+   "sets": "f99df5a514e2fd9ccf538a18075296ef",
+   "decisions": "097428d59362d658867b0a2e2dcfb1c2",
+   "publications": 35
+  },
+  {
+   "seed": 290,
+   "sets": "04f95c536f022d6a000a473f3ab45400",
+   "decisions": "ac718012f492a467cbb732db4804e391",
+   "publications": 27
+  },
+  {
+   "seed": 291,
+   "sets": "199cf0a9fd49dcaf2f7f299727299e61",
+   "decisions": "081f426aecc6bddd4db891252442a242",
+   "publications": 54
+  },
+  {
+   "seed": 292,
+   "sets": "064d8f0a360aa2f538cb23ec19bfa5b4",
+   "decisions": "dc1b83880b04312fae72406fb735d391",
+   "publications": 67
+  },
+  {
+   "seed": 293,
+   "sets": "e0a20f71674161c31ec6cb703cfdd5aa",
+   "decisions": "9a0994963ba9ad407044bff8c417d6d1",
+   "publications": 45
+  },
+  {
+   "seed": 294,
+   "sets": "13911a6c75e0b83cf469e58d25994eb0",
+   "decisions": "f21acce5b9d19be84e9b8b64100f39d5",
+   "publications": 43
+  },
+  {
+   "seed": 295,
+   "sets": "58c05708dc5af104e138f307ff0a453f",
+   "decisions": "c893a9255af582e5faf4080e80a9171c",
+   "publications": 57
+  },
+  {
+   "seed": 296,
+   "sets": "417dbe473e68fd87259e2f677aeadbe1",
+   "decisions": "3b6f05af42ab9a99e475e2701ba38f8a",
+   "publications": 21
+  },
+  {
+   "seed": 297,
+   "sets": "4146c8dc5bb156dd4015bdfe84ce90a5",
+   "decisions": "2dba279cb9ee405f3e2f5cee0198c9b0",
+   "publications": 14
+  },
+  {
+   "seed": 298,
+   "sets": "cfcedf022afc49c0e0b108355e8d80e5",
+   "decisions": "3fb7ee1644eba29c65c47cc0affd76cf",
+   "publications": 50
+  },
+  {
+   "seed": 299,
+   "sets": "4d6637a2a3befaf21b173c5e2435d091",
+   "decisions": "7ce5c5cf128f161b3f6f830289b9827a",
+   "publications": 48
+  },
+  {
+   "seed": 300,
+   "sets": "62c1d64df421c9c2b8ed5e7d95bf5ca9",
+   "decisions": "364e41ea781b74323035a7062966fb85",
+   "publications": 28
+  },
+  {
+   "seed": 301,
+   "sets": "8753966c78e57a4d7e013c9b09202d29",
+   "decisions": "8bf282eb85ac30fc19a6546af5e82b77",
+   "publications": 65
+  },
+  {
+   "seed": 302,
+   "sets": "d6db1537abcc820a130dc08a1243ffed",
+   "decisions": "897e05ef13973d317289737527edce9d",
+   "publications": 44
+  },
+  {
+   "seed": 303,
+   "sets": "20212e13e5b93b703e1b620e0eec0b7f",
+   "decisions": "db8476a80e9bb1fed5d56bfcdf9397c7",
+   "publications": 39
+  },
+  {
+   "seed": 304,
+   "sets": "a3491a69d5a80c32748ee6c6cf1eef44",
+   "decisions": "4a47fe19182cb0ae116c5fd5a54c299a",
+   "publications": 39
+  },
+  {
+   "seed": 305,
+   "sets": "92d64c885d739d07b7f78535b187a28a",
+   "decisions": "10b1c31f33c6d1d991fc8fe96db73aef",
+   "publications": 52
+  },
+  {
+   "seed": 306,
+   "sets": "2d96d8b3687d6a8f8d2aa6d843dd499c",
+   "decisions": "a97919447e79c5fb83d88b2a862c051b",
+   "publications": 61
+  },
+  {
+   "seed": 307,
+   "sets": "359a0ad540db40ad030fd44a19af0439",
+   "decisions": "faf5fb70ca491af27d534097d57f059c",
+   "publications": 49
+  },
+  {
+   "seed": 308,
+   "sets": "ca134edb207da74a111ba9ee00a77f1d",
+   "decisions": "41528cbc9de2b4c541c67cb725ac308a",
+   "publications": 21
+  },
+  {
+   "seed": 309,
+   "sets": "9ab3b6fa74ff3ef91e6f2318bbe897c4",
+   "decisions": "c5f7cf7d5140c689c4033fd80fa1b0dc",
+   "publications": 66
+  },
+  {
+   "seed": 310,
+   "sets": "e24f4205f4dab302f2c6e4ca21c33eb8",
+   "decisions": "4a482032a5628578d1ba8f52eabd63ec",
+   "publications": 41
+  },
+  {
+   "seed": 311,
+   "sets": "6543dd86991f2950ad856e9de77b6e6f",
+   "decisions": "873b7e85a01667ff8bf991912a43069d",
+   "publications": 68
+  },
+  {
+   "seed": 312,
+   "sets": "2c4b13e96e6d83d501224e5de72014dd",
+   "decisions": "12567428d1c0d296c9066dbf45f21173",
+   "publications": 42
+  },
+  {
+   "seed": 313,
+   "sets": "a420fb370dc987b810f4ff77a0d13411",
+   "decisions": "10d015924678cc444920204835ded71e",
+   "publications": 48
+  },
+  {
+   "seed": 314,
+   "sets": "532405abd0f9229c6c1f6f8aa70a3101",
+   "decisions": "dbb81e74205da8886faa38b79b940bbe",
+   "publications": 49
+  },
+  {
+   "seed": 315,
+   "sets": "d2ac33867388c41b4e52f300667c283e",
+   "decisions": "253ed3f50582d6fd6918aa28ec5b1c5c",
+   "publications": 25
+  },
+  {
+   "seed": 316,
+   "sets": "11ca4d50585e71bcc7b1ffef2c36d120",
+   "decisions": "5f96ed0e3d87c1ff0f4f03024c2a8964",
+   "publications": 27
+  },
+  {
+   "seed": 317,
+   "sets": "8750e705d008c774266ee02451809d8a",
+   "decisions": "1f3e73bda449a5655fb8687af24bff75",
+   "publications": 25
+  },
+  {
+   "seed": 318,
+   "sets": "b2881228fe6abfa0c3e2e6a8c0c311e6",
+   "decisions": "c7a9e3c3993052a3769a3912fdb962f4",
+   "publications": 69
+  },
+  {
+   "seed": 319,
+   "sets": "71976f82e24d904dcff2a17fe3999661",
+   "decisions": "3b446e8058265fb21a2b490c6c001fdf",
+   "publications": 26
+  },
+  {
+   "seed": 320,
+   "sets": "9305eea63e0b01c55a6f3a5abf933e0f",
+   "decisions": "b5120075a2eb930f7211c66a04168c06",
+   "publications": 30
+  },
+  {
+   "seed": 321,
+   "sets": "1830c24277fa3a344335929ce1d50729",
+   "decisions": "5cf7824b2735009393f77322f5e5b566",
+   "publications": 26
+  },
+  {
+   "seed": 322,
+   "sets": "bf72d132b45b6bf5dfeb369c2ff983fb",
+   "decisions": "e63c6d11e3d5b0fcfec20ead1f005903",
+   "publications": 39
+  },
+  {
+   "seed": 323,
+   "sets": "00c9af7db81c5139664255afc90de112",
+   "decisions": "501fdf475339042dfb4891edf308ed22",
+   "publications": 29
+  },
+  {
+   "seed": 324,
+   "sets": "47a8b0618bfc306b9f539133fe4a6fd8",
+   "decisions": "1144b45bf7fb66babcda4a383933f079",
+   "publications": 53
+  },
+  {
+   "seed": 325,
+   "sets": "771e676b9f03c345128627b22be8ea2f",
+   "decisions": "93d5b437f3e1adbc378d72f7a3f36d49",
+   "publications": 29
+  },
+  {
+   "seed": 326,
+   "sets": "a0c03e5174a137117a8ab718d476fa86",
+   "decisions": "9fe6b67ce6ae6b384a5c15e5a6f1d1d1",
+   "publications": 49
+  },
+  {
+   "seed": 327,
+   "sets": "0c8b81775047d106cd243731fba73966",
+   "decisions": "b3baf00a9f267ed517f24f017e7c96af",
+   "publications": 50
+  },
+  {
+   "seed": 328,
+   "sets": "3d42ef571a997db60044d7878c741520",
+   "decisions": "9a65be25ef2a4cd01d89234a6f328f61",
+   "publications": 43
+  },
+  {
+   "seed": 329,
+   "sets": "28409b906f4787ca0b5a2d70843f22db",
+   "decisions": "a0dfdb263c505447a2d1a317995a47ca",
+   "publications": 38
+  },
+  {
+   "seed": 330,
+   "sets": "f6fa193136e3567be6af1c47061b6804",
+   "decisions": "6d833b0e3610a0246d072497e45e7c1e",
+   "publications": 45
+  },
+  {
+   "seed": 331,
+   "sets": "446c49fde4e7c73fac7ddc497e0988d0",
+   "decisions": "8b8b4d918b5cc69874ebcba4e0c0b6ef",
+   "publications": 56
+  },
+  {
+   "seed": 332,
+   "sets": "d393414f535a7a14a10cd269f968f2c5",
+   "decisions": "8972c14165ee8d44b41762ffbcf60646",
+   "publications": 57
+  },
+  {
+   "seed": 333,
+   "sets": "678d21c38cf30d8dd6987d74e671166a",
+   "decisions": "a956392c70c5727c4e09d07bf1fe7839",
+   "publications": 49
+  },
+  {
+   "seed": 334,
+   "sets": "7ba29a3ef9e089d871dd1ef0e2dbe8d6",
+   "decisions": "c45a7e248dd80ce8704689f76df41e9d",
+   "publications": 38
+  },
+  {
+   "seed": 335,
+   "sets": "a3802929d04445317ccfa5d22a0f5f24",
+   "decisions": "a096d5d11b2e488dbcff2aef7e1322c2",
+   "publications": 38
+  },
+  {
+   "seed": 336,
+   "sets": "f0225bd23222688cdeb70c0e7a68656e",
+   "decisions": "8fa677a9abf8111fa2d504c4d95420e7",
+   "publications": 44
+  },
+  {
+   "seed": 337,
+   "sets": "59ca814b60a5a847e5e51e4d43363a5f",
+   "decisions": "0bdbb7b96c980922cdb239fb23d5543f",
+   "publications": 45
+  },
+  {
+   "seed": 338,
+   "sets": "2b608bb614a6b8c5e137f04632fa4160",
+   "decisions": "ea78b1aeb27f1aaac766d54688c70bb6",
+   "publications": 54
+  },
+  {
+   "seed": 339,
+   "sets": "3a556fc940ef408fc451f0e82f65ec60",
+   "decisions": "a1937254c8ff64f48a701b5ac223c706",
+   "publications": 37
+  },
+  {
+   "seed": 340,
+   "sets": "c4d1c368e8c7739cce855a2866b51cad",
+   "decisions": "78c193b9a74875f26ebe9076217a0f22",
+   "publications": 43
+  },
+  {
+   "seed": 341,
+   "sets": "cffbc4f7b0bd2e991fb5fcbc52e53bfa",
+   "decisions": "75f39a001c2b2b56728f4a24497a122a",
+   "publications": 40
+  },
+  {
+   "seed": 342,
+   "sets": "2996cbc4503237aceb1966c7a622ddeb",
+   "decisions": "ed852a960accba1d9feb771580f66d8f",
+   "publications": 36
+  },
+  {
+   "seed": 343,
+   "sets": "244b65254e80fff80cb9de90e4e32577",
+   "decisions": "d26b10d27c34b47d6d7e9da696693dbc",
+   "publications": 54
+  },
+  {
+   "seed": 344,
+   "sets": "f2b5a64812df62fa42454e2981f2dba5",
+   "decisions": "f3811038ccce293211a509e307e58451",
+   "publications": 34
+  },
+  {
+   "seed": 345,
+   "sets": "97a753f9efb96f4d5f4318a8fc11a8cf",
+   "decisions": "ac84eba5d9ea791ae03b89ed55f8ed2f",
+   "publications": 49
+  },
+  {
+   "seed": 346,
+   "sets": "c73ff9c28655a3b4386cedec92593659",
+   "decisions": "b408f9fabe72395c97fbc00fca74fcfd",
+   "publications": 51
+  },
+  {
+   "seed": 347,
+   "sets": "cdc5d0e4447cd52024f61ae39aee0151",
+   "decisions": "f1ffc4e5d5a02964b8ada40089360f78",
+   "publications": 43
+  },
+  {
+   "seed": 348,
+   "sets": "fbaaef96740790928899c7d7b3922889",
+   "decisions": "01ef7c6daa3564d3768c51bc0c26c5c2",
+   "publications": 54
+  },
+  {
+   "seed": 349,
+   "sets": "7ec08b64828f515c4244555d74c86a7f",
+   "decisions": "cfe41377ca5b209b7443da4b8ae8100c",
+   "publications": 57
+  },
+  {
+   "seed": 350,
+   "sets": "5d789fb231f41fdf14a9f70632651893",
+   "decisions": "f6b2008bcb3e9a2b2e021cbab5b30783",
+   "publications": 39
+  },
+  {
+   "seed": 351,
+   "sets": "70d2543a8d6e8141eaa8e8c5cf18e074",
+   "decisions": "9ec1078ce385948f343bb9dd7f98212b",
+   "publications": 38
+  },
+  {
+   "seed": 352,
+   "sets": "ff2bc997877e571e9e569adda2c1c176",
+   "decisions": "3d9099dc5896deba8ce4b9ebb73a6d6d",
+   "publications": 52
+  },
+  {
+   "seed": 353,
+   "sets": "6a751de48f63cc06207d0249df9a287c",
+   "decisions": "ee44b65834e6319fdbfeadaf7bb89d57",
+   "publications": 49
+  },
+  {
+   "seed": 354,
+   "sets": "36f3956e391fe1d7dcf7689073ec5818",
+   "decisions": "f868fd0adea8118f463a2ec0711c1fb1",
+   "publications": 46
+  },
+  {
+   "seed": 355,
+   "sets": "c7c9591d385b50afb12b6274d2dbcf79",
+   "decisions": "4ad833342c416c02c90c1d680dfc8e4c",
+   "publications": 53
+  },
+  {
+   "seed": 356,
+   "sets": "573701a2eb85ec3b4a0b8e284134261c",
+   "decisions": "9957946c2e62944929c8a1e633e65e24",
+   "publications": 40
+  },
+  {
+   "seed": 357,
+   "sets": "dbe1fc636ef46a403443af96dc1981a3",
+   "decisions": "3d965713787029f393140e5c28da7e36",
+   "publications": 36
+  },
+  {
+   "seed": 358,
+   "sets": "6f8f595c4dbd022e51f3ae7192b20f5a",
+   "decisions": "56ea3acc1e852bb19971d03afd909c37",
+   "publications": 34
+  },
+  {
+   "seed": 359,
+   "sets": "45cba6df938a139fbd0fcb3f349a199b",
+   "decisions": "10b71a00ed1e42878d2861730ed46b3d",
+   "publications": 41
+  },
+  {
+   "seed": 360,
+   "sets": "b8e5c7e7326e0210e4a7fa593ecaccba",
+   "decisions": "28968fb60771a532f4d720e460eee14e",
+   "publications": 57
+  },
+  {
+   "seed": 361,
+   "sets": "974f517afab4e97cb7352b66a9e8be0d",
+   "decisions": "51d3d0886a750742f7e6bedfa0c75746",
+   "publications": 36
+  },
+  {
+   "seed": 362,
+   "sets": "a0f999b9f37d97548cf30266d5a9838b",
+   "decisions": "b7b22bb35ad451eab7397bcbc5f9abd0",
+   "publications": 51
+  },
+  {
+   "seed": 363,
+   "sets": "da0e09be42915fd9a7c2dd93f297e635",
+   "decisions": "8474a8f8805ab9bcb5afd534bfcb554b",
+   "publications": 20
+  },
+  {
+   "seed": 364,
+   "sets": "2599c161a74ae1c86acd99ee39efc759",
+   "decisions": "82244fd9573006a2b12fc0a03c43fd3b",
+   "publications": 35
+  },
+  {
+   "seed": 365,
+   "sets": "cb6a622b69c2b03aedbff45ae8f4b69a",
+   "decisions": "d7c08e257f5a09fdb729476da8b479f4",
+   "publications": 54
+  },
+  {
+   "seed": 366,
+   "sets": "97ad2463045926beb076f9dbd72f0ee7",
+   "decisions": "8def6aee623ddc7346872dee115f2851",
+   "publications": 34
+  },
+  {
+   "seed": 367,
+   "sets": "a818a3ce131a4e519643981c1ef7e556",
+   "decisions": "ad8a97f4a42eef0bd6bfb5977de856e0",
+   "publications": 34
+  },
+  {
+   "seed": 368,
+   "sets": "fff8dc87191b59805ec79bf41742f26b",
+   "decisions": "33c9fc22233b4349c191319b59b040f9",
+   "publications": 27
+  },
+  {
+   "seed": 369,
+   "sets": "741524d0d347f5e7a0206115937e57c1",
+   "decisions": "a764d2292ae90d218ae421a3d59a7698",
+   "publications": 50
+  },
+  {
+   "seed": 370,
+   "sets": "ede6db36dc5cb9f51d89fb6b4585b88b",
+   "decisions": "34e512744c5fecf01f571855294078e4",
+   "publications": 44
+  },
+  {
+   "seed": 371,
+   "sets": "939e24c252d61cb8317d9acf13033ce3",
+   "decisions": "b5909f3ee992517f1323746673f69c74",
+   "publications": 34
+  },
+  {
+   "seed": 372,
+   "sets": "47b563f88aafcdffe080ba6e3ac50ba9",
+   "decisions": "afc18f1bf7ff43143234b7d5214a22d5",
+   "publications": 50
+  },
+  {
+   "seed": 373,
+   "sets": "4fb692a60b7e88c6ae8952107b452256",
+   "decisions": "86f025c78eadcd405c67ce1f8f797959",
+   "publications": 43
+  },
+  {
+   "seed": 374,
+   "sets": "222840aa7e49fc9bd4ab51567c057462",
+   "decisions": "bd8b76033daf7cf4243db121ed8d5b94",
+   "publications": 61
+  },
+  {
+   "seed": 375,
+   "sets": "2cfd937ba03eeca9252f41510281b275",
+   "decisions": "67ebd51391a22324768f0ba43f2eed90",
+   "publications": 45
+  },
+  {
+   "seed": 376,
+   "sets": "a3b0eea725972626e7f3d4fc561773ad",
+   "decisions": "0a9d6e2a3a0829b303b37e05fc0a4ce7",
+   "publications": 39
+  },
+  {
+   "seed": 377,
+   "sets": "ff70f76daa6d173bdd217f51c1c4042e",
+   "decisions": "f4824101ffd962c73660f2aff7e1081d",
+   "publications": 45
+  },
+  {
+   "seed": 378,
+   "sets": "41fe81716d7d6f4a77703435e93b5a1f",
+   "decisions": "1cb47b7db167591ac586310c803978a5",
+   "publications": 37
+  },
+  {
+   "seed": 379,
+   "sets": "f6b76bd8f7afd21a20aebdccf2d1e563",
+   "decisions": "3d59f7c01a6ead6e9916ec6e063094f9",
+   "publications": 47
+  },
+  {
+   "seed": 380,
+   "sets": "2b9e8c5451b7f1fa0bc502699c8b6d6f",
+   "decisions": "7df28291e0412352a5fb09224d473e67",
+   "publications": 48
+  },
+  {
+   "seed": 381,
+   "sets": "63c7d7bc0aed6db0cc77c9d53372a293",
+   "decisions": "b481a7f8de6c35c483a662db3caacf72",
+   "publications": 39
+  },
+  {
+   "seed": 382,
+   "sets": "3520269134d81898f1ca15934554f2d1",
+   "decisions": "05fecf0fdbfd35534ab244742f9c6e1a",
+   "publications": 40
+  },
+  {
+   "seed": 383,
+   "sets": "a39613fbe5ad9a35f0ef57cc8b16b768",
+   "decisions": "d532755fefd966cc219dac2b27a436fe",
+   "publications": 33
+  },
+  {
+   "seed": 384,
+   "sets": "4d364a4cb40de0e9f1f91e995ecbe462",
+   "decisions": "26831fb90d9f350e314883ca9af3d3df",
+   "publications": 39
+  },
+  {
+   "seed": 385,
+   "sets": "36ac2ccace3b27309c6cc064d2d73776",
+   "decisions": "2bfd8fe7a39e7a8763b1165875a72ceb",
+   "publications": 31
+  },
+  {
+   "seed": 386,
+   "sets": "227322c68a0506b1ee5d18d53841d00f",
+   "decisions": "f13dc49150336de6c5886c3b0a09e915",
+   "publications": 37
+  },
+  {
+   "seed": 387,
+   "sets": "798d22f2137792b25d96f8ac83985bb4",
+   "decisions": "780ddf0d4f31dd7d4b25d84618c33542",
+   "publications": 24
+  },
+  {
+   "seed": 388,
+   "sets": "819daeaeb31561b0dce4b5d515091d17",
+   "decisions": "5c01551d25cf5b05e200490fdb4d745e",
+   "publications": 34
+  },
+  {
+   "seed": 389,
+   "sets": "974c24f0381b01f85fa782d4f4657c0e",
+   "decisions": "f926194f08ed79bfa17c840965519608",
+   "publications": 36
+  },
+  {
+   "seed": 390,
+   "sets": "420e7b806290ca8eaca623124835ed16",
+   "decisions": "2cd593ddce0316e4a555a492bba2fa2c",
+   "publications": 44
+  },
+  {
+   "seed": 391,
+   "sets": "a36682bde7c16077ba6b2ee1c10fc074",
+   "decisions": "e34935810242bffcdb564eee6fc7fdf3",
+   "publications": 42
+  },
+  {
+   "seed": 392,
+   "sets": "a077795e782ff3b9a74664df77e9f153",
+   "decisions": "5d35eaf9c050afa57ea1f28d2cadd7bd",
+   "publications": 37
+  },
+  {
+   "seed": 393,
+   "sets": "6d81121a67b044c3b36053955ae7319b",
+   "decisions": "ae6e6a5b938923de39440e39a54f0b40",
+   "publications": 40
+  },
+  {
+   "seed": 394,
+   "sets": "b6316cd8ec1858a848f450a9ccc99a69",
+   "decisions": "90a49dbc13c65e02c03660cafaa6da2a",
+   "publications": 30
+  },
+  {
+   "seed": 395,
+   "sets": "72dfbf8d5c5d8b292e1c877c2c9cf42d",
+   "decisions": "d8fb30da68f9c0a567ca607765744fb5",
+   "publications": 45
+  },
+  {
+   "seed": 396,
+   "sets": "06cce2590dd9b3654294e7ee91b70680",
+   "decisions": "6a3d5b5f2815e97dbdf5acaade409962",
+   "publications": 46
+  },
+  {
+   "seed": 397,
+   "sets": "a074b8a2b2d47124ed8ab4d7f0494020",
+   "decisions": "6eeb9bb8cc6e1fab4aa138e3b0824bbd",
+   "publications": 38
+  },
+  {
+   "seed": 398,
+   "sets": "f9e1b3e9eb1e29352e469569d84cdc9c",
+   "decisions": "46bed27e621a5331f3ebcc10e88c3359",
+   "publications": 50
+  },
+  {
+   "seed": 399,
+   "sets": "e173b3efa7ae6866fb70dceb304d8770",
+   "decisions": "ed05870004a58fe19e57da5ddfb8db35",
+   "publications": 23
+  },
+  {
+   "seed": 400,
+   "sets": "378a5dbfe39d5ad4d471f558003a241f",
+   "decisions": "ce5ca2474a088a6fd7a1610a20fd194a",
+   "publications": 44
+  }
+ ],
+ "samples": [
+  {
+   "seed": 1,
+   "sets": [
+    [
+     68,
+     "z2m/test/lamp/set",
+     "{\"state\":\"ON\",\"brightness\":39,\"color_temp\":238,\"transition\":1}"
+    ],
+    [
+     68,
+     "z2m/test/strip/set",
+     "{\"state\":\"ON\",\"brightness\":39,\"color_temp\":238,\"transition\":1}"
+    ],
+    [
+     268,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\",\"brightness\":1,\"transition\":1}"
+    ],
+    [
+     268,
+     "z2m/test/lamp/set",
+     "{\"state\":\"ON\",\"brightness\":1,\"transition\":1}"
+    ],
+    [
+     268,
+     "z2m/test/plug/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     898,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\",\"brightness\":1,\"color_temp\":400,\"transition\":1}"
+    ],
+    [
+     898,
+     "z2m/test/lamp/set",
+     "{\"state\":\"ON\",\"brightness\":1,\"color_temp\":400,\"transition\":1}"
+    ],
+    [
+     898,
+     "z2m/test/strip/set",
+     "{\"state\":\"ON\",\"brightness\":1,\"color_temp\":400,\"transition\":1}"
+    ],
+    [
+     898,
+     "z2m/test/plug/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     1081.2,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     1081.2,
+     "z2m/test/strip/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     1081.4,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\",\"brightness\":152,\"color_temp\":154,\"transition\":1}"
+    ],
+    [
+     1081.4,
+     "z2m/test/lamp/set",
+     "{\"state\":\"ON\",\"brightness\":152,\"color_temp\":154,\"transition\":1}"
+    ],
+    [
+     1081.4,
+     "z2m/test/plug/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     1142.4,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\",\"brightness\":164,\"color_temp\":468,\"transition\":30}"
+    ],
+    [
+     1210.45,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\",\"brightness\":180,\"color_temp\":308,\"transition\":45}"
+    ],
+    [
+     1217.5,
+     "z2m/test/lamp/set",
+     "{\"state\":\"OFF\"}"
+    ],
+    [
+     1217.5,
+     "z2m/test/strip/set",
+     "{\"state\":\"OFF\"}"
+    ],
+    [
+     1247.5,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\",\"brightness\":157,\"color_temp\":225,\"transition\":30}"
+    ],
+    [
+     1254.5,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"OFF\"}"
+    ],
+    [
+     1959.75,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"OFF\"}"
+    ],
+    [
+     1959.75,
+     "z2m/test/strip/set",
+     "{\"state\":\"OFF\"}"
+    ],
+    [
+     2223.75,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     2223.75,
+     "z2m/test/lamp/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     2223.75,
+     "z2m/test/plug/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     2288.05,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     2288.05,
+     "z2m/test/lamp/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     2288.05,
+     "z2m/test/strip/set",
+     "{\"state\":\"ON\",\"brightness\":118,\"color_temp\":164,\"transition\":1}"
+    ],
+    [
+     2295.05,
+     "z2m/test/strip/set",
+     "{\"state\":\"ON\",\"brightness\":143,\"color_temp\":331,\"transition\":30}"
+    ],
+    [
+     2296.05,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     2296.05,
+     "z2m/test/strip/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     2296.05,
+     "z2m/test/plug/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     2306.05,
+     "z2m/test/lamp/set",
+     "{\"state\":\"ON\",\"brightness\":127,\"color_temp\":466,\"transition\":30}"
+    ],
+    [
+     2348.05,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"OFF\"}"
+    ],
+    [
+     2348.05,
+     "z2m/test/lamp/set",
+     "{\"state\":\"OFF\"}"
+    ],
+    [
+     2348.05,
+     "z2m/test/strip/set",
+     "{\"state\":\"OFF\"}"
+    ],
+    [
+     2355.05,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"OFF\"}"
+    ],
+    [
+     2355.05,
+     "z2m/test/lamp/set",
+     "{\"state\":\"OFF\"}"
+    ],
+    [
+     2355.05,
+     "z2m/test/strip/set",
+     "{\"state\":\"OFF\"}"
+    ],
+    [
+     2626.1000000000004,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     2626.1000000000004,
+     "z2m/test/lamp/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     2626.1000000000004,
+     "z2m/test/strip/set",
+     "{\"state\":\"ON\"}"
+    ]
+   ]
+  },
+  {
+   "seed": 2,
+   "sets": [
+    [
+     121.2,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\",\"brightness\":108,\"color_temp\":174,\"transition\":1}"
+    ],
+    [
+     121.2,
+     "z2m/test/lamp/set",
+     "{\"state\":\"ON\",\"brightness\":108,\"color_temp\":174,\"transition\":1}"
+    ],
+    [
+     121.2,
+     "z2m/test/strip/set",
+     "{\"state\":\"ON\",\"brightness\":108,\"color_temp\":174,\"transition\":1}"
+    ],
+    [
+     121.2,
+     "z2m/test/plug/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     121.25,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\",\"brightness\":1,\"color_temp\":156,\"transition\":30}"
+    ],
+    [
+     121.25,
+     "z2m/test/lamp/set",
+     "{\"state\":\"ON\",\"brightness\":1,\"color_temp\":156,\"transition\":30}"
+    ],
+    [
+     121.25,
+     "z2m/test/strip/set",
+     "{\"state\":\"ON\",\"brightness\":1,\"color_temp\":156,\"transition\":30}"
+    ],
+    [
+     128.25,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"OFF\"}"
+    ],
+    [
+     128.25,
+     "z2m/test/lamp/set",
+     "{\"state\":\"OFF\"}"
+    ],
+    [
+     128.25,
+     "z2m/test/strip/set",
+     "{\"state\":\"OFF\"}"
+    ],
+    [
+     128.25,
+     "z2m/test/plug/set",
+     "{\"state\":\"OFF\"}"
+    ],
+    [
+     196.25,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\",\"brightness\":1,\"color_temp\":156,\"transition\":1}"
+    ],
+    [
+     196.25,
+     "z2m/test/strip/set",
+     "{\"state\":\"ON\",\"brightness\":1,\"color_temp\":156,\"transition\":1}"
+    ],
+    [
+     196.25,
+     "z2m/test/plug/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     204.25,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\",\"brightness\":64,\"color_temp\":400,\"transition\":1}"
+    ],
+    [
+     204.25,
+     "z2m/test/strip/set",
+     "{\"state\":\"ON\",\"brightness\":64,\"color_temp\":400,\"transition\":1}"
+    ],
+    [
+     204.25,
+     "z2m/test/plug/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     265.25,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\",\"brightness\":7,\"color_temp\":217,\"transition\":45}"
+    ],
+    [
+     326.3,
+     "z2m/test/lamp/set",
+     "{\"state\":\"ON\",\"brightness\":7,\"color_temp\":217,\"transition\":1}"
+    ],
+    [
+     340.5,
+     "z2m/test/lamp/set",
+     "{\"state\":\"OFF\"}"
+    ],
+    [
+     340.5,
+     "z2m/test/plug/set",
+     "{\"state\":\"OFF\"}"
+    ],
+    [
+     401.5,
+     "z2m/test/lamp/set",
+     "{\"state\":\"ON\",\"brightness\":1,\"transition\":1}"
+    ],
+    [
+     831.5999999999999,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     831.5999999999999,
+     "z2m/test/strip/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     861.5999999999999,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\",\"brightness\":57,\"color_temp\":373,\"transition\":45}"
+    ],
+    [
+     861.5999999999999,
+     "z2m/test/lamp/set",
+     "{\"state\":\"ON\",\"brightness\":57,\"color_temp\":373,\"transition\":45}"
+    ],
+    [
+     861.5999999999999,
+     "z2m/test/strip/set",
+     "{\"state\":\"ON\",\"brightness\":57,\"color_temp\":373,\"transition\":45}"
+    ],
+    [
+     902.8499999999999,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\",\"brightness\":118,\"color_temp\":236,\"transition\":60}"
+    ],
+    [
+     902.8499999999999,
+     "z2m/test/lamp/set",
+     "{\"state\":\"ON\",\"brightness\":118,\"color_temp\":236,\"transition\":60}"
+    ],
+    [
+     902.8499999999999,
+     "z2m/test/strip/set",
+     "{\"state\":\"ON\",\"brightness\":118,\"color_temp\":236,\"transition\":60}"
+    ],
+    [
+     1117.85,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\",\"brightness\":206,\"color_temp\":170,\"transition\":30}"
+    ],
+    [
+     1117.85,
+     "z2m/test/strip/set",
+     "{\"state\":\"ON\",\"brightness\":206,\"color_temp\":170,\"transition\":30}"
+    ],
+    [
+     1180.85,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\",\"brightness\":64,\"transition\":1}"
+    ],
+    [
+     1180.85,
+     "z2m/test/lamp/set",
+     "{\"state\":\"ON\",\"brightness\":64,\"transition\":1}"
+    ],
+    [
+     1180.85,
+     "z2m/test/strip/set",
+     "{\"state\":\"ON\",\"brightness\":64,\"transition\":1}"
+    ],
+    [
+     1180.85,
+     "z2m/test/plug/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     1251.85,
+     "z2m/test/lamp/set",
+     "{\"state\":\"OFF\"}"
+    ],
+    [
+     1291.85,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"OFF\"}"
+    ],
+    [
+     1291.85,
+     "z2m/test/strip/set",
+     "{\"state\":\"OFF\"}"
+    ],
+    [
+     1492.05,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     1492.05,
+     "z2m/test/lamp/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     1492.05,
+     "z2m/test/strip/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     1492.05,
+     "z2m/test/plug/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     1499.05,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"OFF\"}"
+    ],
+    [
+     1499.05,
+     "z2m/test/lamp/set",
+     "{\"state\":\"OFF\"}"
+    ],
+    [
+     1499.05,
+     "z2m/test/strip/set",
+     "{\"state\":\"OFF\"}"
+    ],
+    [
+     1499.05,
+     "z2m/test/plug/set",
+     "{\"state\":\"OFF\"}"
+    ]
+   ]
+  },
+  {
+   "seed": 3,
+   "sets": [
+    [
+     204.05,
+     "z2m/test/lamp/set",
+     "{\"state\":\"OFF\"}"
+    ],
+    [
+     204.05,
+     "z2m/test/strip/set",
+     "{\"state\":\"OFF\"}"
+    ],
+    [
+     484.1,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     484.1,
+     "z2m/test/lamp/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     484.1,
+     "z2m/test/plug/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     891.3,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\",\"transition\":3,\"color_temp\":370}"
+    ],
+    [
+     891.3,
+     "z2m/test/lamp/set",
+     "{\"state\":\"ON\",\"transition\":3,\"color_temp\":370}"
+    ],
+    [
+     891.3,
+     "z2m/test/strip/set",
+     "{\"state\":\"ON\",\"transition\":3,\"color_temp\":370}"
+    ],
+    [
+     891.3,
+     "z2m/test/plug/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     891.7,
+     "z2m/test/lamp/set",
+     "{\"state\":\"OFF\"}"
+    ],
+    [
+     891.7,
+     "z2m/test/plug/set",
+     "{\"state\":\"OFF\"}"
+    ],
+    [
+     921.8,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     921.8,
+     "z2m/test/lamp/set",
+     "{\"state\":\"ON\",\"brightness\":220,\"color_temp\":183,\"transition\":1}"
+    ],
+    [
+     921.8,
+     "z2m/test/strip/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     921.8,
+     "z2m/test/plug/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     922.8,
+     "z2m/test/lamp/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     922.8,
+     "z2m/test/strip/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     922.8,
+     "z2m/test/plug/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     1502.25,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\",\"brightness\":138,\"color_temp\":228,\"transition\":45}"
+    ],
+    [
+     1963.25,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\",\"brightness\":25,\"color_temp\":217,\"transition\":45}"
+    ],
+    [
+     1963.25,
+     "z2m/test/strip/set",
+     "{\"state\":\"ON\",\"brightness\":25,\"color_temp\":217,\"transition\":45}"
+    ],
+    [
+     1993.25,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\",\"brightness\":25,\"color_temp\":217,\"transition\":1}"
+    ],
+    [
+     1993.25,
+     "z2m/test/strip/set",
+     "{\"state\":\"ON\",\"brightness\":25,\"color_temp\":217,\"transition\":1}"
+    ],
+    [
+     1993.25,
+     "z2m/test/plug/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     1994.25,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\",\"brightness\":196,\"color_temp\":261,\"transition\":60}"
+    ],
+    [
+     1994.25,
+     "z2m/test/strip/set",
+     "{\"state\":\"ON\",\"brightness\":196,\"color_temp\":261,\"transition\":60}"
+    ],
+    [
+     2272.3,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\",\"brightness\":254,\"color_temp\":154,\"transition\":1}"
+    ],
+    [
+     2272.3,
+     "z2m/test/lamp/set",
+     "{\"state\":\"ON\",\"brightness\":254,\"color_temp\":154,\"transition\":1}"
+    ],
+    [
+     2272.3,
+     "z2m/test/strip/set",
+     "{\"state\":\"ON\",\"brightness\":254,\"color_temp\":154,\"transition\":1}"
+    ],
+    [
+     2272.3,
+     "z2m/test/plug/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     2274.5,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     2274.5,
+     "z2m/test/lamp/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     2274.5,
+     "z2m/test/strip/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     2274.5,
+     "z2m/test/plug/set",
+     "{\"state\":\"ON\"}"
+    ],
+    [
+     2343.8999999999996,
+     "z2m/test/lamp/set",
+     "{\"state\":\"ON\",\"brightness\":177,\"color_temp\":194,\"transition\":1}"
+    ],
+    [
+     2404.8999999999996,
+     "z2m/test/ceiling/set",
+     "{\"state\":\"OFF\"}"
+    ],
+    [
+     2404.8999999999996,
+     "z2m/test/strip/set",
+     "{\"state\":\"OFF\"}"
+    ],
+    [
+     2404.8999999999996,
+     "z2m/test/plug/set",
+     "{\"state\":\"OFF\"}"
+    ]
+   ]
+  }
+ ]
+}
