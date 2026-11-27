@@ -305,7 +305,7 @@ export function transitionShellySwitch(
       if (message.online) readDevice("online");
     } else if (msg.topic === topics.command) {
       // Its own commands, or someone else's: only a room light reads them.
-      if (config.target) light(relayLightCommandSeen(state.light, msg.payload, config.target, nowMs));
+      if (config.target) light(relayLightCommandSeen(state.light, msg.payload, config.target, state.relayOn, nowMs));
     } else if (msg.topic !== topics.rpc && msg.topic !== topics.deviceCommand) {
       trace("message", "ignored", "unrelated-message", {topic: typeof msg.topic === "string" ? msg.topic : null});
     }

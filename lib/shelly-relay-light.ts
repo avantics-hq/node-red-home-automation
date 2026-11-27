@@ -91,7 +91,7 @@ export function relayLightFromRoom(
 // A command seen on the relay's command topic: its own echo, or someone
 // else's (another flow, the device's own app over MQTT), which the room may
 // take as a person's change.
-export function relayLightCommandSeen(state: RelayLightState, payload: unknown, target: string, nowMs: number): RelayLightStep {
+export function relayLightCommandSeen(state: RelayLightState, payload: unknown, target: string, relayOn: boolean | null, nowMs: number): RelayLightStep {
   const out = step();
   const text = typeof payload === "string" ? payload.trim().toLowerCase() : "";
   if (text !== "on" && text !== "off" && text !== "toggle") return out;
@@ -103,6 +103,9 @@ export function relayLightCommandSeen(state: RelayLightState, payload: unknown, 
       return out;
     }
     state.externalOn = text === "on";
+  } else {
+    // A toggle's result: the opposite of the relay's last report, when known.
+    state.externalOn = relayOn === null ? null : !relayOn;
   }
   out.readings.push({kind: "external", target, state: text.toUpperCase(), setsValues: false, observedAt: new Date(nowMs).toISOString()});
   out.traces.push({event: "command", outcome: "external", reason: null, details: {power: text}});

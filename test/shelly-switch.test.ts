@@ -241,6 +241,11 @@ test("with a Target, its reports are the room's readings: its own command confir
   assert.deepEqual(kinds(result), [["external", "ON"]]);
   result = apply(result.state, relayStatus(true), 120.1, config);
   assert.deepEqual(kinds(result), [["observed", true]]);
+  // Someone else's toggle: external once, and the relay's report of it only observed.
+  result = apply(result.state, {topic: "shellyplus1-test/command/switch:0", payload: "toggle"}, 125, config);
+  assert.deepEqual(kinds(result), [["external", "TOGGLE"]]);
+  result = apply(result.state, relayStatus(false), 125.1, config);
+  assert.deepEqual(kinds(result), [["observed", false]]);
   // status_update on its command topic is nobody's change.
   assert.deepEqual(apply(result.state, {topic: "shellyplus1-test/command/switch:0", payload: "status_update"}, 121, config).lightReadings, []);
 });
