@@ -23,23 +23,39 @@ export function objectField<T>(msg: InputMessage, key: string): T | undefined {
 // handleStatus, which adds status.source).
 const MQTT_CONNECTED = "node-red:common.status.connected";
 
+// A Status node's message: msg.status with the node it came from as
+// status.source.
+function fromStatusNode(msg: InputMessage): boolean {
+  const status = objectField<{source?: unknown}>(msg, "status");
+  return Boolean(status?.source && typeof status.source === "object");
+}
+
 // Whether a message is a Status node's report that an MQTT out node has
 // connected: until then, the broker drops what it is given to publish.
 export function mqttConnected(msg: InputMessage): boolean {
   const status = objectField<{text?: unknown; source?: {type?: unknown}}>(msg, "status");
-  return status?.text === MQTT_CONNECTED && status.source?.type === "mqtt out";
+  return fromStatusNode(msg) && status?.text === MQTT_CONNECTED && status.source?.type === "mqtt out";
 }
 
 // Handle each input; an error is reported against the message and ends it.
 // With a startup message, a node that announces itself takes a Status
 // node's "MQTT out connected" as that startup message, so it announces again
-// once the broker can take it; any other status message is ignored.
-export function onInput(node: Node, handle: (msg: InputMessage, send: Send) => void, startup?: Record<string, unknown>): void {
+// once the broker can take it; any other Status node message is ignored, and
+// traced. Any other message is handled as it is.
+export function onInput(
+  node: Node,
+  handle: (msg: InputMessage, send: Send) => void,
+  startup?: {message: Record<string, unknown>; trace: TraceMetadata}
+): void {
   node.on("input", (msg, send, done) => {
     try {
       const input = msg as InputMessage;
-      if (startup && objectField(input, "status")) {
-        if (mqttConnected(input)) handle(structuredClone(startup) as InputMessage, send);
+      if (startup && mqttConnected(input)) {
+        handle(structuredClone(startup.message) as InputMessage, send);
+      } else if (startup && fromStatusNode(input)) {
+        const status = input.status as {text?: unknown; source: {type?: unknown}};
+        appendTrace(node.context(), startup.trace, [{event: "input", outcome: "ignored", reason: "status-message",
+          details: {text: status.text, source: status.source.type}}]);
       } else {
         handle(input, send);
       }

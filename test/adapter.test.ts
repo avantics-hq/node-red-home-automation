@@ -69,10 +69,10 @@ test("only a Status node's report of an MQTT out node connecting counts as conne
 });
 
 test("with a startup message, MQTT out connecting is handled as that startup message; other status messages are ignored", () => {
-  const {node, asNode} = fakeNode();
+  const {node, asNode, values} = fakeNode();
   const handled: unknown[] = [];
   const startup = {lighting: {kind: "startup"}};
-  onInput(asNode, (msg) => { handled.push(msg); }, startup);
+  onInput(asNode, (msg) => { handled.push(msg); }, {message: startup, trace: {area: "hall", component: "room-controller"}});
   const done: unknown[] = [];
   const input = (msg: InputMessage) => node.emit("input", msg, () => {}, (error?: Error) => done.push(error));
   input(statusOf("mqtt out", "yellow", "node-red:common.status.connecting"));
@@ -80,9 +80,18 @@ test("with a startup message, MQTT out connecting is handled as that startup mes
   input(connected);
   input(connected);
   input({payload: 1} as InputMessage);
-  assert.deepEqual(handled, [startup, startup, {payload: 1}], "every connect announces again; other messages as before");
+  // A status object that isn't a Status node's (no source) is the user's own message.
+  const own = {status: {text: "node-red:common.status.connected"}, payload: 2} as unknown as InputMessage;
+  input(own);
+  assert.deepEqual(handled, [startup, startup, {payload: 1}, own], "every connect announces again; other messages as before");
   assert.notEqual(handled[0], handled[1], "a fresh copy each time");
-  assert.deepEqual(done, [undefined, undefined, undefined, undefined, undefined], "each message ended");
+  assert.deepEqual(done, [undefined, undefined, undefined, undefined, undefined, undefined], "each message ended");
+  const traced = (values.get("trace") as Array<{event: string; outcome: string; reason: string; details: unknown; component: string}>)
+    .map(({event, outcome, reason, details, component}) => [component, event, outcome, reason, details]);
+  assert.deepEqual(traced, [
+    ["room-controller", "input", "ignored", "status-message", {text: "node-red:common.status.connecting", source: "mqtt out"}],
+    ["room-controller", "input", "ignored", "status-message", {text: "node-red:common.status.connected", source: "mqtt in"}]
+  ], "the Status node messages it ignored, in its trace");
 
   // Without a startup message, a status message is handled like any other.
   const plain = fakeNode();

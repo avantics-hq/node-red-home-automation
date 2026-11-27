@@ -54,7 +54,7 @@ const registerShellySwitch: NodeInitializer = (RED) => {
     node.status({fill: "grey", shape: "ring", text: "reading the device's configuration"});
     // Once the flows have started, so the MQTT out node is there to send through.
     whenFlowsStarted(RED, node, () => process({shellySwitch: {kind: "startup"}}, node.send.bind(node)));
-    onInput(node, (msg, send) => process(msg as ShellySwitchMessage, send), {shellySwitch: {kind: "startup"}});
+    onInput(node, (msg, send) => process(msg as ShellySwitchMessage, send), {message: {shellySwitch: {kind: "startup"}}, trace: trace});
     node.on("close", (_removed: boolean, done: () => void) => {
       clearTimeout(timer);
       done();
