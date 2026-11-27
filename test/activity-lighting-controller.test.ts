@@ -402,7 +402,7 @@ test("each light is judged by what it reports: one that never reported the profi
   assert.deepEqual(restarted.state.reported, {});
 });
 
-test("a person changes a light the activity holds: through its adapter the room makes it manual, and the activity leaves it be", () => {
+test("a person changes a light the activity holds: the room makes it manual, the activity reports manual_override, and its next request takes the light back", () => {
   const roomConfig: TopicRoomConfig = {area: "lounge", displayName: "Lounge", initialTransitionSeconds: 1,
     targets: [{id: "wall", stateTopic: "z2m/lounge-wall", commandTopic: "z2m/lounge-wall/set"}, {id: "lamp", stateTopic: "z2m/lounge-lamp", commandTopic: "z2m/lounge-lamp/set"}]};
   let activity = transitionActivityLighting(undefined, {activityLighting: {kind: "intent", requestId: "tv-1", generation: 1, profile: "tv"}}, config, at(0));
@@ -423,6 +423,15 @@ test("a person changes a light the activity holds: through its adapter the room 
   // The reading the room passes on says manual; the activity keeps it as the person left it.
   activity = transitionActivityLighting(activity.state, {activityLighting: {kind: "observed", generation: 1, target: "wall", on: true,
     manual: room.status.control.wall === "manual", fields: ["brightness", "colorTemp"], showsLast: false, observedAt: at(10.5).toISOString()}}, config, at(10.5));
-  assert.equal(activity.state.phase, "ready");
-  assert.equal(activity.events.at(-1)?.theatre.details.preserved, 1);
+  assert.equal(activity.state.phase, "manual_override");
+  assert.equal(activity.events.at(-1)?.theatre.classification, "manual_override");
+  assert.deepEqual(activity.state.overridden, ["wall"]);
+
+  // The next request takes it back: the wall's intent doesn't skip it as a person's; the lamp's still does.
+  activity = transitionActivityLighting(activity.state, {activityLighting: {kind: "intent", requestId: "tv-2", generation: 2, profile: "tv"}}, config, at(20));
+  const intents = activity.commands.map(({lighting}) => lighting!).filter((lighting) => lighting.kind === "intent");
+  assert.deepEqual(intents.map(({targets, preserveManual}) => [targets, preserveManual]), [[["lamp"], true], [["wall"], undefined]]);
+  for (const lighting of intents) room = publishRoom(room.state, {lighting}, roomConfig, at(20));
+  assert.equal(room.status.control.wall, "overridden", "held by the activity again");
+  assert.deepEqual(activity.state.overridden, []);
 });

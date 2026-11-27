@@ -83,6 +83,11 @@ export interface ActivityLightingState {
   // profile's fields, as one that only switches on and off, is confirmed by
   // being on; once it has reported one, it is held to the values.
   reported?: Record<string, string[]>;
+  // The lights this request has seen held (on, and not a person's), and the
+  // ones a person then took over (manual_override), which the next request
+  // takes back.
+  held?: string[];
+  overridden?: string[];
 }
 
 export type ActivityLightingEvent =
@@ -240,7 +245,9 @@ function initialState(
     adoptedGeneration: savedAdoptedGeneration(saved),
     carried: savedCarried(saved),
     reported: Object.fromEntries(Object.entries(saved.reported || {})
-      .filter(([, fields]) => Array.isArray(fields)).map(([target, fields]) => [target, fields.map(String)]))
+      .filter(([, fields]) => Array.isArray(fields)).map(([target, fields]) => [target, fields.map(String)])),
+    held: Array.isArray(saved.held) ? saved.held.map(String) : [],
+    overridden: Array.isArray(saved.overridden) ? saved.overridden.map(String) : []
   };
 }
 
@@ -323,7 +330,19 @@ export function transitionActivityLighting(
   }
 
   function issueApply(attempt: number) {
-    commands.push(commandFor(state, config, "apply", attempt));
+    const command = commandFor(state, config, "apply", attempt);
+    // Lights a person took over from the last request: taken back, so not
+    // skipped as a person's (preserveManual). Every other light as before.
+    const reclaim = (state.overridden ?? []).filter((target) => command.lighting?.targets?.includes(target));
+    if (reclaim.length && command.lighting) {
+      const rest = command.lighting.targets!.filter((target) => !reclaim.includes(target));
+      if (rest.length) commands.push({...command, lighting: {...command.lighting, targets: rest}});
+      const {preserveManual: _preserve, ...taken} = command.lighting;
+      commands.push({...command, lighting: {...taken, targets: reclaim}});
+      trace("command", "emitted", "taking-back", {targets: reclaim});
+    } else {
+      commands.push(command);
+    }
     state.pending = {attempt, deadlineAt: nowMs + config.confirmationTimeoutMs};
     state.phase = "transitioning";
     trace("command", "emitted", null, {operation: "apply", profile: state.desired?.profile, attempt});
@@ -350,7 +369,17 @@ export function transitionActivityLighting(
         fail("lighting-unavailable");
         return;
       }
+      if (observation.manual && state.held?.includes(target)) {
+        // A person changed a light this request held: theirs now, as on the
+        // other theatre targets. The next request takes it back.
+        state.pending = null;
+        state.phase = "manual_override";
+        if (!state.overridden?.includes(target)) state.overridden = [...(state.overridden ?? []), target];
+        trace("observation", "manual_override", "person-changed", {target});
+        return;
+      }
       if (observation.manual || !observation.on) {
+        // A person's before this request (or off): left as it is.
         counts.preserved += 1;
         continue;
       }
@@ -436,11 +465,14 @@ export function transitionActivityLighting(
     }
     state.generation = intent.generation;
     state.observed = {};
+    state.held = [];
     state.pending = null;
     state.failure = null;
     state.blockedGeneration = null;
     if (profileFor(state, config).targets.length === 0) reconcile();
     else issueApply(1);
+    // Taken back with this request's apply (above), or no longer styled.
+    state.overridden = [];
     trace("intent", "accepted", null, {profile: intent.profile, generation: intent.generation});
   }
 
@@ -477,6 +509,10 @@ export function transitionActivityLighting(
     const known = state.reported?.[observation.target] ?? [];
     if (fields.some((field) => !known.includes(field))) {
       state.reported = {...state.reported, [observation.target]: [...new Set([...known, ...fields])]};
+    }
+    // Held by this request: on, and not a person's.
+    if (observation.on === true && observation.manual !== true && !(state.held ?? []).includes(observation.target)) {
+      state.held = [...(state.held ?? []), observation.target];
     }
     state.observed[observation.target] = {
       target: observation.target,

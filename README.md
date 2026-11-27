@@ -360,6 +360,12 @@ changes come with it:
   `manual: true` does (a wall switch's double press sends it). Before 6.0, an
   owner-less intent with values made the light manual, so circadian lighting
   left it alone; now the next style restyles it.
+- **A person changing a light an activity holds is a manual override.** Before
+  6.0, activity lighting counted such a light as preserved and stayed ready.
+  Now it reports `manual_override` for it, as the display, receiver and
+  backlight do; lighting is optional, so the theatre is degraded, not failed,
+  and the next activity request takes the light back. A light that was a
+  person's before the activity is still left alone, as before.
 - **An intent's `refresh: true` no longer changes its transition.** Before 6.0
   it styled the light over the refresh transition instead of the turn-on one;
   the circadian policy now sends a new style whenever anything changes.
