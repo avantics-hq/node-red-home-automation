@@ -18,6 +18,17 @@ const RED = require("node-red");
 const packageName = "@avantics/node-red-home-automation";
 const manifest = JSON.parse(readFileSync(require.resolve(`${packageName}/package.json`), "utf8"));
 const expected = Object.keys(manifest["node-red"].nodes).sort();
+// The exports map exposes only package.json, so a deep import into dist/
+// fails. Node-RED reads package.json and loads each node by file path, which
+// the map doesn't affect, as the rest of this smoke shows.
+const deepImport = (() => {
+  try {
+    require.resolve(`${packageName}/dist/lib/room-controller.js`);
+    return "resolved";
+  } catch (error) {
+    return error.code;
+  }
+})();
 
 RED.init(undefined, {
   userDir,
@@ -50,10 +61,12 @@ try {
     module: module ? `${module.name}@${module.version}` : null,
     registered: registered.length,
     expected: expected.length,
-    errors
+    errors,
+    deepImport
   }, null, 2));
   const missing = expected.filter((type) => !registered.includes(type));
   if (errors.length || missing.length) failure = `missing: ${missing.join(", ") || "none"}; errors: ${errors.length}`;
+  if (!failure && deepImport !== "ERR_PACKAGE_PATH_NOT_EXPORTED") failure = `a deep import into dist/ gave ${deepImport}, not ERR_PACKAGE_PATH_NOT_EXPORTED`;
   if (!failure) failure = await checkExamples();
 } catch (error) {
   failure = error instanceof Error ? error.message : String(error);

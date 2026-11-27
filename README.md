@@ -295,6 +295,12 @@ these after upgrading from 5.x; each shows itself rather than failing silently:
   host** (`projectorPowerMeterHost`). A node that still names only the old key
   is an invalid configuration saying so, in the editor and when deployed, until
   the new host is set.
+- **The package's files can no longer be imported directly.** Its exports map
+  exposes only `package.json`, so `require` or `import` of
+  `@avantics/node-red-home-automation/dist/…` fails with
+  `ERR_PACKAGE_PATH_NOT_EXPORTED`. Only the nodes are a public interface, as
+  5.0.0 said. Node-RED loads them by file path, so installing and using the
+  nodes is unchanged.
 
 ### 5.0.0
 
