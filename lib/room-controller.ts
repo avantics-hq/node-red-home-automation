@@ -4,6 +4,7 @@ import type {TraceEntry} from "./bounded-trace";
 import type {LightStyle} from "./light-styling";
 import {isLightReading, type LightCommandMessage, type LightField, type LightRoomMessage} from "./light-contract";
 import {REMOVED_LIGHT_FIELDS} from "./z2m-light";
+import {addOwner, heldOff as holdHeldOff, legacyHold, newHold, releaseOwner, savedHolds, setOwnerSpec, type LightHold} from "./room-holds";
 import {ECHO_WINDOW_MS, checkStateReport, commandSent, commandSkipped, rememberCommand, type ExpectedCommand} from "./command-echo";
 
 export {fingerprint, parsePayload, type ExpectedCommand} from "./command-echo";
@@ -53,18 +54,7 @@ export interface RoomObservation {
 export type TargetControlState = "in-control" | "overridden" | "manual";
 export type TargetControl = {state: "manual"} | {state: "overridden"; owner: string};
 
-// What an owner asked a held light for, to give back to it when a newer
-// owner lets go. Null when not known (state saved before 6.1).
-export type HeldSpec = Pick<LightCommandMessage, "state" | "brightnessPct" | "colorTempKelvin" | "transitionSeconds" | "extra">;
-
-// The owners holding an overridden light, oldest first: the newest is its
-// control entry's owner and sets the light. `before` is what the light was
-// when the first owner took it, given back when the last one releases it;
-// null when not known (state saved before 6.1).
-export interface LightHold {
-  owners: Array<{owner: string; spec: HeldSpec | null}>;
-  before: {control: "in-control" | "manual"; on: boolean; brightnessPct?: number; colorTempKelvin?: number} | null;
-}
+export type {HeldSpec, LightHold} from "./room-holds";
 
 // Traced when an intent gives brightness or color_temp, Zigbee2MQTT's own
 // units, removed in 6.0: left out of the command, and the node warns.
@@ -116,7 +106,8 @@ export interface RoomState {
   observed: Record<string, RoomObservation>;
   desired: Record<string, boolean>;
   control: Record<string, TargetControl>;
-  // The owners of each overridden light, and what it was before them.
+  // The owners of each overridden light, and what it was before them
+  // (room-holds.ts).
   holds: Record<string, LightHold>;
   expected: Record<string, ExpectedCommand[]>;
   // The style last received, or none yet.
@@ -201,12 +192,7 @@ export function createRoomState(
     observed: {...(saved.observed || {})},
     desired: {...(saved.desired || {})},
     control,
-    holds: Object.fromEntries(Object.entries(saved.holds || {})
-      .filter(([target, hold]) => control[target]?.state === "overridden" && Array.isArray(hold?.owners) && hold.owners.length > 0)
-      .map(([target, hold]) => [target, {
-        owners: hold.owners.map((entry) => ({owner: String(entry.owner), spec: entry.spec ? {...entry.spec} : null})),
-        before: hold.before ? {...hold.before} : null
-      }])),
+    holds: savedHolds(saved.holds, (target) => control[target]?.state === "overridden"),
     expected: Object.fromEntries(
       Object.entries(saved.expected || {}).map(([target, entries]) => [target, entries.map((entry) => ({...entry}))])
     ),
@@ -322,15 +308,13 @@ export function transitionRoom(
   // has its one owner, with nothing known of what it was before.
   function holdOf(targetId: string): LightHold {
     const entry = state.control[targetId];
-    if (!state.holds[targetId]) {
-      state.holds[targetId] = {owners: entry?.state === "overridden" ? [{owner: entry.owner, spec: null}] : [], before: null};
-    }
-    return state.holds[targetId]!;
+    state.holds[targetId] ??= entry?.state === "overridden" ? legacyHold(entry.owner) : {owners: [], before: null};
+    return state.holds[targetId];
   }
 
   // Whether the owner on top holds the light off.
   function heldOff(targetId: string): boolean {
-    return controlOf(targetId) === "overridden" && state.holds[targetId]?.owners.at(-1)?.spec?.state === "OFF";
+    return controlOf(targetId) === "overridden" && holdHeldOff(state.holds[targetId]);
   }
 
   // An owner taking a light, or asking again. The first owner records what
@@ -341,22 +325,18 @@ export function transitionRoom(
     const entry = state.control[targetId];
     if (entry?.state !== "overridden") {
       const observed = state.observed[targetId];
-      state.holds[targetId] = {owners: [{owner, spec: null}], before: {
+      state.holds[targetId] = newHold(owner, {
         control: entry?.state === "manual" ? "manual" : "in-control",
         on: wasOn,
         ...(typeof observed?.brightnessPct === "number" ? {brightnessPct: observed.brightnessPct} : {}),
         ...(typeof observed?.colorTempKelvin === "number" ? {colorTempKelvin: observed.colorTempKelvin} : {})
-      }};
+      });
       setControl(targetId, {state: "overridden", owner}, "owner-intent");
       return false;
     }
-    const hold = holdOf(targetId);
-    const index = hold.owners.findIndex((held) => held.owner === owner);
-    if (index === hold.owners.length - 1) return false;
-    if (index >= 0) return true;
-    hold.owners.push({owner, spec: null});
-    setControl(targetId, {state: "overridden", owner}, "owner-intent");
-    return false;
+    const added = addOwner(holdOf(targetId), owner);
+    if (added === "pushed") setControl(targetId, {state: "overridden", owner}, "owner-intent");
+    return added === "beneath";
   }
 
   // The last owner let go: the light goes back to what it was. One the room
@@ -528,8 +508,7 @@ export function transitionRoom(
         spec = (controlOf(targetId) === "in-control" ? styled(targetId, config.initialTransitionSeconds) : null) ?? {state: "ON"};
       }
       if (owner) {
-        const held = holdOf(targetId).owners.find((entry) => entry.owner === owner)!;
-        held.spec = {...spec, ...(spec.extra ? {extra: {...spec.extra}} : {})};
+        setOwnerSpec(holdOf(targetId), owner, spec);
         if (beneath) {
           trace("intent", "held", "beneath-owner", {target: targetId, owner, top: (state.control[targetId] as {owner: string}).owner});
           continue;
@@ -671,24 +650,18 @@ export function transitionRoom(
     const source = event.source || "release";
     for (const targetId of targets) {
       if (!targetById[targetId] || state.control[targetId]?.state !== "overridden") continue;
-      const hold = holdOf(targetId);
-      const index = owner ? hold.owners.findIndex((entry) => entry.owner === owner) : 0;
-      if (index < 0) continue;
-      if (owner && index < hold.owners.length - 1) {
-        // Beneath a newer owner: dropped, and the light is left as it is.
-        hold.owners.splice(index, 1);
+      const released = releaseOwner(holdOf(targetId), owner);
+      if (released.kind === "dropped") {
         trace("release", "dropped", "beneath-owner", {target: targetId, owner});
-      } else if (owner && hold.owners.length > 1) {
-        hold.owners.pop();
-        const next = hold.owners.at(-1)!;
-        setControl(targetId, {state: "overridden", owner: next.owner}, "released-to-owner");
+      } else if (released.kind === "next") {
+        setControl(targetId, {state: "overridden", owner: released.owner}, "released-to-owner");
         told(targetId);
-        if (next.spec) {
-          state.desired[targetId] = next.spec.state === "ON";
-          command(targetId, {...next.spec}, source);
+        if (released.spec) {
+          state.desired[targetId] = released.spec.state === "ON";
+          command(targetId, released.spec, source);
         }
-      } else {
-        restoreHeld(targetId, hold.before, source);
+      } else if (released.kind === "restore") {
+        restoreHeld(targetId, released.before, source);
       }
     }
   } else if (event.kind === "intent") {
