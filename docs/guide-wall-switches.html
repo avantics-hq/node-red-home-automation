@@ -51,7 +51,12 @@ return msg;</code></pre></div>
 </section>
 <section id="shelly-relay"><h2>Wire a Shelly relay behind a wall switch</h2>
 <p>A common way to keep smart bulbs on a wall switch: put a Shelly Gen2-or-later relay behind the switch, keep the relay on so the bulb always has power, and detach the switch from the relay. Each press then goes out over MQTT, for Node-RED to act on, instead of cutting the bulb’s power.</p>
-<aside class="callout"><strong>Mains wiring is dangerous. Leave it to a qualified electrician.</strong><p>Wiring a relay into a light circuit means working on mains voltage, and local regulations say who may do it and how. Switch off the circuit breaker and check there is no voltage at the wires before touching them. Shelly’s own diagram and instructions for your exact model are the authority; the drawing below only shows the idea.</p></aside>
+<aside class="callout"><strong>Mains wiring is dangerous. Leave it to a qualified electrician.</strong><p>Wiring a relay into a light circuit means working on mains voltage, and local regulations say who may do it and how. Switch off the circuit breaker and check there is no voltage at the wires before touching them. Shelly’s own diagram and instructions for your exact model are the authority; the drawing below only shows the idea.</p>
+<ul>
+<li><strong>The wall switch no longer isolates the light.</strong> The relay stays on, so the bulb holder stays powered with the switch off. Switch off the circuit breaker before changing a bulb or working on the fitting.</li>
+<li><strong>Keep within the relay’s rating.</strong> Shelly gives the 1PM Gen3 a maximum switching current of 16 A at 240 V~, and asks for a circuit breaker of at most 16 A rated current. Check the rating for your model and the load on the circuit.</li>
+<li><strong>The switch works only while Node-RED and MQTT do.</strong> If Node-RED, the MQTT broker or the relay’s network connection is down, pressing the wall switch does nothing: the bulb stays as it was, and keeps its power.</li>
+</ul></aside>
 <figure class="diagram">
 <div role="region" aria-label="Wiring drawing; scroll horizontally on a phone" tabindex="0" style="overflow-x:auto">
 <svg viewBox="0 0 560 280" width="100%" role="img" aria-labelledby="shelly-relay-title shelly-relay-desc" style="min-width:440px;max-width:600px;display:block;margin:0 auto" fill="none" stroke="currentColor" stroke-width="2" font-size="15" font-family="inherit">
@@ -88,10 +93,31 @@ return msg;</code></pre></div>
 <li><strong>Detach the switch from the relay.</strong><p>In the device’s web interface or app, set the output type to <strong>Detached Switch</strong> (in the API, the switch’s <code>in_mode</code> is <code>detached</code>). The input then no longer changes the relay, so a press can’t cut the bulb’s power.</p></li>
 <li><strong>Say what kind of switch it is.</strong><p>Set the input mode to <strong>Switch</strong> for a toggle switch that stays where you put it, or <strong>Button</strong> for a momentary push button (the input’s <code>type</code> is <code>switch</code> or <code>button</code>). A toggle switch reports its on/off position; a button reports pushes, such as <code>single_push</code>, <code>double_push</code> and <code>long_push</code>.</p></li>
 <li><strong>Keep the relay on.</strong><p>Switch the output on, and set <strong>Action on power on</strong> to <strong>Turn ON</strong> (<code>initial_state</code> <code>on</code>), so the bulb has power again after a power cut rather than waiting for someone to switch the relay back on.</p></li>
-<li><strong>Turn on MQTT.</strong><p>Under <strong>Settings → Connectivity → MQTT</strong>, enable MQTT and set your broker as the server; the device restarts to apply it. Leave <strong>RPC status notifications over MQTT</strong> on (the default): the presses and input changes arrive on <code>&lt;prefix&gt;/events/rpc</code>. MQTT control (<code>enable_control</code>, on by default) lets a node send the device commands on <code>&lt;prefix&gt;/command/switch:&lt;id&gt;</code>. The topic prefix is the device ID unless you set your own; note it, as Node-RED subscribes to <code>&lt;prefix&gt;/#</code>.</p></li>
-<li><strong>Bring the presses into Node-RED.</strong><p>Subscribe an MQTT in node to <code>&lt;prefix&gt;/#</code> (output: auto-detect) and wire it to a <strong>shelly switch</strong> node, whose first output goes to an MQTT out node and whose second output feeds this guide’s switch policy. With its <strong>Mode</strong> left at <em>As the device is set up</em>, it reads the device’s configuration itself: a toggle switch’s on/off becomes <code>msg.source = "switch"</code> (the first report, from the device’s status, marked as the baseline), a button’s pushes become <code>msg.source = "switch-action"</code> with <code>single</code>, <code>double</code> or <code>long</code>, and the device going offline or online becomes <code>msg.source = "switch-availability"</code>.</p></li>
+<li><strong>Turn on MQTT.</strong><p>Under <strong>Settings → Connectivity → MQTT</strong>, enable MQTT and set your broker as the server; the device restarts to apply it. Leave <strong>RPC status notifications over MQTT</strong> on (the default): input changes and button pushes arrive on <code>&lt;prefix&gt;/events/rpc</code>, and the device reports <code>true</code> or <code>false</code> on <code>&lt;prefix&gt;/online</code>. The topic prefix is the device ID unless you set your own; note it.</p></li>
+<!-- Today's route. When the mode-aware shelly switch node lands, its pull request replaces this step with that node. -->
+<li><strong>Bring the presses into Node-RED.</strong><p>Subscribe an MQTT in node to <code>&lt;prefix&gt;/#</code> (output: auto-detect) and wire it through a Function node into this guide’s switch policy. The function turns the device’s messages for input 0 into the policy’s inputs: a toggle switch’s state as raw edges, a button’s single and double pushes as actions, and the online topic as availability. The switch policy doesn’t use a long push today, so the function leaves it out.</p>
+<div class="code-block"><div class="code-label"><span>Function → switch policy · a detached Shelly input</span></div><pre><code>const input = "input:0";
+if (msg.topic.endsWith("/online")) {
+  return {source: "switch-availability", payload: msg.payload === true || msg.payload === "true"};
+}
+if (!msg.topic.endsWith("/events/rpc")) return null;
+const params = msg.payload.params || {};
+if (msg.payload.method === "NotifyStatus" &amp;&amp; typeof params[input]?.state === "boolean") {
+  // A toggle switch: its position. The first one after a deploy sets the baseline.
+  const report = {source: "switch", payload: {state: params[input].state}};
+  if (!context.get("seen")) { report.baseline = true; context.set("seen", true); }
+  return report;
+}
+if (msg.payload.method === "NotifyEvent") {
+  // A button: single and double pushes.
+  const event = (params.events || []).find((e) =&gt; e.component === input);
+  const action = {single_push: "single", double_push: "double"}[event?.event];
+  if (action) return {source: "switch-action", payload: action};
+}
+return null;</code></pre></div>
+<p>Change <code>input:0</code> for another input. The device reports a toggle switch’s position only when it changes, so the first flip after a deploy sets the policy’s baseline rather than counting as a press.</p></li>
 </ol>
-<p class="caption">Sources: Shelly’s knowledge base for the <a href="https://kb.shelly.cloud/knowledge-base/shelly-1pm-gen3">1PM Gen3</a> (wiring and safety), the <a href="https://kb.shelly.cloud/knowledge-base/shelly-1-gen3-web-interface-guide">1 Gen3 web interface guide</a> (setting names), and the Gen2 API for <a href="https://shelly-api-docs.shelly.cloud/gen2/ComponentsAndServices/Switch">Switch</a>, <a href="https://shelly-api-docs.shelly.cloud/gen2/ComponentsAndServices/Input">Input</a> and <a href="https://shelly-api-docs.shelly.cloud/gen2/ComponentsAndServices/Mqtt">MQTT</a>.</p>
+<p class="caption">Sources: Shelly’s knowledge base for the <a href="https://kb.shelly.cloud/knowledge-base/shelly-1pm-gen3">1PM Gen3</a> (wiring, rating and safety), the <a href="https://kb.shelly.cloud/knowledge-base/shelly-1-gen3-web-interface-guide">1 Gen3 web interface guide</a> (setting names), and the Gen2 API for <a href="https://shelly-api-docs.shelly.cloud/gen2/ComponentsAndServices/Switch">Switch</a>, <a href="https://shelly-api-docs.shelly.cloud/gen2/ComponentsAndServices/Input">Input</a>, <a href="https://shelly-api-docs.shelly.cloud/gen2/ComponentsAndServices/Mqtt">MQTT</a>, <a href="https://shelly-api-docs.shelly.cloud/gen2/General/Notifications">notifications</a> and <a href="https://shelly-api-docs.shelly.cloud/gen2/General/RPCChannels">RPC channels</a>.</p>
 </section>
 <section id="presses"><h2>What each press requests</h2>
 <p>With raw edges, the policy times changes of the switch’s state. A change starts the raw-edge window. A second change inside it is a double press; when the window ends with no second change, it is a single press. A report that repeats the current state is not a press.</p>
