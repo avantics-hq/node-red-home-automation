@@ -3,15 +3,12 @@
     "label": "Get started",
     "items": [
       {"label": "Introduction", "href": "index.html"},
-      {"label": "Install", "href": "index.html#install"},
-      {"label": "Your first room", "href": "guide-room-lighting.html"},
-      {"label": "Core ideas", "href": "index.html#core-ideas"}
+      {"label": "Your first room", "href": "guide-room-lighting.html"}
     ]
   },
   {
     "label": "Guides",
     "items": [
-      {"label": "Room lighting", "href": "guide-room-lighting.html"},
       {"label": "Motion and occupancy", "href": "guide-motion-occupancy.html"},
       {"label": "Wall switches", "href": "guide-wall-switches.html"},
       {"label": "House schedule", "href": "guide-house-schedule.html"},
@@ -22,44 +19,9 @@
     ]
   },
   {
-    "label": "Node reference",
-    "families": [
-      {
-        "label": "Lighting",
-        "items": [
-          {"label": "Room controller", "href": "guide-room-lighting.html#settings"},
-          {"label": "Motion policy", "href": "guide-motion-occupancy.html#settings"},
-          {"label": "Switch policy", "href": "guide-wall-switches.html#settings"}
-        ]
-      },
-      {
-        "label": "Sensors and schedule",
-        "items": [
-          {"label": "Occupancy fusion", "href": "guide-motion-occupancy.html#wiring"},
-          {"label": "House schedule", "href": "guide-house-schedule.html#before"},
-          {"label": "House schedule MQTT", "href": "guide-house-schedule.html#changes"}
-        ]
-      },
-      {
-        "label": "Covers",
-        "items": [
-          {"label": "Cover controller", "href": "node-cover-controller.html"},
-          {"label": "Cover group", "href": "guide-covers.html#groups"}
-        ]
-      },
-      {
-        "label": "Adapters",
-        "items": [
-          {"label": "Shelly cover", "href": "guide-device-adapters.html#shelly-cover"},
-          {"label": "Zigbee2MQTT cover", "href": "guide-device-adapters.html#zigbee2mqtt"},
-          {"label": "Shelly switch", "href": "guide-device-adapters.html#shelly-switch"}
-        ]
-      }
-    ]
-  },
-  {
-    "label": "Contracts",
+    "label": "Reference",
     "items": [
+      {"label": "Cover controller", "href": "node-cover-controller.html"},
       {"label": "Contract examples", "href": "contract-examples.html"}
     ]
   },

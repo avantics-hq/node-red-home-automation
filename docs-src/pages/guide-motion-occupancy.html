@@ -1,6 +1,5 @@
 <!--{
  "title": "Light a room from motion",
- "kind": "Guides / Motion and occupancy",
  "lead": "Turn motion and presence sensors into room occupancy, and occupancy into lights that come on when the room is in use and dark enough, then go off once it has been empty for a while.",
  "description": "",
  "htmlTitle": "Light a room from motion · Node-RED Home Automation"
@@ -107,4 +106,3 @@ return msg;</code></pre></div>
 <p>Connect a Debug node to the motion policy’s output 1 to see each intent: <code>msg.lighting</code> with <code>kind: "intent"</code>, the targets and <code>state: "ON"</code> or <code>"OFF"</code>. An OFF intent from the countdown also carries <code>vacantSince</code>. If occupancy turns on but no ON appears, check the light level against <strong>Lux cutoff</strong>.</p>
 <p class="caption">Sources: README Room lighting, Room light control and 4.0.0 notes; occupancy fusion and motion lighting policy editor help and defaults; Room lighting example flow.</p>
 </section>
-<nav class="pager" aria-label="Adjacent pages"><a href="guide-room-lighting.html"><small>Previous</small>← Room lighting</a><a href="guide-wall-switches.html"><small>Continue</small>Wall switches →</a></nav>

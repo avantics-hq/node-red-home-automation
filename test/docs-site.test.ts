@@ -85,16 +85,37 @@ test("search covers every page and its sections", async () => {
   }
 });
 
-test("every menu entry opens a page on this site, apart from the listed outside links", async () => {
+type MenuItem = {label: string; href: string};
+const menuItems = () =>
+  (JSON.parse(readFileSync(resolve(root, "docs-src/nav.json"), "utf8")) as Array<{items: MenuItem[]}>).flatMap((group) => group.items);
+
+test("every menu entry is a whole page on this site, apart from the listed outside links", async () => {
   const {PAGES, OUTSIDE_LINKS} = await build();
-  type Item = {label: string; href: string};
-  const nav = JSON.parse(readFileSync(resolve(root, "docs-src/nav.json"), "utf8")) as Array<{items?: Item[]; families?: Array<{items: Item[]}>}>;
-  const items = nav.flatMap((group) => group.families ? group.families.flatMap((family) => family.items) : group.items!);
-  for (const {label, href} of items) {
+  for (const {label, href} of menuItems()) {
     if (/^[a-z]+:/i.test(href)) {
       assert.ok(OUTSIDE_LINKS.has(href), `${label} leaves the site (${href}): give it a page, or remove it from the menu`);
     } else {
-      assert.ok(PAGES.includes(href.split("#")[0]!.replace(/\.html$/, "")), `${label} (${href}) names no page on the site`);
+      assert.ok(!href.includes("#"), `${label} (${href}) points into a section: the menu lists pages only`);
+      assert.ok(PAGES.includes(href.replace(/\.html$/, "")), `${label} (${href}) names no page on the site`);
+    }
+  }
+});
+
+test("no two menu entries share a target or a label", () => {
+  const items = menuItems();
+  for (const key of ["href", "label"] as const) {
+    const seen = items.map((item) => item[key]);
+    assert.deepEqual(seen.filter((value, i) => seen.indexOf(value) !== i), [], `menu entries with the same ${key}`);
+  }
+});
+
+test("each page's menu marks only that page as current", async () => {
+  const {buildDocs} = await build();
+  for (const [path, content] of buildDocs()) {
+    if (!path.endsWith(".html")) continue;
+    for (const [, menu] of content.matchAll(/<nav class="doc-nav"[^>]*>([\s\S]*?)<\/nav>/g)) {
+      const current = [...menu!.matchAll(/<a href="([^"]+)" aria-current="page">/g)].map(([, href]) => href);
+      assert.deepEqual(current, [path], path);
     }
   }
 });

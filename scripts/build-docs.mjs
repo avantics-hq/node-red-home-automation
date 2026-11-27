@@ -7,7 +7,7 @@
 //
 // Usage: node scripts/build-docs.mjs          writes docs/
 //        node scripts/build-docs.mjs --check  exits 1 if docs/ differs
-import {readFileSync, writeFileSync} from "node:fs";
+import {readFileSync, readdirSync, writeFileSync} from "node:fs";
 import {fileURLToPath} from "node:url";
 
 const root = new URL("../", import.meta.url);
@@ -15,13 +15,12 @@ const read = (path) => readFileSync(new URL(path, root), "utf8");
 
 export const REPOSITORY = "https://github.com/avantics-hq/node-red-home-automation";
 
-// The pages, in reading order.
-export const PAGES = [
-  "index",
-  "guide-room-lighting", "guide-motion-occupancy", "guide-wall-switches", "guide-house-schedule",
-  "guide-covers", "home-theatre", "guide-home-assistant", "guide-device-adapters",
-  "node-cover-controller", "contract-examples", "releases", "roadmap"
-];
+// The pages, in reading order: the menu's own entries, top to bottom, so the
+// previous and next links follow the menu.
+export const PAGES = JSON.parse(read("docs-src/nav.json"))
+  .flatMap((group) => group.items.map((item) => item.href))
+  .filter((href) => !/^[a-z]+:/i.test(href))
+  .map((href) => href.replace(/\.html$/, ""));
 
 const escapeHtml = (text) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
@@ -55,6 +54,7 @@ export function sections(content) {
 export const OUTSIDE_LINKS = new Set([REPOSITORY, `${REPOSITORY}/blob/main/CONTRIBUTING.md`]);
 const isOutside = (href) => /^[a-z]+:/i.test(href);
 
+// Every menu entry is a page; the entry for the page being shown is marked.
 function navLink(item, current) {
   const here = item.href === current ? " aria-current=\"page\"" : "";
   const away = isOutside(item.href) ? " ↗" : "";
@@ -62,19 +62,35 @@ function navLink(item, current) {
 }
 
 function renderNav(nav, current) {
-  const groups = nav.map((group) => {
-    const inner = group.families
-      ? group.families.map((family) => {
-        const open = family.items.some((item) => item.href.split("#")[0] === current) ? " open" : "";
-        return `<details${open}><summary>${escapeHtml(family.label)}</summary>${family.items.map((item) => navLink(item, current)).join("")}</details>`;
-      }).join("")
-      : group.items.map((item) => navLink(item, current)).join("");
-    return `<div class="nav-group"><p class="nav-label">${escapeHtml(group.label)}</p>${inner}</div>`;
-  }).join("");
+  const groups = nav.map((group) =>
+    `<div class="nav-group"><p class="nav-label">${escapeHtml(group.label)}</p>${group.items.map((item) => navLink(item, current)).join("")}</div>`
+  ).join("");
   return `<nav class="doc-nav" aria-label="Documentation">${groups}</nav>`;
 }
 
-function renderPage(page, nav, version) {
+// Docs, then the page's menu group and entry, as the menu shows them.
+function renderBreadcrumb(place) {
+  const steps = [place.group, place.label].map((step) => `<span aria-hidden="true">/</span><span>${escapeHtml(step)}</span>`).join("");
+  return `<nav class="breadcrumb" aria-label="Breadcrumb"><a href="index.html">Docs</a>${steps}</nav>`;
+}
+
+// Where each page sits in the menu; every page has an entry.
+function menuPlaces(nav) {
+  const places = new Map();
+  for (const group of nav) for (const item of group.items) places.set(item.href, {group: group.label, label: item.label});
+  return places;
+}
+
+// Previous and next pages, in PAGES order.
+function renderPager(previous, next) {
+  const links = [
+    previous && `<a href="${previous.file}"><small>Previous</small>← ${escapeHtml(previous.title)}</a>`,
+    next && `<a href="${next.file}"><small>Continue</small>${escapeHtml(next.title)} →</a>`
+  ].filter(Boolean).join("");
+  return `<nav class="pager" aria-label="Adjacent pages">${links}</nav>`;
+}
+
+function renderPage(page, nav, version, previous, next, place) {
   const tocLinks = sections(page.content).map(({id, heading}) => `<a href="#${id}">${escapeHtml(heading)}</a>`).join("");
   const menu = renderNav(nav, page.file);
   return `<!doctype html>
@@ -92,9 +108,10 @@ function renderPage(page, nav, version) {
 <header class="topbar"><a class="brand" href="index.html"><span class="mark" aria-hidden="true">HA</span>Node-RED Home Automation</a><span class="version">${escapeHtml(version)}</span><button class="menu-button" id="menu-button" aria-controls="menu-drawer" aria-expanded="false">Menu</button><div class="search"><label class="sr-only" for="doc-search">Search the documentation</label><input id="doc-search" type="search" placeholder="Search the documentation…" autocomplete="off" aria-controls="search-results"><p class="sr-only" id="search-status" role="status"></p><div class="search-results" id="search-results" hidden></div></div><a class="source" href="${REPOSITORY}">Source ↗</a></header>
 <dialog id="menu-drawer" aria-labelledby="drawer-title"><div class="drawer-head"><strong id="drawer-title">Documentation</strong><button id="menu-close" autofocus>Close</button></div>${menu}</dialog>
 <div class="layout"><aside class="sidebar">${menu}</aside><main id="main" tabindex="-1">
-<nav class="breadcrumb" aria-label="Breadcrumb"><a href="index.html">Docs</a><span aria-hidden="true">/</span><span>${escapeHtml(page.kind)}</span></nav><p class="page-kind">${escapeHtml(page.kind)}</p><h1>${escapeHtml(page.title)}</h1><p class="lead">${page.lead}</p>
+${renderBreadcrumb(place)}<p class="page-kind">${escapeHtml(place.group)}</p><h1>${escapeHtml(page.title)}</h1><p class="lead">${page.lead}</p>
 <details class="mobile-toc"><summary>On this page</summary>${tocLinks}</details>
 ${page.content}
+${renderPager(previous, next)}
 <footer class="page-footer"><span>Package ${escapeHtml(version)} · MIT</span><a href="${REPOSITORY}#readme">Read the README ↗</a></footer>
 </main><aside class="toc" aria-label="On this page"><p>On this page</p>${tocLinks}</aside></div>
 <script src="assets/search-index.js"></script>
@@ -108,11 +125,15 @@ ${page.content}
 export function buildDocs() {
   const version = JSON.parse(read("package.json")).version;
   const nav = JSON.parse(read("docs-src/nav.json"));
+  const unlisted = readdirSync(new URL("docs-src/pages/", root)).map((file) => file.replace(/\.html$/, "")).filter((name) => !PAGES.includes(name));
+  if (unlisted.length) throw new Error(`docs-src/pages has pages with no entry in docs-src/nav.json: ${unlisted.join(", ")}`);
   const pages = PAGES.map(readPage);
+  const places = menuPlaces(nav);
   const files = new Map();
   const index = [];
-  for (const page of pages) {
-    files.set(page.file, renderPage(page, nav, version));
+  for (const [i, page] of pages.entries()) {
+    const place = places.get(page.file);
+    files.set(page.file, renderPage(page, nav, version, pages[i - 1], pages[i + 1], place));
     index.push({title: page.title, description: page.description || plainText(page.lead), url: page.file, text: plainText(page.lead)});
     for (const section of sections(page.content)) {
       index.push({title: page.title, section: section.heading, description: section.text.slice(0, 110), url: `${page.file}#${section.id}`, text: section.text});
