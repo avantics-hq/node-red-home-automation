@@ -56,6 +56,7 @@ return msg;</code></pre></div>
 <li><strong>The wall switch doesn’t cut power.</strong> The relay stays on, so the bulb holder stays powered whatever the switch’s position. To cut power to the light, for example to change a bulb, switch the relay off from the Shelly’s own app or web page, or from Home Assistant if it shows the relay. For any work on the fitting or the wiring, switch off the circuit breaker.</li>
 <li><strong>Keep within the relay’s rating.</strong> Shelly gives the 1PM Gen3 a maximum switching current of 16 A at 240 V~, and asks for a circuit breaker of at most 16 A rated current. Check the rating for your model and the load on the circuit.</li>
 <li><strong>The switch works only while Node-RED and MQTT do.</strong> If Node-RED, the MQTT broker or the relay’s network connection is down, pressing the wall switch does nothing: the bulb stays as it was, and keeps its power. The <a href="#shelly-fallback">fallback script</a> below makes the switch work as an ordinary switch then.</li>
+<li><strong>Don’t use the wall switch to change a bulb.</strong> With the fallback script, a wall switch that cut the power while Node-RED was away has the relay switched back on as soon as Node-RED returns, so the bulb holder can come back on in your hands. Switch the relay off from its app or web page, where it stays off, or switch off the circuit breaker.</li>
 </ul></aside>
 <figure class="diagram">
 <div role="region" aria-label="Wiring drawing; scroll horizontally on a phone" tabindex="0" style="overflow-x:auto">
