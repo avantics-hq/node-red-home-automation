@@ -215,15 +215,23 @@ export function theatreRetainedTopics(config: TheatreStateContractConfig): strin
     : [];
   return [
     ...discovery,
-    ...theatreStartingPublications(config).map(({topic}) => topic),
+    theatreTopic(config.baseTopic, "availability"),
     ...STATE_TOPICS.map(([name]) => theatreTopic(config.baseTopic, name))
   ];
 }
 
-// What the contract publishes as it starts and as it stops, so Home Assistant
-// shows its entities as available only while it runs.
+// What the contract publishes as the flows start and as it stops: with
+// discovery on, its entries, as the other publishing nodes announce theirs,
+// so Home Assistant has them without a startup message; and its
+// availability, so Home Assistant shows its entities as available only while
+// it runs. Removing entries when discovery is off stays with the startup
+// message.
 export function theatreStartingPublications(config: TheatreStateContractConfig): ContractPublication[] {
-  return [publication(theatreTopic(config.baseTopic, "availability"), ONLINE)];
+  const entries = config.discovery !== false ? theatreDiscovery(config) : [];
+  return [
+    ...entries.map(({topic, payload}) => publication(topic, payload)),
+    publication(theatreTopic(config.baseTopic, "availability"), ONLINE)
+  ];
 }
 
 export function theatreStoppingPublications(config: TheatreStateContractConfig): ContractPublication[] {

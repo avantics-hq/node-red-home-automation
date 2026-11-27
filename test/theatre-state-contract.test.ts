@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   normaliseStateContractConfig,
   theatreRetainedTopics,
+  theatreStartingPublications,
   theatreStoppingPublications,
   transitionTheatreStateContract,
   type TheatreStateContractConfig,
@@ -267,6 +268,17 @@ test("the retained topic list covers everything the contract publishes", () => {
     assert.ok(listed.has(`home/lounge/theatre/health/${target}`), target);
   }
   assert.ok(listed.has("home/lounge/theatre/transition"));
+});
+
+test("as the flows start, the contract announces its discovery entries, as the startup message does, then its availability", () => {
+  const startup = transitionTheatreStateContract(undefined, {theatreStateContract: {kind: "startup"}}, config, at(0)).publications;
+  assert.deepEqual(theatreStartingPublications(config), startup);
+  assert.equal(theatreStartingPublications(config).at(-1)?.topic, "home/lounge/theatre/availability");
+  // Discovery off: only its availability; the startup message still removes the entries.
+  assert.deepEqual(theatreStartingPublications({...config, discovery: false}).map(({topic, payload}) => [topic, payload]),
+    [["home/lounge/theatre/availability", "online"]]);
+  const listed = theatreRetainedTopics(config);
+  assert.equal(new Set(listed).size, listed.length, "each retained topic listed once");
 });
 
 test("the transition's timing and degraded targets reach Home Assistant as the Phase sensor's attributes", () => {

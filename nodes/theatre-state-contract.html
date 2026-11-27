@@ -88,9 +88,10 @@
     <code>offline</code> as it stops; its Home Assistant entities follow it. These get through only
     when this node is deployed on its own, so set the MQTT broker node's Birth, Close and Will messages to the same (see the
     README).</p>
-  <p>With <b>Home Assistant discovery</b> on, a startup event also publishes discovery for the activity selector and
-    status sensors; switched off, it clears them, so Home Assistant removes them. New nodes start with it off; a node
-    saved before the setting existed keeps it on.</p>
+  <p>With <b>Home Assistant discovery</b> on, it publishes discovery for the activity selector and status sensors once
+    the flows start, before <code>online</code>, and again at a startup event. Switched off, the next startup event
+    clears them, so Home Assistant removes them. New nodes start with it off; a node saved before the setting existed
+    keeps it on.</p>
   <p>The <b>Area</b> names the discovery entities and the default base topic <code>home/&lt;area&gt;/theatre</code>,
     so it is needed when discovery is on or the base topic is empty. With discovery off and a base topic set, it is
     optional.</p>
