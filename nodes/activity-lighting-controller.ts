@@ -15,6 +15,7 @@ import {
   type ActivityLightingMessage,
   type ActivityLightingState
 } from "../lib/activity-lighting-controller";
+import {isLightReading, type LightReading} from "../lib/light-contract";
 import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
 import {jsonSetting, numberSetting, textSetting} from "../lib/settings";
 
@@ -114,6 +115,16 @@ const registerActivityLightingController: NodeInitializer = (RED) => {
     }
 
     onInput(node, (msg, send) => {
+      // A light's reading, as the room controller passes it on (its third
+      // output): an observation for the request in hand.
+      const light = isLightReading(msg.light) && msg.light.kind === "observed" ? msg.light as LightReading & {kind: "observed"; manual?: unknown} : null;
+      if (light) {
+        const generation = (context.get("state") as Partial<ActivityLightingState> | undefined)?.generation ?? 0;
+        if (generation < 1) return;
+        process({activityLighting: {kind: "observed", generation, target: light.target, on: light.on, manual: light.manual === true,
+          fields: light.fields, showsLast: light.showsLast, observedAt: light.observedAt}}, send);
+        return;
+      }
       process({
         activityLighting: objectField<ActivityLightingMessage["activityLighting"]>(msg, "activityLighting")
       }, send);

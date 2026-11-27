@@ -31,7 +31,7 @@
 
 <script type="text/html" data-help-name="home-activity-lighting-controller">
   <p>Applies configuration-owned activity styles only to room lights that are already on and not manually owned.</p>
-  <p>Input <code>msg.activityLighting</code> carries generation-scoped intent, observation, refresh, result or tick events. Output 1 emits standard <code>msg.lighting</code> intents for a room controller. Output 2 emits theatre <code>target_state</code> evidence. Room-light failure is optional degradation, not activity success.</p>
+  <p>Input <code>msg.activityLighting</code> carries generation-scoped intent, refresh, result or tick events. Wire the room lighting controller's third output here too: it passes on each light's reading (<code>msg.light</code>, from the light's adapter) with whether a person set it, which the node takes as an observation of the request in hand. Output 1 emits standard <code>msg.lighting</code> intents for a room controller. Output 2 emits theatre <code>target_state</code> evidence. Room-light failure is optional degradation, not activity success.</p>
   <p>Each profile is <code>{targets: [...], values: {...}}</code>, with <code>values</code> in the package's own units:
     <code>brightnessPct</code> (0-100) and <code>colorTempKelvin</code>, for example
     <code>{"tv": {"targets": ["main"], "values": {"brightnessPct": 25, "colorTempKelvin": 2500}}}</code>.
@@ -42,7 +42,8 @@
     using them is an invalid configuration.</p>
   <p>Each light is judged by what it reports. A light that has reported none of a profile's fields since the node
     started (no brightness, no colour temperature), as one that only switches on and off, is confirmed by being on;
-    once it has reported one, it is held to the profile's values. A profile that gives values to a light that has never
+    once it has reported one, it is held to the profile's values: it confirms when its adapter says it shows the last
+    command sent to it, which is the profile's while the activity holds it. A profile that gives values to a light that has never
     reported them gets one warning per deploy: they may not apply. Mark such a light <code>onOffOnly</code> on the
     room, and the room won't send them.</p>
   <p>While a profile is active, its lights are overridden in the room controller under <b>Owner</b>

@@ -481,7 +481,7 @@ test("activity lighting adapter preserves ownership and emits target evidence", 
       target: "wall",
       on: true,
       manual: true,
-      values: {brightness: 254},
+      fields: ["brightness"], showsLast: false,
       observedAt
     }
   });
@@ -491,7 +491,7 @@ test("activity lighting adapter preserves ownership and emits target evidence", 
       generation: 1,
       target: "lamp",
       on: false,
-      values: {},
+      fields: [], showsLast: false,
       observedAt
     }
   });
@@ -2526,8 +2526,8 @@ test("activity lighting warns once per deploy when a profile gives values to a l
   for (const at of [1, 2]) {
     await receive(node, {activityLighting: {kind: "intent", requestId: `tv-${at}`, generation: at, profile: "tv"}});
     // The wall reports the profile's level; the lamp only that it is on.
-    await receive(node, {activityLighting: {kind: "observed", generation: at, target: "wall", on: true, values: {brightness: 64}, observedAt: new Date().toISOString()}});
-    await receive(node, {activityLighting: {kind: "observed", generation: at, target: "lamp", on: true, values: {}, observedAt: new Date().toISOString()}});
+    await receive(node, {activityLighting: {kind: "observed", generation: at, target: "wall", on: true, fields: ["brightness"], showsLast: true, observedAt: new Date().toISOString()}});
+    await receive(node, {activityLighting: {kind: "observed", generation: at, target: "lamp", on: true, fields: [], showsLast: false, observedAt: new Date().toISOString()}});
   }
   assert.equal(node.warnings.length, 1, "once per deploy");
   assert.match(String(node.warnings[0]), /^lamp reports no brightness or colour, so the activity confirms it by its being on/);
@@ -2566,5 +2566,18 @@ test("a room and a zigbee2mqtt light node, wired as in the examples: commands, r
   assert.deepEqual(port(shown, 1), [], "no command");
   assert.match(String((room.statuses.at(-1) as {text: string}).text), /· 1 offline$/);
   assert.equal((room.context().get("state") as {control: Record<string, {state: string}>}).control.main?.state, "manual");
+});
+
+test("activity lighting takes a light's reading as the room passes it on", async (t) => {
+  const node = new (runtime(registerActivityLighting).Constructor)({area: "lounge", owner: "activity",
+    profiles: JSON.stringify({off: {targets: [], values: {}}, tv: {targets: ["wall"], values: {brightnessPct: 25}}}), confirmationTimeoutMs: 15000, maxAttempts: 2});
+  t.after(() => close(node));
+  // Before any request: nothing to confirm, so it's dropped.
+  assert.deepEqual(await receive(node, {light: {kind: "observed", target: "wall", on: true, fields: ["brightness"], showsLast: true, observedAt: new Date().toISOString(), control: "overridden", manual: false}}), []);
+  await receive(node, {activityLighting: {kind: "intent", requestId: "tv-1", generation: 1, profile: "tv"}});
+  const ready = await receive<Array<unknown>>(node, {light: {kind: "observed", target: "wall", on: true, fields: ["brightness"], showsLast: true,
+    observedAt: new Date(Date.now() + 1000).toISOString(), control: "overridden", manual: false}});
+  assert.equal((node.context().get("state") as {phase: string}).phase, "ready");
+  assert.ok(ready.length > 0);
 });
 

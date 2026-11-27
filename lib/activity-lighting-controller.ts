@@ -1,6 +1,6 @@
 "use strict";
 
-import {REMOVED_LIGHT_FIELDS, lightValues} from "./z2m-light";
+import {REMOVED_LIGHT_FIELDS} from "./z2m-light";
 import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration, adoptionReason, carryOn, answersRequest, savedCarried, type Carried} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {numberSetting, textSetting} from "./settings";
@@ -35,12 +35,14 @@ export interface ActivityLightingDesired {
   requestedAt: string;
 }
 
+// A light's reading, as its adapter gave it and the room passed it on.
 export interface ActivityLightingObservation {
   target: string;
   on: boolean;
   manual: boolean;
   available: boolean;
-  values: Record<string, unknown>;
+  // It shows exactly the last command sent to it, as its adapter judged.
+  showsLast: boolean;
   observedAt: string;
 }
 
@@ -98,7 +100,11 @@ export type ActivityLightingEvent =
     on: boolean;
     manual?: boolean;
     available?: boolean;
-    values?: Record<string, unknown>;
+    // From the light's adapter (light-contract.ts): the value fields it
+    // reports at all (brightness, colorTemp), and whether it shows exactly
+    // the last command sent to it.
+    fields?: string[];
+    showsLast?: boolean;
     observedAt: string;
   }
   | {kind: "command_result"; generation: number; ok: boolean; reason?: string}
@@ -130,14 +136,6 @@ export interface ActivityLightingOutputEvent {
   }, ActivityLightingFailure>;
 }
 
-function stable(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(stable);
-  if (value && typeof value === "object") {
-    const record = value as Record<string, unknown>;
-    return Object.fromEntries(Object.keys(record).sort().map((key) => [key, stable(record[key])]));
-  }
-  return value;
-}
 
 // Whether a light's report shows the profile's values. Reports come in the
 // light's own units, so the profile's are converted first (z2m-light).
@@ -145,18 +143,15 @@ function stable(value: unknown): unknown {
 // them since start, so it is confirmed by being on: the node warns once.
 export const VALUES_NOT_REPORTED = "values-not-reported";
 
-// Whether a light has reported any of the profile's fields since start; true
-// when the profile sets none, as then there is nothing but on to check.
-function reportsAnyOf(profileValues: Record<string, unknown>, reported: readonly string[]): boolean {
-  const expected = Object.keys(lightValues(profileValues).values);
-  return expected.length === 0 || expected.some((key) => reported.includes(key));
-}
+// The reading fields that show a profile's values.
+const PROFILE_FIELDS: Record<string, string> = {brightnessPct: "brightness", colorTempKelvin: "colorTemp"};
 
-function valuesMatch(profileValues: Record<string, unknown>, actual: Record<string, unknown>): boolean {
-  const expected = lightValues(profileValues).values;
-  return Object.entries(expected).every(([key, value]) =>
-    Object.hasOwn(actual, key) && JSON.stringify(stable(actual[key])) === JSON.stringify(stable(value))
-  );
+// Whether a light has reported any of the profile's fields since start; true
+// when the profile sets none of them, as then there is nothing but on to
+// check.
+function reportsAnyOf(profileValues: Record<string, unknown>, reported: readonly string[]): boolean {
+  const expected = Object.keys(profileValues).flatMap((key) => (PROFILE_FIELDS[key] ? [PROFILE_FIELDS[key]!] : []));
+  return expected.length === 0 || expected.some((field) => reported.includes(field));
 }
 
 export function normaliseLightingProfiles(value: unknown): ActivityLightingProfiles {
@@ -367,7 +362,9 @@ export function transitionActivityLighting(
         counts.matched += 1;
         continue;
       }
-      if (!valuesMatch(profile.values, observation.values)) {
+      // It shows the profile's values when it shows the last command sent to
+      // it: the profile's, as the activity holds the light.
+      if (!observation.showsLast) {
         if (isAdopted(state)) {
           // An adopted request the lights don't match: someone else's, and
           // never re-applied.
@@ -476,7 +473,7 @@ export function transitionActivityLighting(
       return;
     }
     // What it reports since start: which fields, for the profiles' values.
-    const fields = observation.values && typeof observation.values === "object" ? Object.keys(observation.values) : [];
+    const fields = Array.isArray(observation.fields) ? observation.fields.map(String) : [];
     const known = state.reported?.[observation.target] ?? [];
     if (fields.some((field) => !known.includes(field))) {
       state.reported = {...state.reported, [observation.target]: [...new Set([...known, ...fields])]};
@@ -486,7 +483,7 @@ export function transitionActivityLighting(
       on: observation.on === true,
       manual: observation.manual === true,
       available: observation.available !== false,
-      values: observation.values && typeof observation.values === "object" ? {...observation.values} : {},
+      showsLast: observation.showsLast === true,
       observedAt: bounded.observedAt
     };
     trace("observation", "accepted", null, {target: observation.target});
