@@ -670,9 +670,9 @@ Without a context store, after a node is redeployed or Node-RED restarts:
   times, set from Home Assistant or a message.
 - **The theatre starts its counts again:** its counters and operational SLO
   samples restart, and the activity controller no longer knows the current
-  activity. At its next startup recovery it works it out from what the devices
-  report, and if no single activity matches, it switches to the recovery off
-  activity.
+  activity. The activity is unknown, and the devices are left alone, until the
+  next request. Working the activity out from what the devices report after a
+  cold start is [issue #179](https://github.com/avantics-hq/node-red-home-automation/issues/179).
 - **Work in progress is not recovered:** a motion off-timer that was running,
   or a theatre device change still being confirmed. The node starts afresh
   and goes by what it next observes.
@@ -846,7 +846,7 @@ Each example uses synthetic identifiers and configuration, asserts its central i
 
 ## Configuration and security
 
-The repository contains no home-network addresses, deployment coordinates, or live credentials. Device hosts and room coordinates are required configuration where applicable.
+The repository contains no home-network addresses, deployment coordinates, or live credentials. Device hosts are required configuration where applicable.
 
 The display controller stores its TV pre-shared key as a Node-RED credential. Keep credentials in Node-RED's encrypted credential store rather than flow fields or repository files.
 

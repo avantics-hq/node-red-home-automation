@@ -42,7 +42,7 @@
 <tr><td>Room lighting</td><td>Motion and illuminance feed occupancy fusion and the motion policy, a wall switch feeds the switch policy, and a circadian lighting policy styles the room; all send intents to the room lighting controller.</td></tr>
 <tr><td>House schedule</td><td>A house schedule shared by two rooms through their circadian lighting policies, with the optional house schedule MQTT node changing its times.</td></tr>
 <tr><td>Shelly switch</td><td>A wall switch on a Shelly Gen2 relay in detached mode driving a room’s lights through the switch policy, with no function nodes.</td></tr>
-<tr><td>Cover control</td><td>A position cover owned by the cover controller, with function nodes that map to and from a Zigbee2MQTT cover.</td></tr>
+<tr><td>Cover control</td><td>A position cover owned by the cover controller, connected to a Zigbee2MQTT cover through the zigbee2mqtt cover adapter. Its one function node pauses motion lighting while the cover moves.</td></tr>
 <tr><td>Cover pair</td><td>Two covers moved as one by a cover group, which reports ready only when both confirm.</td></tr>
 <tr><td>Shelly cover</td><td>A Shelly Gen2 device in cover mode, owned by the cover controller, with no function nodes.</td></tr>
 <tr><td>Home theatre equipment</td><td>The AVR, display, source capability and backlighting controllers, each taking an intent and reporting target state.</td></tr>
@@ -61,7 +61,7 @@
 <ul>
 <li><strong>A room forgets which lights are held or manual.</strong> Every light an activity held, or a person set by hand, is back under the room’s control, so the next style restyles them.</li>
 <li><strong>Changes made at runtime go back to the node’s settings.</strong> For example motion lighting’s enable, vacancy delay and lux cutoff, a circadian policy’s circadian lighting, sleep, and wake and bed times, and the house schedule’s times, set from Home Assistant or a message.</li>
-<li><strong>The theatre starts its counts again.</strong> Its counters and operational SLO samples restart, and the activity controller no longer knows the current activity. At its next startup recovery it works it out from what the devices report; if no single activity matches, it switches to the recovery off activity.</li>
+<li><strong>The theatre starts its counts again.</strong> Its counters and operational SLO samples restart, and the activity controller no longer knows the current activity. The activity is unknown, and the devices are left alone, until the next request. Working the activity out from what the devices report after a cold start is <a href="https://github.com/avantics-hq/node-red-home-automation/issues/179">issue #179</a>.</li>
 <li><strong>Work in progress is not recovered.</strong> A motion off-timer that was running, or a theatre device change still being confirmed, is gone. The node starts afresh and goes by what it next observes.</li>
 <li><strong>Old retained topics are not cleared.</strong> A node can’t remember what it published, so after you change an area, base topic, discovery prefix or targets, the old retained topics and Home Assistant entities stay until you remove them yourself.</li>
 </ul>
@@ -75,7 +75,7 @@
 <aside class="callout neutral"><strong>Removing a node’s entities.</strong><p>Deleting a publishing node clears its Home Assistant entities and retained state only when you deploy with “Modified nodes” or “Modified flows”. After a full deploy, delete the device in Home Assistant instead: Settings → Devices &amp; services → Devices, open the device, then Delete.</p></aside>
 </section>
 <section id="security"><h2>Configuration and security</h2>
-<p>The repository contains no home-network addresses, home coordinates or credentials. Device hosts and room coordinates are settings you provide where a node needs them.</p>
+<p>The repository contains no home-network addresses, home coordinates or credentials. Device hosts are settings you provide where a node needs them.</p>
 <p>The display mode controller stores its TV pre-shared key as a Node-RED credential. Keep credentials in Node-RED’s encrypted credential store rather than in flow fields or repository files.</p>
 <p>Report a suspected vulnerability privately, using the process in <a href="https://github.com/avantics-hq/node-red-home-automation/blob/main/SECURITY.md"><code>SECURITY.md</code></a>, not through a public issue.</p>
 </section>
