@@ -93,10 +93,11 @@ export const contentRules = [
 
 export const pageRules = [
   {
-    // "shelly cover" is the palette name of a node this package ships, so the
-    // docs may name it; every other use of the brand stays out of Pages.
-    name: "deployment-specific room or device label in Pages",
-    pattern: /\b(?:Kitchen|Hallway|Lounge|Bravia|Denon|Shield|PlayStation|Shelly(?![ -]cover\b))\b/gi
+    // Device brands may appear: the package supports them by name, and the
+    // docs must name them to explain setup. Room names describe a home, so
+    // they stay out of the public site.
+    name: "deployment-specific room name in Pages",
+    pattern: /\b(?:Kitchen|Hallway|Lounge)\b/gi
   },
   {
     name: "installation-status wording in Pages",
