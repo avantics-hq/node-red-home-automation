@@ -33,15 +33,15 @@
 </section>
 <section id="outputs"><h2>Outputs</h2>
 <div class="table-wrap" role="region" aria-label="Three output ports; scroll horizontally on a phone" tabindex="0"><table><caption>Three output ports</caption><thead><tr><th scope="col">Port</th><th scope="col">Message</th><th scope="col">Connect to</th></tr></thead><tbody>
-<tr><td>1 · To rooms</td><td>As it starts, one owner intent per light: <code>{lighting: {kind: "intent", targets: [id], state, values?, owner: "scene:&lt;name&gt;", source: "scene"}}</code>. As it ends: <code>{lighting: {kind: "release", owner, targets, source: "scene"}}</code>.</td><td>Each room lighting controller whose lights it sets.</td></tr>
+<tr><td>1 · To rooms</td><td>As it starts, one owner intent per light: <code>{lighting: {kind: "intent", area, targets: [id], state, values?, owner: "scene:&lt;name&gt;", source: "scene"}}</code>. As it ends, one release per room: <code>{lighting: {kind: "release", area, owner, targets, source: "scene"}}</code>.</td><td>Each room lighting controller whose lights it sets.</td></tr>
 <tr><td>2 · To motion</td><td><code>{source: "pause", payload: true, owner}</code> as it starts and every minute while on; <code>payload: false</code> as it ends.</td><td>Each motion lighting policy to pause while it is on.</td></tr>
 <tr><td>3 · MQTT publications</td><td>Its switch’s state (<code>ON</code> or <code>OFF</code>), availability and discovery, retained.</td><td>An MQTT out node, when it publishes.</td></tr>
 </tbody></table></div>
 </section>
 <section id="settings"><h2>Settings</h2>
 <div class="table-wrap" role="region" aria-label="Editor settings and exact defaults; scroll horizontally on a phone" tabindex="0"><table><caption>Editor settings and exact defaults</caption><thead><tr><th scope="col">Setting / property</th><th scope="col">Default</th><th scope="col">Meaning</th></tr></thead><tbody>
-<tr><td>Name / <code>name</code></td><td>None: required</td><td>Names the scene to its rooms and motion policies (owner <code>scene:&lt;name&gt;</code>), in its topics and in Home Assistant. Give each scene its own.</td></tr>
-<tr><td>Lights / <code>lights</code></td><td><code>[]</code></td><td>A JSON array, one entry per light: <code>target</code> (the light’s id in its room controller’s Targets JSON), <code>state</code> <code>ON</code> or <code>OFF</code>, and for an ON light <code>brightnessPct</code> (0-100) and <code>colorTempKelvin</code> (above 0), both optional. A socket is a room target marked on/off only: give it just its state. Empty: the scene only pauses motion.</td></tr>
+<tr><td>Name / <code>name</code></td><td>None: required</td><td>Names the scene to its rooms and motion policies (owner <code>scene:&lt;name&gt;</code>), in its topics and in Home Assistant. Each scene needs its own: the editor marks a name another scene has, compared as in topics (<code>Bath</code> and <code>bath</code> are the same).</td></tr>
+<tr><td>Lights / <code>lights</code></td><td><code>[]</code></td><td>A JSON array, one entry per light: <code>area</code> (its room controller’s Area), <code>target</code> (the light’s id in that room’s Targets JSON), <code>state</code> <code>ON</code> or <code>OFF</code>, and for an ON light <code>brightnessPct</code> (0-100) and <code>colorTempKelvin</code> (above 0), both optional. A socket is a room target marked on/off only: give it just its state. Empty: the scene only pauses motion.</td></tr>
 <tr><td>Safety timer / <code>safetyHours</code></td><td><code>4</code></td><td>Hours until it ends itself, so a forgotten scene doesn’t hold the room. <code>0</code> turns it off.</td></tr>
 <tr><td>Area / <code>area</code></td><td>Empty</td><td>Required only while it publishes: it names its topics, <code>home/&lt;area&gt;/scene/&lt;name&gt;/…</code>.</td></tr>
 <tr><td>Publish state over MQTT / <code>publishState</code></td><td>Off</td><td>Its state, availability and set topic.</td></tr>
@@ -49,19 +49,19 @@
 <tr><td>Discovery prefix / <code>discoveryPrefix</code></td><td><code>homeassistant</code></td><td>Home Assistant’s discovery prefix.</td></tr>
 </tbody></table></div>
 <p class="caption">Scenes use node-based Home Assistant identifiers (<code>idScheme = "node"</code>), so renaming its area keeps its entity. That is not an editor setting.</p>
-<div class="code-block"><div class="code-label"><span>Lights · a main light off, a TV socket on, a lamp dimmed warm</span></div><pre><code>[{"target": "main", "state": "OFF"},
- {"target": "tv", "state": "ON"},
- {"target": "lamp", "state": "ON", "brightnessPct": 30, "colorTempKelvin": 2700}]</code></pre></div>
+<div class="code-block"><div class="code-label"><span>Lights · a main light off, a TV socket on, a lamp dimmed warm</span></div><pre><code>[{"area": "gym", "target": "main", "state": "OFF"},
+ {"area": "gym", "target": "tv", "state": "ON"},
+ {"area": "gym", "target": "lamp", "state": "ON", "brightnessPct": 30, "colorTempKelvin": 2700}]</code></pre></div>
 </section>
 <section id="rules"><h2>What it holds, and what it hands back</h2>
 <ul class="rule-list">
-<li><strong>Which rooms:</strong> its intents reach every room wired to output 1, and each room acts on any light with a matching id. Wire output 1 only to the rooms it sets; if those rooms share ids (two <code>main</code> lights), use one scene per room or give the lights distinct ids.</li><li><strong>Through the room:</strong> each light is held under the scene’s owner, so motion, wall switches without a person’s mark, and the circadian style leave it alone while the scene is on, on or off. See <a href="node-room-controller.html#owners">owners stack</a>.</li>
+<li><strong>Which rooms:</strong> each light names its room by the room controller’s <strong>Area</strong>, and its intents and releases carry it; a room acts only on those for its own Area, so two rooms may each have a <code>main</code>. Set the Area on each room a scene uses.</li><li><strong>Through the room:</strong> each light is held under the scene’s owner, so motion, wall switches without a person’s mark, and the circadian style leave it alone while the scene is on, on or off. See <a href="node-room-controller.html#owners">owners stack</a>.</li>
 <li><strong>Handed back:</strong> when it ends, each room gives a light back what it was before the scene: on or off as it was, in the room’s style as it is now, or a person’s own values if they had set it.</li>
 <li><strong>Scenes stack:</strong> a newer scene holding a light another holds takes it, and hands it back to the older one when it ends. Ending the older one first leaves the light with the newer.</li>
 <li><strong>A person’s change stands:</strong> a person changing a light the scene holds makes it theirs; the scene’s end leaves it alone.</li>
-<li><strong>Motion:</strong> paused under the scene’s owner, renewed every minute, so it lapses within the motion policy’s maximum pause (10 minutes by default) if the scene node goes away. Ending the scene lifts its pause; another owner’s pause stands.</li>
+<li><strong>Motion:</strong> paused under the scene’s owner, renewed every minute, so it lapses within the motion policy’s maximum pause (10 minutes by default) if the scene node goes away. Keep that <strong>Maximum pause</strong> above a minute, or motion runs between renewals. Ending the scene lifts its pause; another owner’s pause stands. If the room went vacant during the scene, motion’s vacancy delay starts when the pause lifts.</li>
 <li><strong>Restarts:</strong> its state is kept in its node context. With a context store, a scene on when the flows stopped is still on when they start, with its timer; if its time ran out meanwhile, it ends as they start. Its lights aren’t asked again: the rooms still hold them.</li>
-<li><strong>Deleted while on:</strong> it lets its lights and motion go, when you deploy with “Modified nodes” or “Modified flows”, while the rooms and motion policies are still running.</li>
+<li><strong>Deleted while on:</strong> it lets its lights and motion go, when you deploy with “Modified nodes” or “Modified flows”, while the rooms and motion policies are still running. On a full deploy the rooms are stopping too, so its release is lost and its lights stay held: end the scene before you delete it, or change those lights by hand, which makes them a person’s. Its motion pause runs out by itself.</li>
 </ul>
 </section>
 <section id="publishing"><h2>Home Assistant</h2>

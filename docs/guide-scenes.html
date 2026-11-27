@@ -34,13 +34,13 @@
 <tr><td>Status node watching MQTT out</td><td>Scene input</td><td>MQTT out’s “connected”, taken as the startup message, so its switch is announced once the broker can take it.</td></tr>
 </tbody></table></div>
 <ol class="step-list">
-<li><strong>Wire output 1 only to the rooms it sets.</strong><p>Its intents reach every room on that wire, and each room acts on any light with a matching id. If those rooms share ids (two <code>main</code> lights), use one scene per room, or give the lights distinct ids.</p></li>
-<li><strong>Name it.</strong><p>The name is how its rooms, its motion policies and Home Assistant know it, so give each scene its own: <code>Exercise mode</code>, <code>Bath</code>.</p></li>
-<li><strong>List its lights.</strong><p>One entry per light or socket, by its id in the room’s Targets JSON:</p>
-<div class="code-block"><div class="code-label"><span>Exercise mode · main light off, TV socket on</span></div><pre><code>[{"target": "main", "state": "OFF"},
- {"target": "tv", "state": "ON"}]</code></pre></div>
-<div class="code-block"><div class="code-label"><span>Bath · two lights dimmed warm</span></div><pre><code>[{"target": "ceiling", "state": "ON", "brightnessPct": 30, "colorTempKelvin": 2700},
- {"target": "mirror", "state": "ON", "brightnessPct": 50}]</code></pre></div>
+<li><strong>Give each room it uses an Area.</strong><p>A scene names each light by its room’s <strong>Area</strong> and its id there, and a room acts only on a scene’s lights for its own Area, so two rooms may each have a <code>main</code>.</p></li>
+<li><strong>Name it.</strong><p>The name is how its rooms, its motion policies and Home Assistant know it, so each scene needs its own: <code>Exercise mode</code>, <code>Bath</code>. Two scenes with one name would share an owner, and one ending would release the other’s lights; the editor marks a name another scene has.</p></li>
+<li><strong>List its lights.</strong><p>One entry per light or socket, by its room’s Area and its id in that room’s Targets JSON:</p>
+<div class="code-block"><div class="code-label"><span>Exercise mode · main light off, TV socket on</span></div><pre><code>[{"area": "gym", "target": "main", "state": "OFF"},
+ {"area": "gym", "target": "tv", "state": "ON"}]</code></pre></div>
+<div class="code-block"><div class="code-label"><span>Bath · two lights dimmed warm</span></div><pre><code>[{"area": "bathroom", "target": "ceiling", "state": "ON", "brightnessPct": 30, "colorTempKelvin": 2700},
+ {"area": "bathroom", "target": "mirror", "state": "ON", "brightnessPct": 50}]</code></pre></div>
 <p>Brightness is 0-100 % and colour temperature in kelvin; a light given neither just switches on. A scene with no lights only pauses motion.</p></li>
 <li><strong>Set its safety timer.</strong><p>It ends itself after <strong>4 hours</strong> by default, so a scene left on doesn’t hold the room overnight. <code>0</code> turns the timer off.</p></li>
 <li><strong>Start and end it.</strong><p>Send <code>msg.scene = {kind: "start"}</code> and <code>msg.scene = {kind: "end"}</code> from your flow, or use its Home Assistant switch (below).</p></li>
@@ -59,7 +59,7 @@
 <li><strong>A light a person had set</strong> gets their brightness and colour back, and stays theirs.</li>
 <li><strong>A light a person changed during the scene</strong> is theirs: the scene’s end leaves it alone.</li>
 </ul>
-<p>Motion lighting resumes when its pause lifts. With the room vacant, motion switches lights off as it normally would.</p>
+<p>Motion lighting resumes when its pause lifts. If the room went vacant during the scene, its vacancy delay starts then, and it switches the lights off as it normally would. Keep each motion policy’s <strong>Maximum pause</strong> above a minute (10 minutes by default), as the scene renews its pause every minute.</p>
 </section>
 <section id="stacking"><h2>Two scenes at once</h2>
 <p>Scenes stack. If <em>Bath</em> starts while <em>Exercise mode</em> holds the same light, Bath takes it; when Bath ends, the light goes back to what Exercise mode asked for, not to the room. If Exercise mode ends first, the light stays with Bath, and goes back to the room when Bath ends. Lights only one scene holds follow that scene. Each scene pauses motion under its own name, so motion resumes only when both have ended.</p>

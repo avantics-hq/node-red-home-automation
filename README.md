@@ -138,15 +138,14 @@ Wire the scene's first output to each room lighting controller whose lights it
 sets, its second to each motion lighting policy to pause, and, to start and
 stop it from Home Assistant, its third to MQTT out, with an MQTT in node on
 `home/<area>/scene/<name>/set` and a Status node watching MQTT out into it.
-Its lights are listed by their ids in the room's Targets JSON; a socket is a
-target marked `"onOffOnly": true`. Its intents reach every room on its first
-output, and each room acts on any light with a matching id, so wire it only to
-the rooms it sets; if those rooms share ids, use one scene per room or distinct
-ids:
+Its lights are listed by their room's Area and their ids in that room's
+Targets JSON; a socket is a target marked `"onOffOnly": true`. A room acts only
+on a scene's lights for its own Area, so set the Area on each room a scene uses;
+two rooms may each have a `main`:
 
 ```json
-[{"target": "main", "state": "OFF"}, {"target": "tv", "state": "ON"},
- {"target": "lamp", "state": "ON", "brightnessPct": 30, "colorTempKelvin": 2700}]
+[{"area": "gym", "target": "main", "state": "OFF"}, {"area": "gym", "target": "tv", "state": "ON"},
+ {"area": "gym", "target": "lamp", "state": "ON", "brightnessPct": 30, "colorTempKelvin": 2700}]
 ```
 
 Start it with `msg.scene = {kind: "start"}` and end it with
@@ -884,6 +883,10 @@ its control state, whether it was on, and the brightness and colour temperature
 it last reported. A newer owner goes on top and sets the light; the owner
 beneath keeps its own request, and sending again updates it without changing
 the light.
+
+An intent or release with `area` is acted on only by the room whose Area
+matches it (compared as in topics), so a scene wired to several rooms reaches
+only its own lights; without `area`, any room it reaches acts on it.
 
 Release overridden targets (default: all; with `owner`, only that owner's
 lights):

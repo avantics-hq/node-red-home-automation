@@ -7,8 +7,8 @@
       var discovery = $("#node-input-discovery");
       return state.length ? state.prop("checked") || discovery.prop("checked") : on(node.publishState) || on(node.discovery);
     }
-    // The lights as lib/scene.ts reads them: a light's id in its room, ON or
-    // OFF, and for an ON light optional brightnessPct (0-100) and
+    // The lights as lib/scene.ts reads them: its room's area and its id there,
+    // ON or OFF, and for an ON light optional brightnessPct (0-100) and
     // colorTempKelvin (above 0); each light once.
     function validLights(v) {
       try {
@@ -18,12 +18,13 @@
         return lights.every(function (light) {
           if (!light || typeof light !== "object" || Array.isArray(light)) return false;
           var target = typeof light.target === "string" ? light.target.trim() : "";
+          var area = topicName(light.area);
           var state = String(light.state || "").toUpperCase();
-          if (!target || seen[target] || (state !== "ON" && state !== "OFF")) return false;
-          seen[target] = true;
+          if (!target || !area || seen[area + "/" + target] || (state !== "ON" && state !== "OFF")) return false;
+          seen[area + "/" + target] = true;
           return Object.keys(light).every(function (key) {
             var value = light[key];
-            if (key === "target" || key === "state") return true;
+            if (key === "area" || key === "target" || key === "state") return true;
             if (state === "OFF" || typeof value !== "number" || !isFinite(value)) return false;
             if (key === "brightnessPct") return value >= 0 && value <= 100;
             if (key === "colorTempKelvin") return value > 0;
@@ -32,13 +33,25 @@
         });
       } catch (e) { return false; }
     }
+    // A name or area as topics and Home Assistant IDs read it (lib/topic-names.ts areaId).
+    function topicName(v) { return String(v || "").trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "_").replace(/^[_-]+|[_-]+$/g, ""); }
     RED.nodes.registerType("home-scene", {
       category: "home automation",
       color: "#e2d96e",
       defaults: {
         // No default: it names the scene to its rooms, motion policies and
-        // Home Assistant.
-        name: {value: "", required: true, validate: function (v) { return /[a-z0-9]/i.test(String(v || "")); }},
+        // Home Assistant, so two scenes can't share one: they would share an
+        // owner, and one's end would release the other's lights and pause.
+        name: {value: "", required: true, validate: function (v) {
+          var own = topicName(v);
+          if (!own) return false;
+          var self = this;
+          var clash = false;
+          RED.nodes.eachNode(function (other) {
+            if (other.type === "home-scene" && other.id !== self.id && topicName(other.name) === own) clash = true;
+          });
+          return clash ? "another scene has this name" : true;
+        }},
         lights: {value: "[]", required: true, validate: validLights},
         safetyHours: {value: 4, required: true, validate: function (v) { var n = Number(v); return String(v).trim() !== "" && isFinite(n) && n >= 0; }},
         area: {value: "", validate: function (v) { return !publishes(this) || /[a-z0-9]/i.test(String(v || "")); }},
@@ -73,7 +86,7 @@
 
 <script type="text/html" data-template-name="home-scene">
   <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name" placeholder="Bath, for example"></div>
-  <div class="form-row"><label for="node-input-lights">Lights</label><input type="text" id="node-input-lights" placeholder='[{"target":"main","state":"OFF"}]'></div>
+  <div class="form-row"><label for="node-input-lights">Lights</label><input type="text" id="node-input-lights" placeholder='[{"area":"gym","target":"main","state":"OFF"}]'></div>
   <div class="form-row"><label for="node-input-safetyHours">Safety timer (hours)</label><input type="number" id="node-input-safetyHours" min="0" step="0.25"> <span>(0: off)</span></div>
   <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area"></div>
   <div class="form-row"><label for="node-input-publishState">Publish state over MQTT</label><input type="checkbox" id="node-input-publishState" style="display:inline-block; width:auto;"></div>
@@ -112,21 +125,24 @@
   <h3>Outputs</h3>
   <ol class="node-ports">
     <li>Room lighting controllers: an owner intent per light as it starts,
-      <code>{lighting: {kind: "intent", targets: [id], state, values?, owner: "scene:&lt;name&gt;", source: "scene"}}</code>,
-      and a release as it ends, <code>{lighting: {kind: "release", owner, targets, source: "scene"}}</code>.</li>
+      <code>{lighting: {kind: "intent", area, targets: [id], state, values?, owner: "scene:&lt;name&gt;", source: "scene"}}</code>,
+      and a release per room as it ends, <code>{lighting: {kind: "release", area, owner, targets, source: "scene"}}</code>.</li>
     <li>Motion lighting policies: <code>{source: "pause", payload: true, owner}</code> as it starts and every minute
-      while on, and <code>payload: false</code> as it ends.</li>
+      while on, and <code>payload: false</code> as it ends. Keep each motion policy's <b>Maximum pause</b> above a
+      minute (10 minutes by default), or motion runs between renewals. If the room went vacant meanwhile, motion's
+      vacancy delay starts when the pause lifts.</li>
     <li>MQTT publications: its switch's state, availability and discovery.</li>
   </ol>
   <h3>Settings</h3>
   <dl class="message-properties">
-    <dt>Name</dt><dd>Required. It names the scene to its rooms and motion policies (owner
-      <code>scene:&lt;name&gt;</code>), and in its topics and Home Assistant. Give each scene its own.</dd>
-    <dt>Lights</dt><dd>A JSON array, one entry per light: <code>target</code> (the light's id in its room
-      controller's Targets JSON), <code>state</code> <code>ON</code> or <code>OFF</code>, and for an ON light
-      <code>brightnessPct</code> (0-100) and <code>colorTempKelvin</code> (optional). A socket is a room target with
-      on/off only: give it just its state. For example
-      <code>[{"target": "main", "state": "OFF"}, {"target": "tv", "state": "ON"}]</code>.</dd>
+    <dt>Name</dt><dd>Required, and each scene's own: it names the scene to its rooms and motion policies (owner
+      <code>scene:&lt;name&gt;</code>), and in its topics and Home Assistant. The editor marks a name another scene
+      has (compared as in topics, so <code>Bath</code> and <code>bath</code> are the same).</dd>
+    <dt>Lights</dt><dd>A JSON array, one entry per light: <code>area</code> (its room controller's <b>Area</b>),
+      <code>target</code> (the light's id in that room's Targets JSON), <code>state</code> <code>ON</code> or
+      <code>OFF</code>, and for an ON light <code>brightnessPct</code> (0-100) and <code>colorTempKelvin</code>
+      (optional). A socket is a room target with on/off only: give it just its state. For example
+      <code>[{"area": "gym", "target": "main", "state": "OFF"}, {"area": "gym", "target": "tv", "state": "ON"}]</code>.</dd>
     <dt>Safety timer</dt><dd>Hours until it ends itself, so a forgotten scene doesn't hold the room: 4 by
       default; 0 turns it off.</dd>
     <dt>Area, Publish state, Home Assistant discovery</dt><dd>Off unless switched on: a switch entity for the scene
@@ -134,9 +150,9 @@
   </dl>
   <h3>Rules</h3>
   <ul>
-    <li>Its intents reach every room wired to output 1, and each room acts on any light with a matching id. Wire
-      output 1 only to the rooms it sets; if those rooms share ids (two <code>main</code> lights), use one scene per
-      room or give the lights distinct ids.</li>
+    <li>Each light names its room by the room controller's <b>Area</b>, so set the Area on each room a scene uses.
+      Its intents and releases carry that area, and a room acts only on those for its own Area: two rooms may each
+      have a <code>main</code>.</li>
     <li>Scenes stack: a newer scene holding a light another scene holds takes it, and hands it back to the older
       one when it ends. Ending the older one first leaves the light with the newer.</li>
     <li>A person changing a light the scene holds makes it theirs: the scene's end leaves it alone.</li>

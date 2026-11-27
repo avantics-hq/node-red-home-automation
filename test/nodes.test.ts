@@ -2640,7 +2640,7 @@ const ANNOUNCING: Array<[string, NodeInitializer, Record<string, unknown>, Recor
   ["AVR controller", registerAvr, {}, {avr: {kind: "startup"}}],
   ["theatre state contract", registerTheatreStateContract, {activities: "[\"off\",\"tv\"]"}, {theatreStateContract: {kind: "startup"}}],
   // It publishes no retained state, but asks the device for its configuration as the flows start.
-  ["scene", registerScene, {name: "Exercise mode", lights: "[{\"target\":\"main\",\"state\":\"OFF\"}]"}, {scene: {kind: "startup"}}],
+  ["scene", registerScene, {name: "Exercise mode", lights: "[{\"area\":\"test\",\"target\":\"main\",\"state\":\"OFF\"}]"}, {scene: {kind: "startup"}}],
   ["shelly switch", registerShellySwitch, {topicPrefix: "shellyplus1-test", channel: "0"}, {shellySwitch: {kind: "startup"}}]
 ];
 const mqttStatus = (type: string, fill: string, text: string) =>
@@ -2671,7 +2671,7 @@ test("scene node: on and off from a flow and from Home Assistant, its switch, it
   type Envelope = Array<Array<Record<string, unknown>> | Record<string, unknown> | null>;
   const sceneRuntime = runtime(registerScene, {}, STORE);
   const config = {id: "scene-ex", name: "Exercise mode", area: "lounge", safetyHours: 4, publishState: true, discovery: true, idScheme: "node",
-    lights: JSON.stringify([{target: "main", state: "OFF"}, {target: "tv", state: "ON"}])};
+    lights: JSON.stringify([{area: "lounge", target: "main", state: "OFF"}, {area: "lounge", target: "tv", state: "ON"}])};
   const node = new sceneRuntime.Constructor(config);
   t.after(() => close(node));
   assert.deepEqual(node.errors, []);
@@ -2690,8 +2690,8 @@ test("scene node: on and off from a flow and from Home Assistant, its switch, it
 
   const on = await receive<Envelope>(node, {topic: "home/lounge/scene/exercise_mode/set", payload: "ON"});
   assert.deepEqual(port(on, 0).map(({lighting}) => lighting), [
-    {kind: "intent", targets: ["main"], state: "OFF", owner: "scene:Exercise mode", source: "scene"},
-    {kind: "intent", targets: ["tv"], state: "ON", owner: "scene:Exercise mode", source: "scene"}
+    {kind: "intent", area: "lounge", targets: ["main"], state: "OFF", owner: "scene:Exercise mode", source: "scene"},
+    {kind: "intent", area: "lounge", targets: ["tv"], state: "ON", owner: "scene:Exercise mode", source: "scene"}
   ]);
   assert.deepEqual(port(on, 1), [{source: "pause", payload: true, owner: "scene:Exercise mode"}]);
   assert.deepEqual(port(on, 2), [{topic: "home/lounge/scene/exercise_mode/state", payload: "ON", retain: true}]);
@@ -2710,12 +2710,12 @@ test("scene node: on and off from a flow and from Home Assistant, its switch, it
   sceneRuntime.flowNodeIds.delete("scene-ex");
   await new Promise<void>((resolve) => after.emit("close", true, resolve));
   const gone = after.sent.slice(before);
-  assert.deepEqual(port(gone, 0).map(({lighting}) => lighting), [{kind: "release", owner: "scene:Exercise mode", targets: ["main", "tv"], source: "scene"}]);
+  assert.deepEqual(port(gone, 0).map(({lighting}) => lighting), [{kind: "release", area: "lounge", owner: "scene:Exercise mode", targets: ["main", "tv"], source: "scene"}]);
   assert.deepEqual(port(gone, 1), [{source: "pause", payload: false, owner: "scene:Exercise mode"}]);
 });
 
 test("scene node: an end trigger from the flow names what ended it; anything else is ignored with a trace", async (t) => {
-  const node = new (runtime(registerScene).Constructor)({id: "scene-bath", name: "Bath", safetyHours: 0, lights: "[{\"target\":\"main\",\"state\":\"ON\",\"brightnessPct\":30}]"});
+  const node = new (runtime(registerScene).Constructor)({id: "scene-bath", name: "Bath", safetyHours: 0, lights: "[{\"area\":\"bathroom\",\"target\":\"main\",\"state\":\"ON\",\"brightnessPct\":30}]"});
   t.after(() => close(node));
   await receive(node, {scene: {kind: "start"}});
   assert.equal((node.statuses.at(-1) as {text: string}).text, "on");
@@ -2729,7 +2729,8 @@ test("scene node: settings it can't use are an invalid configuration naming them
   const Scene = runtime(registerScene).Constructor;
   for (const [settings, message] of [
     [{name: ""}, /name is required/],
-    [{name: "Bath", lights: "[{\"target\":\"main\"}]"}, /state must be ON or OFF/],
+    [{name: "Bath", lights: "[{\"area\":\"bathroom\",\"target\":\"main\"}]"}, /state must be ON or OFF/],
+    [{name: "Bath", lights: "[{\"target\":\"main\",\"state\":\"ON\"}]"}, /needs an area/],
     [{name: "Bath", safetyHours: -2}, /safety timer/],
     [{name: "Bath", publishState: true}, /area/]
   ] as const) {

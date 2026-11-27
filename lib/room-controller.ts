@@ -4,6 +4,7 @@ import type {TraceEntry} from "./bounded-trace";
 import type {LightStyle} from "./light-styling";
 import {isLightReading, type LightCommandMessage, type LightField, type LightRoomMessage} from "./light-contract";
 import {REMOVED_LIGHT_FIELDS} from "./z2m-light";
+import {areaId} from "./topic-names";
 import {addOwner, heldOff as holdHeldOff, legacyHold, newHold, releaseOwner, savedHolds, setOwnerSpec, type LightHold} from "./room-holds";
 import {ECHO_WINDOW_MS, checkStateReport, commandSent, commandSkipped, rememberCommand, type ExpectedCommand} from "./command-echo";
 
@@ -133,6 +134,10 @@ export interface RoomState {
 
 export interface LightingEvent {
   kind?: string;
+  // On an intent or release: the room it is for, by its Area, so a scene
+  // wired to several rooms reaches only its own lights. Absent: any room it
+  // reaches.
+  area?: string;
   targets?: string[];
   target?: string;
   state?: string;
@@ -641,6 +646,9 @@ export function transitionRoom(
       }
       restyleLights(next.source);
     }
+  } else if ((event.kind === "intent" || event.kind === "release") && typeof event.area === "string" && areaId(event.area) !== areaId(config.area)) {
+    // For another room.
+    trace(event.kind, "ignored", "other-area", {area: event.area, source: event.source || event.kind});
   } else if (event.kind === "release") {
     // An owner name lets go of that owner's lights; none lets go of every
     // owner's. A light goes to the owner beneath, with what it asked for, or

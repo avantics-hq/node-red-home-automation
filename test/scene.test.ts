@@ -9,30 +9,35 @@ import {sceneDiscovery, sceneInbound, sceneStateOutputs} from "../lib/scene-publ
 
 const at = (seconds: number) => Date.parse("2026-11-27T20:00:00Z") + seconds * 1000;
 const exercise = normaliseSceneConfig({owner: "scene:Exercise", safetyHours: 4,
-  lights: JSON.stringify([{target: "main", state: "OFF"}, {target: "tv", state: "ON"}])});
+  lights: JSON.stringify([{area: "lounge", target: "main", state: "OFF"}, {area: "lounge", target: "tv", state: "ON"}])});
 const bath = normaliseSceneConfig({owner: "scene:Bath", safetyHours: 0,
-  lights: JSON.stringify([{target: "main", state: "ON", brightnessPct: 30, colorTempKelvin: 2700}])});
+  lights: JSON.stringify([{area: "lounge", target: "main", state: "ON", brightnessPct: 30, colorTempKelvin: 2700}])});
 
 function run(config: SceneConfig, state: Partial<SceneState> | undefined, scene: Record<string, unknown>, seconds: number) {
   return transitionScene(state, {scene}, config, at(seconds));
 }
 
-test("settings: lights as a JSON array of a target, ON or OFF, and values for an ON light; the safety timer in hours", () => {
-  assert.deepEqual(exercise.lights, [{target: "main", state: "OFF"}, {target: "tv", state: "ON"}]);
+test("settings: lights as a JSON array of a room's area, a target, ON or OFF, and values for an ON light; the safety timer in hours", () => {
+  assert.deepEqual(exercise.lights, [{area: "lounge", target: "main", state: "OFF"}, {area: "lounge", target: "tv", state: "ON"}]);
   assert.equal(exercise.safetyMs, 4 * 3_600_000);
   assert.equal(normaliseSceneConfig({owner: "o"}).safetyMs, 4 * 3_600_000, "4 hours by default");
   assert.deepEqual(normaliseSceneConfig({owner: "o"}).lights, [], "a scene may only pause motion");
+  const one = (fields: Record<string, unknown>) => JSON.stringify([{area: "hall", target: "a", ...fields}]);
   for (const [lights, message] of [
     ["{}", /lights must be a JSON array/],
-    ["[{\"state\":\"ON\"}]", /light 1 needs a target/],
-    ["[{\"target\":\"a\",\"state\":\"DIM\"}]", /state must be ON or OFF/],
-    ["[{\"target\":\"a\",\"state\":\"ON\"},{\"target\":\"a\",\"state\":\"OFF\"}]", /listed twice/],
-    ["[{\"target\":\"a\",\"state\":\"OFF\",\"brightnessPct\":5}]", /an OFF light takes no brightnessPct/],
-    ["[{\"target\":\"a\",\"state\":\"ON\",\"brightnessPct\":101}]", /0-100/],
-    ["[{\"target\":\"a\",\"state\":\"ON\",\"colorTempKelvin\":0}]", /above 0/],
-    ["[{\"target\":\"a\",\"state\":\"ON\",\"brightness\":5}]", /unknown field brightness/],
+    [JSON.stringify([{area: "hall", state: "ON"}]), /light 1 needs a target/],
+    [JSON.stringify([{target: "a", state: "ON"}]), /light 1 \(a\) needs an area/],
+    [one({area: "--", state: "ON"}), /needs an area/],
+    [one({state: "DIM"}), /state must be ON or OFF/],
+    [JSON.stringify([{area: "hall", target: "a", state: "ON"}, {area: "Hall", target: "a", state: "OFF"}]), /a in Hall is listed twice/],
+    [one({state: "OFF", brightnessPct: 5}), /an OFF light takes no brightnessPct/],
+    [one({state: "ON", brightnessPct: 101}), /0-100/],
+    [one({state: "ON", colorTempKelvin: 0}), /above 0/],
+    [one({state: "ON", brightness: 5}), /unknown field brightness/],
     ["not json", /lights must be valid JSON/]
   ] as const) assert.throws(() => normaliseSceneConfig({owner: "o", lights}), message, lights);
+  // The same id in two rooms is two lights.
+  assert.equal(normaliseSceneConfig({owner: "o", lights: JSON.stringify([{area: "hall", target: "main", state: "ON"}, {area: "study", target: "main", state: "OFF"}])}).lights.length, 2);
   assert.throws(() => normaliseSceneConfig({owner: "o", safetyHours: -1}), /0 \(off\) or more/);
   assert.equal(normaliseSceneConfig({owner: "o", safetyHours: "0"}).safetyMs, 0);
 });
@@ -40,14 +45,14 @@ test("settings: lights as a JSON array of a target, ON or OFF, and values for an
 test("starting holds each light for the scene and pauses motion; ending releases them and the pause", () => {
   const started = run(exercise, undefined, {kind: "start"}, 0);
   assert.deepEqual(started.lighting, [
-    {lighting: {kind: "intent", targets: ["main"], state: "OFF", owner: "scene:Exercise", source: "scene"}},
-    {lighting: {kind: "intent", targets: ["tv"], state: "ON", owner: "scene:Exercise", source: "scene"}}
+    {lighting: {kind: "intent", area: "lounge", targets: ["main"], state: "OFF", owner: "scene:Exercise", source: "scene"}},
+    {lighting: {kind: "intent", area: "lounge", targets: ["tv"], state: "ON", owner: "scene:Exercise", source: "scene"}}
   ]);
   assert.deepEqual(started.motion, [{source: "pause", payload: true, owner: "scene:Exercise"}]);
   assert.deepEqual(started.status, {fill: "green", shape: "dot", text: "on · 4h 0m left"});
 
   const ended = run(exercise, started.state, {kind: "end", by: "trainer off"}, 600);
-  assert.deepEqual(ended.lighting, [{lighting: {kind: "release", owner: "scene:Exercise", targets: ["main", "tv"], source: "scene"}}]);
+  assert.deepEqual(ended.lighting, [{lighting: {kind: "release", area: "lounge", owner: "scene:Exercise", targets: ["main", "tv"], source: "scene"}}]);
   assert.deepEqual(ended.motion, [{source: "pause", payload: false, owner: "scene:Exercise"}]);
   assert.deepEqual(ended.status, {fill: "grey", shape: "dot", text: "off · ended by trainer off"});
   assert.deepEqual(run(exercise, ended.state, {kind: "end"}, 601).traces.map(({reason}) => reason), ["not-active"], "already off");
@@ -90,7 +95,7 @@ test("after a restart it stays on with its timer, or ends at once if its time ra
   const late = run(exercise, saved, {kind: "startup"}, 5 * 3600);
   assert.equal(late.status.text, "off · ended by timer");
   // It releases what it took, even if its settings changed since.
-  const changed = normaliseSceneConfig({owner: "scene:Exercise", lights: "[{\"target\":\"lamp\",\"state\":\"ON\"}]"});
+  const changed = normaliseSceneConfig({owner: "scene:Exercise", lights: "[{\"area\":\"study\",\"target\":\"lamp\",\"state\":\"ON\"}]"});
   assert.deepEqual(run(changed, saved, {kind: "end"}, 700).lighting[0]!.lighting.targets, ["main", "tv"]);
   // Off, a startup does nothing.
   assert.deepEqual(run(exercise, undefined, {kind: "startup"}, 0).motion, []);
@@ -115,8 +120,9 @@ test("Home Assistant: a switch per scene, its state, and ON or OFF on its set to
 
 // A room with main and tv, styled at 60% 3000K, motion having switched main
 // on, and its commands answered at once (the light shows what it was sent).
-const roomConfig: RoomConfig = {area: "", displayName: "", initialTransitionSeconds: 1, targets: [{id: "main"}, {id: "tv", onOffOnly: true}]};
-function room() {
+const roomConfig: RoomConfig = {area: "lounge", displayName: "", initialTransitionSeconds: 1, targets: [{id: "main"}, {id: "tv", onOffOnly: true}]};
+function room(config: RoomConfig = roomConfig) {
+  const roomConfig = config;
   let state: RoomState | undefined;
   const commands: Array<[string, string, number | undefined]> = [];
   function send(msg: object, seconds: number) {
@@ -172,3 +178,23 @@ for (const order of [["bath", "exercise"], ["exercise", "bath"]] as const) {
     assert.deepEqual([lounge.state().desired.main, lounge.state().desired.tv], [true, false]);
   });
 }
+
+test("lights by area: two rooms each with a main, one scene for one of them; a room with no Area takes none of its lights", () => {
+  const lounge = room();
+  const study = room({...roomConfig, area: "Study"});
+  const unnamed = room({...roomConfig, area: ""});
+  const quiet = normaliseSceneConfig({owner: "scene:Quiet", lights: JSON.stringify([{area: "study", target: "main", state: "OFF"}])});
+  let scene = run(quiet, undefined, {kind: "start"}, 10);
+  for (const msg of scene.lighting) for (const each of [lounge, study, unnamed]) each.send(msg, 10);
+  assert.deepEqual([lounge.commands, study.commands, unnamed.commands], [[], [["main", "OFF", undefined]], []]);
+  assert.deepEqual([lounge.state().control, unnamed.state().control], [{}, {}]);
+  assert.deepEqual(study.state().control.main, {state: "overridden", owner: "scene:Quiet"});
+  scene = run(quiet, scene.state, {kind: "end"}, 20);
+  for (const msg of scene.lighting) for (const each of [lounge, study, unnamed]) each.send(msg, 20);
+  assert.deepEqual([lounge.commands, study.commands, unnamed.commands], [[], [["main", "OFF", undefined], ["main", "ON", 60]], []]);
+  // An intent or release with no area reaches any room, as before.
+  const any = transitionRoom(lounge.state(), {lighting: {kind: "intent", targets: ["main"], state: "OFF", source: "dashboard"}}, roomConfig, at(30));
+  assert.equal(any.state.desired.main, false);
+  const other = transitionRoom(lounge.state(), {lighting: {kind: "intent", area: "study", targets: ["main"], state: "OFF", source: "scene"}}, roomConfig, at(30));
+  assert.deepEqual(other.traces.map(({event, outcome, reason}) => [event, outcome, reason]), [["intent", "ignored", "other-area"]]);
+});

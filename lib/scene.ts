@@ -10,9 +10,12 @@
 
 import type {TraceEntry} from "./bounded-trace";
 import {jsonSetting, numberSetting} from "./settings";
+import {areaId} from "./topic-names";
 
 export interface SceneLight {
-  // The light's id in its room controller's Targets JSON.
+  // Its room, by the room controller's Area, and its id in that room's
+  // Targets JSON: rooms ignore an intent or release for another area.
+  area: string;
   target: string;
   state: "ON" | "OFF";
   brightnessPct?: number;
@@ -37,7 +40,7 @@ export interface SceneState {
   // The owner and lights it took when it started, so it releases what it
   // took even if its settings changed since.
   owner: string | null;
-  lights: string[];
+  lights: Array<{area: string; target: string}>;
   startedAt: number | null;
   // When the safety timer ends it; null with the timer off.
   endsAt: number | null;
@@ -73,11 +76,14 @@ export function normaliseSceneConfig(raw: {owner: string; lights?: unknown; safe
     const light = entry as Record<string, unknown>;
     const target = typeof light.target === "string" ? light.target.trim() : "";
     if (!target) throw new Error(`${at} needs a target: the light's id in its room controller`);
-    if (seen.has(target)) throw new Error(`${at}: ${target} is listed twice`);
-    seen.add(target);
+    const area = typeof light.area === "string" ? light.area.trim() : "";
+    if (!areaId(area)) throw new Error(`${at} (${target}) needs an area: its room controller's Area`);
+    const key = areaId(area) + "/" + target;
+    if (seen.has(key)) throw new Error(`${at}: ${target} in ${area} is listed twice`);
+    seen.add(key);
     const state = String(light.state ?? "").toUpperCase();
     if (state !== "ON" && state !== "OFF") throw new Error(`${at} (${target}): state must be ON or OFF`);
-    const scene: SceneLight = {target, state};
+    const scene: SceneLight = {area, target, state};
     for (const key of ["brightnessPct", "colorTempKelvin"] as const) {
       if (light[key] === undefined) continue;
       const value = light[key];
@@ -88,7 +94,7 @@ export function normaliseSceneConfig(raw: {owner: string; lights?: unknown; safe
       scene[key] = value;
     }
     for (const key of Object.keys(light)) {
-      if (!["target", "state", "brightnessPct", "colorTempKelvin"].includes(key)) throw new Error(`${at} (${target}): unknown field ${key}`);
+      if (!["area", "target", "state", "brightnessPct", "colorTempKelvin"].includes(key)) throw new Error(`${at} (${target}): unknown field ${key}`);
     }
     return scene;
   });
@@ -102,7 +108,9 @@ export function createSceneState(saved: Partial<SceneState> = {}): SceneState {
   return {
     active,
     owner: active ? saved.owner! : null,
-    lights: active && Array.isArray(saved.lights) ? saved.lights.filter((id): id is string => typeof id === "string") : [],
+    lights: active && Array.isArray(saved.lights)
+      ? saved.lights.filter((light) => typeof light?.area === "string" && typeof light.target === "string").map(({area, target}) => ({area, target}))
+      : [],
     startedAt: active && Number.isFinite(saved.startedAt) ? saved.startedAt! : null,
     endsAt: active && Number.isFinite(saved.endsAt) ? saved.endsAt! : null,
     ended: saved.ended && typeof saved.ended.by === "string" && Number.isFinite(saved.ended.at) ? {...saved.ended} : null
@@ -136,7 +144,10 @@ export function transitionScene(
 
   function end(by: string) {
     const owner = state.owner!;
-    if (state.lights.length) lighting.push({lighting: {kind: "release", owner, targets: [...state.lights], source: "scene"}});
+    // One release per room, for the lights it took there.
+    const rooms = new Map<string, string[]>();
+    for (const {area, target} of state.lights) rooms.set(area, [...(rooms.get(area) ?? []), target]);
+    for (const [area, targets] of rooms) lighting.push({lighting: {kind: "release", area, owner, targets, source: "scene"}});
     pause(false);
     trace("scene", "ended", null, {by, owner});
     Object.assign(state, {active: false, owner: null, lights: [], startedAt: null, endsAt: null, ended: {by, at: now}});
@@ -153,7 +164,7 @@ export function transitionScene(
       Object.assign(state, {
         active: true,
         owner: config.owner,
-        lights: config.lights.map(({target}) => target),
+        lights: config.lights.map(({area, target}) => ({area, target})),
         startedAt: now,
         endsAt: config.safetyMs > 0 ? now + config.safetyMs : null
       });
@@ -162,7 +173,7 @@ export function transitionScene(
           ...(light.brightnessPct !== undefined ? {brightnessPct: light.brightnessPct} : {}),
           ...(light.colorTempKelvin !== undefined ? {colorTempKelvin: light.colorTempKelvin} : {})
         };
-        lighting.push({lighting: {kind: "intent", targets: [light.target], state: light.state, owner: config.owner, source: "scene",
+        lighting.push({lighting: {kind: "intent", area: light.area, targets: [light.target], state: light.state, owner: config.owner, source: "scene",
           ...(Object.keys(values).length ? {values} : {})}});
       }
       pause(true);
