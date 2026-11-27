@@ -7,7 +7,7 @@
 //
 // Usage: node scripts/build-docs.mjs          writes docs/
 //        node scripts/build-docs.mjs --check  exits 1 if docs/ differs
-import {readFileSync, writeFileSync} from "node:fs";
+import {readFileSync, readdirSync, writeFileSync} from "node:fs";
 import {fileURLToPath} from "node:url";
 
 const root = new URL("../", import.meta.url);
@@ -15,13 +15,12 @@ const read = (path) => readFileSync(new URL(path, root), "utf8");
 
 export const REPOSITORY = "https://github.com/avantics-hq/node-red-home-automation";
 
-// The pages, in reading order.
-export const PAGES = [
-  "index",
-  "guide-room-lighting", "guide-motion-occupancy", "guide-wall-switches", "guide-house-schedule",
-  "guide-covers", "home-theatre", "guide-home-assistant", "guide-device-adapters",
-  "node-cover-controller", "contract-examples", "releases", "roadmap"
-];
+// The pages, in reading order: the menu's own entries, top to bottom, so the
+// previous and next links follow the menu.
+export const PAGES = JSON.parse(read("docs-src/nav.json"))
+  .flatMap((group) => group.items.map((item) => item.href))
+  .filter((href) => !/^[a-z]+:/i.test(href))
+  .map((href) => href.replace(/\.html$/, ""));
 
 const escapeHtml = (text) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
@@ -126,13 +125,14 @@ ${renderPager(previous, next)}
 export function buildDocs() {
   const version = JSON.parse(read("package.json")).version;
   const nav = JSON.parse(read("docs-src/nav.json"));
+  const unlisted = readdirSync(new URL("docs-src/pages/", root)).map((file) => file.replace(/\.html$/, "")).filter((name) => !PAGES.includes(name));
+  if (unlisted.length) throw new Error(`docs-src/pages has pages with no entry in docs-src/nav.json: ${unlisted.join(", ")}`);
   const pages = PAGES.map(readPage);
   const places = menuPlaces(nav);
   const files = new Map();
   const index = [];
   for (const [i, page] of pages.entries()) {
     const place = places.get(page.file);
-    if (!place) throw new Error(`${page.file} has no entry in docs-src/nav.json`);
     files.set(page.file, renderPage(page, nav, version, pages[i - 1], pages[i + 1], place));
     index.push({title: page.title, description: page.description || plainText(page.lead), url: page.file, text: plainText(page.lead)});
     for (const section of sections(page.content)) {
