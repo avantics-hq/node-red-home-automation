@@ -306,7 +306,9 @@ edit covers both moves:
    whose topics weren't Zigbee2MQTT's (`<base>/<name>` and `<base>/<name>/set`)
    is flagged: set it up by hand on the
    [neutral light contract](#neutral-light-contract). A Zigbee2MQTT group works
-   the same way: tick **Zigbee2MQTT group** on its node.
+   the same way: tick **Zigbee2MQTT group** on its node, and switch on the
+   group's retain in Zigbee2MQTT, so the room has its state after a restart (a
+   group can't be asked for it).
 2. Add a **circadian lighting policy** from the palette and wire its first
    output into the room controller. One policy can feed several rooms that
    share its settings, but its Home Assistant switches and set topics are named
