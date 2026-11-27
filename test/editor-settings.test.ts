@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {resolve} from "node:path";
 import test from "node:test";
-import {movedCircadianSettings} from "../lib/room-controller";
+import {movedCircadianSettings, targetsWithTopics} from "../lib/room-controller";
 import {normaliseAvrConfig} from "../lib/avr-controller";
 
 interface Definition {
@@ -354,3 +354,93 @@ test("a room saved before 6.0 keeps its circadian settings through the editor, s
   assert.deepEqual(movedCircadianSettings(newNode(definition)), []);
 });
 
+
+// The room's editor script with a stand-in for the editor's node store: what
+// the "Create Zigbee2MQTT light nodes" button adds, links and records.
+function roomEditorWith(store: {nodes: Array<Record<string, unknown>>; links: Array<{source: unknown; sourcePort: number; target: unknown}>}) {
+  const html = readFileSync(resolve(__dirname, "../../nodes/room-controller.html"), "utf8");
+  const script = /<script type="text\/javascript">([\s\S]*?)<\/script>/.exec(html)![1]!;
+  let definition: (Definition & Record<string, unknown>) | undefined;
+  const history: unknown[] = [];
+  let next = 0;
+  const RED = {
+    nodes: {
+      registerType: (_name: string, value: Definition & Record<string, unknown>) => { definition = value; },
+      node: (id: string) => store.nodes.find((n) => n.id === id) ?? null,
+      eachLink: (callback: (link: unknown) => void) => store.links.forEach(callback),
+      id: () => `new${++next}`,
+      import: (nodes: Array<Record<string, unknown>>) => {
+        store.nodes.push(...nodes);
+        const links = nodes.flatMap((n) => (n.wires as string[][]).flatMap((port, sourcePort) => port.map((id) => ({source: n, sourcePort, target: nodes.find((m) => m.id === id)}))));
+        store.links.push(...links);
+        return {nodes, links};
+      },
+      addLink: (link: {source: unknown; sourcePort: number; target: unknown}) => { store.links.push(link); },
+      dirty: () => false
+    },
+    history: {push: (event: unknown) => { history.push(event); }},
+    view: {redraw: () => {}},
+    validators: {number: () => () => true}
+  };
+  new Function("RED", "$", script)(RED, () => ({length: 0}));
+  return {definition: definition!, history};
+}
+
+test("a 5.x room's lights: each with Zigbee2MQTT topics gets a zigbee2mqtt light; others are flagged to set up by hand", () => {
+  const {definition} = roomEditorWith({nodes: [], links: []});
+  const plan = (definition.lightPlan as (targets: unknown[]) => Array<Record<string, unknown>>)([
+    {id: "ceiling", stateTopic: "z2m/hall ceiling", commandTopic: "z2m/hall ceiling/set"},
+    {id: "lamp", stateTopic: "home/lamp/state", commandTopic: "home/lamp/command", onOffOnly: true},
+    {id: "already"}
+  ]);
+  assert.deepEqual(plan.map(({id, z2m}) => [id, z2m]), [["ceiling", {baseTopic: "z2m", friendlyName: "hall ceiling"}], ["lamp", null]]);
+  const neutral = definition.neutralTargets as (targets: unknown[]) => unknown[];
+  assert.deepEqual(neutral([{id: "ceiling", stateTopic: "z2m/c", commandTopic: "z2m/c/set"}, {id: "lamp", stateTopic: "z2m/l", commandTopic: "z2m/l/set", onOffOnly: true}]),
+    [{id: "ceiling"}, {id: "lamp", onOffOnly: true}]);
+  // A light whose topics weren't Zigbee2MQTT's keeps them: the room stays refused, naming it, rather than losing it.
+  assert.deepEqual(neutral([{id: "ceiling", stateTopic: "z2m/c", commandTopic: "z2m/c/set"}, {id: "lamp", stateTopic: "home/lamp/state", commandTopic: "home/lamp/command"}]),
+    [{id: "ceiling"}, {id: "lamp", stateTopic: "home/lamp/state", commandTopic: "home/lamp/command"}]);
+});
+
+test("saving a 5.x room's dialog keeps only its lights' ids in Targets JSON", () => {
+  const $ = dialog({"#node-input-targets": JSON.stringify([{id: "ceiling", stateTopic: "z/c", commandTopic: "z/c/set"}, {id: "lamp", stateTopic: "z/l", commandTopic: "z/l/set", onOffOnly: true}])});
+  const definition = editorDefinition("room-controller.html", $);
+  definition.oneditsave!.call({});
+  assert.equal($.values["#node-input-targets"], JSON.stringify([{id: "ceiling"}, {id: "lamp", onOffOnly: true}]));
+  // A 6.0 room's targets are left as they are.
+  const unchanged = dialog({"#node-input-targets": "[{\"id\":\"ceiling\"}]"});
+  editorDefinition("room-controller.html", unchanged).oneditsave!.call({});
+  assert.equal(unchanged.values["#node-input-targets"], "[{\"id\":\"ceiling\"}]");
+});
+
+test("\"Create Zigbee2MQTT light nodes\" adds a light per Zigbee2MQTT target, wired to the room and its MQTT out, in one undo step", () => {
+  const room = {id: "room1", type: "home-room-lighting-controller", z: "tab", x: 300, y: 100};
+  const out = {id: "out1", type: "mqtt out", broker: "broker1"};
+  const store = {nodes: [room, out] as Array<Record<string, unknown>>, links: [{source: room, sourcePort: 0, target: out}] as Array<{source: unknown; sourcePort: number; target: unknown}>};
+  const {definition, history} = roomEditorWith(store);
+  const plan = (definition.lightPlan as (targets: unknown[]) => unknown[])([
+    {id: "ceiling", stateTopic: "z2m/ceiling", commandTopic: "z2m/ceiling/set"},
+    {id: "lamp", stateTopic: "home/lamp/state", commandTopic: "home/lamp/command"}
+  ]);
+  assert.equal((definition.createLights as (id: string, plan: unknown[]) => number)("room1", plan), 1, "only the Zigbee2MQTT one");
+  const light = store.nodes.find((n) => n.type === "home-z2m-light")!;
+  assert.deepEqual([light.target, light.baseTopic, light.friendlyName, light.z], ["ceiling", "z2m", "ceiling", "tab"]);
+  const mqttIn = store.nodes.find((n) => n.type === "mqtt in")!;
+  assert.deepEqual([mqttIn.topic, mqttIn.broker, mqttIn.datatype], ["z2m/ceiling/#", "broker1", "auto-detect"]);
+  const linked = (source: unknown, port: number, target: unknown) => store.links.some((l) => l.source === source && l.sourcePort === port && l.target === target);
+  assert.ok(linked(room, 1, light), "room's light commands → the light");
+  assert.ok(linked(light, 1, room), "the light's readings → room");
+  assert.ok(linked(light, 0, out), "the light's publications → the room's MQTT out");
+  assert.ok(linked(mqttIn, 0, light), "its MQTT in → the light");
+  assert.equal(history.length, 1);
+  assert.deepEqual((history[0] as {nodes: string[]}).nodes.sort(), [light.id, mqttIn.id].sort());
+  assert.equal((history[0] as {links: unknown[]}).links.length, 4);
+});
+
+test("a 5.x room's topic targets survive an editor deploy (Targets JSON is one setting), so the runtime still refuses it until migrated", () => {
+  const definition = editorDefinition("room-controller.html", dialog());
+  const targets = JSON.stringify([{id: "ceiling", stateTopic: "z2m/c", commandTopic: "z2m/c/set"}]);
+  const loaded = asLoaded(definition, {type: "home-room-lighting-controller", area: "", targets, publishState: false, discovery: false});
+  assert.equal(loaded.targets, targets);
+  assert.deepEqual(targetsWithTopics(loaded.targets), ["ceiling"]);
+});

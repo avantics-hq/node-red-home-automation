@@ -127,9 +127,12 @@ export function roomStoppingOutputs(config: PublishSettings): RoomOutput[] {
 // A light's retained control state: in-control, overridden or manual.
 function controlMessage(config: RoomConfig, state: RoomState, targetId: string): RoomOutput {
   const entry = state.control[targetId];
+  const available = state.available[targetId];
   return {
     topic: roomControlTopic(config.area, targetId),
-    payload: {state: entry?.state ?? "in-control", owner: entry?.state === "overridden" ? entry.owner : null},
+    // Its availability once its adapter has reported it: shown, never acted on.
+    payload: {state: entry?.state ?? "in-control", owner: entry?.state === "overridden" ? entry.owner : null,
+      ...(available !== undefined ? {available} : {})},
     retain: true
   };
 }

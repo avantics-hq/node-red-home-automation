@@ -1,6 +1,6 @@
 "use strict";
 
-import {REMOVED_LIGHT_FIELDS, lightValues} from "./z2m-light";
+import {REMOVED_LIGHT_FIELDS} from "./z2m-light";
 import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration, adoptionReason, carryOn, answersRequest, savedCarried, type Carried} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {numberSetting, textSetting} from "./settings";
@@ -35,12 +35,14 @@ export interface ActivityLightingDesired {
   requestedAt: string;
 }
 
+// A light's reading, as its adapter gave it and the room passed it on.
 export interface ActivityLightingObservation {
   target: string;
   on: boolean;
   manual: boolean;
   available: boolean;
-  values: Record<string, unknown>;
+  // It shows exactly the last command sent to it, as its adapter judged.
+  showsLast: boolean;
   observedAt: string;
 }
 
@@ -81,6 +83,11 @@ export interface ActivityLightingState {
   // profile's fields, as one that only switches on and off, is confirmed by
   // being on; once it has reported one, it is held to the values.
   reported?: Record<string, string[]>;
+  // The lights this request has seen held (on, and not a person's), and the
+  // ones a person then took over (manual_override), which the next request
+  // takes back.
+  held?: string[];
+  overridden?: string[];
 }
 
 export type ActivityLightingEvent =
@@ -98,7 +105,11 @@ export type ActivityLightingEvent =
     on: boolean;
     manual?: boolean;
     available?: boolean;
-    values?: Record<string, unknown>;
+    // From the light's adapter (light-contract.ts): the value fields it
+    // reports at all (brightness, colorTemp), and whether it shows exactly
+    // the last command sent to it.
+    fields?: string[];
+    showsLast?: boolean;
     observedAt: string;
   }
   | {kind: "command_result"; generation: number; ok: boolean; reason?: string}
@@ -130,14 +141,6 @@ export interface ActivityLightingOutputEvent {
   }, ActivityLightingFailure>;
 }
 
-function stable(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(stable);
-  if (value && typeof value === "object") {
-    const record = value as Record<string, unknown>;
-    return Object.fromEntries(Object.keys(record).sort().map((key) => [key, stable(record[key])]));
-  }
-  return value;
-}
 
 // Whether a light's report shows the profile's values. Reports come in the
 // light's own units, so the profile's are converted first (z2m-light).
@@ -145,18 +148,15 @@ function stable(value: unknown): unknown {
 // them since start, so it is confirmed by being on: the node warns once.
 export const VALUES_NOT_REPORTED = "values-not-reported";
 
-// Whether a light has reported any of the profile's fields since start; true
-// when the profile sets none, as then there is nothing but on to check.
-function reportsAnyOf(profileValues: Record<string, unknown>, reported: readonly string[]): boolean {
-  const expected = Object.keys(lightValues(profileValues).values);
-  return expected.length === 0 || expected.some((key) => reported.includes(key));
-}
+// The reading fields that show a profile's values.
+const PROFILE_FIELDS: Record<string, string> = {brightnessPct: "brightness", colorTempKelvin: "colorTemp"};
 
-function valuesMatch(profileValues: Record<string, unknown>, actual: Record<string, unknown>): boolean {
-  const expected = lightValues(profileValues).values;
-  return Object.entries(expected).every(([key, value]) =>
-    Object.hasOwn(actual, key) && JSON.stringify(stable(actual[key])) === JSON.stringify(stable(value))
-  );
+// Whether a light has reported any of the profile's fields since start; true
+// when the profile sets none of them, as then there is nothing but on to
+// check.
+function reportsAnyOf(profileValues: Record<string, unknown>, reported: readonly string[]): boolean {
+  const expected = Object.keys(profileValues).flatMap((key) => (PROFILE_FIELDS[key] ? [PROFILE_FIELDS[key]!] : []));
+  return expected.length === 0 || expected.some((field) => reported.includes(field));
 }
 
 export function normaliseLightingProfiles(value: unknown): ActivityLightingProfiles {
@@ -245,7 +245,9 @@ function initialState(
     adoptedGeneration: savedAdoptedGeneration(saved),
     carried: savedCarried(saved),
     reported: Object.fromEntries(Object.entries(saved.reported || {})
-      .filter(([, fields]) => Array.isArray(fields)).map(([target, fields]) => [target, fields.map(String)]))
+      .filter(([, fields]) => Array.isArray(fields)).map(([target, fields]) => [target, fields.map(String)])),
+    held: Array.isArray(saved.held) ? saved.held.map(String) : [],
+    overridden: Array.isArray(saved.overridden) ? saved.overridden.map(String) : []
   };
 }
 
@@ -328,7 +330,19 @@ export function transitionActivityLighting(
   }
 
   function issueApply(attempt: number) {
-    commands.push(commandFor(state, config, "apply", attempt));
+    const command = commandFor(state, config, "apply", attempt);
+    // Lights a person took over from the last request: taken back, so not
+    // skipped as a person's (preserveManual). Every other light as before.
+    const reclaim = (state.overridden ?? []).filter((target) => command.lighting?.targets?.includes(target));
+    if (reclaim.length && command.lighting) {
+      const rest = command.lighting.targets!.filter((target) => !reclaim.includes(target));
+      if (rest.length) commands.push({...command, lighting: {...command.lighting, targets: rest}});
+      const {preserveManual: _preserve, ...taken} = command.lighting;
+      commands.push({...command, lighting: {...taken, targets: reclaim}});
+      trace("command", "emitted", "taking-back", {targets: reclaim});
+    } else {
+      commands.push(command);
+    }
     state.pending = {attempt, deadlineAt: nowMs + config.confirmationTimeoutMs};
     state.phase = "transitioning";
     trace("command", "emitted", null, {operation: "apply", profile: state.desired?.profile, attempt});
@@ -355,7 +369,17 @@ export function transitionActivityLighting(
         fail("lighting-unavailable");
         return;
       }
+      if (observation.manual && state.held?.includes(target)) {
+        // A person changed a light this request held: theirs now, as on the
+        // other theatre targets. The next request takes it back.
+        state.pending = null;
+        state.phase = "manual_override";
+        if (!state.overridden?.includes(target)) state.overridden = [...(state.overridden ?? []), target];
+        trace("observation", "manual_override", "person-changed", {target});
+        return;
+      }
       if (observation.manual || !observation.on) {
+        // A person's before this request (or off): left as it is.
         counts.preserved += 1;
         continue;
       }
@@ -367,7 +391,9 @@ export function transitionActivityLighting(
         counts.matched += 1;
         continue;
       }
-      if (!valuesMatch(profile.values, observation.values)) {
+      // It shows the profile's values when it shows the last command sent to
+      // it: the profile's, as the activity holds the light.
+      if (!observation.showsLast) {
         if (isAdopted(state)) {
           // An adopted request the lights don't match: someone else's, and
           // never re-applied.
@@ -439,11 +465,14 @@ export function transitionActivityLighting(
     }
     state.generation = intent.generation;
     state.observed = {};
+    state.held = [];
     state.pending = null;
     state.failure = null;
     state.blockedGeneration = null;
     if (profileFor(state, config).targets.length === 0) reconcile();
     else issueApply(1);
+    // Taken back with this request's apply (above), or no longer styled.
+    state.overridden = [];
     trace("intent", "accepted", null, {profile: intent.profile, generation: intent.generation});
   }
 
@@ -476,17 +505,21 @@ export function transitionActivityLighting(
       return;
     }
     // What it reports since start: which fields, for the profiles' values.
-    const fields = observation.values && typeof observation.values === "object" ? Object.keys(observation.values) : [];
+    const fields = Array.isArray(observation.fields) ? observation.fields.map(String) : [];
     const known = state.reported?.[observation.target] ?? [];
     if (fields.some((field) => !known.includes(field))) {
       state.reported = {...state.reported, [observation.target]: [...new Set([...known, ...fields])]};
+    }
+    // Held by this request: on, and not a person's.
+    if (observation.on === true && observation.manual !== true && !(state.held ?? []).includes(observation.target)) {
+      state.held = [...(state.held ?? []), observation.target];
     }
     state.observed[observation.target] = {
       target: observation.target,
       on: observation.on === true,
       manual: observation.manual === true,
       available: observation.available !== false,
-      values: observation.values && typeof observation.values === "object" ? {...observation.values} : {},
+      showsLast: observation.showsLast === true,
       observedAt: bounded.observedAt
     };
     trace("observation", "accepted", null, {target: observation.target});

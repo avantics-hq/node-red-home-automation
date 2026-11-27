@@ -9,7 +9,7 @@ import {houseRetainedTopics} from "../lib/house-schedule-publishing";
 const config: RoomConfig = {
   area: "kitchen",
   displayName: "Kitchen",
-  targets: [{id: "cooking", stateTopic: "k/cooking", commandTopic: "k/cooking/set"}],
+  targets: [{id: "cooking"}],
   initialTransitionSeconds: 1
 };
 const now = new Date("2026-06-21T12:00:00Z");
@@ -33,7 +33,8 @@ test("the room controller decides about lights only; publishing adds the topics"
   // The controller reports which lights' control changed; publishing names the topic.
   const overridden = transitionRoom(undefined, {lighting: {kind: "intent", state: "ON", targets: ["cooking"], owner: "theatre"}}, config, now);
   assert.deepEqual(overridden.controlChanged, ["cooking"]);
-  assert.ok(overridden.outputs.every(({topic}) => topic === "k/cooking/set"));
+  assert.deepEqual(overridden.outputs, [], "its light command goes to the light's adapter, not to MQTT");
+  assert.deepEqual(overridden.commands.map(({kind, target}) => [kind, target]), [["command", "cooking"]]);
 });
 
 test("as the flows start, the room clears its old circadian entries, announces its own, then its availability", () => {
@@ -66,4 +67,17 @@ test("a house and a room of the same name don't share topics: the room's clear l
   const houseTopics = houseRetainedTopics({area: "hall", publishState: true, discovery: true, discoveryPrefix: "homeassistant", nodeId: "house1", idScheme: "node"});
   assert.ok(houseTopics.includes("home/hall/schedule/wake-time/state"), houseTopics.join());
   assert.deepEqual(cleared.filter((topic) => houseTopics.includes(topic)), []);
+});
+
+test("a light's availability is shown on its control state and counted in the status, and changes nothing else", () => {
+  const publishing = {...config, publishState: true};
+  const lit = publishRoom(undefined, {lighting: {kind: "intent", state: "ON", targets: ["cooking"], source: "wall", manual: true}}, publishing, now).state;
+  const offline = publishRoom(lit, {light: {kind: "availability", target: "cooking", online: false}}, publishing, now);
+  assert.deepEqual(offline.outputs, [{topic: "home/kitchen/lighting/cooking/control", payload: {state: "manual", owner: null, available: false}, retain: true}]);
+  assert.deepEqual(offline.commands, [], "no command");
+  assert.deepEqual([offline.status.offlineCount, offline.state.control, offline.state.desired], [1, lit.control, lit.desired]);
+  // The same again: nothing to publish.
+  assert.deepEqual(publishRoom(offline.state, {light: {kind: "availability", target: "cooking", online: false}}, publishing, now).outputs, []);
+  const back = publishRoom(offline.state, {light: {kind: "availability", target: "cooking", online: true}}, publishing, now);
+  assert.deepEqual([back.status.offlineCount, (back.outputs[0]!.payload as {available: boolean}).available], [0, true]);
 });

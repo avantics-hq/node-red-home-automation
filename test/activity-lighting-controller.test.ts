@@ -10,8 +10,8 @@ import {
   type ActivityLightingEvent,
   type ActivityLightingState
 } from "../lib/activity-lighting-controller";
-import {type RoomConfig, type RoomState} from "../lib/room-controller";
-import {publishRoom} from "../lib/room-publishing";
+import {type RoomState} from "../lib/room-controller";
+import {publishRoom, type TopicRoomConfig} from "./helpers/room-with-lights";
 
 const config: ActivityLightingConfig = {
   profiles: {
@@ -86,7 +86,7 @@ test("matching lights confirm while manual and occupancy-off targets remain pres
     generation: 1,
     target: "wall",
     on: true,
-    values: {brightness: 64, color_temp: 400},
+    fields: ["brightness", "colorTemp"], showsLast: true,
     observedAt: at(1).toISOString()
   }, 1);
   assert.notEqual(result.state.phase, "ready");
@@ -97,7 +97,7 @@ test("matching lights confirm while manual and occupancy-off targets remain pres
     target: "lamp",
     on: true,
     manual: true,
-    values: {brightness: 254},
+    fields: ["brightness"], showsLast: false,
     observedAt: at(1.1).toISOString()
   }, 1.1);
   assert.equal(result.state.phase, "ready");
@@ -115,7 +115,7 @@ test("matching lights confirm while manual and occupancy-off targets remain pres
     generation: 2,
     target: "wall",
     on: false,
-    values: {},
+    fields: [], showsLast: false,
     observedAt: at(2.1).toISOString()
   }, 2.1);
   assert.equal(result.state.phase, "ready");
@@ -187,7 +187,7 @@ test("a new profile releases only the lights it no longer styles", () => {
 });
 
 test("activity lighting holds its room lights through refresh and hands them back", () => {
-  const roomConfig: RoomConfig = {
+  const roomConfig: TopicRoomConfig = {
     area: "lounge",
     displayName: "Lounge",
     targets: [
@@ -275,7 +275,7 @@ test("a node with nothing saved adopts a refresh's wanted profile and observes, 
   assert.deepEqual(result.commands.map(({operation}) => operation), ["observe"]);
   assert.equal(result.state.applied?.targets, null, "which lights it held is unknown");
   for (const [target, seconds] of [["wall", 1], ["lamp", 1.1]] as const) {
-    result = apply(result.state, {kind: "observed", generation: 2, target, on: true, values: {brightness: 64, color_temp: 400},
+    result = apply(result.state, {kind: "observed", generation: 2, target, on: true, fields: ["brightness", "colorTemp"], showsLast: true,
       observedAt: at(seconds).toISOString()}, seconds);
     assert.ok(!result.commands.some(({operation}) => operation === "apply"));
   }
@@ -291,7 +291,7 @@ test("a node with nothing saved adopts a refresh's wanted profile and observes, 
 test("an adopted request the lights don't match is a manual override: nothing applied", () => {
   let result = apply(undefined, {kind: "refresh", requestId: "activity-9", generation: 9, profile: "tv"});
   const sent = [...result.commands];
-  result = apply(result.state, {kind: "observed", generation: 9, target: "wall", on: true, values: {brightness: 200, color_temp: 250},
+  result = apply(result.state, {kind: "observed", generation: 9, target: "wall", on: true, fields: ["brightness", "colorTemp"], showsLast: false,
     observedAt: at(1).toISOString()}, 1);
   sent.push(...result.commands);
   for (const seconds of [3, 6, 12]) {
@@ -309,7 +309,7 @@ test("a profile in percent and kelvin matches the light's report in its own unit
     let result = transitionActivityLighting(undefined, {activityLighting: {kind: "intent", requestId: "tv-1", generation: 1, profile: "tv"}}, neutral, at(0));
     assert.deepEqual(result.commands[0]?.lighting?.values, values, "the intent carries the profile's own values");
     result = transitionActivityLighting(result.state, {activityLighting: {kind: "observed", generation: 1, target: "wall", on: true,
-      values: {brightness: 64, color_temp: 400}, observedAt: at(1).toISOString()}}, neutral, at(1));
+      fields: ["brightness", "colorTemp"], showsLast: true, observedAt: at(1).toISOString()}}, neutral, at(1));
     assert.equal(result.state.phase, "ready", JSON.stringify(values));
   }
 });
@@ -329,7 +329,7 @@ test("a profile's brightnessPct and colorTempKelvin are checked when deployed", 
 function readyTv() {
   let result = intent(undefined);
   for (const [seconds, target] of [[1, "wall"], [1.1, "lamp"]] as const) {
-    result = apply(result.state, {kind: "observed", generation: 1, target, on: true, values: {brightness: 64, color_temp: 400}, observedAt: at(seconds).toISOString()}, seconds);
+    result = apply(result.state, {kind: "observed", generation: 1, target, on: true, fields: ["brightness", "colorTemp"], showsLast: true, observedAt: at(seconds).toISOString()}, seconds);
   }
   assert.equal(result.state.phase, "ready");
   return result;
@@ -341,12 +341,12 @@ test("a refresh of ready room lighting re-reads it without leaving ready; the re
   assert.deepEqual(result.events, [], "no target state until a reading answers");
   assert.deepEqual([result.state.phase, result.state.pending, Object.keys(result.state.observed).sort()], ["ready", null, ["lamp", "wall"]]);
 
-  const matching = apply(result.state, {kind: "observed", generation: 1, target: "wall", on: true, values: {brightness: 64, color_temp: 400}, observedAt: at(30.1).toISOString()}, 30.1);
+  const matching = apply(result.state, {kind: "observed", generation: 1, target: "wall", on: true, fields: ["brightness", "colorTemp"], showsLast: true, observedAt: at(30.1).toISOString()}, 30.1);
   assert.equal(matching.events[0]?.theatre.status, "ready");
 
   // A light restyled by someone else classifies as any reading after ready does.
-  const differing = apply(result.state, {kind: "observed", generation: 1, target: "wall", on: true, values: {brightness: 200}, observedAt: at(30.1).toISOString()}, 30.1);
-  assert.equal(differing.state.phase, readyAfter(readyTv().state, {brightness: 200}).state.phase);
+  const differing = apply(result.state, {kind: "observed", generation: 1, target: "wall", on: true, fields: ["brightness"], showsLast: false, observedAt: at(30.1).toISOString()}, 30.1);
+  assert.equal(differing.state.phase, readyAfter(readyTv().state, {fields: ["brightness"], showsLast: false}).state.phase);
 
   // Unanswered, nothing is left waiting.
   const later = apply(result.state, {kind: "tick", generation: 1}, 60);
@@ -354,8 +354,8 @@ test("a refresh of ready room lighting re-reads it without leaving ready; the re
 });
 
 // The same different reading reaching ready lighting with no refresh before it.
-function readyAfter(state: ActivityLightingState, values: Record<string, unknown>) {
-  return apply(state, {kind: "observed", generation: 1, target: "wall", on: true, values, observedAt: at(30.1).toISOString()}, 30.1);
+function readyAfter(state: ActivityLightingState, reading: {fields: string[]; showsLast: boolean}) {
+  return apply(state, {kind: "observed", generation: 1, target: "wall", on: true, ...reading, observedAt: at(30.1).toISOString()}, 30.1);
 }
 
 test("a refresh of room lighting that isn't ready, and a startup, still re-observe as before", () => {
@@ -371,31 +371,67 @@ test("after carrying on, readings for the replaced generation still count", () =
   result = apply(result.state, {kind: "refresh", requestId: "recovery-2", generation: 2, profile: "tv"}, 0.1);
   assert.deepEqual([result.state.generation, result.state.adoptedGeneration], [2, null]);
   for (const [seconds, target] of [[1, "wall"], [1.1, "lamp"]] as const) {
-    result = apply(result.state, {kind: "observed", generation: 1, target, on: true, values: {brightness: 64, color_temp: 400}, observedAt: at(seconds).toISOString()}, seconds);
+    result = apply(result.state, {kind: "observed", generation: 1, target, on: true, fields: ["brightness", "colorTemp"], showsLast: true, observedAt: at(seconds).toISOString()}, seconds);
   }
   assert.deepEqual([result.state.phase, result.events[0]?.theatre.generation], ["ready", 2]);
 });
 
 test("each light is judged by what it reports: one that never reported the profile's fields confirms by being on, one that has is held to the values", () => {
-  const observe = (state: Partial<ActivityLightingState>, target: string, values: Record<string, unknown>, seconds: number) =>
-    transitionActivityLighting(state, {activityLighting: {kind: "observed", generation: 1, target, on: true, values, observedAt: at(seconds).toISOString()}}, config, at(seconds));
+  const observe = (state: Partial<ActivityLightingState>, target: string, reading: {fields: string[]; showsLast: boolean}, seconds: number) =>
+    transitionActivityLighting(state, {activityLighting: {kind: "observed", generation: 1, target, on: true, ...reading, observedAt: at(seconds).toISOString()}}, config, at(seconds));
   const start = transitionActivityLighting(undefined, {activityLighting: {kind: "intent", requestId: "tv-1", generation: 1, profile: "tv"}}, config, at(0));
-  let result = observe(start.state, "wall", {brightness: 64, color_temp: 400}, 1);
+  let result = observe(start.state, "wall", {fields: ["brightness", "colorTemp"], showsLast: true}, 1);
   // The lamp reports only that it is on: it has never reported brightness or colour.
-  result = observe(result.state, "lamp", {}, 1.1);
+  result = observe(result.state, "lamp", {fields: [], showsLast: false}, 1.1);
   assert.equal(result.state.phase, "ready", "confirmed by being on");
   assert.deepEqual(result.traces.filter(({reason}) => reason === "values-not-reported").map(({details}) => details), [{target: "lamp"}]);
-  assert.deepEqual(result.state.reported, {wall: ["brightness", "color_temp"]});
+  assert.deepEqual(result.state.reported, {wall: ["brightness", "colorTemp"]});
 
-  // A lamp that has reported brightness since start is held to the values: off by one, it isn't confirmed.
-  let held = observe(start.state, "wall", {brightness: 64, color_temp: 400}, 1);
-  held = observe(held.state, "lamp", {brightness: 200}, 1.1);
+  // A lamp that has reported brightness since start is held to the values: until it shows them, it isn't confirmed.
+  let held = observe(start.state, "wall", {fields: ["brightness", "colorTemp"], showsLast: true}, 1);
+  held = observe(held.state, "lamp", {fields: ["brightness"], showsLast: false}, 1.1);
   assert.notEqual(held.state.phase, "ready");
-  held = observe(held.state, "lamp", {}, 1.2);
-  assert.notEqual(held.state.phase, "ready", "it reported brightness once, so a report without it doesn't confirm");
+  held = observe(held.state, "lamp", {fields: [], showsLast: false}, 1.2);
+  assert.notEqual(held.state.phase, "ready", "it reported brightness once, so a later report without it doesn't confirm");
   assert.deepEqual(held.traces.filter(({reason}) => reason === "values-not-reported"), []);
+  held = observe(held.state, "lamp", {fields: ["brightness"], showsLast: true}, 1.3);
+  assert.equal(held.state.phase, "ready", "it shows the profile");
 
   // A restart learns again.
   const restarted = transitionActivityLighting(held.state, {activityLighting: {kind: "startup"}}, config, at(5));
   assert.deepEqual(restarted.state.reported, {});
+});
+
+test("a person changes a light the activity holds: the room makes it manual, the activity reports manual_override, and its next request takes the light back", () => {
+  const roomConfig: TopicRoomConfig = {area: "lounge", displayName: "Lounge", initialTransitionSeconds: 1,
+    targets: [{id: "wall", stateTopic: "z2m/lounge-wall", commandTopic: "z2m/lounge-wall/set"}, {id: "lamp", stateTopic: "z2m/lounge-lamp", commandTopic: "z2m/lounge-lamp/set"}]};
+  let activity = transitionActivityLighting(undefined, {activityLighting: {kind: "intent", requestId: "tv-1", generation: 1, profile: "tv"}}, config, at(0));
+  // The lights are on (motion), then the activity styles them.
+  let room = publishRoom(undefined, {lighting: {kind: "intent", state: "ON", source: "motion"}}, roomConfig, at(0));
+  room = publishRoom(room.state, {lighting: activity.commands[0]!.lighting!}, roomConfig, at(0));
+  assert.deepEqual(room.status.control, {wall: "overridden", lamp: "overridden"});
+  // Both lights obey; the wall then gets a person's change at the switch app, with values.
+  for (const [target, topic] of [["wall", "z2m/lounge-wall"], ["lamp", "z2m/lounge-lamp"]] as const) {
+    room = publishRoom(room.state, {topic, payload: {state: "ON", brightness: 64, color_temp: 400}, lighting: {kind: "observed"}}, roomConfig, at(1));
+    activity = transitionActivityLighting(activity.state, {activityLighting: {kind: "observed", generation: 1, target, on: true,
+      manual: room.status.control[target] === "manual", fields: ["brightness", "colorTemp"], showsLast: true, observedAt: at(1).toISOString()}}, config, at(1));
+  }
+  assert.equal(activity.state.phase, "ready");
+  room = publishRoom(room.state, {topic: "z2m/lounge-wall/set", payload: {state: "ON", brightness: 200}, lighting: {kind: "command-observed"}}, roomConfig, at(10));
+  assert.equal(room.status.control.wall, "manual", "a person's change takes it from the activity");
+  room = publishRoom(room.state, {topic: "z2m/lounge-wall", payload: {state: "ON", brightness: 200, color_temp: 400}, lighting: {kind: "observed"}}, roomConfig, at(10.5));
+  // The reading the room passes on says manual; the activity keeps it as the person left it.
+  activity = transitionActivityLighting(activity.state, {activityLighting: {kind: "observed", generation: 1, target: "wall", on: true,
+    manual: room.status.control.wall === "manual", fields: ["brightness", "colorTemp"], showsLast: false, observedAt: at(10.5).toISOString()}}, config, at(10.5));
+  assert.equal(activity.state.phase, "manual_override");
+  assert.equal(activity.events.at(-1)?.theatre.classification, "manual_override");
+  assert.deepEqual(activity.state.overridden, ["wall"]);
+
+  // The next request takes it back: the wall's intent doesn't skip it as a person's; the lamp's still does.
+  activity = transitionActivityLighting(activity.state, {activityLighting: {kind: "intent", requestId: "tv-2", generation: 2, profile: "tv"}}, config, at(20));
+  const intents = activity.commands.map(({lighting}) => lighting!).filter((lighting) => lighting.kind === "intent");
+  assert.deepEqual(intents.map(({targets, preserveManual}) => [targets, preserveManual]), [[["lamp"], true], [["wall"], undefined]]);
+  for (const lighting of intents) room = publishRoom(room.state, {lighting}, roomConfig, at(20));
+  assert.equal(room.status.control.wall, "overridden", "held by the activity again");
+  assert.deepEqual(activity.state.overridden, []);
 });

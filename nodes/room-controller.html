@@ -12,6 +12,73 @@
     };
     function given(value) { return value !== undefined && value !== null && value !== ""; }
     function moved(value) { return !given(value); }
+    function parsedTargets(json) {
+      try { var targets = JSON.parse(json || "[]"); return Array.isArray(targets) ? targets : []; } catch (e) { return []; }
+    }
+    // A room saved before 6.0 named each light's Zigbee2MQTT topics. Each
+    // target with topics, and the zigbee2mqtt light that replaces them; null
+    // when they aren't <base>/<name> and <base>/<name>/set, to set up by hand.
+    function lightPlan(targets) {
+      return targets.filter(function (target) {
+        return target && (target.stateTopic !== undefined || target.commandTopic !== undefined);
+      }).map(function (target) {
+        var state = typeof target.stateTopic === "string" ? target.stateTopic : "";
+        var slash = state.indexOf("/");
+        var z2m = target.commandTopic === state + "/set" && slash > 0 && slash < state.length - 1
+          ? {baseTopic: state.slice(0, slash), friendlyName: state.slice(slash + 1)}
+          : null;
+        return {id: String(target.id), stateTopic: target.stateTopic, commandTopic: target.commandTopic, z2m: z2m};
+      });
+    }
+    // The targets as 6.0 has them: ids, and onOffOnly, for every light whose
+    // topics were Zigbee2MQTT's. A light whose topics weren't keeps them: the
+    // room stays refused, naming it, until its adapter is set up by hand and
+    // its topics removed, so it can't be lost silently.
+    function neutralTargets(targets) {
+      var flagged = lightPlan(targets).filter(function (entry) { return !entry.z2m; }).map(function (entry) { return entry.id; });
+      return targets.map(function (target) {
+        if (target && flagged.indexOf(String(target.id)) >= 0) return target;
+        return target && target.onOffOnly === true ? {id: target.id, onOffOnly: true} : {id: target && target.id};
+      });
+    }
+    // Adds a zigbee2mqtt light for each light the plan can, wired to the room
+    // (its light commands in, readings back) and to the MQTT out nodes the
+    // room publishes through, with an MQTT in node on each light's topics
+    // when their broker is known. One undo step.
+    function createLights(roomId, plan) {
+      var room = RED.nodes.node(roomId);
+      if (!room) return 0;
+      var outs = [];
+      RED.nodes.eachLink(function (link) {
+        if (link.source === room && link.sourcePort === 0 && link.target.type === "mqtt out") outs.push(link.target);
+      });
+      var broker = outs.length ? outs[0].broker : "";
+      var add = [];
+      plan.filter(function (entry) { return entry.z2m; }).forEach(function (entry, index) {
+        var lightId = RED.nodes.id();
+        var y = room.y + 80 * (index + 1);
+        add.push({id: lightId, type: "home-z2m-light", z: room.z, x: room.x + 260, y: y, name: "", target: entry.id,
+          baseTopic: entry.z2m.baseTopic, friendlyName: entry.z2m.friendlyName, group: false, wires: [[], []]});
+        if (broker) {
+          add.push({id: RED.nodes.id(), type: "mqtt in", z: room.z, x: room.x + 40, y: y, name: "", broker: broker,
+            topic: entry.z2m.baseTopic + "/" + entry.z2m.friendlyName + "/#", qos: "1", datatype: "auto-detect", nl: false,
+            rap: true, rh: 0, inputs: 0, wires: [[lightId]]});
+        }
+      });
+      if (!add.length) return 0;
+      var wasDirty = RED.nodes.dirty();
+      var imported = RED.nodes.import(add, {generateIds: false});
+      var links = imported.links.slice();
+      imported.nodes.filter(function (n) { return n.type === "home-z2m-light"; }).forEach(function (light) {
+        [{source: room, sourcePort: 1, target: light}, {source: light, sourcePort: 1, target: room}].concat(outs.map(function (out) {
+          return {source: light, sourcePort: 0, target: out};
+        })).forEach(function (link) { RED.nodes.addLink(link); links.push(link); });
+      });
+      RED.history.push({t: "add", nodes: imported.nodes.map(function (n) { return n.id; }), links: links, dirty: wasDirty});
+      RED.nodes.dirty(true);
+      RED.view.redraw(true);
+      return imported.nodes.filter(function (n) { return n.type === "home-z2m-light"; }).length;
+    }
     RED.nodes.registerType("home-room-lighting-controller", {
       category: "home automation",
       color: "#ffd27f",
@@ -90,14 +157,36 @@
           }
           return MOVED[key] + " " + value;
         }).join(", "));
+        // Its lights' topics, which move to a zigbee2mqtt light each.
+        var plan = lightPlan(parsedTargets(node.targets));
+        $("#room-moved-lights").toggle(plan.length > 0);
+        $("#room-moved-lights-list").empty();
+        plan.forEach(function (entry) {
+          $("<li>").text(entry.id + ": " + (entry.z2m
+            ? "zigbee2mqtt light, base topic " + entry.z2m.baseTopic + ", friendly name " + entry.z2m.friendlyName
+            : "topics " + entry.stateTopic + " and " + entry.commandTopic + " aren't Zigbee2MQTT's: set it up by hand on the neutral light contract")).appendTo("#room-moved-lights-list");
+        });
+        $("#room-create-lights").toggle(plan.some(function (entry) { return entry.z2m; })).off("click").on("click", function (event) {
+          event.preventDefault();
+          var made = createLights(node.id, plan);
+          $(this).prop("disabled", true).text(made + " zigbee2mqtt light node" + (made === 1 ? "" : "s") + " added");
+        });
       },
       // Saving the dialog migrates the room: its old circadian settings go.
       oneditsave: function () {
         var node = this;
         Object.keys(MOVED).forEach(function (key) { node[key] = ""; });
+        // Its targets become ids: their topics are the lights' adapters' now.
+        var targets = parsedTargets($("#node-input-targets").val());
+        if (lightPlan(targets).length) $("#node-input-targets").val(JSON.stringify(neutralTargets(targets)));
       },
+      // For the editor's tests.
+      lightPlan: lightPlan,
+      neutralTargets: neutralTargets,
+      createLights: createLights,
       inputs: 1,
-      outputs: 1,
+      outputs: 3,
+      outputLabels: ["MQTT publications (MQTT out)", "light commands (to each light's adapter)", "light readings (to activity lighting)"],
       icon: "font-awesome/fa-lightbulb-o",
       label: function () { return this.name || (this.area ? this.area + " " : "") + "lighting controller"; }
     });
@@ -109,6 +198,16 @@
     <b>Circadian lighting moved to its own node in 6.0.</b> Add a <i>circadian lighting policy</i>, wire its first
     output to this room, and set its fields to this room's settings from before: <span id="room-moved-circadian-values"></span>.
     A room that should stay unstyled needs no policy. Saving this dialog then clears them here, and the room runs again.
+  </div>
+  <div class="form-tips" id="room-moved-lights" style="display:none; margin-bottom:12px;">
+    <b>Lights are reached through light adapters in 6.0.</b> Each light below needs a <i>zigbee2mqtt light</i> node:
+    <ul id="room-moved-lights-list"></ul>
+    <button type="button" class="red-ui-button" id="room-create-lights">Create Zigbee2MQTT light nodes</button>
+    It adds and wires one per light (and an MQTT in node on its topics when the room's MQTT out shows the broker).
+    Delete the old MQTT in nodes on the lights' state and command topics. Saving this dialog keeps only each
+    Zigbee2MQTT light's id in Targets JSON. A light whose topics aren't Zigbee2MQTT's keeps them, and the room stays
+    an invalid configuration naming it: set up its adapter by hand on the neutral light contract, then remove its
+    topics from Targets JSON.
   </div>
   <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
   <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area" placeholder="needed when publishing"></div>
@@ -134,13 +233,17 @@
     lighting policy in 6.0. A room saved before 6.0 is an invalid configuration until it is migrated: add a circadian
     lighting policy wired to the room, with the room's old settings (the dialog lists them), then open and save the
     room. Circadian, sleep and schedule messages sent to the room are ignored, with a warning.</p>
+  <h3>Lights and their adapters</h3>
+  <p>The room reaches each light through an adapter, such as a <i>zigbee2mqtt light</i> node per light: wire the
+    room's second output (its light commands, <code>msg.light</code>) into every adapter, and each adapter's readings
+    back into the room. The adapter tells the room's own commands from other people's, and the room acts on someone
+    else's: a command with values makes the light manual, and someone else's bare ON is restyled at most once every 5
+    seconds, so it never answers itself in a loop. At its startup message the room asks each light for a reading. A
+    light's availability, as its adapter reports it, is shown on its control state and in the status, and changes
+    nothing. For a light that isn't Zigbee2MQTT's, any flow that answers <code>msg.light</code> commands with
+    <code>msg.light</code> readings works in the adapter's place (see the README's neutral light contract).</p>
   <h3>Publishing</h3>
-  <p>Wire its commands to MQTT out unchanged. It watches each light's command topic to tell its own commands from
-    other people's, so a function that rewrites them on the way makes them look like someone else's. A bare ON or OFF
-    that arrives within 5 seconds of one of its own commands with that power, before that command has come back on the
-    topic, is taken as that command (traced as <code>mutated-own-command</code>), and it restyles a light after someone else's bare ON at most once every 5
-    seconds, so it never answers itself in a loop.</p>
-  <p>The room always commands its lights on each target's own command topic. Two settings add what it publishes
+  <p>Two settings add what it publishes
     for other systems to see; both are named after the <b>Area</b>, which is needed only when one of them is on. Topics
     and IDs use it in lowercase, with spaces and other characters (anything but letters, digits, <code>_</code> and
     <code>-</code>) as <code>_</code>: <i>Living Room</i> publishes under <code>home/living_room/…</code>.</p>
@@ -160,7 +263,7 @@
   </dl>
   <p>New nodes start with both off. A node saved before these settings existed keeps publishing both.</p>
   <h3>Targets</h3>
-  <p>A JSON list of lights, each <code>{"id", "stateTopic", "commandTopic"}</code>. Add <code>"onOffOnly": true</code>
+  <p>A JSON list of lights, each <code>{"id"}</code>: the name its adapter's <b>Target</b> and the policies use. Add <code>"onOffOnly": true</code>
     for a light that only switches on and off: it is never sent brightness, colour or a transition, styles skip it,
     and values an intent gives it are left out with a warning once per deploy. Who controls it works as for any light.
     <b>Turn-on transition seconds</b> is the transition for a light switched on, styled or with an intent's values.</p>
@@ -171,18 +274,18 @@
     <dt>overridden</dt><dd>another owner, such as an activity or a scene, holds the light. Styles leave it alone until
       that owner releases it.</dd>
     <dt>manual</dt><dd>a person set the light: an intent with <code>manual: true</code> (a wall switch's double
-      press), or someone else's command on its command topic with values. An intent's values alone don't make a light
+      press), or someone else's command on the light with values, as its adapter reports it. An intent's values alone don't make a light
       manual. Switching circadian lighting on returns manual lights to in-control.</dd>
   </dl>
   <p>An overridden light changes only for an intent with an <code>owner</code> (its own, or a newer owner who takes
-    it over), a person (a <code>manual: true</code> intent, <code>person: true</code>, set by the wall-switch policies, an external command on the command topic, or a change
+    it over), a person (a <code>manual: true</code> intent, <code>person: true</code>, set by the wall-switch policies, someone else's command on the light, or a change
     seen at the light), or a release. Any other intent, including motion ON or OFF and owner-less values, leaves it
     alone and is traced as <code>ignored held-by</code>; other targets in the same intent are still handled.
     Switching a light off by its owner or a person returns it to in-control.</p>
   <p>The control states are kept in the node's context. When the node starts with nothing saved (its first deploy,
     or a redeploy or restart without a context store, see the README), it can't know which lights were held or set
     by a person, so it leaves every light as it is: no style restyles a light until an intent or release names it,
-    someone switches it on with a bare ON on its command topic, or circadian lighting is switched on. A light that is
+    someone switches it on with a bare ON, or circadian lighting is switched on. A light that is
     on at that start and that nothing names keeps its start-time style; to bring it back into step, switch circadian
     lighting on (for example with the Home Assistant circadian switch), or let motion or a wall switch name it.</p>
   <h3>Inputs</h3>
@@ -201,8 +304,15 @@
       held by that owner are released. Released lights that are on are restyled over the style's transition.</dd>
   </dl>
   <h3>Outputs</h3>
-  <p>With <b>Publish state</b> on, on startup and whenever a target's control state changes, a retained message is
-    sent with topic
-    <code>home/&lt;area&gt;/lighting/&lt;target&gt;/control</code> and payload
-    <code>{"state": "in-control" | "overridden" | "manual", "owner": string | null}</code>.</p>
+  <ol class="node-ports">
+    <li>MQTT publications, for an MQTT out node: with <b>Publish state</b> on, on startup and whenever a target's
+      control state or availability changes, a retained message on <code>home/&lt;area&gt;/lighting/&lt;target&gt;/control</code>
+      with payload <code>{"state": "in-control" | "overridden" | "manual", "owner": string | null, "available"?: boolean}</code>
+      (<code>available</code> once its adapter has reported it), and the room's availability and discovery.</li>
+    <li>Light commands, <code>msg.light</code>, for the lights' adapters: <code>{kind: "command", target, state,
+      brightnessPct?, colorTempKelvin?, transitionSeconds?, extra?, restyle?, source, id}</code>, and
+      <code>{kind: "observe", target}</code> at its startup message.</li>
+    <li>Each light's reading, <code>msg.light</code>, passed on with <code>control</code> and <code>manual</code>, for
+      activity lighting.</li>
+  </ol>
 </script>

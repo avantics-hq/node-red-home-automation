@@ -3,7 +3,7 @@
     "id": "example-home-theatre-activity-home-theatre-activity-example",
     "type": "comment",
     "name": "Home theatre activity example",
-    "info": "The state contract turns a request on home/<area>/theatre/request into an activity intent. The activity controller plans each target and sends msg.theatreCommand; the switch routes each command by its target, and a change node moves it onto that controller's input. Every controller reports msg.theatre target state on output 2, wired straight back to the activity controller, which publishes a complete snapshot through the contract.\n\nName the area on the state contract before deploying: it names the MQTT topics and Home Assistant entities, and until it is set the contract shows \"invalid configuration\". Put the same area in the \"request tv activity\" inject's topic. Set the display controller's device hosts and TV pre-shared key too; until then it shows \"invalid configuration\" and the activity waits for it. Wire the controllers' output 1 to your device transports and activity lighting to your room lighting controller.",
+    "info": "The state contract turns a request on home/<area>/theatre/request into an activity intent. The activity controller plans each target and sends msg.theatreCommand; the switch routes each command by its target, and a change node moves it onto that controller's input. Every controller reports msg.theatre target state on output 2, wired straight back to the activity controller, which publishes a complete snapshot through the contract.\n\nName the area on the state contract before deploying: it names the MQTT topics and Home Assistant entities, and until it is set the contract shows \"invalid configuration\". Put the same area in the \"request tv activity\" inject's topic. Set the display controller's device hosts and TV pre-shared key too; until then it shows \"invalid configuration\" and the activity waits for it. Wire the controllers' output 1 to your device transports and activity lighting to your room lighting controller. Activity lighting holds the room's lights through a room lighting controller, which reaches its light through a zigbee2mqtt light node and passes each light's reading back to activity lighting (its third output), so the lights confirm. Set the light's friendly name, wire the debug's place to MQTT out, and an MQTT in node on the light's topics (zigbee2mqtt/<your light>/#) into the light node.",
     "x": 190,
     "y": 40,
     "wires": []
@@ -133,7 +133,7 @@
     "y": 440,
     "wires": [
       [
-        "example-home-theatre-activity-room-lighting-intents"
+        "example-home-theatre-activity-room"
       ],
       [
         "example-home-theatre-activity-theatre-activity-controller"
@@ -143,7 +143,7 @@
   {
     "id": "example-home-theatre-activity-room-lighting-intents",
     "type": "debug",
-    "name": "room lighting intents",
+    "name": "room and light MQTT (MQTT out)",
     "active": true,
     "tosidebar": true,
     "console": false,
@@ -152,7 +152,7 @@
     "targetType": "full",
     "statusVal": "",
     "statusType": "auto",
-    "x": 1630,
+    "x": 1880,
     "y": 440,
     "wires": []
   },
@@ -474,5 +474,50 @@
     "x": 1630,
     "y": 520,
     "wires": []
+  },
+  {
+    "id": "example-home-theatre-activity-room",
+    "type": "home-room-lighting-controller",
+    "name": "",
+    "area": "",
+    "publishState": false,
+    "discovery": false,
+    "idScheme": "node",
+    "displayName": "",
+    "discoveryPrefix": "homeassistant",
+    "targets": "[{\"id\":\"main\"}]",
+    "initialTransitionSeconds": 1,
+    "x": 1630,
+    "y": 440,
+    "wires": [
+      [
+        "example-home-theatre-activity-room-lighting-intents"
+      ],
+      [
+        "example-home-theatre-activity-room-light-main"
+      ],
+      [
+        "example-home-theatre-activity-activity-lighting-controller"
+      ]
+    ]
+  },
+  {
+    "id": "example-home-theatre-activity-room-light-main",
+    "type": "home-z2m-light",
+    "name": "",
+    "target": "main",
+    "baseTopic": "zigbee2mqtt",
+    "friendlyName": "<your light>",
+    "group": false,
+    "x": 1630,
+    "y": 520,
+    "wires": [
+      [
+        "example-home-theatre-activity-room-lighting-intents"
+      ],
+      [
+        "example-home-theatre-activity-room"
+      ]
+    ]
   }
 ]

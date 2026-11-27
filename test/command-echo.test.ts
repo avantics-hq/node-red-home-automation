@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import {checkCommandEcho, checkStateReport, fingerprint, rememberCommand, ECHO_QUEUE_LIMIT, ECHO_WINDOW_MS} from "../lib/command-echo";
+import {checkCommandEcho, checkStateReport, fingerprint, rememberCommand, ECHO_QUEUE_LIMIT, ECHO_WINDOW_MS, commandSent, commandSkipped} from "../lib/command-echo";
 
 test("fingerprints ignore key order", () => {
   assert.equal(fingerprint({state: "ON", brightness: 10}), fingerprint({brightness: 10, state: "ON"}));
@@ -66,4 +66,22 @@ test("our own command, changed on the way, still counts as ours: once", () => {
   // No command of ours pending: someone else's bare ON.
   assert.equal(checkCommandEcho(undefined, {state: "ON"}, 100).own, false);
   assert.equal(checkCommandEcho(sent, {state: "ON"}, ECHO_WINDOW_MS + 1).own, false, "after the echo window");
+});
+
+test("a tentative restyle doesn't count towards the limit or push out an older command, until its adapter says it sent it", () => {
+  let queue = Array.from({length: 8}).reduce<ReturnType<typeof rememberCommand>>((q, _, index) => rememberCommand(q, {state: "ON", n: index}, 1000, {id: String(index)}), []);
+  queue = rememberCommand(queue, {state: "ON"}, 1000, {id: "r", tentative: true});
+  assert.deepEqual(queue.map(({id}) => id), ["0", "1", "2", "3", "4", "5", "6", "7", "r"], "nothing pushed out yet");
+  assert.deepEqual(commandSkipped(queue, "r", 1000).map(({id}) => id), ["0", "1", "2", "3", "4", "5", "6", "7"], "skipped: as if never sent");
+  assert.deepEqual(commandSent(queue, "r", 1000).map(({id}) => id), ["1", "2", "3", "4", "5", "6", "7", "r"], "sent: an ordinary entry, the oldest goes");
+});
+
+test("a tentative restyle never makes a report stale: an OFF arriving before its adapter's answer is someone else's", () => {
+  // The light is on, confirmed; the room sends a restyle; the light reports OFF before the adapter says skipped or sent.
+  let queue = rememberCommand([], {state: "ON"}, 1000, {id: "1"});
+  queue = checkStateReport(queue, true, 1100).queue;
+  queue = rememberCommand(queue, {state: "ON"}, 1200, {id: "2", tentative: true});
+  assert.equal(checkStateReport(queue, false, 1300).verdict, "external", "as before 6.0, when a skipped restyle was never sent");
+  // Once sent, it is pending like any command.
+  assert.equal(checkStateReport(commandSent(queue, "2", 1250), false, 1300).verdict, "stale");
 });

@@ -60,7 +60,7 @@ export function roomDiscovery(config: RoomDiscoveryConfig, targetIds: string[]):
         state_topic: roomControlTopic(config.area, id),
         value_template: "{{ value_json.state }}",
         json_attributes_topic: roomControlTopic(config.area, id),
-        json_attributes_template: "{{ {'owner': value_json.owner} | tojson }}",
+        json_attributes_template: "{{ {'owner': value_json.owner, 'available': value_json.available} | tojson }}",
         entity_category: "diagnostic",
         availability_topic: roomAvailabilityTopic(config.area),
         device: roomDevice(config),

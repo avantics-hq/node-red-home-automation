@@ -4,6 +4,7 @@ import type {Node, NodeDef, NodeInitializer} from "node-red";
 import {
   transitionRoom,
   movedCircadianSettings,
+  targetsWithTopics,
   type RoomConfig,
   type RoomMessage,
   type RoomState,
@@ -13,6 +14,7 @@ import {
   ON_OFF_ONLY,
   REMOVED_LIGHT_UNITS
 } from "../lib/room-controller";
+import {isLightReading} from "../lib/light-contract";
 import {publishingLifecycle} from "./publishing-lifecycle";
 import {publishRoom, roomRetainedTopics, roomStartingOutputs, roomStoppingOutputs, withoutCircadianState, type RoomPublishingConfig} from "../lib/room-publishing";
 import {invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
@@ -35,22 +37,20 @@ interface RoomControllerNode extends Node {}
 
 type RoomStatus = ReturnType<typeof transitionRoom>["status"];
 
+// The room's lights: an id each, and onOffOnly for one that only switches.
+// Their devices are reached through their adapters.
 function parseTargets(value: unknown): RoomTarget[] {
   const targets = jsonSetting(value, "targets", []);
-  if (!Array.isArray(targets) || targets.some((target) => {
-    if (!target || typeof target !== "object") return true;
-    const candidate = target as Record<string, unknown>;
-    return typeof candidate.id !== "string" ||
-      typeof candidate.stateTopic !== "string" ||
-      typeof candidate.commandTopic !== "string";
-  })) {
-    throw new Error("targets must define id, stateTopic and commandTopic strings");
+  if (!Array.isArray(targets) || targets.some((target) => !target || typeof target !== "object" ||
+    typeof (target as Record<string, unknown>).id !== "string" || (target as Record<string, unknown>).id === "")) {
+    throw new Error("targets must each have an id");
   }
   if (targets.some((target) => (target as Record<string, unknown>).onOffOnly !== undefined &&
     typeof (target as Record<string, unknown>).onOffOnly !== "boolean")) {
     throw new Error("a target's onOffOnly must be true or false");
   }
-  const typedTargets = targets as RoomTarget[];
+  const typedTargets = (targets as Array<Record<string, unknown>>)
+    .map(({id, onOffOnly}) => ({id: id as string, ...(onOffOnly === true ? {onOffOnly: true} : {})}));
   if (new Set(typedTargets.map((target) => target.id)).size !== typedTargets.length) {
     throw new Error("target ids must be unique");
   }
@@ -68,10 +68,17 @@ const registerRoomController: NodeInitializer = (RED) => {
       // A room saved before 6.0 still has its circadian settings, which moved
       // to the circadian lighting policy: it runs only once migrated, so it
       // can't quietly lose its styling.
+      // Its lights' topics moved to their light adapters likewise: one
+      // migration covers both.
       const moved = movedCircadianSettings(config as unknown as Record<string, unknown>);
-      if (moved.length) {
-        throw new Error("circadian lighting moved to its own node in 6.0: add a circadian lighting policy wired to " +
-          "this room, with this room's " + moved.join(", ") + ", then open and save this room");
+      const lights = targetsWithTopics(config.targets);
+      if (moved.length || lights.length) {
+        throw new Error("this room was saved before 6.0: " + [
+          ...(moved.length ? ["circadian lighting moved to its own node (add a circadian lighting policy wired to this room, " +
+            "with its " + moved.join(", ") + ")"] : []),
+          ...(lights.length ? ["its lights are reached through light adapters (add one for " + lights.join(", ") +
+            ": a zigbee2mqtt light, or your own on the neutral light contract, and remove their topics from Targets JSON)"] : [])
+        ].join(", and ") + "; then open and save this room");
       }
       // Not set (null, or absent from a flow saved before these settings)
       // means on, so an older flow keeps publishing as before.
@@ -112,7 +119,7 @@ const registerRoomController: NodeInitializer = (RED) => {
       starting: () => roomStartingOutputs(controllerConfig),
       stopping: () => roomStoppingOutputs(controllerConfig),
       output: 0,
-      outputs: 1
+      outputs: 3
     });
 
     function updateStatus(status: RoomStatus) {
@@ -120,7 +127,8 @@ const registerRoomController: NodeInitializer = (RED) => {
         fill: status.manualCount ? "yellow" : status.styled ? "green" : "grey",
         shape: "dot",
         text: (status.styled ? "styled" : "unstyled") + " · " + status.onCount + " on · " + status.manualCount + " manual" +
-          (status.overriddenCount ? " · " + status.overriddenCount + " overridden" : "")
+          (status.overriddenCount ? " · " + status.overriddenCount + " overridden" : "") +
+          (status.offlineCount ? " · " + status.offlineCount + " offline" : "")
       });
     }
 
@@ -138,9 +146,19 @@ const registerRoomController: NodeInitializer = (RED) => {
     function process(msg: RoomMessage, send: Send) {
       const result = runReducer(node, {area: controllerConfig.area, component: "room-controller"},
         (saved: Partial<RoomState> | undefined, now) => publishRoom(saved, msg, controllerConfig, now));
-      if (result.outputs.length) {
-        send([result.outputs.map((output) => ({...output, payload: output.payload}))]);
-      }
+      // Output 1: MQTT publications (control states, availability,
+      // discovery). Output 2: light commands, for the lights' adapters.
+      // Output 3: each light's reading passed on with its control state, for
+      // activity lighting.
+      const reading = isLightReading(msg.light) && msg.light.kind === "observed" &&
+        controllerConfig.targets.some(({id}) => id === (msg.light as {target: string}).target) ? msg.light : null;
+      const control = reading ? result.status.control[reading.target] : undefined;
+      const outputs = [
+        result.outputs.length ? result.outputs.map((output) => ({...output, payload: output.payload})) : null,
+        result.commands.length ? result.commands.map((light) => ({payload: undefined, light})) : null,
+        reading ? {payload: undefined, light: {...reading, control, manual: control === "manual"}} : null
+      ];
+      if (outputs.some((output) => output !== null)) send(outputs);
       for (const [reason, text] of warnings) {
         if (!warned.has(reason) && result.traces.some((entry) => entry.reason === reason)) {
           warned.add(reason);
@@ -156,6 +174,7 @@ const registerRoomController: NodeInitializer = (RED) => {
       if (objectField<RoomMessage["lighting"]>(msg, "lighting")?.kind === "startup") lifecycle.startup(send);
       process({
         lighting: objectField<RoomMessage["lighting"]>(msg, "lighting"),
+        light: msg.light,
         topic: typeof msg.topic === "string" ? msg.topic : undefined,
         payload: msg.payload,
         retain: msg.retain === true

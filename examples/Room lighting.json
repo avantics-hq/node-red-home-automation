@@ -3,7 +3,7 @@
     "id": "example-room-lighting-room-lighting-example",
     "type": "comment",
     "name": "Room lighting example",
-    "info": "Motion and illuminance feed occupancy fusion and the motion policy; a wall switch feeds the switch policy. Both send lighting intents to the room controller, which owns the light's commands. The circadian lighting policy sends the room how its lights should look over the day; the room uses it for lights nobody has set otherwise.\n\nReplace the inject nodes with your sensors and wire the room controller's output to your MQTT broker. Set the circadian policy's wake and bed times (Node-RED host time) before deploying. Give the room controller an area to publish each light's control state and its Home Assistant discovery, and the circadian policy one to publish its circadian and sleep switches; without one they still control and style the lights.",
+    "info": "Motion and illuminance feed occupancy fusion and the motion policy; a wall switch feeds the switch policy. Both send lighting intents to the room controller, which owns the light's commands. The circadian lighting policy sends the room how its lights should look over the day; the room uses it for lights nobody has set otherwise.\n\nReplace the inject nodes with your sensors. The room reaches its light through the zigbee2mqtt light node: set its friendly name, wire the room's first output and the light node's first output to MQTT out, and an MQTT in node on the light's topics (zigbee2mqtt/<your light>/#) into the light node. Set the circadian policy's wake and bed times (Node-RED host time) before deploying. Give the room controller an area to publish each light's control state and its Home Assistant discovery, and the circadian policy one to publish its circadian and sleep switches; without one they still control and style the lights.",
     "x": 170,
     "y": 40,
     "wires": []
@@ -201,18 +201,41 @@
     "name": "",
     "area": "",
     "displayName": "",
-    "targets": "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]",
+    "targets": "[{\"id\":\"main\"}]",
     "initialTransitionSeconds": 1,
     "x": 880,
     "y": 180,
     "wires": [
       [
         "example-room-lighting-room-commands"
-      ]
+      ],
+      [
+        "example-room-lighting-room-lighting-controller-light-main"
+      ],
+      []
     ],
     "publishState": false,
     "discovery": false,
     "idScheme": "node"
+  },
+  {
+    "id": "example-room-lighting-room-lighting-controller-light-main",
+    "type": "home-z2m-light",
+    "name": "",
+    "target": "main",
+    "baseTopic": "zigbee2mqtt",
+    "friendlyName": "<your light>",
+    "group": false,
+    "x": 880,
+    "y": 240,
+    "wires": [
+      [
+        "example-room-lighting-room-commands"
+      ],
+      [
+        "example-room-lighting-room-lighting-controller"
+      ]
+    ]
   },
   {
     "id": "example-room-lighting-room-commands",

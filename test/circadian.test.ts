@@ -6,8 +6,7 @@ import {scheduledLighting} from "../lib/circadian";
 import {alreadyStyled, lightCommand} from "../lib/z2m-light";
 import {DEFAULT_BED_TIME, DEFAULT_WAKE_TIME, clockMinutes, resolveSchedule, scheduleLevel} from "../lib/circadian-schedule";
 import {styleAtLevel, type LightLevels} from "../lib/light-styling";
-import {type RoomConfig} from "../lib/room-controller";
-import {publishRoom} from "../lib/room-publishing";
+import {publishRoom, type TopicRoomConfig} from "./helpers/room-with-lights";
 
 const levels: LightLevels = {sleepBrightnessPct: 1, maxBrightnessPct: 100, sleepColorTempKelvin: 2200, maxColorTempKelvin: 6500};
 const clock = (hours: number, minutes = 0) => new Date(2026, 10, 23, hours, minutes);
@@ -56,7 +55,7 @@ test("scheduled lighting holds the sleep settings in sleep mode", () => {
 });
 
 test("a room uses whatever style it is sent: a different curve is a different style source", () => {
-  const config: RoomConfig = {
+  const config: TopicRoomConfig = {
     area: "room", displayName: "Room", initialTransitionSeconds: 1,
     targets: [{id: "main", stateTopic: "room/light/main", commandTopic: "room/light/main/set"}]
   };

@@ -9,12 +9,11 @@ import {DEFAULT_BED_TIME, DEFAULT_WAKE_TIME, resolveSchedule, scheduleLevel} fro
 import type {LightLevels} from "../lib/light-styling";
 import {lightCommand} from "../lib/z2m-light";
 import {
-  type RoomConfig,
   type RoomMessage,
-  type RoomOutput,
   type RoomState
 } from "../lib/room-controller";
-import {publishRoom, type RoomPublishingConfig} from "../lib/room-publishing";
+import {type RoomPublishingConfig} from "../lib/room-publishing";
+import {publishRoom, type CommandOutput as RoomOutput, type TopicRoomConfig} from "./helpers/room-with-lights";
 
 const levels: LightLevels = {
   maxBrightnessPct: 100,
@@ -22,7 +21,7 @@ const levels: LightLevels = {
   sleepBrightnessPct: 1,
   sleepColorTempKelvin: 1000
 };
-const config: RoomConfig = {
+const config: TopicRoomConfig = {
   area: "kitchen",
   displayName: "Kitchen",
   targets: [
@@ -41,7 +40,7 @@ function style(at: Date, {sleeping = false, takeBack = false, values}: {sleeping
     transitionSeconds: RESTYLE_SECONDS, until: new Date(at.getTime() + 86_400_000).toISOString(), ...(takeBack ? {takeBack: true} : {})}} as RoomMessage;
 }
 // A room that has just started with nothing saved and been sent the style.
-function fresh(at: Date = now, room: RoomConfig = config): RoomState {
+function fresh(at: Date = now, room: TopicRoomConfig = config): RoomState {
   return publishRoom(undefined, style(at), room, at).state;
 }
 // The command a styled light gets: over the room's turn-on transition, or the style's own for a restyle.
@@ -414,7 +413,7 @@ test("state saved before control states existed loads as manual or in-control", 
 });
 
 // The held-light rule: lamp held by "film".
-const heldConfig: RoomConfig = {...config, targets: [
+const heldConfig: TopicRoomConfig = {...config, targets: [
   {id: "lamp", stateTopic: "home/kitchen/light/lamp", commandTopic: "home/kitchen/light/lamp/set"},
   {id: "wall", stateTopic: "home/kitchen/light/wall", commandTopic: "home/kitchen/light/wall/set"}
 ]};
@@ -700,7 +699,7 @@ test("a confirmed OFF leaves control as the OFF intent set it", () => {
 });
 
 test("publish settings: state and discovery each switch on and off, and unset means on", () => {
-  const startupTopics = (settings: Partial<RoomConfig & RoomPublishingConfig>) =>
+  const startupTopics = (settings: Partial<TopicRoomConfig & RoomPublishingConfig>) =>
     publishRoom(undefined, {lighting: {kind: "startup"}}, {...config, ...settings}, now).outputs.map(({topic, payload}) => [topic, payload]);
   const discoveryTopic = "homeassistant/sensor/kitchen_cooking_control/config";
   const controlTopic = "home/kitchen/lighting/cooking/control";

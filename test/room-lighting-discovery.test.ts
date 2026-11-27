@@ -26,7 +26,7 @@ test("the room's Home Assistant entities are each light's control state, on one 
     state_topic: "home/kitchen/lighting/cooking/control",
     value_template: "{{ value_json.state }}",
     json_attributes_topic: "home/kitchen/lighting/cooking/control",
-    json_attributes_template: "{{ {'owner': value_json.owner} | tojson }}",
+    json_attributes_template: "{{ {'owner': value_json.owner, 'available': value_json.available} | tojson }}",
     entity_category: "diagnostic",
     availability_topic: "home/kitchen/lighting/availability",
     device: {

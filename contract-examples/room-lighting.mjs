@@ -2,6 +2,7 @@ import {scheduledLighting} from "../dist/lib/circadian.js";
 import {resolveSchedule} from "../dist/lib/circadian-schedule.js";
 import {transitionCircadian} from "../dist/lib/circadian-policy.js";
 import {transitionRoom} from "../dist/lib/room-controller.js";
+import {normaliseZ2mLightConfig, transitionZ2mLight} from "../dist/lib/z2m-light-adapter.js";
 import {assert, runWhenMain} from "./_shared.mjs";
 
 export const name = "room-lighting";
@@ -10,11 +11,7 @@ export function run() {
   const configuration = {
     area: "demo_room",
     displayName: "Demo Room",
-    targets: [{
-      id: "ceiling",
-      stateTopic: "demo/lighting/ceiling/state",
-      commandTopic: "demo/lighting/ceiling/set"
-    }],
+    targets: [{id: "ceiling"}],
     initialTransitionSeconds: 1
   };
   const schedule = resolveSchedule("07:00", "23:00");
@@ -45,20 +42,22 @@ export function run() {
   };
   assert.equal(style.lighting.until, "2026-03-20T10:03:00.000Z");
   const styled = transitionRoom(undefined, style, configuration, now);
-  assert.equal(styled.outputs.length, 0);
+  assert.equal(styled.commands.length, 0);
   const result = transitionRoom(styled.state, input, configuration, now);
-  const outputs = result.outputs.map(({topic, payload, retain, lighting_command}) => ({
-    topic,
-    payload,
-    retain,
-    lighting_command
-  }));
-
+  // The room's neutral command, for the light's adapter.
+  assert.equal(result.commands.length, 1);
+  const command = result.commands[0];
+  assert.equal(command.kind, "command");
+  assert.equal(command.target, "ceiling");
+  assert.equal(command.state, "ON");
+  assert.equal(command.source, "motion");
+  // The Zigbee2MQTT light adapter turns it into the light's own message.
+  const light = normaliseZ2mLightConfig({target: "ceiling", baseTopic: "demo", friendlyName: "ceiling"});
+  const outputs = transitionZ2mLight(undefined, {light: command}, light, now).publications;
   assert.equal(outputs.length, 1);
-  assert.equal(outputs[0].topic, "demo/lighting/ceiling/set");
+  assert.equal(outputs[0].topic, "demo/ceiling/set");
   assert.equal(outputs[0].payload.state, "ON");
   assert.equal(typeof outputs[0].payload.brightness, "number");
-  assert.equal(outputs[0].lighting_command.source, "motion");
 
   return {
     configuration: {
@@ -67,8 +66,9 @@ export function run() {
       schedule
     },
     inputs: [style, input],
+    commands: result.commands,
     outputs,
-    invariant: "The room controller is the only transport command owner and records the policy source; a style only shapes how its lights look."
+    invariant: "The room controller owns its lights' commands and records the policy source; a style only shapes how its lights look; each light's adapter speaks the device's own messages."
   };
 }
 
