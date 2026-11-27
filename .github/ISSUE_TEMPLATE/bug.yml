@@ -23,7 +23,7 @@ body:
     attributes:
       label: Runtime versions
       description: Node-RED and Node.js versions.
-      placeholder: Node-RED 5.0.x; Node.js 24.x or 22.x
+      placeholder: Node-RED 5.0.x; Node.js 24.x
     validations:
       required: true
 

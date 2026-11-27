@@ -193,6 +193,33 @@ function traces(node: RuntimeNode): TraceRecord[] {
   return node.context().get("trace") as TraceRecord[];
 }
 
+test("enable inputs: a value other than true or false is refused visibly, once in the log and on the status, never read as off", async (t) => {
+  const motionRuntime = runtime(registerMotion);
+  const motion = new motionRuntime.Constructor({area: "kitchen", onTargets: "[\"cooking\"]", offTargets: "[\"cooking\"]"});
+  t.after(() => close(motion));
+  await receive(motion, {source: "area-enabled", payload: "off"});
+  await receive(motion, {source: "area-enabled", payload: "OFF"});
+  assert.equal(motion.warnings.length, 1, "once per input per deploy");
+  assert.match(String(motion.warnings[0]), /area-enabled takes only true or false: "off" was refused/);
+  assert.deepEqual(motion.statuses.at(-1), {fill: "yellow", shape: "ring", text: "refused area-enabled \"OFF\": send true or false"});
+  assert.equal((motion.context().get("state") as {areaEnabled: boolean}).areaEnabled, true, "still enabled");
+  await receive(motion, {source: "pause", payload: "on", owner: "blind"});
+  assert.equal(motion.warnings.length, 2, "a second input warns once too");
+  await receive(motion, {source: "area-enabled", payload: false});
+  assert.equal((motion.context().get("state") as {areaEnabled: boolean}).areaEnabled, false);
+  assert.match(String((motion.statuses.at(-1) as {text: string}).text), /^disabled/);
+
+  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
+  const room = new (runtime(registerRoom).Constructor)({targets, area: "", publishState: false, discovery: false});
+  t.after(() => close(room));
+  await receive(room, {lighting: {kind: "circadian", enabled: "off"}});
+  await receive(room, {lighting: {kind: "circadian", enabled: "off"}});
+  assert.equal(room.warnings.length, 1);
+  assert.match(String(room.warnings[0]), /circadian's enabled takes only true or false: "off" was refused/);
+  assert.deepEqual(room.statuses.at(-1), {fill: "yellow", shape: "ring", text: "refused circadian \"off\": send true or false"});
+  assert.equal((room.context().get("state") as {circadianEnabled: boolean}).circadianEnabled, true);
+});
+
 test("motion adapter emits intents and persists standard traces", async (t) => {
   const {Constructor} = runtime(registerMotion);
   const node = new Constructor({

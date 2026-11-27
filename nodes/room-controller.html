@@ -159,6 +159,10 @@
     (for example with the Home Assistant circadian switch), or let motion or a wall switch name it.</p>
   <h3>Inputs</h3>
   <dl class="message-properties">
+    <dt>lighting.kind = "circadian" or "sleep"</dt>
+    <dd><code>lighting.enabled</code> <code>true</code> or <code>false</code> switches circadian lighting or sleep. Any
+      other value, such as <code>"on"</code>, is refused: nothing changes, and the node logs a warning once per deploy
+      and shows it on its status.</dd>
     <dt>topic = home/&lt;area&gt;/circadian/set</dt>
     <dd>payload <code>ON</code> or <code>OFF</code> (any case) switches circadian lighting on or off, as
       <code>lighting.kind = "circadian"</code> does. Read only while <b>Publish state</b> is on and the area is set.

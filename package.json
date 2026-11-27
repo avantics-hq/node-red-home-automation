@@ -39,7 +39,7 @@
     "docs": "node scripts/build-docs.mjs"
   },
   "engines": {
-    "node": ">=22.9"
+    "node": ">=24"
   },
   "node-red": {
     "version": ">=5.0.0",
