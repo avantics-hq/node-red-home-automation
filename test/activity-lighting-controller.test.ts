@@ -10,8 +10,6 @@ import {
   type ActivityLightingEvent,
   type ActivityLightingState
 } from "../lib/activity-lighting-controller";
-import {scheduledLighting} from "../lib/circadian";
-import {resolveSchedule} from "../lib/circadian-schedule";
 import {type RoomConfig, type RoomState} from "../lib/room-controller";
 import {publishRoom} from "../lib/room-publishing";
 
@@ -196,18 +194,14 @@ test("activity lighting holds its room lights through refresh and hands them bac
       {id: "wall", stateTopic: "lounge/wall", commandTopic: "lounge/wall/set"},
       {id: "lamp", stateTopic: "lounge/lamp", commandTopic: "lounge/lamp/set"}
     ],
-    initialTransitionSeconds: 1,
-    refreshTransitionSeconds: 45,
-    initialSleep: false,
-    lighting: scheduledLighting(resolveSchedule(), {
-      maxBrightnessPct: 100,
-      maxColorTempKelvin: 5500,
-      sleepBrightnessPct: 1,
-      sleepColorTempKelvin: 1000
-    })
+    initialTransitionSeconds: 1
   };
   const noon = (seconds: number) => new Date(new Date(2026, 5, 21, 12, 0).getTime() + seconds * 1000);
-  let room = publishRoom(undefined, {lighting: {kind: "intent", targets: ["wall", "lamp"], state: "ON", source: "motion"}}, roomConfig, noon(0));
+  // The daytime style, as a circadian lighting policy sends it each interval.
+  const style = (seconds: number) => ({lighting: {kind: "style", source: "circadian", values: {brightnessPct: 100, colorTempKelvin: 5500},
+    transitionSeconds: 45, until: noon(seconds + 180).toISOString()}});
+  let room = publishRoom(undefined, style(0), roomConfig, noon(0));
+  room = publishRoom(room.state, {lighting: {kind: "intent", targets: ["wall", "lamp"], state: "ON", source: "motion"}}, roomConfig, noon(0));
   const feed = (lighting: ReturnType<typeof transitionActivityLighting>, seconds: number) => {
     for (const command of lighting.commands) {
       if (command.lighting) room = publishRoom(room.state as Partial<RoomState>, {lighting: command.lighting}, roomConfig, noon(seconds));
@@ -221,7 +215,7 @@ test("activity lighting holds its room lights through refresh and hands them bac
   room = feed(activity, 1);
   assert.deepEqual(commanded(room), [["wall", 64], ["lamp", 64]]);
   assert.deepEqual(room.status.control, {wall: "overridden", lamp: "overridden"});
-  room = publishRoom(room.state, {lighting: {kind: "refresh"}}, roomConfig, noon(90));
+  room = publishRoom(room.state, style(90), roomConfig, noon(90));
   assert.deepEqual(commanded(room), []);
 
   // Ending the activity releases both lights and the room controller restyles them.
@@ -229,7 +223,7 @@ test("activity lighting holds its room lights through refresh and hands them bac
   room = feed(activity, 100);
   assert.deepEqual(commanded(room), [["wall", 254], ["lamp", 254]]);
   assert.deepEqual(room.status.control, {wall: "in-control", lamp: "in-control"});
-  room = publishRoom(room.state, {lighting: {kind: "refresh"}}, roomConfig, noon(190));
+  room = publishRoom(room.state, style(190), roomConfig, noon(190));
   assert.equal(commanded(room).length, 2);
 });
 
@@ -380,4 +374,28 @@ test("after carrying on, readings for the replaced generation still count", () =
     result = apply(result.state, {kind: "observed", generation: 1, target, on: true, values: {brightness: 64, color_temp: 400}, observedAt: at(seconds).toISOString()}, seconds);
   }
   assert.deepEqual([result.state.phase, result.events[0]?.theatre.generation], ["ready", 2]);
+});
+
+test("each light is judged by what it reports: one that never reported the profile's fields confirms by being on, one that has is held to the values", () => {
+  const observe = (state: Partial<ActivityLightingState>, target: string, values: Record<string, unknown>, seconds: number) =>
+    transitionActivityLighting(state, {activityLighting: {kind: "observed", generation: 1, target, on: true, values, observedAt: at(seconds).toISOString()}}, config, at(seconds));
+  const start = transitionActivityLighting(undefined, {activityLighting: {kind: "intent", requestId: "tv-1", generation: 1, profile: "tv"}}, config, at(0));
+  let result = observe(start.state, "wall", {brightness: 64, color_temp: 400}, 1);
+  // The lamp reports only that it is on: it has never reported brightness or colour.
+  result = observe(result.state, "lamp", {}, 1.1);
+  assert.equal(result.state.phase, "ready", "confirmed by being on");
+  assert.deepEqual(result.traces.filter(({reason}) => reason === "values-not-reported").map(({details}) => details), [{target: "lamp"}]);
+  assert.deepEqual(result.state.reported, {wall: ["brightness", "color_temp"]});
+
+  // A lamp that has reported brightness since start is held to the values: off by one, it isn't confirmed.
+  let held = observe(start.state, "wall", {brightness: 64, color_temp: 400}, 1);
+  held = observe(held.state, "lamp", {brightness: 200}, 1.1);
+  assert.notEqual(held.state.phase, "ready");
+  held = observe(held.state, "lamp", {}, 1.2);
+  assert.notEqual(held.state.phase, "ready", "it reported brightness once, so a report without it doesn't confirm");
+  assert.deepEqual(held.traces.filter(({reason}) => reason === "values-not-reported"), []);
+
+  // A restart learns again.
+  const restarted = transitionActivityLighting(held.state, {activityLighting: {kind: "startup"}}, config, at(5));
+  assert.deepEqual(restarted.state.reported, {});
 });

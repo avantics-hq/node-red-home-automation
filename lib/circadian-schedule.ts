@@ -63,3 +63,15 @@ export function scheduleLevel(now: Date, wakeTime: string, bedTime: string): num
   const untilBed = awakeMinutes - sinceWake;
   return untilBed < windDown ? ease(untilBed / windDown) : 1;
 }
+
+// New times from a "schedule" message, each "HH:MM", with a time left out
+// staying as it is; null if they aren't valid, different times.
+export function requestedSchedule(current: DaySchedule, event: {wakeTime?: unknown; bedTime?: unknown}): DaySchedule | null {
+  const next = {
+    wakeTime: typeof event.wakeTime === "string" ? event.wakeTime.trim() : current.wakeTime,
+    bedTime: typeof event.bedTime === "string" ? event.bedTime.trim() : current.bedTime
+  };
+  const wake = clockMinutes(next.wakeTime);
+  const bed = clockMinutes(next.bedTime);
+  return wake === null || bed === null || wake === bed ? null : next;
+}

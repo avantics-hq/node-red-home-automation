@@ -3,7 +3,7 @@
     "id": "example-room-lighting-room-lighting-example",
     "type": "comment",
     "name": "Room lighting example",
-    "info": "Motion and illuminance feed occupancy fusion and the motion policy; a wall switch feeds the switch policy. Both send lighting intents to the room controller, which owns the light's commands.\n\nReplace the inject nodes with your sensors and wire the room controller's output to your MQTT broker. Set the room's wake and bed times (Node-RED host time) before deploying. Give the room controller an area to publish each light's control state, its circadian switch and Home Assistant discovery; without one it still controls the lights.",
+    "info": "Motion and illuminance feed occupancy fusion and the motion policy; a wall switch feeds the switch policy. Both send lighting intents to the room controller, which owns the light's commands. The circadian lighting policy sends the room how its lights should look over the day; the room uses it for lights nobody has set otherwise.\n\nReplace the inject nodes with your sensors and wire the room controller's output to your MQTT broker. Set the circadian policy's wake and bed times (Node-RED host time) before deploying. Give the room controller an area to publish each light's control state and its Home Assistant discovery, and the circadian policy one to publish its circadian and sleep switches; without one they still control and style the lights.",
     "x": 170,
     "y": 40,
     "wires": []
@@ -98,7 +98,7 @@
   {
     "id": "example-room-lighting-room-startup",
     "type": "inject",
-    "name": "room startup",
+    "name": "startup",
     "props": [
       {
         "p": "lighting",
@@ -115,7 +115,8 @@
     "y": 280,
     "wires": [
       [
-        "example-room-lighting-room-lighting-controller"
+        "example-room-lighting-room-lighting-controller",
+        "example-room-lighting-circadian"
       ]
     ]
   },
@@ -167,20 +168,41 @@
     ]
   },
   {
+    "id": "example-room-lighting-circadian",
+    "type": "home-circadian-lighting-policy",
+    "name": "",
+    "area": "",
+    "houseSchedule": "",
+    "wakeTime": "07:00",
+    "bedTime": "23:00",
+    "maxBrightnessPct": 100,
+    "maxColorTempKelvin": 6500,
+    "sleepBrightnessPct": 1,
+    "sleepColorTempKelvin": 2200,
+    "refreshTransitionSeconds": 60,
+    "refreshSeconds": 60,
+    "initialSleep": false,
+    "publishState": false,
+    "discovery": false,
+    "discoveryPrefix": "homeassistant",
+    "idScheme": "node",
+    "x": 620,
+    "y": 280,
+    "wires": [
+      [
+        "example-room-lighting-room-lighting-controller"
+      ],
+      []
+    ]
+  },
+  {
     "id": "example-room-lighting-room-lighting-controller",
     "type": "home-room-lighting-controller",
     "name": "",
     "area": "",
     "displayName": "",
     "targets": "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]",
-    "maxBrightnessPct": 100,
-    "maxColorTempKelvin": 6500,
-    "sleepBrightnessPct": 1,
-    "sleepColorTempKelvin": 2200,
     "initialTransitionSeconds": 1,
-    "refreshTransitionSeconds": 60,
-    "refreshSeconds": 60,
-    "initialSleep": false,
     "x": 880,
     "y": 180,
     "wires": [
@@ -188,8 +210,6 @@
         "example-room-lighting-room-commands"
       ]
     ],
-    "wakeTime": "07:00",
-    "bedTime": "23:00",
     "publishState": false,
     "discovery": false,
     "idScheme": "node"

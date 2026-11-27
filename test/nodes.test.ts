@@ -18,6 +18,7 @@ import registerMotion from "../nodes/motion-policy";
 import registerSwitch from "../nodes/switch-policy";
 import registerOccupancy from "../nodes/occupancy-fusion";
 import registerRoom from "../nodes/room-controller";
+import registerCircadian from "../nodes/circadian-policy";
 import registerHouse from "../nodes/house-schedule";
 import registerHouseMqtt from "../nodes/house-schedule-mqtt";
 import registerShellyCover from "../nodes/shelly-cover";
@@ -87,7 +88,9 @@ const builtNodes = new Map<string, unknown>();
 function runtime(
   register: NodeInitializer,
   credentials: Record<string, string> = {},
-  {contextStore = false}: {contextStore?: boolean} = {}
+  // `flows`: other nodes deployed in the same flows (as their saved configs,
+  // with their type), which eachNode lists too.
+  {contextStore = false, flows = []}: {contextStore?: boolean; flows?: Array<{id: string; type: string} & Record<string, unknown>>} = {}
 ): {Constructor: RuntimeConstructor; events: EventEmitter; flowNodeIds: Set<string>} {
   let Constructor: RuntimeConstructor | undefined;
   const globalValues = new Map<string, unknown>([["MOTION_ENABLED_STATE", true]]);
@@ -99,6 +102,9 @@ function runtime(
   // Node-RED's runtime events, such as "flows:started" after a deploy.
   const events = new EventEmitter();
   const flowNodeIds = new Set<string>();
+  // Each node's saved config with its type, as Node-RED's eachNode gives it.
+  const flowConfigs = new Map<string, Record<string, unknown>>();
+  let typeName = "";
   const RED = {
     events,
     nodes: {
@@ -107,6 +113,7 @@ function runtime(
         // As Node-RED does, the node takes its ID from its saved config.
         (node as RuntimeNode & {id?: string}).id = config?.id;
         flowNodeIds.add(config?.id ?? "");
+        flowConfigs.set(config?.id ?? "", {type: typeName, ...config});
         if (config?.id) builtNodes.set(config.id, node);
         const emitter = new EventEmitter();
         node.on = emitter.on.bind(emitter);
@@ -152,10 +159,12 @@ function runtime(
         return builtNodes.get(id) ?? null;
       },
       // The deployed flows: every node built here, until a test deletes one.
-      eachNode(callback: (node: {id: string}) => void) {
-        for (const id of flowNodeIds) callback({id});
+      eachNode(callback: (node: {id: string} & Record<string, unknown>) => void) {
+        for (const id of flowNodeIds) callback({...flowConfigs.get(id), id});
+        for (const other of flows) callback(other);
       },
-      registerType(_name: string, implementation: RuntimeConstructor) {
+      registerType(name: string, implementation: RuntimeConstructor) {
+        typeName = name;
         Constructor = implementation;
       }
     }
@@ -213,12 +222,11 @@ test("enable inputs: a value other than true or false is refused visibly, once i
   const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
   const room = new (runtime(registerRoom).Constructor)({targets, area: "", publishState: false, discovery: false});
   t.after(() => close(room));
-  await receive(room, {lighting: {kind: "circadian", enabled: "off"}});
-  await receive(room, {lighting: {kind: "circadian", enabled: "off"}});
+  // Circadian switches are the circadian lighting policy's since 6.0: a room ignores them, with one warning.
+  await receive(room, {lighting: {kind: "circadian", enabled: false}});
+  await receive(room, {lighting: {kind: "sleep", enabled: true}});
   assert.equal(room.warnings.length, 1);
-  assert.match(String(room.warnings[0]), /circadian's enabled takes only true or false: "off" was refused/);
-  assert.deepEqual(room.statuses.at(-1), {fill: "yellow", shape: "ring", text: "refused circadian \"off\": send true or false"});
-  assert.equal((room.context().get("state") as {circadianEnabled: boolean}).circadianEnabled, true);
+  assert.match(String(room.warnings[0]), /circadian, sleep and schedule messages go to the circadian lighting policy since 6\.0/);
 });
 
 test("motion adapter emits intents and persists standard traces", async (t) => {
@@ -308,27 +316,14 @@ test("room adapter publishes startup messages and standard traces", async (t) =>
     area: "kitchen",
     displayName: "Kitchen",
     targets: "[{\"id\":\"cooking\",\"stateTopic\":\"home/kitchen/light/group/cooking\",\"commandTopic\":\"home/kitchen/light/group/cooking/set\"}]",
-    latitude: 51.5074,
-    longitude: -0.1278,
-    minBrightnessPct: 1,
-    maxBrightnessPct: 100,
-    minColorTempKelvin: 2000,
-    maxColorTempKelvin: 5500,
-    sleepBrightnessPct: 1,
-    sleepColorTempKelvin: 1000,
-    initialTransitionSeconds: 1,
-    refreshTransitionSeconds: 45,
-    refreshSeconds: 90,
-    initialSleep: false
+    initialTransitionSeconds: 1
   });
   t.after(() => close(node));
 
   const startup = await receive<SendEnvelope>(node, {lighting: {kind: "startup"}});
   assert.equal(startup.length, 1);
-  assert.equal(
-    startup[0]?.[0]?.[0]?.topic,
-    "homeassistant/switch/kitchen_circadian_lighting/config"
-  );
+  // First, the circadian entry it published before 6.0, cleared.
+  assert.deepEqual([startup[0]?.[0]?.[0]?.topic, startup[0]?.[0]?.[0]?.payload], ["homeassistant/switch/kitchen_circadian_lighting/config", ""]);
   const commanded = await receive<SendEnvelope>(node, {
     lighting: {kind: "intent", targets: ["cooking"], state: "OFF", source: "test"}
   });
@@ -350,28 +345,23 @@ test("room adapter publishes startup messages and standard traces", async (t) =>
   assert.equal(node.errors.length, 0);
 });
 
-test("room adapter deploys a saved configuration from before schedules, ignoring coordinates", async (t) => {
-  // Saved by 2.2.x: latitude, longitude and the minimum settings, no times.
+test("room adapter: a room saved before 6.0 is an invalid configuration until migrated to a circadian lighting policy", () => {
+  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
   const {Constructor} = runtime(registerRoom);
-  const node = new Constructor({
-    area: "room",
-    displayName: "Room",
-    targets: "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]",
-    latitude: 51.5074,
-    longitude: -0.1278,
-    minBrightnessPct: 1,
-    minColorTempKelvin: 2000
-  });
-  t.after(() => close(node));
-  assert.deepEqual(node.errors, []);
-  assert.notEqual((node.statuses.at(-1) as {text?: string} | undefined)?.text, "invalid configuration");
-  // It commands the light; the default schedule's values are tested in the reducer.
-  const sent = await receive<Array<Array<{payload?: Record<string, unknown>; topic?: string}>>>(node, {
-    lighting: {kind: "intent", targets: ["main"], state: "ON", source: "motion"}
-  });
-  const command = sent.flat(2).find((message) => message.topic === "room/light/main/set");
-  assert.equal(command?.payload?.state, "ON");
-  assert.equal(typeof command?.payload?.brightness, "number");
+  // As saved by 5.x (the editor wrote every circadian setting), and by 2.2.x (coordinates, no times).
+  for (const saved of [
+    {wakeTime: "07:00", bedTime: "23:00", maxBrightnessPct: 100, refreshSeconds: 60, initialSleep: false, houseSchedule: ""},
+    {latitude: 51.5074, longitude: -0.1278, minBrightnessPct: 1, minColorTempKelvin: 2000}
+  ]) {
+    // Not closed: an invalid node registers no close handler.
+    const node = new Constructor({area: "room", displayName: "Room", targets, ...saved});
+    assert.equal((node.statuses.at(-1) as {text?: string}).text, "invalid configuration");
+    assert.match(String(node.errors[0]), /circadian lighting moved to its own node in 6\.0: add a circadian lighting policy wired to this room/);
+  }
+  // Migrated (the old settings cleared, as saving the dialog does), it runs.
+  const migrated = new Constructor({area: "room", displayName: "Room", targets, wakeTime: "", bedTime: "", maxBrightnessPct: "", initialSleep: ""});
+  assert.deepEqual(migrated.errors, []);
+  assert.notEqual((migrated.statuses.at(-1) as {text?: string} | undefined)?.text, "invalid configuration");
 });
 
 test("AVR adapter emits protocol commands and bounded traces", async (t) => {
@@ -1004,14 +994,14 @@ test("AVR adapter rejects a configuration the reducer would reject, at deploy", 
   }
 });
 
-test("room adapter rejects an unusable wake and bed schedule at deploy", () => {
+test("the circadian lighting policy rejects an unusable wake and bed schedule at deploy", () => {
   for (const [label, times, reason] of [
     ["not a time", {wakeTime: "7am", bedTime: "23:00"}, /HH:MM/],
     ["a blank wake time is an error", {wakeTime: "", bedTime: "07:00"}, /wake time is required/],
     ["the same time", {wakeTime: "07:00", bedTime: "07:00"}, /differ/]
   ] as const) {
-    const {Constructor} = runtime(registerRoom);
-    const node = new Constructor({area: "room", displayName: "Room", targets: "[]", latitude: 0, longitude: 0, ...times});
+    const {Constructor} = runtime(registerCircadian);
+    const node = new Constructor({...times});
     const status = node.statuses.at(-1) as {fill?: string; text?: string} | undefined;
     assert.equal(status?.fill, "red", label);
     assert.equal(status?.text, "invalid configuration", label);
@@ -1228,7 +1218,8 @@ test("an emptied or non-numeric number setting is an invalid configuration that 
     ["source", registerSource, {area: "a", sources: "{\"streamer\":{\"activation\":\"command\",\"deactivation\":\"command\",\"confirmation\":\"active\"}}", pollMs: "abc"}, "poll interval"],
     ["backlighting", registerBacklighting, {area: "a", maxAttempts: ""}, "max attempts"],
     ["activity lighting", registerActivityLighting, {area: "a", profiles: "{\"off\":{\"targets\":[],\"values\":{}}}", confirmationTimeoutMs: ""}, "confirmation timeout"],
-    ["room", registerRoom, {area: "a", targets: "[]", refreshSeconds: ""}, "refresh interval"],
+    ["room", registerRoom, {area: "a", targets: "[]", initialTransitionSeconds: ""}, "initial transition"],
+    ["circadian", registerCircadian, {refreshSeconds: ""}, "restyle interval"],
     ["motion", registerMotion, {area: "a", onTargets: "[\"main\"]", defaultDelaySeconds: "abc"}, "vacancy delay"],
     ["switch", registerSwitch, {area: "a", targets: "[\"main\"]", switchWindowMs: ""}, "switch window"],
     ["theatre activity", registerTheatreActivity, {area: "a", freshnessMs: "", activityProfiles: JSON.stringify({
@@ -1354,7 +1345,7 @@ test("publish settings: null and a missing field mean on; only false means off",
     t.after(() => close(node));
     assert.deepEqual(node.errors, []);
     const startup = await receive<Array<Array<{topic?: string; payload?: unknown} | null>>>(node, {lighting: {kind: "startup"}});
-    const entry = startup.flat(2).find((message) => message?.topic === "homeassistant/switch/hall_circadian_lighting/config");
+    const entry = startup.flat(2).find((message) => message?.topic === "homeassistant/sensor/hall_main_control/config");
     return entry ? (typeof entry.payload === "object" ? "published" : "cleared") : "none";
   };
   assert.equal(await discoveryOf({publishState: null, discovery: null}), "published", "null (the editor's not-set) is on");
@@ -1415,7 +1406,7 @@ test("discovery basics: the room checks a publishing area and uses its discovery
   const prefixed = new room({targets, area: "hall", discoveryPrefix: "ha", publishState: true, discovery: true});
   t.after(() => close(prefixed));
   const startup = await receive<Array<Array<{topic?: string; payload?: Record<string, unknown>} | null>>>(prefixed, {lighting: {kind: "startup"}});
-  const entry = startup.flat(2).find((message) => message?.topic === "ha/switch/hall_circadian_lighting/config");
+  const entry = startup.flat(2).find((message) => message?.topic === "ha/sensor/hall_main_control/config");
   assert.equal((entry?.payload?.origin as {name?: string} | undefined)?.name, "@avantics/node-red-home-automation");
 });
 
@@ -1487,18 +1478,19 @@ test("ID schemes: a saved node keeps its area-named entities; a new node names t
     t.after(() => close(node));
     assert.deepEqual(node.errors, []);
     const startup = await receive<SendEnvelope>(node, {lighting: {kind: "startup"}});
-    const entry = startup.flat(2).find((message) => String(message?.topic).endsWith("/config"));
+    // The first entry it announces (its old circadian entries come first, cleared).
+    const entry = startup.flat(2).find((message) => String(message?.topic).endsWith("/config") && message?.payload !== "");
     const payload = entry?.payload as {unique_id: string; default_entity_id: string; device: {identifiers: string[]}};
     return [entry?.topic, payload.unique_id, payload.default_entity_id, payload.device.identifiers[0]];
   };
-  const entityId = ["switch", "hall_circadian_lighting"].join(".");
+  const entityId = ["sensor", "hall_main_control"].join(".");
   assert.deepEqual(await discoveryOf({id: "saved1"}),
-    ["homeassistant/switch/hall_circadian_lighting/config", "hall_circadian_lighting", entityId, "nodered_hall_lighting"],
+    ["homeassistant/sensor/hall_main_control/config", "hall_main_control", entityId, "nodered_hall_lighting"],
     "no idScheme: as every room published before");
   assert.deepEqual(await discoveryOf({id: "saved2", idScheme: null}),
-    ["homeassistant/switch/hall_circadian_lighting/config", "hall_circadian_lighting", entityId, "nodered_hall_lighting"]);
+    ["homeassistant/sensor/hall_main_control/config", "hall_main_control", entityId, "nodered_hall_lighting"]);
   assert.deepEqual(await discoveryOf({id: "new1", idScheme: "node"}),
-    ["homeassistant/switch/nrha_new1_circadian_lighting/config", "nrha_new1_circadian_lighting", entityId, "nrha_new1"],
+    ["homeassistant/sensor/nrha_new1_main_control/config", "nrha_new1_main_control", entityId, "nrha_new1"],
     "a new node: named after the node, with the same entity ID");
   const junk = new room({targets, area: "hall", idScheme: "random"});
   assert.deepEqual(junk.errors.map(String), ["invalid configuration: ID scheme must be area or node"]);
@@ -1530,25 +1522,13 @@ test("ID schemes: after an area change, a node clears the retained topics it no 
   // A new node keeps its discovery topic, which now points at home/den.
   assert.deepEqual(await topicsCleared("node"), [
     ["home/hall/lighting/availability", ""],
-    ["home/hall/circadian/state", ""],
-    ["home/hall/sleep/state", ""],
-    ["home/hall/wake-time/state", ""],
-    ["home/hall/bed-time/state", ""],
     ["home/hall/lighting/main/control", ""]
   ]);
   // A saved node's discovery topic is named after the area, so it moves too
   // and the old entry is cleared, rather than left behind as before.
   assert.deepEqual(await topicsCleared(null), [
-    ["homeassistant/switch/hall_circadian_lighting/config", ""],
-    ["homeassistant/switch/hall_sleep/config", ""],
-    ["homeassistant/time/hall_wake_time/config", ""],
-    ["homeassistant/time/hall_bed_time/config", ""],
     ["homeassistant/sensor/hall_main_control/config", ""],
     ["home/hall/lighting/availability", ""],
-    ["home/hall/circadian/state", ""],
-    ["home/hall/sleep/state", ""],
-    ["home/hall/wake-time/state", ""],
-    ["home/hall/bed-time/state", ""],
     ["home/hall/lighting/main/control", ""]
   ]);
 });
@@ -1560,13 +1540,8 @@ test("discovery: a room announces its Home Assistant entries when the flows star
     .flatMap((envelope) => envelope[0] ?? [])
     .filter(({topic, payload}) => topic.endsWith("/config") && typeof payload === "object" && payload !== null)
     .map(({topic}) => topic);
-  const announced = [
-    "homeassistant/switch/hall_circadian_lighting/config",
-    "homeassistant/switch/hall_sleep/config",
-    "homeassistant/time/hall_wake_time/config",
-    "homeassistant/time/hall_bed_time/config",
-    "homeassistant/sensor/hall_main_control/config"
-  ];
+  // Its control sensor; its circadian entities are the circadian lighting policy's since 6.0.
+  const announced = ["homeassistant/sensor/hall_main_control/config"];
   const settings = {targets, area: "hall", publishState: true, discovery: true};
   const first = new roomRuntime.Constructor(settings);
   roomRuntime.events.emit("flows:started");
@@ -1580,11 +1555,11 @@ test("discovery: a room announces its Home Assistant entries when the flows star
   const modified = new roomRuntime.Constructor({...settings, targets: targets.replace("main", "lamp")});
   t.after(() => close(modified));
   roomRuntime.events.emit("flows:started");
-  assert.deepEqual(entries(modified.sent), [...announced.slice(0, 4), "homeassistant/sensor/hall_lamp_control/config"]);
+  assert.deepEqual(entries(modified.sent), ["homeassistant/sensor/hall_lamp_control/config"]);
 
   // The startup message still announces them, as before.
   assert.deepEqual(entries(await receive(modified, {lighting: {kind: "startup"}})),
-    [...announced.slice(0, 4), "homeassistant/sensor/hall_lamp_control/config"]);
+    ["homeassistant/sensor/hall_lamp_control/config"]);
 
   // Discovery off: no entries announced.
   const off = new roomRuntime.Constructor({id: "off", ...settings, discovery: false});
@@ -1640,26 +1615,22 @@ test("ID schemes: after a redeploy that changes the area, the old topics are cle
   const started = renamed.sent as Array<Array<Array<{topic: string; payload: unknown}>>>;
   assert.deepEqual(started[0]?.[0]?.map(({topic, payload}) => [topic, payload]), [
     ["home/hall/lighting/availability", ""],
-    ["home/hall/circadian/state", ""],
-    ["home/hall/sleep/state", ""],
-    ["home/hall/wake-time/state", ""],
-    ["home/hall/bed-time/state", ""],
     ["home/hall/lighting/main/control", ""],
-    ["homeassistant/switch/nrha_r5_circadian_lighting/config", "entry"],
-    ["homeassistant/switch/nrha_r5_sleep/config", "entry"],
-    ["homeassistant/time/nrha_r5_wake_time/config", "entry"],
-    ["homeassistant/time/nrha_r5_bed_time/config", "entry"],
+    // The circadian entries it published before 6.0, cleared at every start.
+    ["homeassistant/switch/nrha_r5_circadian_lighting/config", ""],
+    ["homeassistant/switch/nrha_r5_sleep/config", ""],
+    ["homeassistant/time/nrha_r5_wake_time/config", ""],
+    ["homeassistant/time/nrha_r5_bed_time/config", ""],
     ["homeassistant/sensor/nrha_r5_main_control/config", "entry"],
     ["home/den/lighting/availability", "online"]
   ].map(([topic, payload]) => [topic, payload === "entry" ? started[0]?.[0]?.find((output) => output.topic === topic)?.payload : payload]));
-  assert.ok(started[0]?.[0]?.filter(({topic}) => topic.endsWith("/config")).every(({payload}) => typeof payload === "object" && payload !== null),
-    "the den's entries are announced, not cleared");
+  assert.equal(typeof started[0]?.[0]?.find(({topic}) => topic === "homeassistant/sensor/nrha_r5_main_control/config")?.payload, "object",
+    "the den's entry is announced, not cleared");
   // The broker may not have been connected yet, so the startup message
   // clears them again, and from then on nothing.
   const startup = await receive<SendEnvelope>(renamed, {lighting: {kind: "startup"}});
   assert.deepEqual((startup[0]?.[0] ?? []).map(({topic}) => topic),
-    ["home/hall/lighting/availability", "home/hall/circadian/state", "home/hall/sleep/state", "home/hall/wake-time/state",
-      "home/hall/bed-time/state", "home/hall/lighting/main/control"]);
+    ["home/hall/lighting/availability", "home/hall/lighting/main/control"]);
   const again = await receive<SendEnvelope>(renamed, {lighting: {kind: "startup"}});
   assert.equal(again.length, 1, "settled: no clears");
 
@@ -1696,18 +1667,18 @@ test("entity cleanup: a deleted node clears what it published; a disabled or red
   roomRuntime.flowNodeIds.delete("r1");
   const cleared = await stop(deleted, true) as Array<Array<Array<{topic: string; payload: unknown; retain: boolean}>>>;
   assert.deepEqual(cleared[0]?.[0]?.map(({topic, payload, retain}) => [topic, payload, retain]), [
-    ["homeassistant/switch/nrha_r1_circadian_lighting/config", "", true],
-    ["homeassistant/switch/nrha_r1_sleep/config", "", true],
-    ["homeassistant/time/nrha_r1_wake_time/config", "", true],
-    ["homeassistant/time/nrha_r1_bed_time/config", "", true],
     ["homeassistant/sensor/nrha_r1_main_control/config", "", true],
     ["home/hall/lighting/availability", "", true],
-    ["home/hall/circadian/state", "", true],
-    ["home/hall/sleep/state", "", true],
-    ["home/hall/wake-time/state", "", true],
-    ["home/hall/bed-time/state", "", true],
     ["home/hall/lighting/main/control", "", true]
   ]);
+  // A room whose record was saved before 6.0 lists the circadian state topics as its own. The circadian lighting
+  // policy publishes them now, so deleting the room never clears them.
+  const upgraded = new roomRuntime.Constructor({...roomConfig, id: "r1b"});
+  upgraded.context().set("retainedTopics", ["home/hall/circadian/state", "home/hall/sleep/state", "home/hall/wake-time/state", "home/hall/bed-time/state"]);
+  const rebuilt = new roomRuntime.Constructor({...roomConfig, id: "r1b"});
+  roomRuntime.flowNodeIds.delete("r1b");
+  const upgradedCleared = (await stop(rebuilt, true) as Array<Array<Array<{topic: string}>>>)[0]?.[0]?.map(({topic}) => topic) ?? [];
+  assert.deepEqual(upgradedCleared.filter((topic) => /\/(circadian|sleep|wake-time|bed-time)\/state$/.test(topic)), []);
 
   const contractRuntime = runtime(registerTheatreStateContract);
   const contract = new contractRuntime.Constructor({id: "c1", idScheme: "node", area: "lounge", activities: "[\"off\"]"});
@@ -1731,10 +1702,6 @@ test("entity cleanup: switching Publish state off clears the room's state topics
   const startup = await receive<SendEnvelope>(quiet, {lighting: {kind: "startup"}});
   assert.deepEqual((startup[0]?.[0] ?? []).map(({topic, payload}) => [topic, payload]), [
     ["home/hall/lighting/availability", ""],
-    ["home/hall/circadian/state", ""],
-    ["home/hall/sleep/state", ""],
-    ["home/hall/wake-time/state", ""],
-    ["home/hall/bed-time/state", ""],
     ["home/hall/lighting/main/control", ""]
   ]);
 });
@@ -2066,29 +2033,29 @@ test("house schedule: a redeploy without a context store goes back to its settin
   }
 });
 
-test("house schedule: rooms using it follow it, at the flow start and at every change, and stop when they close", async (t) => {
+test("house schedule: circadian lighting policies using it follow it, at the flow start and at every change, and stop when they close", async (t) => {
   const house = new (runtime(registerHouse).Constructor)({id: "house1", name: "house", wakeTime: "07:00", bedTime: "23:00"}) as RuntimeNode & SharedSchedule;
   assert.deepEqual(house.errors, []);
-  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
-  // With a context store, as reading a closed room's state and redeploying
+  // With a context store, as reading a closed node's state and redeploying
   // it with its saved state need one.
-  const rooms = runtime(registerRoom, {}, STORE);
-  const room = (id: string) => {
-    const node = new rooms.Constructor({id, targets, area: id, publishState: true, discovery: true, idScheme: "node", wakeTime: "08:00", bedTime: "22:00", houseSchedule: "house1"});
+  const policies = runtime(registerCircadian, {}, STORE);
+  const policy = (id: string) => {
+    const node = new policies.Constructor({id, area: id, publishState: true, discovery: true, wakeTime: "08:00", bedTime: "22:00", houseSchedule: "house1"});
     t.after(() => close(node));
     return node;
   };
-  const [hall, study] = [room("hall"), room("study")];
+  const [hall, study] = [policy("hall"), policy("study")];
   const schedule = (node: RuntimeNode) => (node.context().get("state") as {schedule?: unknown} | undefined)?.schedule;
-  rooms.events.emit("flows:started");
+  policies.events.emit("flows:started");
   assert.deepEqual([schedule(hall), schedule(study)], [{wakeTime: "07:00", bedTime: "23:00"}, {wakeTime: "07:00", bedTime: "23:00"}],
-    "the house's times, not the rooms' own");
+    "the house's times, not their own");
 
   house.change({kind: "schedule", bedTime: "22:30"});
   assert.deepEqual([schedule(hall), schedule(study)], [{wakeTime: "07:00", bedTime: "22:30"}, {wakeTime: "07:00", bedTime: "22:30"}]);
-  // Following the house, a room has no time entities and reads no time set topics of its own.
+  // Following the house, it has no time entities and reads no time set topics of its own.
   const startup = await receive<SendEnvelope>(hall, {lighting: {kind: "startup"}});
-  const published = startup.flat(2).filter((message) => message?.payload !== "").map((message) => String(message?.topic));
+  const published = startup.flatMap((envelope) => (envelope as unknown as Array<Array<{topic: string; payload: unknown}> | null>)[1] ?? [])
+    .filter(({payload}) => payload !== "").map(({topic}) => topic);
   assert.ok(!published.some((topic) => /wake|bed/.test(topic)), published.join());
   await receive(hall, {topic: "home/hall/wake-time/set", payload: "05:00:00"});
   assert.deepEqual(schedule(hall), {wakeTime: "07:00", bedTime: "22:30"});
@@ -2096,33 +2063,27 @@ test("house schedule: rooms using it follow it, at the flow start and at every c
   await close(study);
   house.change({kind: "schedule", wakeTime: "06:00"});
   assert.deepEqual([schedule(hall), schedule(study)], [{wakeTime: "06:00", bedTime: "22:30"}, {wakeTime: "07:00", bedTime: "22:30"}],
-    "a closed room no longer listens");
+    "a closed policy no longer listens");
 
-  // Redeployed with no schedule (or its schedule deleted): its own times, not the house's last ones.
-  const own = new rooms.Constructor({id: "study", targets, area: "study", publishState: true, discovery: true, idScheme: "node", wakeTime: "08:00", bedTime: "22:00", houseSchedule: ""});
+  // Redeployed with no schedule (or its schedule deleted): its own times, not the house's last ones, even where
+  // its own time matches the house's.
+  const own = new policies.Constructor({id: "study", area: "study", publishState: true, discovery: true, wakeTime: "08:00", bedTime: "23:00", houseSchedule: ""});
   t.after(() => close(own));
   const startup2 = await receive<SendEnvelope>(own, {lighting: {kind: "startup"}});
-  assert.deepEqual(schedule(own), {wakeTime: "08:00", bedTime: "22:00"});
-  assert.ok(startup2.flat(2).some((message) => message?.topic === "home/study/wake-time/state" && message.payload === "08:00:00"));
-  assert.equal(traces(own).at(-1)?.reason, "own-times");
+  assert.deepEqual(schedule(own), {wakeTime: "08:00", bedTime: "23:00"});
+  assert.ok(startup2.flatMap((envelope) => (envelope as unknown as Array<Array<{topic: string; payload: unknown}> | null>)[1] ?? [])
+    .some(({topic, payload}) => topic === "home/study/wake-time/state" && payload === "08:00:00"));
 });
 
-test("house schedule: a room whose schedule is missing keeps its own times and says so", async (t) => {
-  const targets = "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]";
-  const rooms = runtime(registerRoom);
-  const node = new rooms.Constructor({id: "orphan", targets, area: "orphan", publishState: true, discovery: true, idScheme: "node", wakeTime: "08:00", bedTime: "22:00", houseSchedule: "deleted-schedule"});
+test("house schedule: a circadian lighting policy whose schedule is missing keeps its own times and says so", async (t) => {
+  const policies = runtime(registerCircadian);
+  const node = new policies.Constructor({id: "orphan", area: "orphan", publishState: true, discovery: true, wakeTime: "08:00", bedTime: "22:00", houseSchedule: "deleted-schedule"});
   t.after(() => close(node));
   assert.deepEqual(node.errors, []);
-  assert.deepEqual(node.statuses.at(-1), {fill: "yellow", shape: "ring", text: "schedule missing: own times"});
-  assert.deepEqual(traces(node).map(({reason}) => reason), ["schedule-missing"], "traced once");
-  // Its own time entities and set topics again, as it publishes.
-  const startup = await receive<SendEnvelope>(node, {lighting: {kind: "startup"}});
-  const topics = startup.flat(2).filter((message) => message?.payload !== "").map((message) => String(message?.topic));
-  assert.ok(topics.includes("home/orphan/wake-time/state"), topics.join());
-  assert.ok(topics.some((topic) => topic.endsWith("_wake_time/config")), topics.join());
+  assert.match(String((node.statuses.at(-1) as {text: string}).text), /schedule missing: own times$/);
+  // Its own time set topics, as it publishes.
   await receive(node, {topic: "home/orphan/wake-time/set", payload: "05:00:00"});
   assert.equal((node.context().get("state") as {schedule: {wakeTime: string}}).schedule.wakeTime, "05:00");
-  assert.match(String((node.statuses.at(-1) as {text: string}).text), /^schedule missing: own times · /);
 });
 
 test("house schedule MQTT node: publishes the schedule for Home Assistant and changes it from its set topics", async (t) => {
@@ -2465,3 +2426,95 @@ test("shelly switch node: reads the device's configuration once the flows start,
   const unset = new (runtime(registerShellySwitch).Constructor)({id: "w2"});
   assert.equal((unset.statuses.at(-1) as {text?: string}).text, "invalid configuration");
 });
+
+test("circadian node: a style once the flows start and every interval, with its discovery after the old room entries are cleared, in one batch", async (t) => {
+  t.mock.timers.enable({apis: ["setTimeout", "setInterval", "Date"], now: new Date("2026-06-21T12:00:00").getTime()});
+  type Out = Array<{lighting?: Record<string, unknown>} | Array<{topic: string; payload: string}> | null>;
+  // Two rooms in the flows: one with this area (saved before 6.0, so still invalid), one elsewhere.
+  const circadianRuntime = runtime(registerCircadian, {}, {flows: [
+    {id: "room-den", type: "home-room-lighting-controller", area: "Den", idScheme: "node", wakeTime: "07:00"},
+    {id: "room-hall", type: "home-room-lighting-controller", area: "hall", idScheme: "node"}
+  ]});
+  const node = new circadianRuntime.Constructor({id: "c1", area: "den", publishState: true, discovery: true, refreshSeconds: 60});
+  t.after(() => close(node));
+  assert.deepEqual(node.errors, []);
+  const styles = () => (node.sent as Out[]).map((out) => (out[0] as {lighting?: Record<string, unknown>} | null)?.lighting).filter(Boolean) as Array<Record<string, unknown>>;
+  const published = () => (node.sent as Out[]).flatMap((out) => (out[1] as Array<{topic: string; payload: string}> | null) ?? []);
+
+  circadianRuntime.events.emit("flows:started");
+  assert.equal(styles().length, 1);
+  assert.deepEqual(Object.keys(styles()[0]!.values as object), ["brightnessPct", "colorTempKelvin"]);
+  assert.ok(published().some(({topic, payload}) => topic === "home/den/circadian/availability" && payload === "online"));
+  // No delay: the old entries are cleared in the same batch, before its own.
+  const config = published().filter(({topic}) => topic.endsWith("/config"));
+  assert.deepEqual(config.slice(0, 8).map(({topic, payload}) => [topic, payload]), [
+    ["homeassistant/switch/den_circadian_lighting/config", ""],
+    ["homeassistant/switch/den_sleep/config", ""],
+    ["homeassistant/time/den_wake_time/config", ""],
+    ["homeassistant/time/den_bed_time/config", ""],
+    ["homeassistant/switch/nrha_room-den_circadian_lighting/config", ""],
+    ["homeassistant/switch/nrha_room-den_sleep/config", ""],
+    ["homeassistant/time/nrha_room-den_wake_time/config", ""],
+    ["homeassistant/time/nrha_room-den_bed_time/config", ""]
+  ], "the room in this area, migrated or not; not the hall's");
+  assert.equal(config.slice(8).length, 4);
+  assert.ok(config.slice(8).every(({topic, payload}) => topic.includes("nrha_c1_") && payload !== ""));
+  t.mock.timers.tick(60_000);
+  assert.equal(styles().length, 2, "one per interval");
+
+  // The startup message announces at once.
+  const startup = await receive<Out>(node, {lighting: {kind: "startup"}});
+  assert.ok(startup.some((out) => Array.isArray(out[1]) && out[1].some(({topic}) => topic === "homeassistant/switch/nrha_c1_circadian_lighting/config")));
+  assert.ok(startup.some((out) => (out[0] as {lighting?: {kind: string}} | null)?.lighting?.kind === "style"));
+
+  // Home Assistant switches it off: rooms are told at once, and the state is published.
+  const off = await receive<Out>(node, {topic: "home/den/circadian/set", payload: "OFF"});
+  assert.deepEqual(off.map((out) => (out[0] as {lighting?: {values: unknown}} | null)?.lighting?.values).filter((v) => v !== undefined), [null]);
+  assert.ok(off.some((out) => Array.isArray(out[1]) && out[1].some(({topic, payload}) => topic === "home/den/circadian/state" && payload === "OFF")));
+  assert.deepEqual(node.statuses.at(-1), {fill: "grey", shape: "dot", text: "off"});
+
+  // A flow's "on" is refused, visibly.
+  await receive(node, {lighting: {kind: "circadian", enabled: "on"}});
+  assert.match(String(node.warnings.at(-1)), /circadian's enabled takes only true or false: "on" was refused/);
+  assert.deepEqual(node.statuses.at(-1), {fill: "yellow", shape: "ring", text: "refused circadian \"on\": send true or false"});
+
+  // On again: rooms take back what a person set.
+  const on = await receive<Out>(node, {lighting: {kind: "circadian", enabled: true}});
+  assert.equal((on[0]![0] as {lighting: {takeBack?: boolean}}).lighting.takeBack, true);
+});
+
+test("circadian node: deleted, it tells rooms to stop styling at once; following a house, it takes the house's times", async (t) => {
+  const circadianRuntime = runtime(registerCircadian);
+  const gone = new circadianRuntime.Constructor({id: "c2"});
+  circadianRuntime.flowNodeIds.delete("c2");
+  // Node-RED waits for every close handler, so everything sent as it closes counts.
+  const before = gone.sent.length;
+  gone.emit("close", true, () => {});
+  const sent = gone.sent.slice(before) as Array<Array<{lighting?: {kind: string; values: unknown}} | null>>;
+  assert.deepEqual(sent.filter((out) => out[0]).map((out) => [out[0]?.lighting?.kind, out[0]?.lighting?.values]), [["style", null]]);
+
+  const house = new (runtime(registerHouse).Constructor)({id: "house9", name: "house", wakeTime: "07:00", bedTime: "23:00"}) as RuntimeNode & SharedSchedule;
+  const housesRuntime = runtime(registerCircadian);
+  const follower = new housesRuntime.Constructor({id: "c3", houseSchedule: "house9", wakeTime: "05:00", bedTime: "20:00"});
+  t.after(() => close(follower));
+  housesRuntime.events.emit("flows:started");
+  assert.deepEqual((follower.context().get("state") as {schedule: unknown}).schedule, {wakeTime: "07:00", bedTime: "23:00"});
+  house.change({kind: "schedule", bedTime: "22:15"});
+  assert.deepEqual((follower.context().get("state") as {schedule: unknown}).schedule, {wakeTime: "07:00", bedTime: "22:15"});
+});
+
+test("activity lighting warns once per deploy when a profile gives values to a light that reports none", async (t) => {
+  const node = new (runtime(registerActivityLighting).Constructor)({area: "lounge", owner: "activity",
+    profiles: JSON.stringify({off: {targets: [], values: {}}, tv: {targets: ["wall", "lamp"], values: {brightnessPct: 25}}}), confirmationTimeoutMs: 15000, maxAttempts: 2});
+  t.after(() => close(node));
+  assert.deepEqual([node.errors, node.warnings], [[], []]);
+  for (const at of [1, 2]) {
+    await receive(node, {activityLighting: {kind: "intent", requestId: `tv-${at}`, generation: at, profile: "tv"}});
+    // The wall reports the profile's level; the lamp only that it is on.
+    await receive(node, {activityLighting: {kind: "observed", generation: at, target: "wall", on: true, values: {brightness: 64}, observedAt: new Date().toISOString()}});
+    await receive(node, {activityLighting: {kind: "observed", generation: at, target: "lamp", on: true, values: {}, observedAt: new Date().toISOString()}});
+  }
+  assert.equal(node.warnings.length, 1, "once per deploy");
+  assert.match(String(node.warnings[0]), /^lamp reports no brightness or colour, so the activity confirms it by its being on/);
+});
+

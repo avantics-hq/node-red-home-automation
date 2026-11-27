@@ -18,7 +18,7 @@ Most home automations translate an event directly into a command. This package a
 ## What it solves
 
 - **Occupancy without flicker:** combine PIR motion with optional presence sensing before changing room state.
-- **Circadian lighting with manual ownership:** calculate circadian brightness and colour temperature without immediately overwriting wall-switch changes.
+- **Circadian lighting with manual ownership:** a circadian lighting policy styles a room's lights over the day, never overwriting a light a person set or an activity holds.
 - **Honest wall inputs:** preserve restart baselines while exposing unconfirmed, stale and unavailable physical-input evidence.
 - **Reliable AV transitions:** coordinate AVR inputs, TV power, projector warm-up and cooldown, and motorised screens from observed state rather than blind toggles.
 - **Honest source readiness:** model controllable, externally controlled, and unavailable playback sources without claiming success from an input selection alone.
@@ -39,19 +39,28 @@ The nodes come in four groups. Each group has an importable example flow
 ### Room lighting
 
 Motion, presence, illuminance and wall switches drive one room's lights, with
-circadian styling and manual ownership. Wire occupancy fusion into the motion
-policy, wall switches into the switch policy, and both policies into the room
-controller. The room controller keeps a light a person set after the room went
+manual ownership, and a circadian lighting policy styles them over the day.
+Wire occupancy fusion into the motion policy, wall switches into the switch
+policy, and both policies and the circadian policy into the room controller. A
+room without a circadian policy styles nothing: its lights just go on and off.
+The room controller keeps a light a person set after the room went
 vacant, so motion doesn't switch it straight off. Without a Node-RED context
 store, a motion node that restarts or is redeployed doesn't know whether the
 room is occupied, so it counts the room as vacant from then: someone sitting
 still in a lit room has the motion-lit lights switched off after the vacancy
 delay unless motion is seen. After a restart the room has also forgotten which
 lights a person set, so it doesn't keep those either. Circadian
-levels follow the room controller's wake and bed times (default 07:00 and
+levels follow the circadian policy's wake and bed times (default 07:00 and
 23:00): they rise over the hour after waking, stay bright and cool through the
 day, and wind down to the sleep settings over the three hours before bed. Times
-are the Node-RED host's local time.
+are the Node-RED host's local time. The policy sends the room a *style* (a
+brightness and colour temperature) once the flows start, every restyle
+interval and at every change; the room uses it for lights it controls, never
+for one a person set or an owner such as an activity holds. One policy can
+style several rooms, or each area can have its own, with its own switches in
+Home Assistant. A light that only switches on and off can be marked
+`"onOffOnly": true` in the room's targets: it is never sent brightness, colour
+or a transition.
 Example: [`Room lighting.json`](https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/Room%20lighting.json).
 
 Wire the room controller's commands to MQTT out unchanged, and observe commands
@@ -70,7 +79,8 @@ way; other rewrites can still be misread.
 | `home-occupancy-fusion` | Combines PIR motion with optional presence sensing. |
 | `home-motion-lighting-policy` | Converts occupancy and illuminance into lighting intent. A `delay` message (in seconds) or `illuminance-cut-off` message overrides its settings until they are changed and redeployed. |
 | `home-switch-lighting-policy` | Converts raw edges or pre-classified button actions into lighting intent while exposing input freshness and availability. |
-| `home-room-lighting-controller` | Owns the room's light commands, adaptive styling, manual and held lights, and lighting state. |
+| `home-circadian-lighting-policy` | Styles rooms over the day: brightness and colour temperature from wake and bed times, sleep mode, and circadian and sleep switches for Home Assistant. |
+| `home-room-lighting-controller` | Owns the room's light commands, manual and held lights, and lighting state, and applies the style it is sent. |
 | `home-shelly-switch` | Connects one switch channel of a Shelly Gen2+ relay as the device is set up: a detached wall switch's presses to the switch policy, or the relay as the light. |
 
 A Shelly Gen2 or later relay behind a wall switch wires straight in through the
@@ -90,18 +100,19 @@ overrides what was read, and decides when the configuration can't be read.
 Example: [`Shelly switch.json`](https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/Shelly%20switch.json).
 
 One house schedule can set the wake and bed times for many rooms. It is a
-configuration node, like an MQTT broker: choose it as a room controller's
-**Schedule** and the room follows it, hearing of every change without wires.
-Those rooms then have no wake and bed time entities of their own in Home
-Assistant. Rooms that need their own times (a child's room, say) choose none.
-Deleting the house schedule in the editor returns its rooms to their own times.
+configuration node, like an MQTT broker: choose it as a circadian lighting
+policy's **Schedule** and the policy follows it, hearing of every change
+without wires. Those policies then have no wake and bed time entities of their
+own in Home Assistant. A policy that needs its own times (a child's room, say)
+chooses none. Deleting the house schedule in the editor returns its policies to
+their own times.
 The optional house schedule MQTT node publishes the schedule's times and Home
 Assistant time entities, and takes changes from them.
 Example: [`House schedule.json`](https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/House%20schedule.json).
 
 | Node | Purpose |
 |---|---|
-| `home-house-schedule` | A configuration node: one wake and bed time for every room that uses it. |
+| `home-house-schedule` | A configuration node: one wake and bed time for every circadian lighting policy that uses it. |
 | `home-house-schedule-mqtt` | Publishes a house schedule for Home Assistant and changes it from Home Assistant. |
 
 ### Home theatre equipment
@@ -264,17 +275,71 @@ Add the installed nodes from the **home automation** section of the Node-RED pal
 
 ### 6.0.0
 
-Requires Node.js 24, and removes what 5.0 kept working for a release. Check
-these after upgrading from 5.x; each shows itself rather than failing silently:
+Circadian lighting becomes its own node, 6.0 requires Node.js 24, and it
+removes what 5.0 kept working for a release. Check these after upgrading from
+5.x; each shows itself rather than failing silently.
+
+**Every room lighting controller needs migrating.** Circadian lighting, sleep,
+the wake and bed times and the house schedule moved from the room controller to
+a new node, the **circadian lighting policy**. A room saved before 6.0 is an
+*invalid configuration* until you migrate it: its lights don't respond to
+anything until then. Every room saved by 5.x has these settings, so migrate
+each one. A room that should stay unstyled needs only step 4. For the others:
+
+1. Add a **circadian lighting policy** from the palette and wire its first
+   output into the room controller. One policy can feed several rooms that
+   share its settings, but its Home Assistant switches and set topics are named
+   after its own area only: rooms in other areas lose their
+   `home/<area>/circadian/set` topics and switches, so give each area that
+   needs its own switches its own policy.
+2. Copy the room's old settings into it: wake and bed times (or its house
+   schedule), the daytime and sleep brightness and kelvin, the refresh
+   transition and interval (now *Restyle transition* and *Restyle interval*),
+   and initial sleep. The room's edit dialog lists its old values.
+3. To keep the Home Assistant switches, give the policy the room's area, switch
+   on **Publish state** and **Home Assistant discovery**, and wire its second
+   output to MQTT out. Move any MQTT in node on `home/<area>/circadian/set`,
+   `…/sleep/set`, `…/wake-time/set` or `…/bed-time/set` from the room to the
+   policy, and any flow sending `{kind: "circadian" | "sleep" | "schedule"}`.
+4. Open the room controller and click **Done**: saving clears its old settings,
+   and it runs again. Deploy it with its policy.
+
+As it starts, the policy clears the circadian, sleep, wake and bed entities
+that rooms in its area published before 6.0, migrated or not, then announces
+its own in the same batch, so Home Assistant can give them the old entity IDs.
+The room clears its own as it starts too. A 5.x room deleted rather than
+migrated is invalid, so it clears nothing: remove its retained topics and
+entities yourself. A room inside a subflow isn't found this way yet
+([#171](https://github.com/avantics-hq/node-red-home-automation/issues/171)):
+migrate it and send it a startup message before you add its policy, so it
+clears its own old entities first. A room without
+a circadian policy just switches its lights on and off. Two further room
+changes come with it:
+
+- **A light can be marked on/off only** with `"onOffOnly": true` in the room's
+  targets: it is never sent brightness, colour or a transition, and values for
+  it are left out with a warning. Activity lighting judges each light by what it
+  reports: one that has never reported brightness or colour temperature since
+  start is confirmed by being on, with a warning once per deploy if a profile
+  gives it values.
+- **An intent's values alone no longer make a light manual**: only
+  `manual: true` does (a wall switch's double press sends it). Before 6.0, an
+  owner-less intent with values made the light manual, so circadian lighting
+  left it alone; now the next style restyles it.
+- **An intent's `refresh: true` no longer changes its transition.** Before 6.0
+  it styled the light over the refresh transition instead of the turn-on one;
+  the circadian policy now sends a new style whenever anything changes.
+
+The other changes:
 
 - **Node.js 24 or newer is required.** Node.js 22 is no longer supported.
 - **Enable inputs take only `true` or `false`.** The motion policy's
-  `area-enabled`, `global-enabled` and `pause`, and the room controller's
-  `{kind: "circadian" | "sleep", enabled}`, no longer read strings such as
-  `"ON"` or `"on"`. Any other value is refused: nothing changes, the node logs
+  `area-enabled`, `global-enabled` and `pause`, and the circadian lighting
+  policy's `{kind: "circadian" | "sleep", enabled}`, no longer read strings such
+  as `"ON"` or `"on"`. Any other value is refused: nothing changes, the node logs
   a warning once per input per deploy, and its status says what was refused.
   Before 6.0 the motion policy read "on" in any case as on and anything else as
-  off, and the room read anything but `true` as off. Home Assistant's own `ON`
+  off, and the room controller read anything but `true` as off. Home Assistant's own `ON`
   and `OFF` on the `…/set` topics are unchanged: the nodes translate them.
 - **Lighting values in Zigbee2MQTT's units are gone.** Intents take only
   `brightnessPct` (0-100) and `colorTempKelvin`: a `brightness` or `color_temp`
@@ -597,11 +662,11 @@ Without a context store, after a node is redeployed or Node-RED restarts:
 
 - **A room forgets which lights are held or manual:** every light an activity
   held, or a person set by hand, is back under the room's control, so the next
-  refresh restyles an activity's lights and lights a person set.
+  style restyles an activity's lights and lights a person set.
 - **Changes made at runtime go back to the node's settings:** for example motion
-  lighting's enable, vacancy delay and lux cutoff, a room's circadian lighting,
-  sleep, and wake and bed times, and the house schedule's times, set from Home
-  Assistant or a message.
+  lighting's enable, vacancy delay and lux cutoff, a circadian policy's
+  circadian lighting, sleep, and wake and bed times, and the house schedule's
+  times, set from Home Assistant or a message.
 - **The theatre starts its counts again:** its counters and operational SLO
   samples restart, and the activity controller no longer knows the current
   activity. At its next startup recovery it works it out from what the devices
@@ -619,16 +684,20 @@ Without a context store, after a node is redeployed or Node-RED restarts:
 
 The room lighting controller gives each target one control state:
 
-- `in-control`: circadian lighting may style and refresh the light (the default).
+- `in-control`: the room styles the light with the style it is sent, such as a
+  circadian lighting policy's (the default).
 - `overridden`: another owner, such as an activity or a scene, holds the light;
-  refresh and circadian changes leave it alone until it is released.
-- `manual`: a person changed the light.
+  styles leave it alone until it is released.
+- `manual`: a person changed the light: an intent with `manual: true` (a wall
+  switch's double press), or someone else's command with values on its command
+  topic. An intent's values alone don't make a light manual. Switching circadian
+  lighting on returns manual lights to `in-control`.
 
 The control states live in the node's context. A room controller that starts
 with nothing saved (its first deploy, or a redeploy or restart without a
 context store) can't know which lights an activity held or a person set, so it
-leaves every light as it is: the periodic refresh restyles a light again only
-once an intent or release names it, someone switches it on with a bare ON, or
+leaves every light as it is: a style restyles a light again only once an
+intent or release names it, someone switches it on with a bare ON, or
 circadian lighting is switched on. A light that is on at that start and that
 nothing names can keep its start-time style all day; to bring it back into step,
 switch circadian lighting on (for example with the Home Assistant circadian
@@ -670,7 +739,8 @@ set it on every lighting message from the node, releases included, or leave it
 to the node's Owner setting.
 
 Release overridden targets (default: all; with `owner`, only that owner's
-lights). Released lights that are on are restyled as a refresh would:
+lights). Released lights that are on are restyled with the room's style, over
+the style's own transition:
 
 ```js
 msg.lighting = {kind: "release", targets: ["wall", "lamp"], owner: "theatre"};
@@ -694,17 +764,22 @@ changes, the controller sends a retained message on its command output:
 ```
 
 Flows that filter that output by topic must pass the `/control` topics through.
-It also publishes the circadian state on `home/<area>/circadian/state`, and
-acts on ON or OFF sent to `home/<area>/circadian/set`, which is where the Home
-Assistant circadian switch sends them: wire an MQTT in node subscribed to that
-topic into the room controller. In the same way it publishes and acts on sleep
-(`home/<area>/sleep/state` and `/set`, ON or OFF) and the wake and bed times
-(`home/<area>/wake-time/state` and `/set`, likewise `bed-time`, as `HH:MM:SS`);
-subscribing to `home/<area>/+/set` covers all four. A time set from Home
-Assistant lasts until the node is deployed with a different setting for it.
-With discovery on, Home Assistant also gets a sleep switch, wake and bed time
-entities (under the device's configuration), and a diagnostic sensor per light
-showing its control state, with the owner as an attribute.
+With discovery on, Home Assistant gets a diagnostic sensor per light showing
+its control state, with the owner as an attribute.
+
+The circadian lighting policy publishes the circadian state on
+`home/<area>/circadian/state`, and acts on ON or OFF sent to
+`home/<area>/circadian/set`, which is where the Home Assistant circadian switch
+sends them: wire an MQTT in node subscribed to that topic into the policy. In
+the same way it publishes and acts on sleep (`home/<area>/sleep/state` and
+`/set`, ON or OFF) and its wake and bed times (`home/<area>/wake-time/state`
+and `/set`, likewise `bed-time`, as `HH:MM:SS`); subscribing to
+`home/<area>/+/set` covers all four. These are the topics the room controller
+used before 6.0. A time set from Home Assistant lasts until the node is
+deployed with a different setting for it. With discovery on, Home Assistant
+gets Circadian lighting and Sleep switches and, with its own times, Wake time
+and Bed time entities, on the policy's own device. The policy's publishing is
+off until you switch it on.
 
 ## Receiver volume ownership
 

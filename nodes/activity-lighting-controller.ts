@@ -9,6 +9,7 @@ import type {
 } from "node-red";
 import {
   normaliseLightingProfiles,
+  VALUES_NOT_REPORTED,
   transitionActivityLighting,
   type ActivityLightingConfig,
   type ActivityLightingMessage,
@@ -89,8 +90,17 @@ const registerActivityLightingController: NodeInitializer = (RED) => {
       }
       updateStatus(result.status);
       schedule(result.state);
+      // Once per deploy: a light the profile gives values to that reports
+      // none of them, confirmed by being on.
+      const unreported = result.traces.find(({reason}) => reason === VALUES_NOT_REPORTED);
+      if (unreported && !warnedUnreported) {
+        warnedUnreported = true;
+        node.warn(`${String((unreported.details as {target: string}).target)} reports no brightness or colour, so the activity confirms it ` +
+          "by its being on, and the profile's values for it may not apply: a light that only switches on and off can be marked onOffOnly on the room");
+      }
       return result;
     }
+    let warnedUnreported = false;
 
     // A pending transition is here only if the node's context survived its
     // stop, which needs a configured context store (see the README); timers

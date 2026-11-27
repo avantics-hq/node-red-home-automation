@@ -128,7 +128,7 @@ return msg;</code></pre></div>
   manual: true,
   values: {brightnessPct: 100}
 };</code></pre></div>
-<p>The room controller resolves <code>TOGGLE</code> per light: off if it last set or saw the light on, otherwise on. A light switched on by a single press gets circadian styling when circadian lighting is on and the light is under the room’s control.</p>
+<p>The room controller resolves <code>TOGGLE</code> per light: off if it last set or saw the light on, otherwise on. A light switched on by a single press gets the room’s style (from a circadian lighting policy) when the room has one and the light is under its control.</p>
 <p>A pre-classified action cancels a raw press still waiting for its window to end.</p>
 </section>
 <section id="ownership"><h2>Presses, motion and manual lights</h2>
@@ -136,7 +136,7 @@ return msg;</code></pre></div>
 <ul class="rule-list">
 <li><strong>Motion keeps its hands off.</strong> The motion policy’s vacancy OFF carries <code>vacantSince</code>. The room controller ignores it for a light a person set after the room went vacant (traced as <code>person-set-after-vacancy</code>).</li>
 <li><strong>Presses reach held lights.</strong> A light held by an owner, such as an activity, ignores owner-less intents like motion, but a press still reaches it.</li>
-<li><strong>A double press makes the light manual.</strong> Circadian refresh then leaves it alone. Enabling circadian lighting returns manual lights to the room’s control.</li>
+<li><strong>A double press makes the light manual.</strong> It sends <code>manual: true</code>, so the room’s style then leaves it alone. Switching circadian lighting on returns manual lights to the room’s control.</li>
 <li><strong>Switching off hands the light back.</strong> A light switched off by a person or its owner returns to <code>in-control</code>.</li>
 </ul>
 <aside class="callout neutral"><strong>Switches don’t go to the motion policy.</strong><p>Switch messages sent to the motion lighting policy are ignored. Wire switches only to the switch policy.</p></aside>

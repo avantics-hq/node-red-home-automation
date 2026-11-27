@@ -76,6 +76,11 @@ export interface ActivityLightingState {
   adoptedGeneration: number | null;
   // The generation a request carried on from (see carryOn).
   carried?: Carried | null;
+  // The value fields each light has reported since the node started, such
+  // as brightness or color_temp. A light that has reported none of a
+  // profile's fields, as one that only switches on and off, is confirmed by
+  // being on; once it has reported one, it is held to the values.
+  reported?: Record<string, string[]>;
 }
 
 export type ActivityLightingEvent =
@@ -136,6 +141,17 @@ function stable(value: unknown): unknown {
 
 // Whether a light's report shows the profile's values. Reports come in the
 // light's own units, so the profile's are converted first (z2m-light).
+// Traced when a light the profile gives values to has never reported any of
+// them since start, so it is confirmed by being on: the node warns once.
+export const VALUES_NOT_REPORTED = "values-not-reported";
+
+// Whether a light has reported any of the profile's fields since start; true
+// when the profile sets none, as then there is nothing but on to check.
+function reportsAnyOf(profileValues: Record<string, unknown>, reported: readonly string[]): boolean {
+  const expected = Object.keys(lightValues(profileValues).values);
+  return expected.length === 0 || expected.some((key) => reported.includes(key));
+}
+
 function valuesMatch(profileValues: Record<string, unknown>, actual: Record<string, unknown>): boolean {
   const expected = lightValues(profileValues).values;
   return Object.entries(expected).every(([key, value]) =>
@@ -227,7 +243,9 @@ function initialState(
     failure: saved.failure && typeof saved.failure === "object" ? {...saved.failure} : null,
     blockedGeneration: Number.isInteger(saved.blockedGeneration) ? saved.blockedGeneration! : null,
     adoptedGeneration: savedAdoptedGeneration(saved),
-    carried: savedCarried(saved)
+    carried: savedCarried(saved),
+    reported: Object.fromEntries(Object.entries(saved.reported || {})
+      .filter(([, fields]) => Array.isArray(fields)).map(([target, fields]) => [target, fields.map(String)]))
   };
 }
 
@@ -341,6 +359,14 @@ export function transitionActivityLighting(
         counts.preserved += 1;
         continue;
       }
+      // A light that has never reported any of the profile's fields (one
+      // that only switches on and off) is confirmed by being on, and traced so
+      // the node can say its values may not apply.
+      if (!reportsAnyOf(profile.values, state.reported?.[target] ?? [])) {
+        trace("observation", "confirmed", VALUES_NOT_REPORTED, {target});
+        counts.matched += 1;
+        continue;
+      }
       if (!valuesMatch(profile.values, observation.values)) {
         if (isAdopted(state)) {
           // An adopted request the lights don't match: someone else's, and
@@ -449,6 +475,12 @@ export function transitionActivityLighting(
       trace("observation", "ignored", "out-of-order", {target: observation.target});
       return;
     }
+    // What it reports since start: which fields, for the profiles' values.
+    const fields = observation.values && typeof observation.values === "object" ? Object.keys(observation.values) : [];
+    const known = state.reported?.[observation.target] ?? [];
+    if (fields.some((field) => !known.includes(field))) {
+      state.reported = {...state.reported, [observation.target]: [...new Set([...known, ...fields])]};
+    }
     state.observed[observation.target] = {
       target: observation.target,
       on: observation.on === true,
@@ -521,6 +553,8 @@ export function transitionActivityLighting(
     trace("refresh", "observing", "ready", {profile: state.desired.profile});
   } else if (event.kind === "startup" || event.kind === "refresh") {
     state.observed = {};
+    // Since start: what each light reports is learned again.
+    if (event.kind === "startup") state.reported = {};
     state.pending = null;
     if (state.desired) {
       if (profileFor(state, config).targets.length === 0) reconcile();

@@ -8,7 +8,7 @@
 
 import type {TraceEntry} from "./bounded-trace";
 import type {DaySchedule} from "./circadian-schedule";
-import {requestedSchedule} from "./room-schedule";
+import {requestedSchedule} from "./circadian-schedule";
 import {keptOverride} from "./settings";
 
 export interface HouseScheduleState {

@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import {scheduledLighting, type CircadianLighting} from "../lib/circadian";
+import {scheduledLighting} from "../lib/circadian";
 import {alreadyStyled, lightCommand} from "../lib/z2m-light";
 import {DEFAULT_BED_TIME, DEFAULT_WAKE_TIME, clockMinutes, resolveSchedule, scheduleLevel} from "../lib/circadian-schedule";
 import {styleAtLevel, type LightLevels} from "../lib/light-styling";
@@ -55,18 +55,14 @@ test("scheduled lighting holds the sleep settings in sleep mode", () => {
   assert.deepEqual(lighting.styleAt(clock(13), true), styleAtLevel(0, levels));
 });
 
-test("the room controller uses whatever circadian lighting it is given", () => {
-  // A different curve is a different implementation, not an edit to the controller.
-  const fixed: CircadianLighting = {
-    styleAt: () => ({brightnessPct: 77 * 100 / 254, colorTempKelvin: 1_000_000 / 333}),
-    withSchedule() { return fixed; }
-  };
+test("a room uses whatever style it is sent: a different curve is a different style source", () => {
   const config: RoomConfig = {
-    area: "room", displayName: "Room", initialSleep: false,
-    targets: [{id: "main", stateTopic: "room/light/main", commandTopic: "room/light/main/set"}],
-    refreshTransitionSeconds: 60, initialTransitionSeconds: 1, lighting: fixed
+    area: "room", displayName: "Room", initialTransitionSeconds: 1,
+    targets: [{id: "main", stateTopic: "room/light/main", commandTopic: "room/light/main/set"}]
   };
-  const result = publishRoom(undefined, {lighting: {kind: "intent", targets: ["main"], state: "ON", source: "motion"}}, config, clock(3));
+  const styled = publishRoom(undefined, {lighting: {kind: "style", source: "fixed", values: {brightnessPct: 77 * 100 / 254, colorTempKelvin: 1_000_000 / 333},
+    transitionSeconds: 60, until: clock(4).toISOString()}}, config, clock(3));
+  const result = publishRoom(styled.state, {lighting: {kind: "intent", targets: ["main"], state: "ON", source: "motion"}}, config, clock(3));
   const command = result.outputs.find((entry) => entry.lighting_command)?.payload as Record<string, unknown>;
   assert.equal(command.brightness, 77);
   assert.equal(command.color_temp, 333);

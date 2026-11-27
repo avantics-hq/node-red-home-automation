@@ -40,8 +40,13 @@
     controller converts them for the light, and a light's report (in its own units) is compared after the same
     conversion. Zigbee2MQTT's own <code>brightness</code> and <code>color_temp</code> were removed in 6.0: a profile
     using them is an invalid configuration.</p>
+  <p>Each light is judged by what it reports. A light that has reported none of a profile's fields since the node
+    started (no brightness, no colour temperature), as one that only switches on and off, is confirmed by being on;
+    once it has reported one, it is held to the profile's values. A profile that gives values to a light that has never
+    reported them gets one warning per deploy: they may not apply. Mark such a light <code>onOffOnly</code> on the
+    room, and the room won't send them.</p>
   <p>While a profile is active, its lights are overridden in the room controller under <b>Owner</b>
-    (default <code>activity</code>), so circadian refresh leaves the activity style alone. When a new profile
+    (default <code>activity</code>), so the room's style (from a circadian lighting policy) leaves the activity's alone. When a new profile
     no longer includes a light, including a switch to an off profile with no targets, the node emits
     <code>{kind: "release", owner, targets}</code> for those lights and the room controller restyles them.
     Give each activity-lighting node that feeds the same room controller its own owner.</p>

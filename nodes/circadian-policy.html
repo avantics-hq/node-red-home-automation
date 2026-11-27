@@ -1,0 +1,140 @@
+<script type="text/javascript">
+  (function () {
+    function clockTime(v) { return /^([01]\d|2[0-3]):[0-5]\d$/.test(String(v || "")); }
+    RED.nodes.registerType("home-circadian-lighting-policy", {
+      category: "home automation",
+      color: "#ffd27f",
+      defaults: {
+        name: {value: ""},
+        // Required only when the node publishes, and then with a letter or
+        // digit, from which its topics are made.
+        area: {value: "", validate: function (v) {
+          var publishing = $("#node-input-publishState").length
+            ? $("#node-input-publishState").prop("checked") || $("#node-input-discovery").prop("checked")
+            : this.publishState === true || this.discovery === true;
+          return !publishing || /[a-z0-9]/i.test(String(v || ""));
+        }},
+        // The house schedule it follows; none: its own wake and bed times.
+        houseSchedule: {value: "", type: "home-house-schedule", required: false},
+        wakeTime: {value: "07:00", validate: function (v) { return Boolean(this.houseSchedule) || clockTime(v); }},
+        bedTime: {value: "23:00", validate: function (v) { return Boolean(this.houseSchedule) || clockTime(v); }},
+        maxBrightnessPct: {value: 100, required: true, validate: RED.validators.number()},
+        maxColorTempKelvin: {value: 6500, required: true, validate: RED.validators.number()},
+        sleepBrightnessPct: {value: 1, required: true, validate: RED.validators.number()},
+        sleepColorTempKelvin: {value: 2200, required: true, validate: RED.validators.number()},
+        refreshTransitionSeconds: {value: 60, required: true, validate: RED.validators.number()},
+        refreshSeconds: {value: 60, required: true, validate: function (v) { return RED.validators.number()(v) && Number(v) >= 10; }},
+        initialSleep: {value: false},
+        publishState: {value: false},
+        discovery: {value: false},
+        discoveryPrefix: {value: "homeassistant", required: true, validate: function (v) { var prefix = String(v || "").trim().replace(/^\/+|\/+$/g, ""); return Boolean(prefix) && !/[+#]/.test(prefix); }},
+        // A new node, so its Home Assistant entities are named after it.
+        idScheme: {value: "node"}
+      },
+      oneditprepare: function () {
+        // Discovery describes the published state, so it needs it.
+        function follow() {
+          var publishing = $("#node-input-publishState").prop("checked");
+          if (!publishing) $("#node-input-discovery").prop("checked", false);
+          $("#node-input-discovery").prop("disabled", !publishing);
+          $("#node-input-area").trigger("change");
+        }
+        $("#node-input-publishState, #node-input-discovery").on("change", follow);
+        follow();
+        // Following a house, the times are the house's.
+        function times() {
+          var own = !$("#node-input-houseSchedule").val() || $("#node-input-houseSchedule").val() === "_ADD_";
+          $(".circadian-own-times").toggle(own);
+        }
+        $("#node-input-houseSchedule").on("change", times);
+        times();
+      },
+      inputs: 1,
+      outputs: 2,
+      outputLabels: ["style, to room lighting controllers", "publications (MQTT out)"],
+      icon: "font-awesome/fa-sun-o",
+      label: function () { return this.name || (this.area ? this.area + " " : "") + "circadian lighting"; }
+    });
+  })();
+</script>
+
+<script type="text/html" data-template-name="home-circadian-lighting-policy">
+  <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
+  <div class="form-row"><label for="node-input-houseSchedule">Schedule</label><input type="text" id="node-input-houseSchedule"></div>
+  <div class="form-row circadian-own-times"><label for="node-input-wakeTime">Wake time</label><input type="text" id="node-input-wakeTime" placeholder="07:00"></div>
+  <div class="form-row circadian-own-times"><label for="node-input-bedTime">Bed time</label><input type="text" id="node-input-bedTime" placeholder="23:00"></div>
+  <div class="form-row"><label for="node-input-maxBrightnessPct">Daytime brightness %</label><input type="number" id="node-input-maxBrightnessPct"></div>
+  <div class="form-row"><label for="node-input-maxColorTempKelvin">Daytime kelvin</label><input type="number" id="node-input-maxColorTempKelvin"></div>
+  <div class="form-row"><label for="node-input-sleepBrightnessPct">Sleep brightness %</label><input type="number" id="node-input-sleepBrightnessPct"></div>
+  <div class="form-row"><label for="node-input-sleepColorTempKelvin">Sleep kelvin</label><input type="number" id="node-input-sleepColorTempKelvin"></div>
+  <div class="form-row"><label for="node-input-refreshTransitionSeconds">Restyle transition (s)</label><input type="number" id="node-input-refreshTransitionSeconds"></div>
+  <div class="form-row"><label for="node-input-refreshSeconds">Restyle interval (s)</label><input type="number" min="10" id="node-input-refreshSeconds"></div>
+  <div class="form-row"><label for="node-input-initialSleep">Start in sleep mode</label><input type="checkbox" id="node-input-initialSleep" style="display:inline-block; width:auto;"></div>
+  <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area" placeholder="needed when publishing"></div>
+  <div class="form-row"><label for="node-input-publishState">Publish state over MQTT</label><input type="checkbox" id="node-input-publishState" style="display:inline-block; width:auto;"></div>
+  <div class="form-row"><label for="node-input-discovery">Home Assistant discovery</label><input type="checkbox" id="node-input-discovery" style="display:inline-block; width:auto;"> <span>(needs Publish state)</span></div>
+  <div class="form-row"><label for="node-input-discoveryPrefix">Discovery prefix</label><input type="text" id="node-input-discoveryPrefix"></div>
+</script>
+
+<script type="text/html" data-help-name="home-circadian-lighting-policy">
+  <p>Works out how lights should look over the day and sends it to room lighting controllers as a <i>style</i>: a
+    brightness and colour temperature for lights that nobody has set otherwise. Wire its first output to one or more
+    room lighting controllers. A room without it styles nothing: its lights just go on and off.</p>
+  <p>The lights rise to the daytime level over the hour after waking, stay there through the day, and wind down to
+    the sleep levels over the three hours before bed. Sleep mode holds the sleep levels whatever the time. Times are
+    the Node-RED host's local time.</p>
+  <h3>What a room does with a style</h3>
+  <p>A style is not a request to change a light: it never switches one on or off, and never reaches a light that an
+    owner (such as an activity) holds or a person set. A room uses it when a light it controls comes on with no values
+    given (motion, a wall-switch press), on each new style for lights that are on, after someone else's bare ON, and
+    when an owner releases a light. Switching circadian lighting on is the one exception: it takes back the lights a
+    person set, even when it is already on, so a flow can send it to bring lights back into step.</p>
+  <p>It sends a style once the flows start, every <b>Restyle interval</b>, at its startup message, and at once when
+    circadian lighting, sleep or the times change. Each style lasts three intervals: if the policy stops (deleted,
+    disabled, or its flow stopped), rooms stop styling soon after. Deleted with a modified deploy, it tells rooms at
+    once. While circadian lighting is off it sends a style with no values, and rooms style nothing.</p>
+  <h3>Inputs</h3>
+  <dl class="message-properties">
+    <dt>lighting.kind = "circadian" or "sleep"</dt>
+    <dd><code>lighting.enabled</code> <code>true</code> or <code>false</code> switches circadian lighting or sleep. Any
+      other value, such as <code>"on"</code>, is refused: nothing changes, and the node logs a warning once per deploy
+      and shows it on its status.</dd>
+    <dt>lighting.kind = "schedule"</dt>
+    <dd><code>lighting.wakeTime</code> and <code>lighting.bedTime</code>, <code>"HH:MM"</code>, either alone. A time set
+      this way lasts until the node is deployed with a different setting for it.</dd>
+    <dt>lighting.kind = "startup"</dt>
+    <dd>Sends the style, and with publishing on, its availability, state and discovery. Send it a few seconds after
+      the flows start, as the examples do.</dd>
+    <dt>topic = home/&lt;area&gt;/circadian/set, home/&lt;area&gt;/sleep/set</dt>
+    <dd><code>ON</code> or <code>OFF</code> from Home Assistant, as <code>lighting.kind = "circadian"</code> or
+      <code>"sleep"</code> does. Read only while <b>Publish state</b> is on. Retained messages and other payloads are
+      ignored.</dd>
+    <dt>topic = home/&lt;area&gt;/wake-time/set or bed-time/set</dt>
+    <dd>A time from Home Assistant, with its own times only.</dd>
+  </dl>
+  <h3>Outputs</h3>
+  <ol class="node-ports">
+    <li>Style, to room lighting controllers: <code>msg.lighting = {kind: "style", source: "circadian", values:
+      {brightnessPct, colorTempKelvin} | null, transitionSeconds, until, takeBack?}</code>.</li>
+    <li>Publications, to an MQTT out node with no topic set: availability on
+      <code>home/&lt;area&gt;/circadian/availability</code>, the circadian and sleep state on
+      <code>home/&lt;area&gt;/circadian/state</code> and <code>home/&lt;area&gt;/sleep/state</code>, its own wake and
+      bed times on <code>home/&lt;area&gt;/wake-time/state</code> and <code>…/bed-time/state</code>, and discovery.</li>
+  </ol>
+  <h3>Settings</h3>
+  <dl class="message-properties">
+    <dt>Schedule</dt><dd>A house schedule, so several rooms share one wake and bed time; none uses its own
+      <b>Wake time</b> and <b>Bed time</b>. Following a house, it has no time entities of its own: the house schedule
+      MQTT node offers them.</dd>
+    <dt>Daytime and sleep brightness and kelvin</dt><dd>The levels at full day and in sleep.</dd>
+    <dt>Restyle transition</dt><dd>How long a room takes to move a light that is on to a new style. A light turning
+      on uses the room's own transition.</dd>
+    <dt>Restyle interval</dt><dd>How often it sends its style, at least 10 seconds.</dd>
+    <dt>Publish state over MQTT, Home Assistant discovery</dt><dd>Off unless switched on. With both on, Home Assistant
+      shows Circadian lighting and Sleep switches and, with its own times, Wake time and Bed time, named after this
+      node. The topics keep the names the room controller used before 6.0, so a flow already writing
+      <code>home/&lt;area&gt;/circadian/set</code> keeps working when this node has that area. Before announcing, it
+      clears the circadian entities older room controllers in its area published, migrated or not, in the same batch,
+      so Home Assistant can give the new ones the same entity IDs.</dd>
+  </dl>
+</script>
