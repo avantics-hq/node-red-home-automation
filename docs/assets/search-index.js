@@ -78,9 +78,9 @@ window.DOCS_SEARCH = [
  {
   "title": "Install",
   "section": "Add it from a release tarball",
-  "description": "Each GitHub Release also attaches the package tarball and its SHA-256 checksum. Check the checksum of the file",
+  "description": "Each GitHub Release also attaches the package tarball and its SHA-256 checksum. Download both into one folder ",
   "url": "install.html#tarball",
-  "text": "Each GitHub Release also attaches the package tarball and its SHA-256 checksum. Check the checksum of the file you downloaded against the one in the release, then add it in either way: In the editor, choose Manage palette → Install → Upload module and pick the tarball. From your Node-RED user directory, install the tarball with npm and restart Node-RED. Terminal · Node-RED user directory npm install /path/to/avantics-node-red-home-automation-<version>.tgz"
+  "text": "Each GitHub Release also attaches the package tarball and its SHA-256 checksum. Download both into one folder and check the tarball there: it prints the tarball’s name and OK . On macOS, use shasum -a 256 -c . Checksum files from releases up to 6.1.0 name it as release/…tgz : put the tarball in a release folder beside the checksum file to check those. Terminal · the folder with both downloads sha256sum -c avantics-node-red-home-automation-<version>.tgz.sha256 Then add it in either way: In the editor, choose Manage palette → Install → Upload module and pick the tarball. From your Node-RED user directory, install the tarball with npm and restart Node-RED. Terminal · Node-RED user directory npm install /path/to/avantics-node-red-home-automation-<version>.tgz"
  },
  {
   "title": "Install",
