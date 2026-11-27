@@ -73,14 +73,14 @@ test("the public scan leaves documentation look-alikes alone", async () => {
   }
 });
 
-test("Pages may name the shelly cover node, but no other device brand or room", async () => {
+test("Pages may name device brands, but no room", async () => {
   const scanText = await scanner();
-  const pageLabel = "deployment-specific room or device label in Pages";
+  const pageLabel = "deployment-specific room name in Pages";
   for (const file of ["docs/guide.html", "docs-src/pages/guide.html"]) {
-    for (const line of ["Wire the shelly cover node", "Shelly Cover adapter", "type home-shelly-cover"]) {
+    for (const line of ["Wire the shelly cover node", "a Shelly relay in detached mode", "Shelly Plus 2PM", "Denon receiver", "type home-shelly-cover"]) {
       assert.deepEqual(scanText(file, line), [], `${file}: ${line}`);
     }
-    for (const line of ["a Shelly relay in cover mode", "Shelly Plus 2PM", "the shelly-covers group", "the Kitchen blind", "Denon receiver"]) {
+    for (const line of ["the Kitchen blind", "Hallway lights", "the lounge receiver"]) {
       assert.deepEqual(scanText(file, line).map(ruleOf), [pageLabel], `${file}: ${line}`);
     }
   }
