@@ -3,7 +3,7 @@
     "id": "example-house-schedule-house-schedule-example",
     "type": "comment",
     "name": "House schedule example",
-    "info": "A house schedule shared by two areas. Each area's circadian lighting policy chooses the house schedule as its Schedule and follows it without wires, and styles its own room. \"wake earlier\" changes the schedule through the optional MQTT node, which publishes its times (wire its output to an MQTT out node, and an MQTT in node on its set topics to its input).",
+    "info": "A house schedule shared by two areas. Each area's circadian lighting policy chooses the house schedule as its Schedule and follows it without wires, and styles its own room. \"wake earlier\" changes the schedule through the optional MQTT node, which publishes its times (wire its output to an MQTT out node, and an MQTT in node on its set topics to its input). Each room reaches its light through a zigbee2mqtt light node: set its friendly name, and wire its first output to MQTT out and an MQTT in node on the light's topics (zigbee2mqtt/<your light>/#) into it.",
     "x": 170,
     "y": 40,
     "wires": []
@@ -110,18 +110,41 @@
     "name": "living room",
     "area": "",
     "displayName": "",
-    "targets": "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]",
+    "targets": "[{\"id\":\"main\"}]",
     "initialTransitionSeconds": 1,
     "x": 600,
     "y": 100,
     "wires": [
       [
         "example-house-schedule-living-commands"
-      ]
+      ],
+      [
+        "example-house-schedule-living-light-main"
+      ],
+      []
     ],
     "publishState": false,
     "discovery": false,
     "idScheme": "node"
+  },
+  {
+    "id": "example-house-schedule-living-light-main",
+    "type": "home-z2m-light",
+    "name": "",
+    "target": "main",
+    "baseTopic": "zigbee2mqtt",
+    "friendlyName": "<your light>",
+    "group": false,
+    "x": 470,
+    "y": 100,
+    "wires": [
+      [
+        "example-house-schedule-living-commands"
+      ],
+      [
+        "example-house-schedule-living"
+      ]
+    ]
   },
   {
     "id": "example-house-schedule-bedroom",
@@ -129,18 +152,41 @@
     "name": "bedroom",
     "area": "",
     "displayName": "",
-    "targets": "[{\"id\":\"main\",\"stateTopic\":\"room/light/main\",\"commandTopic\":\"room/light/main/set\"}]",
+    "targets": "[{\"id\":\"main\"}]",
     "initialTransitionSeconds": 1,
     "x": 600,
     "y": 160,
     "wires": [
       [
         "example-house-schedule-bedroom-commands"
-      ]
+      ],
+      [
+        "example-house-schedule-bedroom-light-main"
+      ],
+      []
     ],
     "publishState": false,
     "discovery": false,
     "idScheme": "node"
+  },
+  {
+    "id": "example-house-schedule-bedroom-light-main",
+    "type": "home-z2m-light",
+    "name": "",
+    "target": "main",
+    "baseTopic": "zigbee2mqtt",
+    "friendlyName": "<your light>",
+    "group": false,
+    "x": 470,
+    "y": 160,
+    "wires": [
+      [
+        "example-house-schedule-bedroom-commands"
+      ],
+      [
+        "example-house-schedule-bedroom"
+      ]
+    ]
   },
   {
     "id": "example-house-schedule-living-commands",

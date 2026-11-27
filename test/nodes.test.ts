@@ -119,6 +119,7 @@ function runtime(
         const emitter = new EventEmitter();
         node.on = emitter.on.bind(emitter);
         node.emit = emitter.emit.bind(emitter);
+        (node as RuntimeNode & {listenerCount?: (event: string) => number}).listenerCount = emitter.listenerCount.bind(emitter);
         node.sent = [];
         node.errors = [];
         node.statuses = [];
@@ -194,9 +195,12 @@ function receive<T>(
 }
 
 // Closes the node, then deals with its context as Node-RED does.
+// As Node-RED does: a node with no close handler is closed at once.
 function close(node: RuntimeNode): Promise<void> {
+  const handlers = (node as RuntimeNode & {listenerCount?: (event: string) => number}).listenerCount?.("close") ?? 1;
   return new Promise<void>((resolve) => {
-    node.emit("close", false, resolve);
+    if (handlers === 0) resolve();
+    else node.emit("close", false, resolve);
   }).then(() => node.closeContext?.());
 }
 
@@ -1029,7 +1033,9 @@ test("the example theatre flow reaches ready with no translation and stays ready
     "home-avr-controller": registerAvr,
     "home-source-capability-controller": registerSource,
     "home-activity-lighting-controller": registerActivityLighting,
-    "home-backlighting-controller": registerBacklighting
+    "home-backlighting-controller": registerBacklighting,
+    "home-room-lighting-controller": registerRoom,
+    "home-z2m-light": registerZ2mLight
   };
 
   // The devices behind the controllers. The display controller reaches its
