@@ -26,7 +26,7 @@ Most home automations translate an event directly into a command. This package a
 - **Bounded receiver volume:** coordinate absolute and relative requests through one transport owner while preserving later physical adjustments.
 - **Recoverable automation:** adopt one fresh, uniquely matching physical activity after lost state; otherwise report the activity as unknown and leave the devices alone until the next request.
 
-![Architecture diagram. Inputs (wall switches, motion and presence sensors, illuminance, and theatre requests over MQTT) feed two groups of nodes. Room lighting: occupancy-fusion, motion-lighting-policy and switch-lighting-policy feed room-lighting-controller, which sends set commands to the lights (for example Zigbee2MQTT) and reads back their observed state. Theatre activities: theatre-state-contract passes activity intents to theatre-activity-controller and publishes retained theatre state and Home Assistant discovery; your flow routes each theatreCommand by target to the theatre equipment controllers (AVR, display mode, source capability, backlighting), which command the devices, or to activity-lighting-controller, which holds room lights; both report target state back to the activity controller.](https://avantics-hq.github.io/node-red-home-automation/images/architecture.svg)
+![Architecture diagram. Inputs (wall switches, motion and presence sensors, illuminance, and theatre requests over MQTT) feed two groups of nodes. Room lighting: occupancy-fusion, motion-lighting-policy and switch-lighting-policy feed room-lighting-controller, which sends neutral commands to each light through its adapter (such as the zigbee2mqtt light node) and reads back the light’s readings. Theatre activities: theatre-state-contract passes activity intents to theatre-activity-controller and publishes retained theatre state and Home Assistant discovery; your flow routes each theatreCommand by target to the theatre equipment controllers (AVR, display mode, source capability, backlighting), which command the devices, or to activity-lighting-controller, which holds room lights; both report target state back to the activity controller.](https://avantics-hq.github.io/node-red-home-automation/images/architecture.svg)
 
 Each controller keeps the desired and the observed state, sends semantic
 commands, and reports done only when fresh observations confirm them.
@@ -63,16 +63,20 @@ Home Assistant. A light that only switches on and off can be marked
 or a transition.
 Example: [`Room lighting.json`](https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/Room%20lighting.json).
 
-Wire the room controller's commands to MQTT out unchanged, and observe commands
-and state as they are wired. The controller watches each light's command topic
-to tell its own commands from other people's, so a function that rewrites them
-on the way makes them look like someone else's. To stop that becoming a loop, a
-bare ON or OFF that arrives within 5 seconds of one of its own commands with that
-power, before that command has come back on the topic, is taken as that command,
-and the controller restyles a light after someone else's bare ON at most once
-every 5 seconds. A person's bare ON or OFF in that moment is taken as the
-controller's own, which changes nothing, as the light is already being set that
-way; other rewrites can still be misread.
+The room controller reaches each light through an adapter: a **zigbee2mqtt
+light** node per Zigbee2MQTT light or group. Wire the room's second output into
+every light's node and each node's second output back into the room; each
+node's first output goes to MQTT out unchanged, and an MQTT in node on the
+light's `<base>/<friendly name>/#` feeds it. The light's node tells the room's
+own commands from other people's on the light's `/set` topic, so a function
+that rewrites them on the way makes them look like someone else's. To stop that
+becoming a loop, a bare ON or OFF that arrives within 5 seconds of one of its
+own commands with that power, before that command has come back on the topic,
+is taken as that command, and the room restyles a light after someone else's
+bare ON at most once every 5 seconds. A person's bare ON or OFF in that moment
+is taken as the room's own, which changes nothing, as the light is already being
+set that way; other rewrites can still be misread. The node also skips a
+restyle the light already shows.
 
 | Node | Purpose |
 |---|---|
@@ -81,6 +85,7 @@ way; other rewrites can still be misread.
 | `home-switch-lighting-policy` | Converts raw edges or pre-classified button actions into lighting intent while exposing input freshness and availability. |
 | `home-circadian-lighting-policy` | Styles rooms over the day: brightness and colour temperature from wake and bed times, sleep mode, and circadian and sleep switches for Home Assistant. |
 | `home-room-lighting-controller` | Owns the room's light commands, manual and held lights, and lighting state, and applies the style it is sent. |
+| `home-z2m-light` | Connects one Zigbee2MQTT light or group to a room controller: the room's neutral commands become Zigbee2MQTT's `/set` messages, and the light's reports become readings. |
 | `home-shelly-switch` | Connects one switch channel of a Shelly Gen2+ relay as the device is set up: a detached wall switch's presses to the switch policy, or the relay as the light. |
 
 A Shelly Gen2 or later relay behind a wall switch wires straight in through the
@@ -276,34 +281,58 @@ Add the installed nodes from the **home automation** section of the Node-RED pal
 
 ### 6.0.0
 
-Circadian lighting becomes its own node, 6.0 requires Node.js 24, and it
-removes what 5.0 kept working for a release. Check these after upgrading from
-5.x; each shows itself rather than failing silently.
+Circadian lighting becomes its own node, the room controller reaches its
+lights through light adapters, 6.0 requires Node.js 24, and it removes what 5.0
+kept working for a release. Check these after upgrading from 5.x; each shows
+itself rather than failing silently.
 
-**Every room lighting controller needs migrating.** Circadian lighting, sleep,
-the wake and bed times and the house schedule moved from the room controller to
-a new node, the **circadian lighting policy**. A room saved before 6.0 is an
-*invalid configuration* until you migrate it: its lights don't respond to
-anything until then. Every room saved by 5.x has these settings, so migrate
-each one. A room that should stay unstyled needs only step 4. For the others:
+**Every room lighting controller needs migrating.** Two things moved out of the
+room controller: circadian lighting, sleep, the wake and bed times and the house
+schedule, to a new **circadian lighting policy**; and each light's Zigbee2MQTT
+topics, to a **zigbee2mqtt light** node per light, which now speaks to the
+light. A room saved before 6.0 is an *invalid configuration* until you migrate
+it, and its lights don't respond to anything until then. Every room saved by
+5.x has both, so migrate each one; its edit dialog lists everything below. One
+edit covers both moves:
 
-1. Add a **circadian lighting policy** from the palette and wire its first
+1. **Its lights.** In the room's dialog, click **Create Zigbee2MQTT light
+   nodes**: it adds a zigbee2mqtt light per light, with the base topic and
+   friendly name read from the light's old topics, wired from the room's light
+   commands (its new second output) and back into the room, its MQTT messages to
+   the MQTT out the room publishes through, and an MQTT in node on the light's
+   topics when that MQTT out shows the broker. Or add them yourself: Target is
+   the light's id, and an MQTT in node on `<base>/<friendly name>/#` feeds each.
+   Delete the old MQTT in nodes on the lights' state and command topics. A light
+   whose topics weren't Zigbee2MQTT's (`<base>/<name>` and `<base>/<name>/set`)
+   is flagged: set it up by hand on the
+   [neutral light contract](#neutral-light-contract). A Zigbee2MQTT group works
+   the same way: tick **Zigbee2MQTT group** on its node.
+2. Add a **circadian lighting policy** from the palette and wire its first
    output into the room controller. One policy can feed several rooms that
    share its settings, but its Home Assistant switches and set topics are named
    after its own area only: rooms in other areas lose their
    `home/<area>/circadian/set` topics and switches, so give each area that
    needs its own switches its own policy.
-2. Copy the room's old settings into it: wake and bed times (or its house
+3. Copy the room's old settings into it: wake and bed times (or its house
    schedule), the daytime and sleep brightness and kelvin, the refresh
    transition and interval (now *Restyle transition* and *Restyle interval*),
    and initial sleep. The room's edit dialog lists its old values.
-3. To keep the Home Assistant switches, give the policy the room's area, switch
+4. To keep the Home Assistant switches, give the policy the room's area, switch
    on **Publish state** and **Home Assistant discovery**, and wire its second
    output to MQTT out. Move any MQTT in node on `home/<area>/circadian/set`,
    `…/sleep/set`, `…/wake-time/set` or `…/bed-time/set` from the room to the
    policy, and any flow sending `{kind: "circadian" | "sleep" | "schedule"}`.
-4. Open the room controller and click **Done**: saving clears its old settings,
-   and it runs again. Deploy it with its policy.
+5. Click **Done**: saving keeps only each light's id in Targets JSON and clears
+   the old circadian settings, and the room runs again. Deploy it with its
+   policy and light nodes. A room that should stay unstyled skips steps 2 to 4.
+
+The room's own output is now three: 1, its MQTT publications (control states,
+availability, discovery), still wired to MQTT out; 2, light commands
+(`msg.light`) for its lights' nodes; 3, each light's reading, for activity
+lighting, which now confirms its lights from them. A flow that filtered the
+room's output by the old command topics must now take the zigbee2mqtt light
+nodes' output instead. The `/set` messages are byte for byte what the room sent
+before, proven by a regression test over 400 generated histories.
 
 As it starts, the policy clears the circadian, sleep, wake and bed entities
 that rooms in its area published before 6.0, migrated or not, then announces
@@ -316,6 +345,10 @@ migrate it and send it a startup message before you add its policy, so it
 clears its own old entities first. A room without
 a circadian policy just switches its lights on and off. Two further room
 changes come with it:
+
+- **A light's availability** from its node (Zigbee2MQTT's availability) is shown
+  on its control state (`available`) and in the room's status, and changes
+  nothing.
 
 - **A light can be marked on/off only** with `"onOffOnly": true` in the room's
   targets: it is never sent brightness, colour or a transition, and values for
@@ -749,7 +782,7 @@ msg.lighting = {kind: "release", targets: ["wall", "lamp"], owner: "theatre"};
 
 A held (`overridden`) light changes only for an intent with an `owner` (its own,
 or a newer owner who takes it over), a person (`manual: true`, an external
-command on the command topic, or a change seen at the light), or a release.
+command on the light (from its adapter), or a change seen at the light), or a release.
 Other intents, such as motion ON or OFF and owner-less values, leave it alone
 and are traced as `ignored held-by`; their other targets are still handled.
 The switch policy marks presses with `person: true`. Owner-less
@@ -781,6 +814,70 @@ deployed with a different setting for it. With discovery on, Home Assistant
 gets Circadian lighting and Sleep switches and, with its own times, Wake time
 and Bed time entities, on the policy's own device. The policy's publishing is
 off until you switch it on.
+
+## Neutral light contract
+
+The room lighting controller speaks to each light through an adapter on
+`msg.light`. The **zigbee2mqtt light** node is one; for any other kind of light,
+a flow (or your own node) that answers the same messages works in its place.
+Every message names its `target`: the light's id in the room's Targets JSON.
+Values are the package's own: brightness in percent, colour temperature in
+kelvin.
+
+From the room (its second output), to every light's adapter, each acting only on
+its own target:
+
+```js
+// Switch a light, with values when given.
+msg.light = {
+  kind: "command", target: "ceiling", state: "ON" | "OFF",
+  brightnessPct?: number,      // 0-100: 0 is the dimmest, not off
+  colorTempKelvin?: number,    // above 0
+  transitionSeconds?: number,  // the fade
+  extra?: {effect: "blink"},   // other fields an intent gave, to pass on as they are
+  restyle?: true,              // a restyle of a light already on (see "skipped")
+  source: "motion",            // who asked
+  id: "42"                     // the room's id for this command
+};
+// Ask for a fresh reading (the room sends one per light at its startup message).
+msg.light = {kind: "observe", target: "ceiling"};
+```
+
+An OFF carries no values. A light marked `onOffOnly` is never sent values or a
+transition.
+
+From the adapter, into the room's input:
+
+```js
+// The light's own report, whenever it reports.
+msg.light = {kind: "observed", target, on: true,
+  brightnessPct?: 25.2, colorTempKelvin?: 2500,  // what it shows, as it reported it
+  fields: ["brightness", "colorTemp"],            // what it reports at all, since start
+  showsLast: true,                                // it shows exactly the last command sent to it
+  observedAt: "<ISO time>"};
+// Someone else's command on the light (power ON, OFF, TOGGLE or "", and whether it sets values).
+msg.light = {kind: "external", target, state: "ON", setsValues: false, observedAt};
+// One of the room's own commands, seen again changed on the way.
+msg.light = {kind: "echo-changed", target, id, state: "ON"};
+// Every restyle answered: skipped, as the light already shows it (with its last report's time), or sent.
+msg.light = {kind: "skipped", target, id, observedAt};
+msg.light = {kind: "sent", target, id};
+// Whether the light is reachable: shown, never acted on.
+msg.light = {kind: "availability", target, online: true};
+```
+
+What the room expects of an adapter:
+- **Its own commands:** never report the light's echo of the room's own command
+  as someone else's. An ON or OFF arriving while one of its own with that power
+  hasn't come back counts as its own, changed on the way.
+- **Someone else's commands:** report them as `external`; with `setsValues`,
+  the room takes the light as a person's change.
+- **Restyles:** answer every `restyle` command with `skipped` or `sent`. Only
+  ever skip a restyle, and only when the light already shows it.
+- **Matching:** `showsLast` and `skipped` are judged in the device's own units.
+  The room and activity lighting never compare values themselves.
+- **No reading support:** an adapter that can't ask its light for a reading
+  ignores `observe`.
 
 ## Receiver volume ownership
 

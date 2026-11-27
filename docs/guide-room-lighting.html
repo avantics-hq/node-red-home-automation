@@ -33,34 +33,32 @@
 </section>
 <section id="wiring"><h2>Wire the room</h2>
 <p>Start from the example: in the Node-RED editor, <strong>Import → Examples</strong>, then <strong>Room lighting</strong>. It wires the policies into the controller, with inject nodes standing in for your sensors and a Debug node standing in for MQTT out. Replace those with your own inputs and broker.</p>
-<figure class="diagram"><div class="wiring-flow"><div class="flow-node">Motion and illuminance<small>occupancy → motion policy</small></div><span class="arrow" aria-hidden="true">+</span><div class="flow-node">Wall switch<small>switch policy</small></div><span class="arrow controller-arrow" aria-hidden="true">→</span><div class="flow-node owner controller">Room lighting controller<small>Intents in · light commands out</small></div><div class="return">Controller output → MQTT out → each light’s command topic</div><div class="flow-node broker-out" style="grid-column:1 / -1">MQTT in<small>Each light’s state topic, tagged as an observation, back to the controller</small></div></div><figcaption>Intents: both policies → controller, side by side. Commands: controller → MQTT out, unchanged. Observations: MQTT in → controller. The table below names every connection.</figcaption></figure>
+<figure class="diagram"><div class="wiring-flow"><div class="flow-node">Motion and illuminance<small>occupancy → motion policy</small></div><span class="arrow" aria-hidden="true">+</span><div class="flow-node">Wall switch<small>switch policy</small></div><span class="arrow controller-arrow" aria-hidden="true">→</span><div class="flow-node owner controller">Room lighting controller<small>Intents in · light commands out</small></div><div class="return">Controller output 2 → each light’s zigbee2mqtt light node → MQTT out</div><div class="flow-node broker-out" style="grid-column:1 / -1">MQTT in → zigbee2mqtt light<small>Each light’s topics; its readings back to the controller</small></div></div><figcaption>Intents: both policies → controller. Light commands: controller output 2 → each light’s node → MQTT out. Readings: each light’s node → controller. The table below names every connection.</figcaption></figure>
 <div class="table-wrap" role="region" aria-label="Room connections; scroll horizontally on a phone" tabindex="0"><table><caption>Room connections</caption><thead><tr><th scope="col">From</th><th scope="col">Connect to</th><th scope="col">Why</th></tr></thead><tbody>
 <tr><td>occupancy fusion output 1</td><td>motion policy input</td><td>Occupancy becomes a lighting intent. Illuminance goes to the motion policy too.</td></tr>
 <tr><td>motion policy output 1</td><td>Controller input</td><td>Motion ON and OFF intents for the policy’s targets.</td></tr>
 <tr><td>switch policy output</td><td>Controller input</td><td>Wall-switch presses, marked as a person’s.</td></tr>
 <tr><td>circadian lighting policy output 1</td><td>Controller input</td><td>The style for lights nobody has set otherwise. Without it the room just switches lights on and off.</td></tr>
-<tr><td>Controller output</td><td>MQTT out</td><td>Light commands on each light’s command topic. Pass them through unchanged.</td></tr>
-<tr><td>MQTT in, each light’s state topic</td><td>Controller input</td><td>The light’s own reports, tagged <code>observed</code>, confirm what it did.</td></tr>
-<tr><td>MQTT in, each light’s command topic</td><td>Controller input</td><td>Commands from anyone else, tagged <code>command-observed</code>, show a person’s change.</td></tr>
+<tr><td>Controller output 1</td><td>MQTT out</td><td>Its publications (control states, availability, discovery), when publishing is on.</td></tr>
+<tr><td>Controller output 2</td><td>Every light’s zigbee2mqtt light node</td><td>Light commands, <code>msg.light</code>; each node acts only on its own Target.</td></tr>
+<tr><td>Each zigbee2mqtt light, output 1</td><td>MQTT out</td><td>The light’s <code>/set</code> messages. Pass them through unchanged.</td></tr>
+<tr><td>Each zigbee2mqtt light, output 2</td><td>Controller input</td><td>The light’s readings, and other people’s commands on it.</td></tr>
+<tr><td>MQTT in on <code>zigbee2mqtt/&lt;device&gt;/#</code></td><td>That light’s zigbee2mqtt light node</td><td>The light’s state, its <code>/set</code> topic and its availability.</td></tr>
+<tr><td>Controller output 3</td><td>Activity lighting, if any</td><td>Each light’s reading with whether a person set it.</td></tr>
 <tr><td>Inject, once after 3 seconds</td><td>Controller input</td><td><code>msg.lighting = {kind: "startup"}</code>, as in the example.</td></tr>
 </tbody></table></div>
 <p>The motion and switch inputs have their own guides: <a href="guide-motion-occupancy.html">Motion and occupancy</a> and <a href="guide-wall-switches.html">Wall switches</a>. In the example both policies light the target <code>main</code>; their target names must match the controller’s.</p>
 <ol class="step-list">
-<li><strong>Name the room’s lights.</strong><p>Set <strong>Targets JSON</strong> on the controller. Each light needs an <code>id</code> (the name the policies use), a <code>stateTopic</code> and a <code>commandTopic</code>; ids must be unique.</p></li>
-<li><strong>Send commands out unchanged.</strong><p>Wire the controller’s output straight to MQTT out on the same broker, with the MQTT out topic left empty so each command goes to its light’s command topic.</p></li>
-<li><strong>Feed the lights’ reports back.</strong><p>Add an MQTT in node on each light’s state topic and tag what it receives as an observation before it reaches the controller. The incoming topic must equal the target’s <code>stateTopic</code>.</p></li>
-<li><strong>Watch the command topics.</strong><p>Add an MQTT in node on each light’s command topic, tagged <code>command-observed</code>. This is how the controller tells its own commands from someone else’s.</p></li>
-<li><strong>Send a startup message.</strong><p>Keep the example’s “room startup” inject, which fires once 3 seconds after a deploy, so the MQTT broker node has usually connected first.</p></li>
+<li><strong>Name the room’s lights.</strong><p>Set <strong>Targets JSON</strong> on the controller, an <code>id</code> per light (the name the policies use); ids must be unique.</p></li>
+<li><strong>Add a zigbee2mqtt light per light.</strong><p>Set its <strong>Target</strong> to the light’s id and its <strong>Friendly name</strong> to the light’s (or group’s) name in Zigbee2MQTT; tick <strong>Zigbee2MQTT group</strong> for a group. See <a href="node-z2m-light.html">Zigbee2MQTT light</a>.</p></li>
+<li><strong>Wire them both ways.</strong><p>The controller’s second output into every light’s node; each node’s second output back into the controller; each node’s first output to MQTT out on the same broker, with the topic left empty.</p></li>
+<li><strong>Feed each light’s node.</strong><p>An MQTT in node on <code>zigbee2mqtt/&lt;device&gt;/#</code> (output: auto-detect) into the light’s node. That brings its reports, other people’s commands on its <code>/set</code> topic, and its availability.</p></li>
+<li><strong>Send a startup message.</strong><p>Keep the example’s “startup” inject, which fires once 3 seconds after a deploy, so the MQTT broker node has usually connected first. The controller then asks each light for a reading.</p></li>
 </ol>
-<div class="code-block"><div class="code-label"><span>MQTT in (state topic) → function → controller · tag a light report</span></div><pre><code>msg.lighting = {kind: "observed"};
-return msg;</code></pre></div>
-<div class="code-block"><div class="code-label"><span>MQTT in (command topic) → function → controller · tag a command</span></div><pre><code>msg.lighting = {kind: "command-observed"};
-return msg;</code></pre></div>
-<p>Retained messages on a command topic are ignored, so only a fresh command counts as someone’s change.</p>
-<div class="code-block"><div class="code-label"><span>Targets JSON · one Zigbee2MQTT light</span></div><pre><code>[{"id": "main",
-  "stateTopic": "zigbee2mqtt/&lt;device&gt;",
-  "commandTopic": "zigbee2mqtt/&lt;device&gt;/set"}]</code></pre></div>
-<aside class="callout"><strong>Don’t rewrite the controller’s commands on the way.</strong><p>The controller watches each command topic to tell its own commands from other people’s, so a function that changes them looks like someone else’s change. A bare ON or OFF that arrives within 5 seconds of one of its own commands with that power, before that command has come back, is taken as its own, and it restyles a light after someone else’s bare ON at most once every 5 seconds. Other rewrites can still be misread.</p></aside>
+<div class="code-block"><div class="code-label"><span>Targets JSON · two lights, one only switching</span></div><pre><code>[{"id": "main"},
+ {"id": "lamp", "onOffOnly": true}]</code></pre></div>
+<aside class="callout"><strong>Don’t rewrite the lights’ commands on the way.</strong><p>Each light’s node watches its <code>/set</code> topic to tell the room’s commands from other people’s, so a function that changes them looks like someone else’s change. A bare ON or OFF that arrives within 5 seconds of one of its own commands with that power, before that command has come back, is taken as its own, and the room restyles a light after someone else’s bare ON at most once every 5 seconds. Other rewrites can still be misread.</p></aside>
+<aside class="callout neutral"><strong>Lights that aren’t Zigbee2MQTT’s.</strong><p>Any flow that answers the room’s <code>msg.light</code> commands with <code>msg.light</code> readings works in place of a zigbee2mqtt light node: see the <a href="node-room-controller.html#light-contract">neutral light contract</a>.</p></aside>
 </section>
 <section id="intents"><h2>What the policies send</h2>
 <p>The policies send <code>msg.lighting</code> intents. You can send the same from an Inject or Function node to try the room before any sensor is wired.</p>
@@ -106,7 +104,7 @@ return msg;</code></pre></div>
 <p>Each light has one control state, and a style only touches lights that are <code>in-control</code>:</p>
 <div class="table-wrap" role="region" aria-label="Control states; scroll horizontally on a phone" tabindex="0"><table><caption>Control states</caption><thead><tr><th scope="col">State</th><th scope="col">Means</th><th scope="col">Back to in-control when</th></tr></thead><tbody>
 <tr><td><code>in-control</code></td><td>The room styles the light with the style it is sent. The default.</td><td>—</td></tr>
-<tr><td><code>manual</code></td><td>A person changed the light: an intent with <code>manual: true</code>, or a command with values seen on its command topic. An intent’s values alone don’t make a light manual.</td><td>It is switched off, or circadian lighting is switched on.</td></tr>
+<tr><td><code>manual</code></td><td>A person changed the light: an intent with <code>manual: true</code>, or someone else’s command on it with values, as its node reports it. An intent’s values alone don’t make a light manual.</td><td>It is switched off, or circadian lighting is switched on.</td></tr>
 <tr><td><code>overridden</code></td><td>Another owner, such as an activity or a scene, holds the light.</td><td>Its owner releases it, or the owner or a person switches it off.</td></tr>
 </tbody></table></div>
 <p>A held light ignores motion ON and OFF and owner-less values; it changes only for an intent with an <code>owner</code>, a person (<code>manual: true</code>, <code>person: true</code>, an external command, or a change seen at the light), or a release. The switch policy marks its presses with <code>person: true</code>, so a wall switch always reaches the light. A dashboard acting for a person should set one of these too.</p>
@@ -143,7 +141,7 @@ return msg;</code></pre></div>
 <tr><td><code>… 1 manual</code> (yellow dot)</td><td>A person set a light; styles leave it alone.</td></tr>
 <tr><td><code>… 1 overridden</code></td><td>An owner such as an activity holds a light.</td></tr>
 </tbody></table></div>
-<p>Wire a Debug node to the controller’s output, as the example does. Each command has the light’s command topic, a payload such as <code>{state: "ON", brightness, color_temp, transition}</code>, and <code>msg.lighting_command</code> naming the target and the source that asked for it.</p>
+<p>Wire a Debug node to a light’s node’s first output, as the example does. Each message has the light’s <code>/set</code> topic and a payload such as <code>{state: "ON", brightness, color_temp, transition}</code>. The controller’s second output shows the same commands as <code>msg.light</code>, naming the target and the source that asked for it.</p>
 <aside class="callout neutral"><strong>After a restart without a context store,</strong><p>the room leaves every light as it is: a style restyles a light only once an intent or release names it, someone switches it on with a bare ON, or circadian lighting is switched on. To bring a light that is on back into step, switch circadian lighting on, or let motion or a wall switch name it.</p></aside>
 <p class="caption">Sources: README Room lighting, Room light control and Recommended setup; room lighting controller editor settings and help; examples/Room lighting.json; observation tagging and status text from the room lighting controller source.</p>
 </section>

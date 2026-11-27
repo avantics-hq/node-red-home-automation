@@ -39,7 +39,7 @@
 <tr><td>cover controller (<code>home-cover-controller</code>)</td><td>Output 4.</td><td><code>home/&lt;area&gt;/cover/&lt;name&gt;/+</code> and, for a position cover, <code>…/position/set</code></td></tr>
 <tr><td>house schedule MQTT (<code>home-house-schedule-mqtt</code>)</td><td>Output 1, its only output.</td><td><code>home/&lt;name&gt;/schedule/wake-time/set</code> and <code>…/bed-time/set</code></td></tr>
 </tbody></table></div>
-<p>The room lighting controller watches each light’s command topic to tell its own commands from other people’s, so a function that rewrites its output on the way makes them look like someone else’s. Flows that filter that output by topic must pass the <code>/control</code> topics through.</p>
+<p>The room lighting controller’s first output carries only its publications; its light commands leave through each light’s adapter. Flows that filter the first output by topic must pass the <code>/control</code> topics through. A light’s control sensor shows its availability as an attribute once its adapter reports it.</p>
 <p>For the cover controller, <code>&lt;name&gt;</code> is its <strong>Name in topics</strong>, which has no default: give each cover in a room its own. For the house schedule MQTT node, <code>&lt;name&gt;</code> is the house schedule’s <strong>Name</strong>, <code>house</code> by default. Use one house schedule MQTT node per schedule: two would share the same topics and entities.</p></section>
 <section id="entities"><h2>Which nodes offer which entities</h2>
 <p>With discovery on, each node announces its own entities, grouped under one Home Assistant device per node.</p>

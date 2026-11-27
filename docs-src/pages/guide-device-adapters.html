@@ -102,13 +102,29 @@ return msg;</code></pre></div>
 </ol>
 <aside class="callout neutral"><strong>No configuration, no guess.</strong><p>If the device doesn’t answer within 10 seconds, the status says <em>configuration unreadable: set Mode</em>, and nothing is passed on until the Mode setting says how.</p></aside>
 </section>
+<section id="zigbee2mqtt-light"><h2>Wire a zigbee2mqtt light</h2>
+<p>The <strong>zigbee2mqtt light</strong> node connects one Zigbee2MQTT light, or a Zigbee2MQTT group, to a <strong>room lighting controller</strong>: the room’s neutral commands become Zigbee2MQTT’s <code>/set</code> messages, exactly as the room sent them before 6.0, and the light’s reports become readings. Use one per light in the room’s Targets JSON.</p>
+<div class="table-wrap" role="region" aria-label="zigbee2mqtt light settings; scroll horizontally on a phone" tabindex="0"><table><caption>zigbee2mqtt light settings</caption><thead><tr><th scope="col">Setting</th><th scope="col">Default</th><th scope="col">What to set</th></tr></thead><tbody>
+<tr><td>Target</td><td>None: required</td><td>The light’s id in the room’s Targets JSON.</td></tr>
+<tr><td>Base topic</td><td><code>zigbee2mqtt</code></td><td>Zigbee2MQTT’s base topic.</td></tr>
+<tr><td>Friendly name</td><td>None: required</td><td>The light’s or group’s name in Zigbee2MQTT.</td></tr>
+<tr><td>Zigbee2MQTT group</td><td>Off</td><td>On for a group.</td></tr>
+</tbody></table></div>
+<ol class="step-list">
+<li><strong>Subscribe to the light’s topics.</strong><p>One MQTT in node on <code>zigbee2mqtt/&lt;device&gt;/#</code> (output: auto-detect) feeds the adapter: the light’s state, its <code>/set</code> topic (to see other people’s commands) and its availability.</p></li>
+<li><strong>Wire it to the room both ways.</strong><p>The room’s second output (light commands) into the adapter; the adapter’s second output (readings) back into the room. One wire from the room can feed every light’s adapter.</p></li>
+<li><strong>Send its messages out.</strong><p>The adapter’s first output to an MQTT out node with no topic set.</p></li>
+</ol>
+<p>A group takes the same commands; Zigbee2MQTT works out its state from what it sent and its members’ reports. A group has no availability and can’t be asked to report. Each light’s availability is shown on its control state and in the room’s status, and changes nothing. A 5.x room’s dialog can create these nodes for its old targets: see the <a href="node-room-controller.html#before-6">room controller</a>. Full reference: <a href="node-z2m-light.html">Zigbee2MQTT light</a>.</p>
+</section>
 <section id="choose"><h2>Choose an adapter</h2>
 <div class="cards">
 <div class="card"><h3>shelly cover</h3><p>A Gen2-or-later relay device in cover mode, calibrated on the device. Position covers only. One MQTT in node on <code>&lt;prefix&gt;/#</code>.</p></div>
 <div class="card"><h3>zigbee2mqtt cover</h3><p>A Zigbee cover paired with Zigbee2MQTT. Position covers, or open, close and stop only. Two MQTT in nodes: the device topic and its availability.</p></div>
+<div class="card"><h3>zigbee2mqtt light</h3><p>A Zigbee light or group paired with Zigbee2MQTT, for a room lighting controller. One MQTT in node on <code>zigbee2mqtt/&lt;device&gt;/#</code>.</p></div>
 <div class="card"><h3>shelly switch</h3><p>A Gen2-or-later relay behind a wall switch: in detached mode, the switch’s presses for the switch policy; otherwise, the relay as the light. One MQTT in node on <code>&lt;prefix&gt;/#</code>.</p></div>
 </div>
-<p>For any other device, the controller’s neutral commands and readings are the contract to map to.</p>
+<p>For any other device, the controller’s neutral commands and readings are the contract to map to; for a light, the room’s <a href="node-room-controller.html#light-contract">neutral light contract</a>.</p>
 </section>
 <section id="check"><h2>Check the result</h2>
 <p>Wire controller output 2 to a Debug node, then watch the adapter’s node status as well.</p>
