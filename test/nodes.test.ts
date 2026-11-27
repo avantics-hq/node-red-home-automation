@@ -21,6 +21,7 @@ import registerRoom from "../nodes/room-controller";
 import registerHouse from "../nodes/house-schedule";
 import registerHouseMqtt from "../nodes/house-schedule-mqtt";
 import registerShellyCover from "../nodes/shelly-cover";
+import registerShellySwitch from "../nodes/shelly-switch";
 import registerZ2mCover from "../nodes/z2m-cover";
 import type {SharedSchedule} from "../lib/house-schedule";
 import registerSource from "../nodes/source-capability-controller";
@@ -2377,5 +2378,23 @@ test("zigbee2mqtt cover node: state reports become cover readings, and cover com
   assert.deepEqual(await receive(node, {topic: "z2m/test-cover/set", payload: {position: 3}}), []);
   // No friendly name: invalid configuration, not a guess.
   const unset = new (runtime(registerZ2mCover).Constructor)({id: "z2"});
+  assert.equal((unset.statuses.at(-1) as {text?: string}).text, "invalid configuration");
+});
+
+// The adapter has no timers, so nothing to close.
+test("shelly switch node: commands become MQTT publications, and status readings go to the backlighting and display outputs", async () => {
+  const node = new (runtime(registerShellySwitch).Constructor)({id: "w1", topicPrefix: "shellyplus1pm-test", channel: "0"});
+  assert.deepEqual(node.errors, []);
+  const command = await receive<SendEnvelope>(node, {backlightingCommand: {operation: "set_power", requestId: "r", generation: 2, power: "on", attempt: 1}});
+  assert.deepEqual((command[0]?.[0] as Array<{topic: string; payload: string}>).map(({topic, payload}) => [topic, payload]),
+    [["shellyplus1pm-test/command/switch:0", "on"]]);
+  const reported = await receive<SendEnvelope>(node, {topic: "shellyplus1pm-test/status/switch:0", payload: {id: 0, output: true, apower: 31.5}});
+  const backlighting = reported[0]?.[1] as Array<{backlighting?: {kind: string; generation: number; power: string}}> | undefined;
+  const display = reported[0]?.[2] as Array<{display?: {kind: string; device: string; watts: number}}> | undefined;
+  assert.deepEqual(backlighting?.map(({backlighting: b}) => [b?.kind, b?.generation, b?.power]), [["observed", 2, "on"]]);
+  assert.deepEqual(display?.map(({display: d}) => [d?.kind, d?.device, d?.watts]), [["observed", "projector", 31.5]]);
+  assert.equal((node.statuses.at(-1) as {text?: string}).text, "on · 31.5 W");
+  // No device prefix: invalid configuration, not a guess.
+  const unset = new (runtime(registerShellySwitch).Constructor)({id: "w2"});
   assert.equal((unset.statuses.at(-1) as {text?: string}).text, "invalid configuration");
 });

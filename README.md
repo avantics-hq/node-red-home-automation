@@ -99,6 +99,7 @@ on output 2. Example: [`Home theatre equipment.json`](https://github.com/avantic
 | `home-display-mode-controller` | Coordinates TV, projector, and screen transitions. |
 | `home-source-capability-controller` | Gates source readiness on fresh availability, active-device, application or playback evidence. |
 | `home-backlighting-controller` | Owns TV-backlight power with observation-gated confirmation. |
+| `home-shelly-switch` | Connects one switch of a Shelly Gen2+ relay or plug, over its own MQTT API, to the backlighting controller, to the display controller as the projector's power meter, or to both. |
 
 The display controller reads the projector's power from any meter or adapter:
 send `msg.display = {kind: "observed", device: "projector", power: "on"}`
@@ -107,6 +108,19 @@ built-in Shelly meter is optional. Without one, it asks for a reading on output
 3 whenever it needs one; wire that to your meter, unless the meter reports on
 its own at least once per query timeout. A device that doesn't report fails
 the request with reason `no-reading`. The node's help has the details.
+
+A Shelly Gen2 or later relay or plug wires straight in through the Shelly
+switch adapter, with no function nodes: an MQTT in node on the device's
+`<prefix>/#` feeds it, and its first output goes to an MQTT out node. For TV
+backlighting, wire the backlighting controller's commands into it and its
+second output back: it sends `on`, `off` and `status_update` on
+`<prefix>/command/switch:<id>`, and turns the switch's output into the
+controller's on or off reading. As the projector's power meter, wire the
+display controller's third output into it and its third output back: each
+query asks the device for a fresh status, and its measured power (`apower`)
+goes to the display as `watts`. While the device is offline, a command or query
+fails at once with reason `offline`. Example:
+[`Shelly switch.json`](https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/Shelly%20switch.json).
 
 For projector mode it opens the screen to its **Screen viewing position**, or,
 left empty (the default for a new node), by the screen's own open command,

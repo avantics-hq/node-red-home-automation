@@ -427,62 +427,69 @@ window.DOCS_SEARCH = [
   "text": "Read the outcome What you see What it means No entities appear Check that discovery and, where the node has it, Publish state are on, the publications output reaches MQTT out, and the discovery prefix matches Home Assistant’s. Send the startup message again: one sent before the broker connected was dropped. Entities show unavailable after a full deploy or restart The node’s own online could not get through. Set the broker node’s birth, close and will messages on its availability topic. A control in Home Assistant does nothing Wire an MQTT in node on the node’s set topics into its input. The room lighting controller reads them only while Publish state is on and the area is set. Entities remain after deleting a node It was removed with a full deploy. Delete the device in Home Assistant. A room has no wake and bed time entities It follows a house schedule. Use the house schedule MQTT node’s entities. To watch what a node publishes, connect its publications output to a Debug node as well as MQTT out. Sources: README 4.0.0 and Upgrading from 2.x notes, Covers , Room light control , Receiver volume ownership and Theatre MQTT contract ; the editor help of each publishing node; the example flows’ startup Inject nodes; lib/theatre-ha-discovery.ts and lib/ha-discovery.ts ."
  },
  {
-  "title": "Connect a cover device",
-  "description": "A device adapter sits between one cover motor and its cover controller. It turns the device’s own MQTT messages into the controller’s neutral readings, and the controller’s neutral commands into messages the device understands.",
+  "title": "Connect a device",
+  "description": "A device adapter sits between one device and its controller. It turns the device’s own MQTT messages into the controller’s neutral readings, and the controller’s neutral commands into messages the device understands.",
   "url": "guide-device-adapters.html",
-  "text": "A device adapter sits between one cover motor and its cover controller. It turns the device’s own MQTT messages into the controller’s neutral readings, and the controller’s neutral commands into messages the device understands."
+  "text": "A device adapter sits between one device and its controller. It turns the device’s own MQTT messages into the controller’s neutral readings, and the controller’s neutral commands into messages the device understands."
  },
  {
-  "title": "Connect a cover device",
+  "title": "Connect a device",
   "section": "Before you wire it",
   "description": "The cover controller ( home-cover-controller ) is device-neutral. It sends commands as msg.cover_command = {op",
   "url": "guide-device-adapters.html#before",
   "text": "The cover controller ( home-cover-controller ) is device-neutral. It sends commands as msg.cover_command = {operation, position, requestId, generation, attempt} , where operation is set_position , stop or observe (read the cover now). An Open, close and stop only cover sends open , close , stop or observe . It expects readings back as msg.cover = {kind: \"observed\", …} and {kind: \"availability\", online} . An adapter does the translation for one kind of device, so the controller never needs to know which device it drives. An adapter has no broker connection of its own: device messages arrive from an MQTT in node, and its publications leave through an MQTT out node. Pick the adapter for your device: the shelly cover node ( home-shelly-cover ) or the zigbee2mqtt cover node ( home-z2m-cover ). Have a broker connection in Node-RED that both the MQTT in and MQTT out nodes use. Both adapters speak the device’s own MQTT messages, with no function nodes. Neither commands the device through Home Assistant. Both adapters report 0 = closed and 100 = open . If your device runs the other way, set Invert positions on the controller."
  },
  {
-  "title": "Connect a cover device",
+  "title": "Connect a device",
   "section": "Wire either adapter the same way",
   "description": "Both adapters have one input and two outputs. Output 1 goes to the device; output 2 goes to the cover controll",
   "url": "guide-device-adapters.html#shape",
   "text": "Both adapters have one input and two outputs. Output 1 goes to the device; output 2 goes to the cover controller. MQTT in The device’s topics → Adapter Device messages ↔ neutral messages ⇄ Cover controller Requests and confirmation Adapter output 1 → MQTT out → device MQTT out Same broker · leave its topic empty Reports: MQTT in → adapter → controller. Commands: controller output 1 → adapter → MQTT out. Four connections for either adapter From Connect to Why MQTT in (output: auto-detect) Adapter input The device’s reports and availability. Controller output 1 Adapter input Neutral device commands. Adapter output 1 MQTT out Same broker; leave the MQTT out topic empty, because each message carries its own topic. Adapter output 2 Controller input Readings and availability for the controller. Anything else that reaches an adapter’s input is ignored."
  },
  {
-  "title": "Connect a cover device",
+  "title": "Connect a device",
   "section": "Wire a shelly cover",
   "description": "The shelly cover node connects a Gen2-or-later relay device in cover mode, over the device’s own MQTT API. The",
   "url": "guide-device-adapters.html#shelly-cover",
   "text": "The shelly cover node connects a Gen2-or-later relay device in cover mode, over the device’s own MQTT API. The covers guide walks through its full wiring; this is the summary. shelly cover settings Setting Default What to set MQTT topic prefix None: required The device’s topic prefix: its device ID unless a custom prefix is set on the device. It cannot contain + or # . Cover ID 0 0 , or 1 for a device’s second cover. Prepare the device. Calibrate the cover on the device. Turn MQTT on with Enable MQTT Control (the default); without it the device ignores the commands. Keep RPC status notifications on (also the default) so each change is reported. Subscribe to the whole prefix. One MQTT in node on <prefix>/# feeds the adapter. It reads <prefix>/status/cover:<id> , change notifications on <prefix>/events/rpc , and availability on <prefix>/online . Keep the controller as a position cover. Leave Cover as “Takes a position (0 to 100)”. The adapter translates set_position , stop and observe ; it does not translate the open and close commands of an Open, close and stop only cover. No position, no guess. A cover that is not calibrated, or does not know its position, has no position to report. The controller’s command in hand fails with reason not-calibrated or position-unknown , and no position is sent to an uncalibrated cover."
  },
  {
-  "title": "Connect a cover device",
+  "title": "Connect a device",
   "section": "Wire a zigbee2mqtt cover",
   "description": "The zigbee2mqtt cover node connects a Zigbee2MQTT cover (a blind, shutter or curtain motor) over Zigbee2MQTT’s",
   "url": "guide-device-adapters.html#zigbee2mqtt",
   "text": "The zigbee2mqtt cover node connects a Zigbee2MQTT cover (a blind, shutter or curtain motor) over Zigbee2MQTT’s MQTT messages. zigbee2mqtt cover settings Setting Default What to set Base topic zigbee2mqtt Zigbee2MQTT’s base topic, unless you changed it in Zigbee2MQTT’s settings. Friendly name None: required The device’s friendly name in Zigbee2MQTT (or its IEEE address if it has none). Neither setting can contain + or # . With no Name , the node is labelled with the friendly name. zigbee2mqtt cover topics Topic Direction Carries <base>/<friendly name> MQTT in → adapter The device’s whole state as JSON. <base>/<friendly name>/availability MQTT in → adapter Online or offline. <base>/<friendly name>/set Adapter → MQTT out Position and open, close or stop commands. <base>/<friendly name>/get Adapter → MQTT out A request for a fresh reading. Add two MQTT in nodes. Subscribe one to <base>/<friendly name> and another to <base>/<friendly name>/availability , both with output auto-detect, and wire both to the adapter. Turn on availability in Zigbee2MQTT. Availability needs Zigbee2MQTT’s availability setting. Without it, the cover is taken as available. The adapter accepts {\"state\": \"online\"} or {\"state\": \"offline\"} , or plain online or offline , and turns it into {kind: \"availability\", online} . Choose the controller’s cover type. See which cover type fits below. The adapter reads each state report like this: Position comes from position , 0 closed and 100 open as Zigbee2MQTT reports by default. If yours runs the other way, set Invert positions on the controller, or the device’s invert_cover option. Motion comes from motor_state ( opening , closing , stopped ; pause reads as stopped), from moving ( UP , DOWN , STOP ), or from running when it is false (stopped). A cover that reports no motion is confirmed by the controller’s Settle time . End state , for a cover with no position, comes from Zigbee2MQTT’s OPEN or CLOSE , but only once its motion says it has stopped: before that, the state can show where it is going rather than where it is. Time : observedAt is when the report arrived, never a time the device gives. Battery and charging status are passed on as reported facts; the controller never acts on them."
  },
  {
-  "title": "Connect a cover device",
+  "title": "Connect a device",
   "section": "Choose the controller’s cover type",
   "description": "The controller’s Cover setting must match what the device reports. Which cover type fits The device Set Cover ",
   "url": "guide-device-adapters.html#cover-type",
   "text": "The controller’s Cover setting must match what the device reports. Which cover type fits The device Set Cover to How a move is confirmed Reports a position (any shelly cover; a zigbee2mqtt cover that reports position ) Takes a position (0 to 100) A stopped report at the target, or the same position for the settle time. Reports no position (a zigbee2mqtt cover with only OPEN / CLOSE ) Open, close and stop only A reported end state, or a move that ran for its Full travel time . With no motion reports either, it cannot be confirmed, and the controller says so. If a position cover receives a reading with no position, the controller’s error says: “observed cover reading has no position: for a cover that reports none, set the cover node’s Cover to \"Open, close and stop only\"”."
  },
  {
-  "title": "Connect a cover device",
+  "title": "Connect a device",
   "section": "What each adapter sends",
   "description": "You send requests such as \"open\" , 60 or \"stop\" to the controller, as in the covers guide . The controller tur",
   "url": "guide-device-adapters.html#commands",
   "text": "You send requests such as \"open\" , 60 or \"stop\" to the controller, as in the covers guide . The controller turns them into neutral commands, and the adapter sends these: Neutral command to device message Controller command shelly cover, on <prefix>/command/cover:<id> zigbee2mqtt cover set_position pos,<0-100> {\"position\": <0-100>} on …/set open Not translated {\"state\": \"OPEN\"} on …/set close Not translated {\"state\": \"CLOSE\"} on …/set stop stop {\"state\": \"STOP\"} on …/set observe status_update : the device reports a fresh status {\"position\": \"\"} on …/get , or {\"state\": \"\"} for a cover with no position Some Zigbee2MQTT devices cannot be read through …/get ; they still report their position whenever it changes. Inject → cover controller · read the cover after a deploy msg.cover = {kind: \"startup\"}; return msg; On startup the controller reads the cover again rather than trusting old state, so the adapter sends its observe message."
  },
  {
-  "title": "Connect a cover device",
+  "title": "Connect a device",
+  "section": "Wire a shelly switch",
+  "description": "The shelly switch node connects one switch of a Gen2-or-later relay or plug, over the device’s own MQTT API. I",
+  "url": "guide-device-adapters.html#shelly-switch",
+  "text": "The shelly switch node connects one switch of a Gen2-or-later relay or plug, over the device’s own MQTT API. It can switch TV backlighting for the backlighting controller , report a projector’s power to the display mode controller as its power meter, or both. It has three outputs: the device’s MQTT messages, readings for the backlighting controller, and readings for the display controller. shelly switch settings Setting Default What to set MQTT topic prefix None: required The device’s topic prefix: its device ID unless a custom prefix is set on the device. It cannot contain + or # . Switch ID 0 0 , or the number of another switch on a device with more than one. Use one node per switch. Prepare the device. Turn MQTT on with Enable MQTT Control (the default); without it the device ignores the commands. Keep RPC status notifications on (also the default). Only devices with power metering report power. Subscribe to the whole prefix. One MQTT in node on <prefix>/# feeds the adapter, and its first output goes to an MQTT out node with no topic set. For backlighting, wire the backlighting controller’s commands into the adapter and the adapter’s second output back to the controller. set_power is sent as on or off ; the switch’s output comes back as the controller’s on or off reading. As the projector’s power meter, leave the display controller’s Projector power meter host empty, wire its third output (projector power queries) into the adapter, and the adapter’s third output back to the display controller. The measured power goes as watts , read against the display’s on and standby watts. Offline is said at once. While the device is offline, a backlighting command or a power query is answered straight away as failed with reason offline , rather than at the controller’s timeout. Back online, the adapter asks the device for a fresh status."
+ },
+ {
+  "title": "Connect a device",
   "section": "Choose an adapter",
   "description": "shelly cover A Gen2-or-later relay device in cover mode, calibrated on the device. Position covers only. One M",
   "url": "guide-device-adapters.html#choose",
-  "text": "shelly cover A Gen2-or-later relay device in cover mode, calibrated on the device. Position covers only. One MQTT in node on <prefix>/# . zigbee2mqtt cover A Zigbee cover paired with Zigbee2MQTT. Position covers, or open, close and stop only. Two MQTT in nodes: the device topic and its availability. For any other device, the controller’s neutral commands and readings are the contract to map to."
+  "text": "shelly cover A Gen2-or-later relay device in cover mode, calibrated on the device. Position covers only. One MQTT in node on <prefix>/# . zigbee2mqtt cover A Zigbee cover paired with Zigbee2MQTT. Position covers, or open, close and stop only. Two MQTT in nodes: the device topic and its availability. shelly switch A Gen2-or-later relay or plug: TV backlighting on and off, a projector’s power meter, or both. One MQTT in node on <prefix>/# . For any other device, the controller’s neutral commands and readings are the contract to map to."
  },
  {
-  "title": "Connect a cover device",
+  "title": "Connect a device",
   "section": "Check the result",
   "description": "Wire controller output 2 to a Debug node, then watch the adapter’s node status as well. Read the outcome What ",
   "url": "guide-device-adapters.html#check",

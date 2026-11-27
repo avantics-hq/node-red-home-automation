@@ -1,0 +1,247 @@
+[
+  {
+    "id": "example-shelly-switch-comment",
+    "type": "comment",
+    "name": "Shelly switch example",
+    "info": "One switch of a Shelly Gen2 relay or plug, with no function nodes. Here it switches TV backlighting for the backlighting controller; its third output carries the same switch's measured power to a display mode controller as the projector's power meter, if you use it for that (wire the display's third output, its projector power queries, into the adapter, and leave the display's Projector power meter host empty). In your flow, replace the injects marked 'from the device' with an MQTT in node subscribed to <prefix>/# (output: auto-detect), and the debug node 'to the MQTT out node' with an MQTT out node, both on your broker. Set the adapter's MQTT topic prefix to your device's (its device ID unless you set one).",
+    "x": 150,
+    "y": 40,
+    "wires": []
+  },
+  {
+    "id": "example-shelly-switch-on",
+    "type": "inject",
+    "name": "backlighting on",
+    "props": [
+      {
+        "p": "backlighting",
+        "v": "{\"kind\":\"intent\",\"requestId\":\"example-backlighting-1\",\"generation\":1,\"power\":\"on\"}",
+        "vt": "json"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 140,
+    "y": 100,
+    "wires": [
+      [
+        "example-shelly-switch-backlighting"
+      ]
+    ]
+  },
+  {
+    "id": "example-shelly-switch-off",
+    "type": "inject",
+    "name": "backlighting off",
+    "props": [
+      {
+        "p": "backlighting",
+        "v": "{\"kind\":\"intent\",\"requestId\":\"example-backlighting-2\",\"generation\":2,\"power\":\"off\"}",
+        "vt": "json"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 140,
+    "y": 140,
+    "wires": [
+      [
+        "example-shelly-switch-backlighting"
+      ]
+    ]
+  },
+  {
+    "id": "example-shelly-switch-backlighting",
+    "type": "home-backlighting-controller",
+    "name": "",
+    "area": "",
+    "pollMs": 2000,
+    "confirmationTimeoutMs": 15000,
+    "maxAttempts": 2,
+    "x": 400,
+    "y": 120,
+    "wires": [
+      [
+        "example-shelly-switch-adapter"
+      ],
+      [
+        "example-shelly-switch-state"
+      ]
+    ]
+  },
+  {
+    "id": "example-shelly-switch-adapter",
+    "type": "home-shelly-switch",
+    "name": "",
+    "topicPrefix": "shellyplus1pm-a8032ab12345",
+    "channel": 0,
+    "x": 660,
+    "y": 200,
+    "wires": [
+      [
+        "example-shelly-switch-to-device"
+      ],
+      [
+        "example-shelly-switch-backlighting"
+      ],
+      [
+        "example-shelly-switch-to-display"
+      ]
+    ]
+  },
+  {
+    "id": "example-shelly-switch-to-device",
+    "type": "debug",
+    "name": "to the MQTT out node",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 900,
+    "y": 160,
+    "wires": []
+  },
+  {
+    "id": "example-shelly-switch-state",
+    "type": "debug",
+    "name": "backlighting state and results",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 660,
+    "y": 100,
+    "wires": []
+  },
+  {
+    "id": "example-shelly-switch-to-display",
+    "type": "debug",
+    "name": "to the display controller",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 920,
+    "y": 240,
+    "wires": []
+  },
+  {
+    "id": "example-shelly-switch-online",
+    "type": "inject",
+    "name": "online, from the device",
+    "props": [
+      {
+        "p": "payload",
+        "v": "true",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "shellyplus1pm-a8032ab12345/online",
+    "x": 190,
+    "y": 260,
+    "wires": [
+      [
+        "example-shelly-switch-adapter"
+      ]
+    ]
+  },
+  {
+    "id": "example-shelly-switch-status",
+    "type": "inject",
+    "name": "switch status, from the device",
+    "props": [
+      {
+        "p": "payload",
+        "v": "{\"id\":0,\"output\":true,\"apower\":140.5}",
+        "vt": "json"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "shellyplus1pm-a8032ab12345/status/switch:0",
+    "x": 200,
+    "y": 300,
+    "wires": [
+      [
+        "example-shelly-switch-adapter"
+      ]
+    ]
+  },
+  {
+    "id": "example-shelly-switch-notify",
+    "type": "inject",
+    "name": "change notification, from the device",
+    "props": [
+      {
+        "p": "payload",
+        "v": "{\"src\":\"shellyplus1pm-a8032ab12345\",\"dst\":\"shellyplus1pm-a8032ab12345/events\",\"method\":\"NotifyStatus\",\"params\":{\"ts\":1764151200,\"switch:0\":{\"id\":0,\"output\":false}}}",
+        "vt": "json"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "shellyplus1pm-a8032ab12345/events/rpc",
+    "x": 210,
+    "y": 340,
+    "wires": [
+      [
+        "example-shelly-switch-adapter"
+      ]
+    ]
+  },
+  {
+    "id": "example-shelly-switch-query",
+    "type": "inject",
+    "name": "projector power query, from a display controller",
+    "props": [
+      {
+        "p": "payload",
+        "v": "query",
+        "vt": "str"
+      },
+      {
+        "p": "display_command",
+        "v": "{\"device\":\"projector\",\"operation\":\"query_power\",\"requestId\":\"example-display-1\",\"generation\":1,\"attempt\":1}",
+        "vt": "json"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 240,
+    "y": 380,
+    "wires": [
+      [
+        "example-shelly-switch-adapter"
+      ]
+    ]
+  }
+]

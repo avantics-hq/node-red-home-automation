@@ -77,7 +77,7 @@ test("Pages may name device brands, but no room", async () => {
   const scanText = await scanner();
   const pageLabel = "deployment-specific room name in Pages";
   for (const file of ["docs/guide.html", "docs-src/pages/guide.html"]) {
-    for (const line of ["Wire the shelly cover node", "a Shelly relay in detached mode", "Shelly Plus 2PM", "Denon receiver", "type home-shelly-cover"]) {
+    for (const line of ["Wire the shelly cover node", "a Shelly relay in detached mode", "Shelly Plus 2PM", "Denon receiver", "type home-shelly-cover", "Wire the shelly switch node", "type home-shelly-switch"]) {
       assert.deepEqual(scanText(file, line), [], `${file}: ${line}`);
     }
     for (const line of ["the Kitchen blind", "Hallway lights", "the lounge receiver"]) {

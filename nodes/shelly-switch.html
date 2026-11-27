@@ -1,0 +1,68 @@
+<script type="text/javascript">
+  RED.nodes.registerType("home-shelly-switch", {
+    category: "home automation",
+    color: "#e2d96e",
+    defaults: {
+      name: {value: ""},
+      // No default: it names the user's own device.
+      topicPrefix: {value: "", required: true, validate: function (v) {
+        var prefix = String(v || "").trim().replace(/^\/+|\/+$/g, "");
+        return prefix !== "" && !/[+#]/.test(prefix);
+      }},
+      channel: {value: 0, required: true, validate: function (v) {
+        return /^\d+$/.test(String(v).trim());
+      }}
+    },
+    inputs: 1,
+    outputs: 3,
+    outputLabels: ["to the device (MQTT out)", "to the backlighting controller", "to the display controller"],
+    icon: "font-awesome/fa-exchange",
+    label: function () { return this.name || "shelly switch"; },
+    paletteLabel: "shelly switch"
+  });
+</script>
+
+<script type="text/html" data-template-name="home-shelly-switch">
+  <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
+  <div class="form-row"><label for="node-input-topicPrefix">MQTT topic prefix</label><input type="text" id="node-input-topicPrefix" placeholder="the device's ID, e.g. shellyplus1pm-a8032ab12345"></div>
+  <div class="form-row"><label for="node-input-channel">Switch ID</label><input type="number" min="0" step="1" id="node-input-channel"></div>
+</script>
+
+<script type="text/html" data-help-name="home-shelly-switch">
+  <p>Connects one switch of a Shelly Gen2 or later relay or plug, over the device's own MQTT API, to a
+    <b>home backlighting controller</b> (which switches it), to a <b>home display mode controller</b> as the projector's
+    power meter, or to both: no function nodes, no Home Assistant and no HTTP.</p>
+  <h3>Wiring</h3>
+  <ol>
+    <li>An <b>MQTT in</b> node subscribed to <code>&lt;prefix&gt;/#</code> (output: auto-detect) → this node.</li>
+    <li>This node's first output → an <b>MQTT out</b> node on the same broker, with no topic set.</li>
+    <li>For backlighting: the backlighting controller's first output (its commands) → this node, and this node's
+      second output → the backlighting controller.</li>
+    <li>As the projector's power meter: leave the display controller's <b>Projector power meter host</b> empty, wire
+      its third output (projector power queries) → this node, and this node's third output → the display controller.</li>
+  </ol>
+  <p>On the device, MQTT must be on with <b>Enable MQTT Control</b> (the default): without it the device ignores
+    the commands this node sends. <b>RPC status notifications</b> (also the default) report each change. Only devices
+    with power metering report power.</p>
+  <h3>Settings</h3>
+  <dl class="message-properties">
+    <dt>MQTT topic prefix</dt><dd>the device's topic prefix: its device ID (such as
+      <code>shellyplus1pm-a8032ab12345</code>) unless a custom one is set on the device.</dd>
+    <dt>Switch ID</dt><dd><code>0</code>, or the number of another switch on a device with more than one. Use one
+      node per switch.</dd>
+  </dl>
+  <h3>What it does</h3>
+  <ul>
+    <li>The backlighting controller's <code>set_power</code> is sent as <code>on</code> or <code>off</code>, and its
+      <code>observe</code>, like the display's power query, as <code>status_update</code>, which makes the device report
+      a fresh status, on <code>&lt;prefix&gt;/command/switch:&lt;id&gt;</code>.</li>
+    <li>The switch's output becomes <code>msg.backlighting = {kind: "observed", generation, power: "on" | "off",
+      observedAt}</code> once the backlighting controller has sent a command, as its readings carry that command's
+      generation.</li>
+    <li>The measured power (<code>apower</code>) becomes <code>msg.display = {kind: "observed", device: "projector",
+      watts, observedAt}</code>, read against the display's on and standby watts.</li>
+    <li>Readings are timed when they arrive. While the device is offline (<code>&lt;prefix&gt;/online</code> false), a
+      command or query is answered at once as failed with reason <code>offline</code>; back online, the node asks for
+      a fresh status.</li>
+  </ul>
+</script>
