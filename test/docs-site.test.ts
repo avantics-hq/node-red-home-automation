@@ -98,3 +98,16 @@ test("every menu entry opens a page on this site, apart from the listed outside 
     }
   }
 });
+
+// Majors from 5 have a section on the releases page; minor and patch releases
+// are described in the GitHub release notes.
+test("the releases page has a section for every major version from 5", () => {
+  const readme = readFileSync(resolve(root, "README.md"), "utf8");
+  const page = readFileSync(resolve(root, "docs-src/pages/releases.html"), "utf8");
+  const majors = [...readme.matchAll(/^### (\d+)\.0\.0$/gm)].map(([, major]) => Number(major)).filter((major) => major >= 5);
+  assert.ok(majors.includes(5), "README has no 5.0.0 notes");
+  for (const major of majors) {
+    assert.ok(page.includes(`<section id="v${major}"><h2>Version ${major}</h2>`),
+      `docs-src/pages/releases.html has no section for version ${major}`);
+  }
+});

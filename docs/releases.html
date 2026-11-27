@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Releases and upgrading · Node-RED Home Automation</title>
+<meta name="description" content="Supported versions, version numbering, and what to do when upgrading to each major version.">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar"><a class="brand" href="index.html"><span class="mark" aria-hidden="true">HA</span>Node-RED Home Automation</a><span class="version">5.0.0</span><button class="menu-button" id="menu-button" aria-controls="menu-drawer" aria-expanded="false">Menu</button><div class="search"><label class="sr-only" for="doc-search">Search the documentation</label><input id="doc-search" type="search" placeholder="Search the documentation…" autocomplete="off" aria-controls="search-results"><p class="sr-only" id="search-status" role="status"></p><div class="search-results" id="search-results" hidden></div></div><a class="source" href="https://github.com/avantics-hq/node-red-home-automation">Source ↗</a></header>
+<dialog id="menu-drawer" aria-labelledby="drawer-title"><div class="drawer-head"><strong id="drawer-title">Documentation</strong><button id="menu-close" autofocus>Close</button></div><nav class="doc-nav" aria-label="Documentation"><div class="nav-group"><p class="nav-label">Get started</p><a href="index.html">Introduction</a><a href="index.html#install">Install</a><a href="guide-room-lighting.html">Your first room</a><a href="index.html#core-ideas">Core ideas</a></div><div class="nav-group"><p class="nav-label">Guides</p><a href="guide-room-lighting.html">Room lighting</a><a href="guide-motion-occupancy.html">Motion and occupancy</a><a href="guide-wall-switches.html">Wall switches</a><a href="guide-house-schedule.html">House schedule</a><a href="guide-covers.html">Covers</a><a href="home-theatre.html">Home theatre</a><a href="guide-home-assistant.html">Home Assistant</a><a href="guide-device-adapters.html">Device adapters</a></div><div class="nav-group"><p class="nav-label">Node reference</p><details><summary>Lighting</summary><a href="guide-room-lighting.html#settings">Room controller</a><a href="guide-motion-occupancy.html#settings">Motion policy</a><a href="guide-wall-switches.html#settings">Switch policy</a></details><details><summary>Sensors and schedule</summary><a href="guide-motion-occupancy.html#wiring">Occupancy fusion</a><a href="guide-house-schedule.html#before">House schedule</a><a href="guide-house-schedule.html#changes">House schedule MQTT</a></details><details><summary>Covers</summary><a href="node-cover-controller.html">Cover controller</a><a href="guide-covers.html#groups">Cover group</a></details><details><summary>Adapters</summary><a href="guide-device-adapters.html#shelly-cover">Shelly cover</a><a href="guide-device-adapters.html#zigbee2mqtt">Zigbee2MQTT cover</a><a href="guide-device-adapters.html#shelly-switch">Shelly switch</a></details></div><div class="nav-group"><p class="nav-label">Contracts</p><a href="contract-examples.html">Contract examples</a></div><div class="nav-group"><p class="nav-label">Project</p><a href="releases.html" aria-current="page">Releases and upgrading</a><a href="roadmap.html">Roadmap</a><a href="https://github.com/avantics-hq/node-red-home-automation/blob/main/CONTRIBUTING.md">Contributing ↗</a></div></nav></dialog>
+<div class="layout"><aside class="sidebar"><nav class="doc-nav" aria-label="Documentation"><div class="nav-group"><p class="nav-label">Get started</p><a href="index.html">Introduction</a><a href="index.html#install">Install</a><a href="guide-room-lighting.html">Your first room</a><a href="index.html#core-ideas">Core ideas</a></div><div class="nav-group"><p class="nav-label">Guides</p><a href="guide-room-lighting.html">Room lighting</a><a href="guide-motion-occupancy.html">Motion and occupancy</a><a href="guide-wall-switches.html">Wall switches</a><a href="guide-house-schedule.html">House schedule</a><a href="guide-covers.html">Covers</a><a href="home-theatre.html">Home theatre</a><a href="guide-home-assistant.html">Home Assistant</a><a href="guide-device-adapters.html">Device adapters</a></div><div class="nav-group"><p class="nav-label">Node reference</p><details><summary>Lighting</summary><a href="guide-room-lighting.html#settings">Room controller</a><a href="guide-motion-occupancy.html#settings">Motion policy</a><a href="guide-wall-switches.html#settings">Switch policy</a></details><details><summary>Sensors and schedule</summary><a href="guide-motion-occupancy.html#wiring">Occupancy fusion</a><a href="guide-house-schedule.html#before">House schedule</a><a href="guide-house-schedule.html#changes">House schedule MQTT</a></details><details><summary>Covers</summary><a href="node-cover-controller.html">Cover controller</a><a href="guide-covers.html#groups">Cover group</a></details><details><summary>Adapters</summary><a href="guide-device-adapters.html#shelly-cover">Shelly cover</a><a href="guide-device-adapters.html#zigbee2mqtt">Zigbee2MQTT cover</a><a href="guide-device-adapters.html#shelly-switch">Shelly switch</a></details></div><div class="nav-group"><p class="nav-label">Contracts</p><a href="contract-examples.html">Contract examples</a></div><div class="nav-group"><p class="nav-label">Project</p><a href="releases.html" aria-current="page">Releases and upgrading</a><a href="roadmap.html">Roadmap</a><a href="https://github.com/avantics-hq/node-red-home-automation/blob/main/CONTRIBUTING.md">Contributing ↗</a></div></nav></aside><main id="main" tabindex="-1">
+<nav class="breadcrumb" aria-label="Breadcrumb"><a href="index.html">Docs</a><span aria-hidden="true">/</span><span>Project</span></nav><p class="page-kind">Project</p><h1>Releases and upgrading</h1><p class="lead">Which Node-RED and Node.js versions the package needs, how its versions are numbered, and what each major version changes and asks of you. The GitHub release notes have the detail of every release.</p>
+<details class="mobile-toc"><summary>On this page</summary><a href="#supported">Supported versions</a><a href="#numbering">How versions are numbered</a><a href="#upgrade">How to upgrade</a><a href="#v5">Version 5</a></details>
+<div class="meta"><span class="tag">Project</span><a class="tag" href="https://github.com/avantics-hq/node-red-home-automation/releases">GitHub release notes ↗</a></div>
+<section id="supported"><h2>Supported versions</h2>
+<p>The package needs Node-RED 5.0.0 or newer. From the release after 5.0.0, it also needs Node.js 24 or newer.</p>
+<div class="table-wrap" role="region" aria-label="Supported versions; scroll horizontally on a phone" tabindex="0"><table><caption>Supported versions</caption><thead><tr><th scope="col">Package</th><th scope="col">Node-RED</th><th scope="col">Node.js</th></tr></thead><tbody>
+<tr><td>5.0.0</td><td>5.0.0 or newer</td><td>22.9 or newer</td></tr>
+<tr><td>The next release</td><td>5.0.0 or newer</td><td>24 or newer</td></tr>
+</tbody></table></div>
+<p>Node-RED 5 itself runs on Node.js 22.9 or newer; this package asks for 24. Check your Node.js version before you update the package.</p>
+</section>
+<section id="numbering"><h2>How versions are numbered</h2>
+<ul class="rule-list">
+<li><strong>Major: the first number</strong><p>A change that a flow, a saved node or an installation must act on: for example, raising the Node.js version the package needs, or removing old units or setting names.</p></li>
+<li><strong>Minor: the second number</strong><p>New nodes and features.</p></li>
+<li><strong>Patch: the third number</strong><p>Fixes.</p></li>
+</ul>
+<p>An old form, such as an old unit or setting name, keeps working through the rest of its major series, with a warning in the log where it can. It is removed in the next major version. This page has a section for each major version; minor and patch releases are described in the <a href="https://github.com/avantics-hq/node-red-home-automation/releases">GitHub release notes</a>.</p>
+</section>
+<section id="upgrade"><h2>How to upgrade</h2>
+<ol class="step-list">
+<li><strong>Read before you update.</strong><p>Read the section below for each major version you cross, the <a href="#supported">supported versions</a>, and the GitHub release notes for the releases in between.</p></li>
+<li><strong>Update the package.</strong><p>In Node-RED, open <strong>Manage palette</strong> and update <code>@avantics/node-red-home-automation</code> there. Or, from your Node-RED user directory, install the version you want and restart Node-RED.</p></li>
+<li><strong>Pin the version you use.</strong><p>Name the exact version, so a later install doesn’t move you on before you have read its notes.</p></li>
+<li><strong>Check your flows.</strong><p>Open and save the nodes the notes mention, and watch the log for warnings about old forms.</p></li>
+</ol>
+<div class="code-block"><div class="code-label"><span>Terminal · from your Node-RED user directory</span></div><pre><code>npm install @avantics/node-red-home-automation@5.0.0</code></pre></div>
+<p>Each <a href="https://github.com/avantics-hq/node-red-home-automation/releases">GitHub Release</a> also attaches the package tarball and its SHA-256 checksum, which <strong>Manage palette → Install → Upload module</strong> accepts.</p>
+</section>
+<section id="v5"><h2>Version 5</h2>
+<p>5.0 separates the decisions from the devices they drive. Requests to lights and the receiver use plain units (percent, kelvin and dB) instead of Zigbee2MQTT’s brightness and mireds and the receiver’s 0-98 scale, so the decisions no longer depend on one kind of device. The display controller’s settings are named by role, and the projector’s power can come from any meter. It also adds the shelly cover adapter, and fixes theatre recovery and screen handling.</p>
+<h3>When you upgrade from 4.x</h3>
+<ul>
+<li><strong>Lighting values:</strong> send <code>brightnessPct</code> (0-100) and <code>colorTempKelvin</code> in lighting intents and activity lighting profiles. Brightness 64 becomes 25%, and <code>color_temp</code> 400 becomes 2500 K (1,000,000 ÷ mireds). 0% is the dimmest level, not off.</li>
+<li><strong>Receiver volume:</strong> send <code>valueDb</code> in volume requests (80 on the receiver’s 0-98 scale is 0 dB). Open and save the AVR controller to store its volume bounds in dB, and update any flow or automation that reads the published volume, which is now in dB.</li>
+<li><strong>Display controller:</strong> open and save it to store its renamed settings. Without the built-in power meter host, wire its new third output to ask your meter for the projector’s power.</li>
+<li><strong>Screen:</strong> a saved viewing position must be above 0 and at most 100, or empty; with none, the screen opens fully with its own command.</li>
+<li><strong>Code that imports the package’s files directly:</strong> the display transport moved to <code>dist/lib/transports/display-transport</code>. Only the nodes are a public interface.</li>
+</ul>
+<h3>Deprecated, removed in the next major version</h3>
+<div class="table-wrap" role="region" aria-label="Deprecated in version 5; scroll horizontally on a phone" tabindex="0"><table><caption>Deprecated in version 5</caption><thead><tr><th scope="col">Old form</th><th scope="col">Use instead</th><th scope="col">Warning in the log</th></tr></thead><tbody>
+<tr><td><code>brightness</code> (1-254) and <code>color_temp</code> (mireds) in lighting intents and activity lighting profiles</td><td><code>brightnessPct</code> and <code>colorTempKelvin</code></td><td>Yes</td></tr>
+<tr><td><code>value</code> on the receiver’s 0-98 scale in volume requests</td><td><code>valueDb</code></td><td>Yes</td></tr>
+<tr><td>The display controller’s saved setting <code>projectorMeterHost</code></td><td>Open and save the node, which stores it as <code>projectorPowerMeterHost</code></td><td>No</td></tr>
+</tbody></table></div>
+<p>Details: <a href="https://github.com/avantics-hq/node-red-home-automation/releases/tag/v5.0.0">5.0.0 release notes</a> and the <a href="https://github.com/avantics-hq/node-red-home-automation#500">README’s 5.0.0 notes</a>.</p>
+<p class="caption">Sources: README Requirements and 5.0.0 notes; package.json; CONTRIBUTING Releases.</p>
+</section>
+<footer class="page-footer"><span>Package 5.0.0 · MIT</span><a href="https://github.com/avantics-hq/node-red-home-automation#readme">Read the README ↗</a></footer>
+</main><aside class="toc" aria-label="On this page"><p>On this page</p><a href="#supported">Supported versions</a><a href="#numbering">How versions are numbered</a><a href="#upgrade">How to upgrade</a><a href="#v5">Version 5</a></aside></div>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

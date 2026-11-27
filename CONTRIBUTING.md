@@ -177,16 +177,21 @@ require 2FA and disallow tokens.
 
 Documentation-only commits do not receive package tags or releases.
 
-Fixes bump the patch number, and features the minor. For now, breaking changes
-also bump the minor version rather than the major, so improvements keep rolling
-out; every breaking change is called out under "Behaviour change" in the GitHub
-Release notes. Cut a release when a group
-of user-noticeable fixes or a feature has merged, not on every merge. The
-version-bump pull request updates every place that names the current version:
-`package.json`, both root entries in `package-lock.json` (`npm version <x.y.z>
---no-git-tag-version`), the README install line and the version placeholder in
-`.github/ISSUE_TEMPLATE/bug.yml`, then runs `npm run docs`, which writes the new
-version into every documentation page.
+Fixes bump the patch number, and new nodes and features the minor. A change
+that a flow, a saved node or an installation must act on, such as raising the
+Node.js version the package needs or removing an old unit or setting name,
+bumps the major. An old form keeps working through the rest of its major series,
+with a warning where possible, and is removed in the next major. Cut a release
+when a group of user-noticeable fixes or a feature has merged, not on every
+merge. The version-bump pull request updates every place that names the current
+version: `package.json`, both root entries in `package-lock.json` (`npm version
+<x.y.z> --no-git-tag-version`), the README install line and the version
+placeholder in `.github/ISSUE_TEMPLATE/bug.yml`, and adds the release's notes to
+the README. A major release also adds its section to
+`docs-src/pages/releases.html`: what changed and why, what to do when
+upgrading, and what is deprecated for the next major (a test checks each major
+from 5 has one). Then run `npm run docs`, which writes the new version into every
+documentation page.
 
 ## Repository boundaries
 

@@ -578,6 +578,40 @@ window.DOCS_SEARCH = [
   "text": "Policy before transport Sensor and user events become semantic outcomes before a target owner selects a protocol. Evidence before ready Command acceptance never substitutes for a fresh observation of the required state. Finite state Timers, retries, generations and traces remain bounded and stale work stays inert. Privacy boundary Every identifier, topic, profile, timestamp and coordinate in these examples is synthetic. The examples contain no device inventory, addresses, credentials, entity identifiers, flow exports or operational records."
  },
  {
+  "title": "Releases and upgrading",
+  "description": "Supported versions, version numbering, and what to do when upgrading to each major version.",
+  "url": "releases.html",
+  "text": "Which Node-RED and Node.js versions the package needs, how its versions are numbered, and what each major version changes and asks of you. The GitHub release notes have the detail of every release."
+ },
+ {
+  "title": "Releases and upgrading",
+  "section": "Supported versions",
+  "description": "The package needs Node-RED 5.0.0 or newer. From the release after 5.0.0, it also needs Node.js 24 or newer. Su",
+  "url": "releases.html#supported",
+  "text": "The package needs Node-RED 5.0.0 or newer. From the release after 5.0.0, it also needs Node.js 24 or newer. Supported versions Package Node-RED Node.js 5.0.0 5.0.0 or newer 22.9 or newer The next release 5.0.0 or newer 24 or newer Node-RED 5 itself runs on Node.js 22.9 or newer; this package asks for 24. Check your Node.js version before you update the package."
+ },
+ {
+  "title": "Releases and upgrading",
+  "section": "How versions are numbered",
+  "description": "Major: the first number A change that a flow, a saved node or an installation must act on: for example, raisin",
+  "url": "releases.html#numbering",
+  "text": "Major: the first number A change that a flow, a saved node or an installation must act on: for example, raising the Node.js version the package needs, or removing old units or setting names. Minor: the second number New nodes and features. Patch: the third number Fixes. An old form, such as an old unit or setting name, keeps working through the rest of its major series, with a warning in the log where it can. It is removed in the next major version. This page has a section for each major version; minor and patch releases are described in the GitHub release notes ."
+ },
+ {
+  "title": "Releases and upgrading",
+  "section": "How to upgrade",
+  "description": "Read before you update. Read the section below for each major version you cross, the supported versions , and ",
+  "url": "releases.html#upgrade",
+  "text": "Read before you update. Read the section below for each major version you cross, the supported versions , and the GitHub release notes for the releases in between. Update the package. In Node-RED, open Manage palette and update @avantics/node-red-home-automation there. Or, from your Node-RED user directory, install the version you want and restart Node-RED. Pin the version you use. Name the exact version, so a later install doesn’t move you on before you have read its notes. Check your flows. Open and save the nodes the notes mention, and watch the log for warnings about old forms. Terminal · from your Node-RED user directory npm install @avantics/node-red-home-automation@5.0.0 Each GitHub Release also attaches the package tarball and its SHA-256 checksum, which Manage palette → Install → Upload module accepts."
+ },
+ {
+  "title": "Releases and upgrading",
+  "section": "Version 5",
+  "description": "5.0 separates the decisions from the devices they drive. Requests to lights and the receiver use plain units (",
+  "url": "releases.html#v5",
+  "text": "5.0 separates the decisions from the devices they drive. Requests to lights and the receiver use plain units (percent, kelvin and dB) instead of Zigbee2MQTT’s brightness and mireds and the receiver’s 0-98 scale, so the decisions no longer depend on one kind of device. The display controller’s settings are named by role, and the projector’s power can come from any meter. It also adds the shelly cover adapter, and fixes theatre recovery and screen handling. When you upgrade from 4.x Lighting values: send brightnessPct (0-100) and colorTempKelvin in lighting intents and activity lighting profiles. Brightness 64 becomes 25%, and color_temp 400 becomes 2500 K (1,000,000 ÷ mireds). 0% is the dimmest level, not off. Receiver volume: send valueDb in volume requests (80 on the receiver’s 0-98 scale is 0 dB). Open and save the AVR controller to store its volume bounds in dB, and update any flow or automation that reads the published volume, which is now in dB. Display controller: open and save it to store its renamed settings. Without the built-in power meter host, wire its new third output to ask your meter for the projector’s power. Screen: a saved viewing position must be above 0 and at most 100, or empty; with none, the screen opens fully with its own command. Code that imports the package’s files directly: the display transport moved to dist/lib/transports/display-transport . Only the nodes are a public interface. Deprecated, removed in the next major version Deprecated in version 5 Old form Use instead Warning in the log brightness (1-254) and color_temp (mireds) in lighting intents and activity lighting profiles brightnessPct and colorTempKelvin Yes value on the receiver’s 0-98 scale in volume requests valueDb Yes The display controller’s saved setting projectorMeterHost Open and save the node, which stores it as projectorPowerMeterHost No Details: 5.0.0 release notes and the README’s 5.0.0 notes . Sources: README Requirements and 5.0.0 notes; package.json; CONTRIBUTING Releases."
+ },
+ {
   "title": "Roadmap",
   "description": "The public progress record: released components and the milestone roadmap.",
   "url": "roadmap.html",
