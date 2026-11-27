@@ -28,8 +28,9 @@ const registerZ2mLight: NodeInitializer = (RED) => {
     onInput(node, (msg, send) => {
       const result = runReducer(node, trace, (saved: Partial<Z2mLightState> | undefined, now) => {
         const decided = transitionZ2mLight(saved, msg, light, now);
-        // Another light's command: nothing to keep or trace.
-        return decided.ignored ? {state: saved ?? decided.state, traces: []} : decided;
+        // Another light's command: nothing to keep or trace, and the result
+        // still says it was ignored.
+        return decided.ignored ? {...decided, state: saved ?? decided.state, traces: []} : decided;
       }) as ReturnType<typeof transitionZ2mLight>;
       if (result.ignored) return;
       // MQTT publications for the device on output 1, for an MQTT out node;
