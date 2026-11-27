@@ -270,8 +270,17 @@ npm install @avantics/node-red-home-automation
 ```
 
 Each [GitHub Release](https://github.com/avantics-hq/node-red-home-automation/releases)
-also attaches the package tarball and its SHA-256 checksum. Install a downloaded
-tarball through **Manage palette → Install → Upload module**, or with:
+also attaches the package tarball and its SHA-256 checksum. Download both into
+one folder and check the tarball there (on macOS, `shasum -a 256 -c` instead):
+
+```sh
+sha256sum -c avantics-node-red-home-automation-<version>.tgz.sha256
+```
+
+It prints the tarball's name and `OK`. Checksum files from releases up to
+6.1.0 name it as `release/…tgz`: put the tarball in a `release` folder beside
+the checksum file to check those. Install a downloaded tarball through
+**Manage palette → Install → Upload module**, or with:
 
 ```sh
 npm install /path/to/avantics-node-red-home-automation-6.1.0.tgz

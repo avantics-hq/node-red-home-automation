@@ -140,8 +140,11 @@ jobs:
           test "${GITHUB_REF_NAME}" = "v${version}"
           mkdir release
           npm pack --pack-destination release
-          package_file="release/avantics-node-red-home-automation-${version}.tgz"
-          sha256sum "${package_file}" > "${package_file}.sha256"
+          package_name="avantics-node-red-home-automation-${version}.tgz"
+          package_file="release/${package_name}"
+          # From inside release/, so the checksum file names the tarball alone
+          # and sha256sum -c works next to a downloaded copy.
+          (cd release && sha256sum "${package_name}" > "${package_name}.sha256")
           echo "file=${package_file}" >> "${GITHUB_OUTPUT}"
 
       - name: Stage npm release
