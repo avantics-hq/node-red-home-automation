@@ -1,6 +1,5 @@
 <!--{
  "title": "Wire wall switches",
- "kind": "Guides / Wall switches",
  "lead": "Turn wall switch flips and button presses into lighting requests through the switch lighting policy node. A single press toggles the room’s lights; a double press sets them to full brightness and marks them as set by a person.",
  "description": "",
  "htmlTitle": "Wire wall switches · Node-RED Home Automation"
@@ -165,6 +164,5 @@ return msg;</code></pre></div>
 <tr><td><code>switch unavailable</code></td><td>The switch was reported unavailable.</td></tr>
 </tbody></table></div>
 <p>Connect a Debug node to the policy’s output and press the switch: a single press shows a <code>TOGGLE</code> intent; a double press shows the full-brightness <code>ON</code> intent. Then check the room controller’s commands reach the light.</p>
-</section>
 <p class="caption">Sources: README “Room lighting” and “Room light control”; the switch lighting policy, motion lighting policy, room lighting controller and cover controller help; <code>contract-examples/switch-gestures.mjs</code>; <code>examples/Room lighting.json</code>.</p>
-<nav class="pager" aria-label="Adjacent pages"><a href="guide-motion-occupancy.html"><small>Previous</small>← Motion and occupancy</a><a href="guide-house-schedule.html"><small>Continue</small>House schedule →</a></nav>
+</section>

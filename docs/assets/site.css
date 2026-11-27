@@ -46,9 +46,6 @@ small{font-size:.78rem}
 .doc-nav a{display:block;padding:6px 10px;font-size:.85rem;line-height:1.5;text-decoration:none;color:var(--muted);border-radius:5px}
 .doc-nav a:hover{color:var(--text);background:var(--bg)}
 .doc-nav a[aria-current=page]{background:var(--accent-soft);color:var(--text);font-weight:650;border-left:2px solid var(--accent);padding-left:8px}
-.doc-nav details{font-size:.85rem;color:var(--muted)}
-.doc-nav summary{cursor:pointer;padding:6px 10px}
-.doc-nav details a{margin-left:15px;font-size:.81rem}
 main{min-width:0;padding:40px clamp(24px,4vw,64px) 32px;max-width:930px;width:100%;margin:auto auto 0;align-self:start;margin-top:0}
 .breadcrumb{font-size:.78rem;color:var(--muted);margin-bottom:24px;display:flex;gap:9px}
 .breadcrumb a{text-decoration:none;color:var(--muted)}
