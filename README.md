@@ -478,9 +478,8 @@ Version 3.0 changed some behaviour, and later versions added to it. Check these 
   so set the MQTT broker node's **Birth message** to `online`, and its **Close message** and **Will message** (which
   covers crashes) to `offline`, all retained, on the same topic; with several publishing nodes, the broker can cover
   one of them. With discovery on, each publishing node also announces its Home Assistant entries once the flows have
-  started, just before its `online`, and again at its startup message; the theatre state contract announces its
-  entries only at its startup message. The theatre's readiness (`unknown`, `available`, `degraded`
-  or `unavailable`), which used `<base>/availability` before, is now on `<base>/readiness`.
+  started, just before its `online`, and again at its startup message. The theatre's readiness (`unknown`,
+  `available`, `degraded` or `unavailable`), which used `<base>/availability` before, is now on `<base>/readiness`.
 
 ## Theatre MQTT contract
 

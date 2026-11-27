@@ -1487,7 +1487,9 @@ test("availability: a node redeployed on its own is available again without a st
   const again = new contractRuntime.Constructor({area: "lounge", activities: "[\"off\"]"});
   t.after(() => close(again));
   contractRuntime.events.emit("flows:started");
-  assert.deepEqual(again.sent, [[null, [{topic: "home/lounge/theatre/availability", payload: "online", retain: true}]]]);
+  assert.equal(again.sent.length, 1);
+  const againSent = (again.sent[0] as Array<Array<{topic: string; payload: unknown; retain: boolean}> | null>)[1] ?? [];
+  assert.deepEqual(againSent.at(-1), {topic: "home/lounge/theatre/availability", payload: "online", retain: true});
   // A node closed before the flows start announces nothing.
   const closedEarly = new contractRuntime.Constructor({area: "den", activities: "[\"off\"]"});
   await close(closedEarly);
@@ -1607,6 +1609,39 @@ test("discovery: a room announces its Home Assistant entries when the flows star
   const off = new roomRuntime.Constructor({id: "off", ...settings, discovery: false});
   t.after(() => close(off));
   roomRuntime.events.emit("flows:started");
+  assert.deepEqual(entries(off.sent), []);
+});
+
+test("discovery: a theatre state contract announces its Home Assistant entries when the flows start, without a startup message, and again after a modified deploy", async (t) => {
+  const contractRuntime = runtime(registerTheatreStateContract);
+  type Publication = {topic: string; payload: unknown};
+  const published = (sent: unknown[]) => sent.flatMap((envelope) => (envelope as Array<Publication[] | null>)[1] ?? []);
+  const entries = (sent: unknown[]) => published(sent)
+    .filter(({topic, payload}) => topic.endsWith("/config") && payload !== "").map(({topic}) => topic);
+  const settings = {id: "t1", idScheme: "node", area: "lounge", activities: "[\"off\",\"tv\"]", discovery: true};
+  const first = new contractRuntime.Constructor(settings);
+  contractRuntime.events.emit("flows:started");
+  const started = first.sent.slice();
+  // A modified deploy reconstructs the node, which announces again.
+  await close(first);
+  const announced = entries(started);
+  assert.ok(announced.includes("homeassistant/select/nrha_t1_theatre_activity/config"), announced.join());
+  assert.equal(published(started).at(-1)?.topic, "home/lounge/theatre/availability", "the entries come before it shows as available");
+
+  const modified = new contractRuntime.Constructor({...settings, activities: "[\"off\",\"tv\",\"projector\"]"});
+  t.after(() => close(modified));
+  contractRuntime.events.emit("flows:started");
+  assert.deepEqual(entries(modified.sent), announced);
+  const select = published(modified.sent).find(({topic}) => topic === "homeassistant/select/nrha_t1_theatre_activity/config");
+  assert.deepEqual(JSON.parse(String(select?.payload)).options, ["off", "tv", "projector"], "with the new settings");
+
+  // The startup message still announces the same entries, as before.
+  assert.deepEqual(entries(await receive(modified, {theatreStateContract: {kind: "startup"}})), announced);
+
+  // Discovery off: no entries announced.
+  const off = new contractRuntime.Constructor({...settings, id: "t2", discovery: false});
+  t.after(() => close(off));
+  contractRuntime.events.emit("flows:started");
   assert.deepEqual(entries(off.sent), []);
 });
 
