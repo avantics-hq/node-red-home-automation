@@ -61,8 +61,8 @@
     from what it sent and its members' reports, so a group's report follows a command at once. A group has no
     availability and can't be asked to report, so at the room's startup the node sends nothing: the room waits for
     Zigbee2MQTT's next state for the group. (Passing on an old state could settle a command still on its way.)</p>
-  <p>Switch on the group's <b>retain</b> in Zigbee2MQTT (the group's settings in its frontend, or <code>retain: true</code>
-    under the group in its configuration). Zigbee2MQTT doesn't retain a group's state by default, so after a restart the
+  <p>Switch on the group's <b>retain</b> in Zigbee2MQTT: <code>retain: true</code> under the group in Zigbee2MQTT's
+    <code>configuration.yaml</code> (it is off by default). Zigbee2MQTT doesn't retain a group's state by default, so after a restart the
     room has no reading for the group until it changes, and an activity that holds it waits on it. With retain, the broker
     gives this node the group's last state as soon as its MQTT in node subscribes.</p>
   <h3>Settings</h3>
