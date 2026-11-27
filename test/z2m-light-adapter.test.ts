@@ -112,6 +112,14 @@ test("availability is passed on; a group has none, and isn't asked to report", (
   assert.deepEqual(transitionZ2mLight(undefined, {topic: "z2m/test-light/availability", payload: "offline"}, group, at(0)).readings, []);
 });
 
+test("a group's retained state, as Zigbee2MQTT's per-group retain keeps it, is read at a restart", () => {
+  // Nothing saved: the node has just started, and the MQTT in node's
+  // subscription brings the broker's retained state first.
+  const restarted = transitionZ2mLight(undefined, {topic: "z2m/test-light", payload: {state: "ON", brightness: 64}, retain: true}, group, at(0));
+  assert.deepEqual(restarted.readings.map((reading) => [reading.kind, (reading as {on?: boolean}).on]), [["observed", true]]);
+  assert.equal((restarted.readings[0] as {showsLast: boolean}).showsLast, false, "no command sent yet");
+});
+
 test("settings, and reading a 5.x room target's topics", () => {
   assert.throws(() => normaliseZ2mLightConfig({friendlyName: "x"}), /target is required/);
   assert.throws(() => normaliseZ2mLightConfig({target: "a", friendlyName: ""}), /friendly name is required/);
