@@ -96,24 +96,35 @@ export const coverStartingOutputs = cover.starting;
 export const coverStoppingOutputs = cover.stopping;
 export const coverRetainedTopics = cover.retainedTopics;
 
+// Any cover's topics as this package names them, for any area and name: what
+// a cover publishes, and its set topics. They come back to a cover through
+// a wildcard subscription (home/<area>/cover/#), and are never its requests
+// unless they are its own set topics.
+const COVER_TOPIC = /^home\/[^/]+\/cover\/[^/]+\/(?:state|position|availability|set|position\/set)$/;
+
 // A request from Home Assistant on the cover's set topics, as the payload the
 // cover node takes from a flow: "open", "close", "stop" or a position. Read
 // only while it publishes; retained messages and anything else are ignored
-// with a trace. Anything else passes through (null).
+// with a trace. Its own other topics, and any other cover's, publishing or
+// not, are ignored with a trace too. Anything else, such as a cover group's
+// request named by its member or a flow's own topic, passes through (null).
 export function coverInbound(
   msg: {topic?: unknown; payload?: unknown; retain?: unknown},
   config: CoverPublishingConfig
 ): {request: string | number | null; traces: TraceEntry[]} | null {
-  if (!publishesState(config)) return null;
-  const command = msg.topic === coverCommandTopic(config);
-  const position = config.positions && msg.topic === coverSetPositionTopic(config);
-  // Anything else on its own topic tree, such as its own state, position and
-  // availability coming back through a wildcard subscription, is never a
-  // request.
-  if (!command && !position && typeof msg.topic === "string" && msg.topic.startsWith(coverTopic(config, ""))) {
-    return {request: null, traces: [{event: "own-topic", outcome: "ignored", reason: "not-a-set-topic", details: {topic: msg.topic}}]};
+  const topic = typeof msg.topic === "string" ? msg.topic : null;
+  const publishing = publishesState(config);
+  const command = publishing && topic === coverCommandTopic(config);
+  const position = publishing && config.positions && topic === coverSetPositionTopic(config);
+  if (!command && !position) {
+    const own = publishing && topic !== null && topic.startsWith(coverTopic(config, ""));
+    if (own || (topic !== null && COVER_TOPIC.test(topic))) {
+      return {request: null, traces: [own
+        ? {event: "own-topic", outcome: "ignored", reason: "not-a-set-topic", details: {topic}}
+        : {event: "cover-topic", outcome: "ignored", reason: "another-covers-topic", details: {topic}}]};
+    }
+    return null;
   }
-  if (!command && !position) return null;
   const event = command ? "command-set" : "position-set";
   const ignored = (reason: string, details: Record<string, unknown> = {}) =>
     ({request: null, traces: [{event, outcome: "ignored", reason, details}]});

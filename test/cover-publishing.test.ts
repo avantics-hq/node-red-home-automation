@@ -65,10 +65,21 @@ test("Home Assistant's commands come back as the cover's own requests", () => {
     const echo = at(topic!, payload);
     assert.deepEqual([echo?.request, echo?.traces.map(({event, reason}) => [event, reason])], [null, [["own-topic", "not-a-set-topic"]]], topic);
   }
-  assert.equal(at("home/bedroom/cover/right/position", "42"), null, "another cover's topics pass through");
+  // Another cover's, through the same wildcard (home/<area>/cover/#): never requests either.
+  for (const [topic, payload] of [["home/bedroom/cover/right/state", "open"], ["home/bedroom/cover/right/position", "42"], ["home/hall/cover/left/set", "OPEN"]]) {
+    const echo = at(topic!, payload);
+    assert.deepEqual([echo?.request, echo?.traces.map(({event, reason}) => [event, reason])], [null, [["cover-topic", "another-covers-topic"]]], topic);
+  }
+  // A cover that doesn't publish, fed the same wildcard, as well.
+  assert.equal(coverInbound({topic: "home/bedroom/cover/right/position", payload: "42"}, {...config, publishState: false})?.traces[0]?.reason, "another-covers-topic");
+  // A cover group's request, named by its member, and a flow's own topics pass through.
+  for (const topic of ["left", "kitchen/blind", "home/bedroom/cover/right/position/extra", "home/bedroom/covers/right/state"]) {
+    assert.equal(coverInbound({topic, payload: 30}, config), null, topic);
+  }
   assert.deepEqual(coverInbound({topic: "home/bedroom/cover/left/position/set", payload: "40"}, {...config, positions: false})?.request, null,
     "no positions on an open/close cover: its own topic, ignored");
-  assert.equal(coverInbound({topic: "home/bedroom/cover/left/set", payload: "OPEN"}, {...config, publishState: false}), null);
+  // Not publishing, it has no set topics: a cover's set topic isn't its request either.
+  assert.equal(coverInbound({topic: "home/bedroom/cover/left/set", payload: "OPEN"}, {...config, publishState: false})?.request, null);
 });
 
 test("an open/close cover stopped partway shows as open; a position cover keeps its own state", () => {
