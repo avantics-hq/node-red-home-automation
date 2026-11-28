@@ -12,6 +12,15 @@
       if (node.homeAssistant === "off" || node.homeAssistant === "state" || node.homeAssistant === "discovery") return node.homeAssistant;
       return !on(node.publishState) ? "off" : on(node.discovery) ? "discovery" : "state";
     }
+    // Whether it publishes through its output, as before 6.2: a room saved
+    // before the Publish choice that published, or one opened and saved since
+    // without a broker (publishesThroughOutput). It needs no broker until
+    // one is chosen; from saved values only, not the open dialog.
+    function throughOutput(node) {
+      if (node.publishesThroughOutput === true) return true;
+      var saved = node.homeAssistant === null || node.homeAssistant === undefined;
+      return saved && on(node.publishState);
+    }
     // Each old setting, and the circadian lighting policy field it goes into.
     var MOVED = {
       houseSchedule: "Schedule", wakeTime: "Wake time", bedTime: "Bed time",
@@ -112,13 +121,17 @@
         // broker when the dialog is opened and saved, not when the node is
         // dropped.
         broker: {value: "", type: "mqtt-broker", required: false, validate: function (v) {
-          return choiceOf(this) === "off" || (Boolean(v) && v !== "_ADD_") ? true : "choose a broker, or set Publish to Don't publish";
+          return choiceOf(this) === "off" || (Boolean(v) && v !== "_ADD_") || throughOutput(this) ? true : "choose a broker, or set Publish to Don't publish";
         }},
         // The two settings the choice replaced, kept with no form rows so the
         // editor carries a saved room's: null means "not set", which kept
         // publishing (on) before the choice.
         publishState: {value: null},
         discovery: {value: null},
+        // true for a room that publishes through its output, as before 6.2,
+        // and was opened and saved without a broker: it stays valid until a
+        // broker is chosen. No form row.
+        publishesThroughOutput: {value: false},
         // How Home Assistant IDs are named. null means "not set": a node saved
         // before this setting, which keeps its area-named entities. New nodes
         // name them after the node (onadd), so renaming the area keeps them.
@@ -156,14 +169,19 @@
       oneditprepare: function () {
         var node = this;
         $("#node-input-homeAssistant").val(choiceOf(node));
-        // The broker only for publishing, the prefix only for discovery.
+        // The broker only for publishing, the prefix only for discovery; for a
+        // room that publishes through its output, that it does until given a
+        // broker.
+        var outputBefore = throughOutput(node);
         function follow() {
           var choice = $("#node-input-homeAssistant").val();
+          var broker = $("#node-input-broker").val();
           $(".room-broker").toggle(choice !== "off");
+          $(".room-through-output").toggle(choice !== "off" && outputBefore && (!broker || broker === "_ADD_"));
           $(".room-discovery").toggle(choice === "discovery");
           $("#node-input-area, #node-input-broker").trigger("change");
         }
-        $("#node-input-homeAssistant").on("change", follow);
+        $("#node-input-homeAssistant, #node-input-broker").on("change", follow);
         follow();
         // A room saved before 6.0: its circadian settings, to copy into a
         // circadian lighting policy.
@@ -197,6 +215,10 @@
         var node = this;
         // The two settings it replaced, kept in step.
         var choice = $("#node-input-homeAssistant").val();
+        // Through its output until a broker is chosen (read before the
+        // dialog's values are applied).
+        var broker = $("#node-input-broker").val();
+        node.publishesThroughOutput = throughOutput(node) && (!broker || broker === "_ADD_");
         node.publishState = choice !== "off";
         node.discovery = choice === "discovery";
         Object.keys(MOVED).forEach(function (key) { node[key] = ""; });
@@ -246,6 +268,8 @@
   <div class="form-row room-broker"><label for="node-input-broker">Broker</label><input type="text" id="node-input-broker"></div>
   <div class="form-tips room-broker">With a broker, the room publishes itself: an MQTT out on its first output, and a
     Status node, are no longer needed and can be deleted.</div>
+  <div class="form-tips room-through-output">This room publishes through its first output, as before 6.2, and keeps
+    working that way. Choose a Broker to let it publish itself.</div>
   <div class="form-row"><label for="node-input-displayName">Display name</label><input type="text" id="node-input-displayName"></div>
   <div class="form-row room-discovery"><label for="node-input-discoveryPrefix">Discovery prefix</label><input type="text" id="node-input-discoveryPrefix"></div>
   <div class="form-row"><label for="node-input-targets">Targets JSON</label><input type="text" id="node-input-targets"></div>
@@ -293,8 +317,9 @@
       <code>&lt;prefix&gt;/status</code>), it clears what it no longer publishes and announces its entities,
       availability and every light's control state, so they come back by themselves. <code>offline</code> as it stops;
       deleted, everything it published is cleared. An MQTT out on output 1 and a Status node are then no longer needed:
-      output 1 sends nothing, and a Status node still wired in is ignored. Needed unless Publish is <i>Don't publish</i>; opening
-      and saving the room offers the first broker in your flows. Without one, the room publishes through output 1 as
+      output 1 sends nothing, and a Status node still wired in is ignored. Needed for a new room unless Publish is <i>Don't publish</i>;
+      opening and saving the room offers the first broker in your flows. A room saved before 6.2 that publishes keeps
+      publishing through output 1 and needs no broker until you choose one. Without one, the room publishes through output 1 as
       before: once the flows start and at its startup message, which a Status node watching your MQTT out sends each
       time it connects, with <code>offline</code> getting through only when this node is deployed on its own, so set
       the MQTT broker node's Birth, Close and Will messages to the same (see the README).</dd>
