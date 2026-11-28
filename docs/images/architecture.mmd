@@ -29,10 +29,11 @@ flowchart TB
     SS[shelly-switch]
     ZC[z2m-cover]
     SC[shelly-cover]
+    WL[wled]
   end
   BROKER[(MQTT broker)]
   HA[Home Assistant: the panel<br/>shows state, sends set messages]
-  DEV[(Devices: Zigbee2MQTT lights and covers,<br/>Shelly switches and covers)]
+  DEV[(Devices: Zigbee2MQTT lights and covers,<br/>Shelly switches and covers,<br/>a WLED TV backlight)]
   AV[(AV device transports)]
 
   SENS --> OCC --> MOT
@@ -58,6 +59,7 @@ flowchart TB
   AL -. target state .-> ACT
   AL -- held-light intents --> ROOM
   EQ -- device commands --> AV
+  EQ <-- backlight power and readings --> WL
 
   Adapt <-- subscribe and publish --> BROKER
   CON <-- requests in, retained state and discovery out --> BROKER

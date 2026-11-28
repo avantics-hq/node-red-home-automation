@@ -1,0 +1,55 @@
+<script type="text/javascript">
+  RED.nodes.registerType("home-wled", {
+    category: "home automation",
+    color: "#e2d96e",
+    defaults: {
+      name: {value: ""},
+      // Node-RED's MQTT broker node, through which it subscribes to WLED's
+      // topics and publishes its commands. The editor offers the first broker
+      // when the dialog is opened and saved.
+      broker: {value: "", type: "mqtt-broker", required: true},
+      // No default: it names the user's own device.
+      deviceTopic: {value: "", required: true, validate: function (v) {
+        var topic = String(v || "").trim().replace(/^\/+|\/+$/g, "");
+        return topic !== "" && !/[+#]/.test(topic);
+      }}
+    },
+    inputs: 1,
+    outputs: 1,
+    outputLabels: ["to the backlighting controller"],
+    icon: "font-awesome/fa-lightbulb-o",
+    label: function () { return this.name || this.deviceTopic || "wled"; },
+    paletteLabel: "wled"
+  });
+</script>
+
+<script type="text/html" data-template-name="home-wled">
+  <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
+  <div class="form-row"><label for="node-input-broker">Broker</label><input type="text" id="node-input-broker"></div>
+  <div class="form-row"><label for="node-input-deviceTopic">Device topic</label><input type="text" id="node-input-deviceTopic" placeholder="WLED's Device Topic, as in its Sync settings"></div>
+  <div class="form-tips">It subscribes to the device topic's <code>/g</code> and <code>/status</code> and publishes WLED's
+    <code>ON</code> and <code>OFF</code> itself: no MQTT in or out nodes.</div>
+</script>
+
+<script type="text/html" data-help-name="home-wled">
+  <p>Connects a WLED light strip to a <b>home backlighting controller</b>, over WLED's own MQTT messages: no function
+    nodes, and never Home Assistant.</p>
+  <h3>Wiring</h3>
+  <ol>
+    <li>The backlighting controller's first output (its device commands) → this node.</li>
+    <li>This node's output → the backlighting controller.</li>
+  </ol>
+  <p>Choose the <b>Broker</b> WLED uses, and set <b>Device topic</b> to WLED's own (Config → Sync Interfaces → MQTT; WLED's
+    default is <code>wled/</code> and its MAC address). It subscribes to <code>&lt;device topic&gt;/g</code> (brightness) and
+    <code>&lt;device topic&gt;/status</code> (online or offline), and publishes <code>ON</code> or <code>OFF</code> on the
+    device topic.</p>
+  <h3>Readings</h3>
+  <p>Each brightness WLED reports becomes <code>msg.backlighting = {kind: "observed", generation, power, observedAt}</code>
+    for the command in hand: brightness 0 is off, anything else on. WLED reports every change, from any source, and
+    doesn't say who made it: the backlighting controller judges a reading it didn't ask for as a manual change.
+    An <code>observe</code> is answered from the last report while WLED is online; with none since Node-RED started
+    there is nothing to answer until WLED next changes: WLED publishes only when it changes, and can't be asked over
+    MQTT (seen on the firmware we tested).</p>
+  <p>A <code>set_power</code> is answered with <code>command_result</code> ok once published, or not ok with reason
+    <code>unavailable</code> while WLED is offline.</p>
+</script>

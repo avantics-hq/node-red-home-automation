@@ -25,6 +25,7 @@ import registerHouseMqtt from "../nodes/house-schedule-mqtt";
 import registerShellyCover from "../nodes/shelly-cover";
 import registerShellySwitch from "../nodes/shelly-switch";
 import registerZ2mCover from "../nodes/z2m-cover";
+import registerWled from "../nodes/wled";
 import registerScene from "../nodes/scene";
 import {fakeBroker} from "./helpers/fake-broker";
 import type {SharedSchedule} from "../lib/house-schedule";
@@ -1420,6 +1421,46 @@ test("the example theatre flow, started with nothing saved while the devices sho
   }
   assert.deepEqual([activity().phase, activity().currentActivity, activity().metrics.recoveriesAdopted], ["ready", "tv", 1]);
   assert.deepEqual(changes, [], "nothing commanded");
+});
+
+test("a WLED node and a backlighting controller, through a broker: on, read back from WLED, and a change made elsewhere", async (t) => {
+  const broker = fakeBroker();
+  builtNodes.set("broker-wled", broker);
+  const wled = new (runtime(registerWled).Constructor)({id: "wled-strip", deviceTopic: "home/test/light/strip", broker: "broker-wled"});
+  const backlight = new (runtime(registerBacklighting).Constructor)({id: "backlight", area: ""});
+  for (const node of [wled, backlight]) t.after(() => close(node));
+  assert.deepEqual([wled.errors, backlight.errors], [[], []]);
+  assert.deepEqual([...broker.subscriptions.keys()].sort(), ["home/test/light/strip/g", "home/test/light/strip/status"]);
+  broker.connect();
+  // The controller's commands to WLED, and WLED's readings back, as wired.
+  const run = async (node: RuntimeNode, msg: Record<string, unknown>) => {
+    for (const envelope of await receive<unknown>(node, msg)) {
+      const outputs = (Array.isArray(envelope) ? envelope : [envelope]) as unknown[];
+      const port = outputs[0];
+      for (const out of port === null || port === undefined ? [] : Array.isArray(port) ? port : [port]) {
+        await run(node === backlight ? wled : backlight, out as Record<string, unknown>);
+      }
+    }
+  };
+  await run(backlight, {backlighting: {kind: "intent", requestId: "on-1", generation: 1, power: "on"}});
+  assert.deepEqual(broker.published.map(({topic, payload}) => [topic, payload]), [["home/test/light/strip", "ON"]]);
+  // WLED reports its brightness: the controller is ready.
+  wled.sent.length = 0;
+  broker.deliver("home/test/light/strip/g", "128");
+  for (const envelope of wled.sent.splice(0) as unknown[][]) {
+    for (const msg of envelope[0] as Array<Record<string, unknown>>) await run(backlight, msg);
+  }
+  assert.equal((backlight.context().get("state") as {phase: string}).phase, "ready");
+  // Switched off from WLED's own app: a manual change.
+  broker.deliver("home/test/light/strip/g", "0");
+  for (const envelope of wled.sent.splice(0) as unknown[][]) {
+    for (const msg of envelope[0] as Array<Record<string, unknown>>) await run(backlight, msg);
+  }
+  assert.equal((backlight.context().get("state") as {phase: string}).phase, "manual_override");
+  // No broker: an invalid configuration.
+  const lonely = new (runtime(registerWled).Constructor)({id: "wled-lonely", deviceTopic: "home/test/light/other"});
+  t.after(() => close(lonely));
+  assert.match(String(lonely.errors[0]), /choose its MQTT broker/);
 });
 
 test("every adapter shows the same badge for a configuration it cannot use, and logs why", () => {

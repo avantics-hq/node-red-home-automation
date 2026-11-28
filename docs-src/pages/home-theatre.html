@@ -18,7 +18,7 @@
 </tbody></table></div>
 <ul>
 <li>A broker connection in Node-RED, for the request topic and the retained state.</li>
-<li>A transport for each device the package doesn’t reach itself: a TCP connection for the receiver, and your own adapters for the media source, the TV backlight and the projector’s infrared power toggle. The display controller reaches the TV and the screen directly over their LAN APIs.</li>
+<li>A transport for each device the package doesn’t reach itself: a TCP connection for the receiver, and your own adapters for the media source and the projector’s infrared power toggle. For a WLED TV backlight, the <a href="node-wled.html">wled</a> node is the transport; for another backlight, your own. The display controller reaches the TV and the screen directly over their LAN APIs.</li>
 <li>A room lighting controller for the lights the activity styles. See <a href="guide-room-lighting.html">Light a room</a>.</li>
 </ul>
 <p>Home Assistant is optional. It can show the activity and request one, through the MQTT topics; it is never the path to a device.</p>
