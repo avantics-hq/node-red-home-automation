@@ -82,6 +82,33 @@ test("room: one Home Assistant choice, a Broker needed unless it's off, and the 
   assert.equal(area({homeAssistant: null, publishState: false, discovery: true}, ""), false, "as in 6.1.0");
 });
 
+test("E1: a node saved before the Publish choice that published stays valid with no broker; a new one set to publish needs one", () => {
+  const broker = (file: string, node: Record<string, unknown>) => editorDefinition(file).defaults.broker!.validate!.call(node, "") as unknown;
+  // As 6.1.0 saved them: the old settings, no choice, no broker.
+  const saved: Array<[string, Record<string, unknown>]> = [
+    ["scene.html", {publishState: true, discovery: true}],
+    ["cover-controller.html", {publishState: true, discovery: false}],
+    ["motion-policy.html", {publishState: true, discovery: true}],
+    ["occupancy-fusion.html", {publishState: true, discovery: false}],
+    ["circadian-policy.html", {publishState: true, discovery: true}],
+    ["avr-controller.html", {publishState: true, discovery: true}],
+    ["house-schedule-mqtt.html", {discovery: true}],
+    ["theatre-state-contract.html", {discovery: null}]
+  ];
+  for (const [file, settings] of saved) {
+    assert.equal(broker(file, {...settings}), true, `${file}: saved, publishing through its output`);
+    assert.equal(broker(file, {...settings, homeAssistant: "discovery", publishesThroughOutput: true}), true, `${file}: opened and saved since`);
+    const chosen = file === "house-schedule-mqtt.html" || file === "theatre-state-contract.html" ? "state" : "discovery";
+    assert.notEqual(broker(file, {homeAssistant: chosen, publishesThroughOutput: false}), true, `${file}: a new node set to publish`);
+    assert.equal(editorDefinition(file).defaults.publishesThroughOutput!.value, false, file);
+  }
+  // New nodes from the palette that always publish start with their choice, so they need a broker.
+  const house = editorDefinition("house-schedule-mqtt.html");
+  assert.equal(newNode(house).homeAssistant, "discovery");
+  const contract = editorDefinition("theatre-state-contract.html");
+  assert.equal(newNode(contract).homeAssistant, "state");
+});
+
 const ONADD_NODES = ["room-controller.html", "theatre-state-contract.html", "occupancy-fusion.html", "motion-policy.html",
   "avr-controller.html", "house-schedule-mqtt.html", "cover-controller.html"];
 

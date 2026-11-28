@@ -12,6 +12,14 @@
       if (node.homeAssistant === "state" || node.homeAssistant === "discovery") return node.homeAssistant;
       return on(node.discovery) ? "discovery" : "state";
     }
+    // Whether it publishes through its output, as before 6.2: a node saved
+    // before the Publish choice that published, or one opened and saved since
+    // without a broker (publishesThroughOutput). It needs no broker until one
+    // is chosen; from saved values only, not the open dialog.
+    function throughOutput(node) {
+      if (node.publishesThroughOutput === true) return true;
+      return node.homeAssistant === null || node.homeAssistant === undefined;
+    }
     RED.nodes.registerType("home-theatre-state-contract", {
       category: "home automation",
       color: "#d9c7f1",
@@ -36,6 +44,10 @@
         // this setting, which keeps publishing discovery. New nodes start with
         // it off (onadd).
         discovery: {value: null},
+        // true for a node that publishes through its output, as before 6.2, and
+        // was opened and saved without a broker: it stays valid until a broker is
+        // chosen. No form row.
+        publishesThroughOutput: {value: false},
         // Publish: state or discovery. null means "not set": a contract saved
         // before this setting, read from discovery above, kept with no row.
         homeAssistant: {value: null},
@@ -44,7 +56,7 @@
         // the first broker when the dialog is opened and saved, not when the
         // node is dropped.
         broker: {value: "", type: "mqtt-broker", required: false, validate: function (v) {
-          return Boolean(v) && v !== "_ADD_" ? true : "choose a broker";
+          return Boolean(v) && v !== "_ADD_" || throughOutput(this) ? true : "choose a broker";
         }},
         // How Home Assistant IDs are named. null means "not set": a node saved
         // before this setting, which keeps its area-named entities. New nodes
@@ -68,10 +80,19 @@
         this.discovery = false;
         this.homeAssistant = "state";
       },
+      oneditsave: function () {
+        // Through its output until a broker is chosen (read before the
+        // dialog's values are applied).
+        var broker = $("#node-input-broker").val();
+        this.publishesThroughOutput = throughOutput(this) && (!broker || broker === "_ADD_");
+      },
       oneditprepare: function () {
         $("#node-input-homeAssistant").val(publishChoice(this));
-        function publishRows() { $(".publish-discovery").toggle($("#node-input-homeAssistant").val() === "discovery"); }
-        $("#node-input-homeAssistant, #node-input-baseTopic").on("change keyup", function () {
+        var outputBefore = throughOutput(this);
+        function publishRows() {
+          var broker = $("#node-input-broker").val();
+          $(".publish-through-output").toggle($("#node-input-homeAssistant").val() !== "off" && outputBefore && (!broker || broker === "_ADD_")); $(".publish-discovery").toggle($("#node-input-homeAssistant").val() === "discovery"); }
+        $("#node-input-homeAssistant, #node-input-broker, #node-input-baseTopic").on("change keyup", function () {
           publishRows();
           $("#node-input-area").trigger("change");
         });
@@ -101,6 +122,8 @@
   <div class="form-row"><label for="node-input-broker">Broker</label><input type="text" id="node-input-broker"></div>
   <div class="form-tips">With a broker, it publishes and reads its requests itself: an MQTT out on its publication output, an
     MQTT in on its its request topic, and a Status node are no longer needed and can be deleted.</div>
+  <div class="form-tips publish-through-output">This node publishes through its output, as before 6.2, and keeps
+    working that way. Choose a Broker to let it publish itself.</div>
   <div class="form-row publish-discovery"><label for="node-input-discoveryPrefix">Discovery prefix</label><input type="text" id="node-input-discoveryPrefix"></div>
   <div class="form-row"><label for="node-input-activities">Activities JSON</label><input type="text" id="node-input-activities"></div>
   <div class="form-row"><label for="node-input-sloWindowSize">SLO window</label><input type="number" id="node-input-sloWindowSize"></div>
@@ -132,8 +155,8 @@
     broker connects, reconnects included, and each time Home Assistant comes back (<code>online</code> on
     <code>&lt;prefix&gt;/status</code>), so its entities come back by themselves. Its publication output then sends
     nothing, and an MQTT out on it, an MQTT in on its request topic and a Status node are no longer needed: still wired, they change nothing.
-    Opening and saving the node offers the first broker in your flows. Without a broker it publishes on its output,
-    as below.</p>
+    Opening and saving the node offers the first broker in your flows. A node saved before 6.2 that publishes keeps
+    publishing on its output, as below, and needs no broker until you choose one.</p>
   <h3>When MQTT out connects</h3>
   <p>Without a broker, wire a <b>Status node</b> whose scope is your MQTT out node into this node. Each time MQTT out shows
     "connected", this node takes it as its startup message (<code>msg.theatreStateContract = {kind: "startup"}</code>) and announces itself again:

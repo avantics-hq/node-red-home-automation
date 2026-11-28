@@ -11,6 +11,14 @@
       if (node.homeAssistant === "off" || node.homeAssistant === "state" || node.homeAssistant === "discovery") return node.homeAssistant;
       return !on(node.publishState) ? "off" : on(node.discovery) ? "discovery" : "state";
     }
+    // Whether it publishes through its output, as before 6.2: a node saved
+    // before the Publish choice that published, or one opened and saved since
+    // without a broker (publishesThroughOutput). It needs no broker until one
+    // is chosen; from saved values only, not the open dialog.
+    function throughOutput(node) {
+      if (node.publishesThroughOutput === true) return true;
+      return (node.homeAssistant === null || node.homeAssistant === undefined) && (node.publishState === true || node.publishState === "true");
+    }
     // Its area is needed while it publishes, and for a node saved before the
     // choice whenever either old setting was on, as the runtime checks.
     function needsArea(node) {
@@ -38,10 +46,14 @@
         // the first broker when the dialog is opened and saved, not when the node
         // is dropped.
         broker: {value: "", type: "mqtt-broker", required: false, validate: function (v) {
-          return publishChoice(this) === "off" || (Boolean(v) && v !== "_ADD_") ? true : "choose a broker, or set Publish to Don't publish";
+          return publishChoice(this) === "off" || (Boolean(v) && v !== "_ADD_") || throughOutput(this) ? true : "choose a broker, or set Publish to Don't publish";
         }},
         publishState: {value: false},
         discovery: {value: false},
+        // true for a node that publishes through its output, as before 6.2, and
+        // was opened and saved without a broker: it stays valid until a broker is
+        // chosen. No form row.
+        publishesThroughOutput: {value: false},
         discoveryPrefix: {value: "homeassistant", required: true, validate: function (v) { var prefix = String(v || "").trim().replace(/^\/+|\/+$/g, ""); return Boolean(prefix) && !/[+#]/.test(prefix); }},
         // How Home Assistant IDs are named; occupancy has no older entities,
         // so not set also means "node".
@@ -52,16 +64,25 @@
         this.name = "";
         this.idScheme = "node";
       },
+      oneditsave: function () {
+        // Through its output until a broker is chosen (read before the
+        // dialog's values are applied).
+        var broker = $("#node-input-broker").val();
+        this.publishesThroughOutput = throughOutput(this) && (!broker || broker === "_ADD_");
+      },
       oneditprepare: function () {
         $("#node-input-homeAssistant").val(publishChoice(this));
         // The broker only while it publishes, the prefix only with discovery.
+        var outputBefore = throughOutput(this);
         function publishRows() {
+          var broker = $("#node-input-broker").val();
+          $(".publish-through-output").toggle($("#node-input-homeAssistant").val() !== "off" && outputBefore && (!broker || broker === "_ADD_"));
           var choice = $("#node-input-homeAssistant").val();
           $(".publish-broker").toggle(choice !== "off");
           $(".publish-discovery").toggle(choice === "discovery");
           $("#node-input-area, #node-input-broker").trigger("change");
         }
-        $("#node-input-homeAssistant").on("change", publishRows);
+        $("#node-input-homeAssistant, #node-input-broker").on("change", publishRows);
         publishRows();
       },
       inputs: 1,
@@ -94,6 +115,8 @@
   <div class="form-row publish-broker"><label for="node-input-broker">Broker</label><input type="text" id="node-input-broker"></div>
   <div class="form-tips publish-broker">With a broker, it publishes and reads its set topics itself: an MQTT out on its
     publication output, an MQTT in on its set topics, and a Status node are no longer needed and can be deleted.</div>
+  <div class="form-tips publish-through-output">This node publishes through its output, as before 6.2, and keeps
+    working that way. Choose a Broker to let it publish itself.</div>
   <div class="form-row publish-discovery"><label for="node-input-discoveryPrefix">Discovery prefix</label><input type="text" id="node-input-discoveryPrefix"></div>
 </script>
 
@@ -121,8 +144,8 @@
     broker connects, reconnects included, and each time Home Assistant comes back (<code>online</code> on
     <code>&lt;prefix&gt;/status</code>), so its entities come back by themselves. Its publication output then sends
     nothing, and an MQTT out on it and a Status node are no longer needed: still wired, they change nothing.
-    Opening and saving the node offers the first broker in your flows. Without a broker it publishes on its output,
-    as below.</p>
+    Opening and saving the node offers the first broker in your flows. A node saved before 6.2 that publishes keeps
+    publishing on its output, as below, and needs no broker until you choose one.</p>
   <h3>When MQTT out connects</h3>
   <p>Without a broker, wire a <b>Status node</b> whose scope is your MQTT out node into this node. Each time MQTT out shows
     "connected", this node takes it as its startup message (<code>msg.source = "startup"</code>) and announces itself again:
