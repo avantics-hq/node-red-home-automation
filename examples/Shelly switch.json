@@ -3,7 +3,7 @@
     "id": "example-shelly-switch-comment",
     "type": "comment",
     "name": "Shelly switch example",
-    "info": "A wall switch wired to a Shelly Gen2 relay in detached mode: the relay stays on to power smart bulbs, and the switch's presses drive the room's lights through the switch policy, with no function nodes. The adapter reads the device's own configuration (its mode and input type) and shows it in its status. In your flow, replace the injects marked 'from the device' with an MQTT in node subscribed to <prefix>/# (output: auto-detect), and the debug node 'to the MQTT out node' with an MQTT out node, both on your broker; wire the switch policy to your room controller. Set the adapter's MQTT topic prefix to your device's (its device ID unless you set one).",
+    "info": "A wall switch wired to a Shelly Gen2 relay in detached mode, where the relay is the room's main light: the switch's presses go through the switch policy to the room controller, and the room switches the relay through the same Shelly node, with no function nodes. The adapter reads the device's own configuration (its mode and input type) and shows it in its status. Its Target, main, is the light's id in the room's Targets JSON, marked onOffOnly; the room's light commands reach it on its input, and its readings go back to the room on its third output.\n\nIn your flow, replace the injects marked 'from the device' with an MQTT in node subscribed to <prefix>/# (output: auto-detect), and the debug node 'to the MQTT out node' with an MQTT out node, both on your broker. Set the adapter's MQTT topic prefix to your device's (its device ID unless you set one). If the relay powers smart bulbs instead, leave the Target empty and wire the switch policy to the room that drives the bulbs.\n\nThe \"MQTT out connected\" status node sends the adapter and the room their startup message each time an MQTT out node connects to the broker: the broker drops anything sent before it connects. It watches every node on this flow, and the nodes act only on an MQTT out node's connected status; you can scope it to your MQTT out node instead.",
     "x": 150,
     "y": 40,
     "wires": []
@@ -23,8 +23,12 @@
       ],
       [
         "example-shelly-switch-policy"
+      ],
+      [
+        "example-shelly-switch-room"
       ]
-    ]
+    ],
+    "target": "main"
   },
   {
     "id": "example-shelly-switch-policy",
@@ -38,7 +42,7 @@
     "y": 240,
     "wires": [
       [
-        "example-shelly-switch-intents"
+        "example-shelly-switch-room"
       ]
     ]
   },
@@ -56,22 +60,6 @@
     "statusType": "auto",
     "x": 700,
     "y": 160,
-    "wires": []
-  },
-  {
-    "id": "example-shelly-switch-intents",
-    "type": "debug",
-    "name": "lighting intents (to the room controller)",
-    "active": true,
-    "tosidebar": true,
-    "console": false,
-    "tostatus": false,
-    "complete": "true",
-    "targetType": "full",
-    "statusVal": "",
-    "statusType": "auto",
-    "x": 960,
-    "y": 240,
     "wires": []
   },
   {
@@ -191,6 +179,57 @@
     "wires": [
       [
         "example-shelly-switch-adapter"
+      ]
+    ]
+  },
+  {
+    "id": "example-shelly-switch-room",
+    "type": "home-room-lighting-controller",
+    "name": "",
+    "area": "",
+    "displayName": "",
+    "targets": "[{\"id\":\"main\",\"onOffOnly\":true}]",
+    "initialTransitionSeconds": 1,
+    "x": 940,
+    "y": 240,
+    "wires": [
+      [
+        "example-shelly-switch-room-out"
+      ],
+      [
+        "example-shelly-switch-adapter"
+      ],
+      []
+    ],
+    "publishState": false,
+    "discovery": false,
+    "idScheme": "node"
+  },
+  {
+    "id": "example-shelly-switch-room-out",
+    "type": "debug",
+    "name": "room publications (to the MQTT out node)",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "x": 1210,
+    "y": 240,
+    "wires": []
+  },
+  {
+    "id": "example-shelly-switch-mqtt-connected",
+    "type": "status",
+    "name": "MQTT out connected",
+    "scope": null,
+    "x": 190,
+    "y": 330,
+    "wires": [
+      [
+        "example-shelly-switch-adapter",
+        "example-shelly-switch-room"
       ]
     ]
   }

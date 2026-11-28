@@ -10,6 +10,7 @@ import {
   type ShellySwitchMessage,
   type ShellySwitchState
 } from "../lib/shelly-switch";
+import {transitionRoom, type RoomState} from "../lib/room-controller";
 import {transitionSwitchPolicy, type SwitchPolicyConfig, type SwitchPolicyEffect, type SwitchPolicyState} from "../lib/switch-policy";
 
 const auto = normaliseShellySwitchConfig({topicPrefix: "shellyplus1-test", channel: 0});
@@ -38,7 +39,9 @@ function setUp(inMode: string, inputType: string, config: ShellySwitchConfig = a
 }
 
 test("the settings name the device's prefix and switch, and a mode that defaults to auto", () => {
-  assert.deepEqual(normaliseShellySwitchConfig({topicPrefix: " dev/ ", channel: "1"}), {topicPrefix: "dev", channel: 1, mode: "auto"});
+  assert.deepEqual(normaliseShellySwitchConfig({topicPrefix: " dev/ ", channel: "1"}), {topicPrefix: "dev", channel: 1, mode: "auto", target: null});
+  assert.equal(normaliseShellySwitchConfig({topicPrefix: "dev", target: " hall "}).target, "hall");
+  assert.equal(normaliseShellySwitchConfig({topicPrefix: "dev", target: ""}).target, null, "empty: not a room light");
   assert.equal(normaliseShellySwitchConfig({topicPrefix: "dev", mode: "relay"}).mode, "relay");
   assert.throws(() => normaliseShellySwitchConfig({}), /topic prefix is required/);
   assert.throws(() => normaliseShellySwitchConfig({topicPrefix: "dev", mode: "fancy"}), /auto, detached or relay/);
@@ -194,4 +197,94 @@ test("a round trip through the real switch policy: wall switch presses become li
     {kind: "intent", targets: ["ceiling"], state: "TOGGLE", source: "wall", person: true},
     {kind: "intent", targets: ["ceiling"], state: "ON", source: "wall", person: true, manual: true, values: {brightnessPct: 100}}
   ]);
+});
+
+// As the room's light "hall": the room's commands and readings.
+const lightOf = (config: Partial<ShellySwitchConfig> = {}) => ({...auto, target: "hall", ...config});
+const roomCommand = (state: "ON" | "OFF", fields: Record<string, unknown> = {}) =>
+  ({light: {kind: "command", target: "hall", state, source: "wall", id: "7", ...fields}});
+const relayStatus = (output: boolean, source = "MQTT") => ({topic: "shellyplus1-test/status/switch:0", payload: {id: 0, output, source}});
+const kinds = (result: ReturnType<typeof apply>) => result.lightReadings.map((reading) => [reading.kind, "on" in reading ? reading.on : "state" in reading ? reading.state : null]);
+
+test("with a Target, the room's commands for it switch the relay; another light's are ignored, and so is everything about values", () => {
+  const config = lightOf();
+  const ready = setUp("detached", "switch", config);
+  const on = apply(ready.state, roomCommand("ON", {brightnessPct: 40, colorTempKelvin: 2700, transitionSeconds: 1}), 1, config);
+  assert.deepEqual(on.publications, [{topic: "shellyplus1-test/command/switch:0", payload: "on"}]);
+  assert.equal(on.ignored, false);
+  const other = apply(on.state, {light: {kind: "command", target: "lamp", state: "OFF", source: "wall", id: "8"}}, 2, config);
+  assert.deepEqual([other.ignored, other.publications, other.lightReadings, other.readings], [true, [], [], []]);
+  // Without a Target, the room's messages are never this node's.
+  assert.equal(apply(setUp("follow", "switch").state, roomCommand("OFF"), 1).ignored, true);
+  // observe asks the relay for its status.
+  assert.deepEqual(apply(ready.state, {light: {kind: "observe", target: "hall"}}, 1, config).publications,
+    [{topic: "shellyplus1-test/command/switch:0", payload: "status_update"}]);
+});
+
+test("with a Target, its reports are the room's readings: its own command confirmed, a change nobody here asked for a person's", () => {
+  const config = lightOf();
+  let result = setUp("detached", "switch", config);
+  result = apply(result.state, deviceStatus(true, false), 0.2, config);
+  assert.deepEqual(kinds(result), [["observed", false]], "the baseline: no change, so nobody's");
+  assert.equal(result.status.text, "detached, switch input · hall off", "no bulbs-unpowered warning for a room light");
+  // Its own command, its echo on the command topic, then the relay's report.
+  result = apply(result.state, roomCommand("ON"), 1, config);
+  const echo = apply(result.state, {topic: "shellyplus1-test/command/switch:0", payload: "on"}, 1.05, config);
+  assert.deepEqual(echo.lightReadings, [], "its own echo");
+  result = apply(echo.state, relayStatus(true), 1.1, config);
+  assert.deepEqual(result.lightReadings.map((reading) => [reading.kind, (reading as {showsLast?: boolean}).showsLast]), [["observed", true]]);
+  // A person at a switch the relay follows, or the Shelly app: external, then observed.
+  result = apply(result.state, notify({"switch:0": {output: false, source: "switch"}}), 60, config);
+  assert.deepEqual(kinds(result), [["external", "OFF"], ["observed", false]]);
+  // Someone else's command on its command topic: external once, not again at the relay's report.
+  result = apply(result.state, {topic: "shellyplus1-test/command/switch:0", payload: "on"}, 120, config);
+  assert.deepEqual(kinds(result), [["external", "ON"]]);
+  result = apply(result.state, relayStatus(true), 120.1, config);
+  assert.deepEqual(kinds(result), [["observed", true]]);
+  // Someone else's toggle: external once, and the relay's report of it only observed.
+  result = apply(result.state, {topic: "shellyplus1-test/command/switch:0", payload: "toggle"}, 125, config);
+  assert.deepEqual(kinds(result), [["external", "TOGGLE"]]);
+  result = apply(result.state, relayStatus(false), 125.1, config);
+  assert.deepEqual(kinds(result), [["observed", false]]);
+  // status_update on its command topic is nobody's change.
+  assert.deepEqual(apply(result.state, {topic: "shellyplus1-test/command/switch:0", payload: "status_update"}, 121, config).lightReadings, []);
+});
+
+test("with a Target: availability for the room, a restyle answered, and in relay mode the switch state still reported", () => {
+  const config = lightOf();
+  let result = setUp("follow", "switch", config);
+  result = apply(result.state, {topic: "shellyplus1-test/online", payload: "false"}, 1, config);
+  assert.deepEqual(result.lightReadings, [{kind: "availability", target: "hall", online: false}]);
+  result = apply(result.state, {topic: "shellyplus1-test/online", payload: "true"}, 2, config);
+  result = apply(result.state, relayStatus(true, "switch"), 3, config);
+  assert.deepEqual(result.readings.map((reading) => "switchState" in reading ? reading.switchState.kind : null), ["observed"], "msg.switchState as before");
+  // A restyle of a relay already on: nothing to send, answered as skipped.
+  const restyle = apply(result.state, roomCommand("ON", {restyle: true}), 4, config);
+  assert.deepEqual([restyle.publications, restyle.lightReadings.map(({kind}) => kind)], [[], ["skipped"]]);
+});
+
+test("a room drives a detached Shelly relay as its on/off light, and a person's change at the relay is the room's to see", () => {
+  const config = lightOf();
+  const roomConfig = {area: "hall", displayName: "Hall", initialTransitionSeconds: 1, targets: [{id: "hall", onOffOnly: true}]};
+  let shelly = setUp("detached", "switch", config);
+  shelly = apply(shelly.state, deviceStatus(false, false), 0.2, config);
+  let room: RoomState = transitionRoom(undefined, {light: shelly.lightReadings[0]}, roomConfig, at(0.2)).state;
+  // A wall-switch press, through the switch policy, reaches the room as a person's ON.
+  const intent = transitionRoom(room, {lighting: {kind: "intent", targets: ["hall"], state: "ON", source: "wall", person: true}}, roomConfig, at(1));
+  room = intent.state;
+  for (const command of intent.commands) shelly = apply(shelly.state, {light: command}, 1, config);
+  assert.deepEqual(shelly.publications, [{topic: "shellyplus1-test/command/switch:0", payload: "on"}]);
+  shelly = apply(shelly.state, relayStatus(true), 1.2, config);
+  for (const reading of shelly.lightReadings) room = transitionRoom(room, {light: reading}, roomConfig, at(1.2)).state;
+  assert.equal(room.desired.hall, true);
+  // Someone switches it off from the Shelly app: the room sees a person's OFF.
+  shelly = apply(shelly.state, notify({"switch:0": {output: false, source: "http"}}), 30, config);
+  const traced: string[] = [];
+  for (const reading of shelly.lightReadings) {
+    const step = transitionRoom(room, {light: reading}, roomConfig, at(30));
+    room = step.state;
+    traced.push(...step.traces.map(({event, outcome}) => `${event}:${outcome}`));
+  }
+  assert.equal(room.desired.hall, false);
+  assert.ok(traced.includes("external-command:observed"), traced.join());
 });

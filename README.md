@@ -87,7 +87,7 @@ restyle the light already shows.
 | `home-circadian-lighting-policy` | Styles rooms over the day: brightness and colour temperature from wake and bed times, sleep mode, and circadian and sleep switches for Home Assistant. |
 | `home-room-lighting-controller` | Owns the room's light commands, manual and held lights, and lighting state, and applies the style it is sent. |
 | `home-z2m-light` | Connects one Zigbee2MQTT light or group to a room controller: the room's neutral commands become Zigbee2MQTT's `/set` messages, and the light's reports become readings. |
-| `home-shelly-switch` | Connects one switch channel of a Shelly Gen2+ relay as the device is set up: a detached wall switch's presses to the switch policy, or the relay as the light. |
+| `home-shelly-switch` | Connects one switch channel of a Shelly Gen2+ relay as the device is set up: a detached wall switch's presses to the switch policy, or the relay as the light; with a Target, the relay is a room light on the neutral light contract. |
 
 A Shelly Gen2 or later relay behind a wall switch wires straight in through the
 Shelly switch adapter, with no function nodes: an MQTT in node on the device's
@@ -95,14 +95,25 @@ Shelly switch adapter, with no function nodes: an MQTT in node on the device's
 the device's own configuration for its channel (with `Shelly.GetConfig`, the
 reply addressed under the device's prefix so the same MQTT in node receives it)
 at startup and whenever the device comes online, and shows what it found. In
-detached mode, where the relay stays on to power smart bulbs, the switch's
+detached mode, the switch's
 presses go to the switch policy: a toggle switch's on/off as edges, with the
 device's status as the baseline, and a push button's single, double or long
 presses as actions (the switch policy acts on single and double; long is passed
-on for later use). The relay is never commanded, and a relay that reports off
-is flagged, as the bulbs have lost power. In any other mode the relay is the
-light: the node reports its state and takes on and off. Its **Mode** setting
-overrides what was read, and decides when the configuration can't be read.
+on for later use). Without a Target, the relay stays on to power smart bulbs:
+it is never commanded, and a relay that reports off is flagged, as the bulbs
+have lost power. In any other mode the relay is the light: the node reports its
+state and takes on and off. Its **Mode** setting overrides what was read, and
+decides when the configuration can't be read.
+
+When the relay is a room light (ordinary bulbs), give the node a **Target**:
+the light's id in the room's Targets JSON, marked `"onOffOnly": true`. The node
+is then that light's adapter on the neutral light contract, in detached or any
+other mode: wire the room's second output into it and its third output back
+into the room. The room's ON and OFF switch the relay, an `observe` asks for its
+status, and its reports come back as readings, with a change nobody here asked
+for (a person at a switch the relay follows, the Shelly app, someone else's
+command on its topic) as `external`. Detached, the presses still go to the
+switch policy. `msg.switchState` and `msg.switchCommand` work as before.
 Example: [`Shelly switch.json`](https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/Shelly%20switch.json).
 
 One house schedule can set the wake and bed times for many rooms. It is a

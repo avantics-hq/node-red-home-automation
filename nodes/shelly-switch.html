@@ -13,11 +13,14 @@
         return /^\d+$/.test(String(v).trim());
       }},
       // auto: as the device is configured.
-      mode: {value: "auto"}
+      mode: {value: "auto"},
+      // The room's id for the light its relay is; empty: not a room light,
+      // as before this setting.
+      target: {value: ""}
     },
     inputs: 1,
-    outputs: 2,
-    outputLabels: ["to the device (MQTT out)", "to the switch policy (detached), or the relay's state"],
+    outputs: 3,
+    outputLabels: ["to the device (MQTT out)", "to the switch policy (detached), or the relay's state", "to the room lighting controller (with a Target)"],
     icon: "font-awesome/fa-toggle-on",
     label: function () { return this.name || "shelly switch"; },
     paletteLabel: "shelly switch"
@@ -36,6 +39,7 @@
       <option value="relay">Relay: the relay is the light</option>
     </select>
   </div>
+  <div class="form-row"><label for="node-input-target">Target</label><input type="text" id="node-input-target" placeholder="the room's id for the light the relay is (optional)"></div>
 </script>
 
 <script type="text/html" data-help-name="home-shelly-switch">
@@ -47,6 +51,8 @@
     <li>This node's first output → an <b>MQTT out</b> node on the same broker, with no topic set.</li>
     <li>Detached: this node's second output → a <b>home switch lighting policy</b>, whose intents go to the room
       controller.</li>
+    <li>When the relay is a room light (a <b>Target</b> set): the room controller's second output (its light
+      commands) → this node, and this node's third output → the room controller.</li>
   </ol>
   <p>On the device, MQTT must be on with <b>Enable MQTT Control</b> and <b>RPC status notifications</b> (both the
     default).</p>
@@ -58,7 +64,26 @@
       node per switch.</dd>
     <dt>Mode</dt><dd><i>As the device is set up</i> (the default) reads the device's own configuration; the other two
       override it, and are needed when it can't be read.</dd>
+    <dt>Target</dt><dd>optional: the room's id for the light the relay is, in the room controller's Targets JSON,
+      marked <code>"onOffOnly": true</code>. Set, the node is that light's adapter, in either mode. Empty, the relay
+      isn't a room light, as before.</dd>
   </dl>
+  <h3>As a room light</h3>
+  <p>With a <b>Target</b>, the relay is that light, whether the device is detached (the wall switch's presses still
+    go to the switch policy, and the room switches the relay) or not (the relay follows the switch, and the room
+    switches it too). It speaks the room's neutral light contract, like the zigbee2mqtt light:</p>
+  <ul>
+    <li>The room's <code>msg.light</code> commands for its Target switch the relay: <code>on</code> or
+      <code>off</code> on <code>&lt;prefix&gt;/command/switch:&lt;n&gt;</code>. A relay has no brightness or colour,
+      so those are left out; mark the target on/off only. Commands for other lights are ignored, so one wire from the
+      room can feed every light's node. An <code>observe</code> asks the relay for its status.</li>
+    <li>Its readings go to the room on output 3: <code>observed</code> with the relay's output; <code>external</code>
+      when the relay changes with no command of this node's pending (a person at a switch the relay follows, the
+      Shelly app), or when someone else's <code>on</code>, <code>off</code> or <code>toggle</code> appears on its
+      command topic (its own commands' echoes are recognised as its own); and <code>availability</code>, shown,
+      never acted on.</li>
+    <li>The status shows the light's state, such as <i>detached, switch input · hall on</i>.</li>
+  </ul>
   <h3>What it does</h3>
   <ul>
     <li>At startup, and whenever the device comes online, it asks the device for its configuration
@@ -66,13 +91,13 @@
       receives it) and for its whole status. The node status shows what it found, such as <i>detached, switch
       input</i>. If nothing answers within 10 seconds, the status says <i>configuration unreadable: set Mode</i>, and
       nothing is passed on until <b>Mode</b> says how.</li>
-    <li><b>Detached</b>: the relay stays on, powering smart bulbs, and is never switched from here. A switch-type input's
+    <li><b>Detached</b>, without a Target: the relay stays on, powering smart bulbs, and is never switched from here. A switch-type input's
       on/off becomes <code>msg.source = "switch"</code> with <code>msg.payload = {state}</code> (the first, from the
       device's status, marked <code>baseline</code>); a button-type input's pushes become
       <code>msg.source = "switch-action"</code> with <code>single</code>, <code>double</code> or <code>long</code>
       (the switch policy acts on single and double; long is passed on for later use). The device going offline or online becomes
       <code>msg.source = "switch-availability"</code>. If the relay reports off, the status warns: the bulbs have lost
-      power.</li>
+      power. With a Target, the relay is the light and the room switches it (see above).</li>
     <li><b>Relay</b> (follow, flip, momentary and the other modes): the relay is the light. Its state becomes
       <code>msg.switchState = {kind: "observed", on, person, observedAt}</code>, with <code>person</code> true when
       the change came from the device's own input; <code>msg.switchCommand = {power: "on" | "off"}</code> switches it.
