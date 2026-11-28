@@ -121,6 +121,7 @@ const registerCoverController: NodeInitializer = (RED) => {
       stopping: () => coverStoppingOutputs(publishing),
       output: 3,
       outputs: 4,
+      startupMessage: {cover: {kind: "startup"}},
       statusTopic: publishing.discovery ? publishing.discoveryPrefix + "/status" : null,
       setTopics: publishesState(publishing)
         ? [coverCommandTopic(publishing), ...(publishing.positions ? [coverSetPositionTopic(publishing)] : [])]

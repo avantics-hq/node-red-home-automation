@@ -184,7 +184,8 @@
   <h3>Broker</h3>
   <p>Choose Node-RED's <b>MQTT broker</b> node, and it publishes and reads its set topics itself: it announces everything each time the
     broker connects, reconnects included, and each time Home Assistant comes back (<code>online</code> on
-    <code>&lt;prefix&gt;/status</code>), so its entities come back by themselves. Its publication output then sends
+    <code>&lt;prefix&gt;/status</code>), so its entities come back by themselves.
+    Each connect also runs its startup message, as a Status node's "connected" did without a broker. Its publication output then sends
     nothing, and an MQTT out on it, an MQTT in on its set topics and a Status node are no longer needed: still wired, they change nothing.
     Opening and saving the node offers the first broker in your flows. A node saved before 6.2 that publishes keeps
     publishing on its output, as below, and needs no broker until you choose one.</p>

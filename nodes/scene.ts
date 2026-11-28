@@ -84,6 +84,7 @@ const registerScene: NodeInitializer = (RED) => {
       stopping: () => sceneStoppingOutputs(publishing),
       output: 2,
       outputs: 3,
+      startupMessage: {scene: {kind: "startup"}},
       statusTopic: publishing.discovery ? publishing.discoveryPrefix + "/status" : null,
       setTopics: publishesState(publishing) ? [sceneCommandTopic(publishing)] : []
     }, trace, (msg, send) => handle(msg, send));

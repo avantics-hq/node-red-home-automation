@@ -145,6 +145,7 @@ const registerAvrController: NodeInitializer = (RED) => {
       stopping: () => avrStoppingOutputs(publishing),
       output: 2,
       outputs: 3,
+      startupMessage: {avr: {kind: "startup"}},
       statusTopic: publishing.discovery ? publishing.discoveryPrefix + "/status" : null,
       setTopics: publishesState(publishing) ? [receiverTopic(publishing.area, "volume/set")] : []
     }, trace, (msg, send) => handle(msg, send));

@@ -22,6 +22,10 @@ export interface PublishingSideParts extends PublishingNode {
   statusTopic: string | null;
   // The topics it reads requests on (its set topics).
   setTopics: string[];
+  // Its startup message. With a broker, each connect runs it through the
+  // node's own input handling, as a Status node's "connected" did before:
+  // its announcement, and whatever else its startup does.
+  startupMessage: Record<string, unknown>;
 }
 
 export interface PublishingSide extends PublishingLifecycle {
@@ -50,9 +54,10 @@ export function publishingSide(
   broker: BrokerNode | null,
   parts: PublishingSideParts,
   trace: TraceMetadata,
-  // A message on one of its set topics, from the broker, for the node's own
-  // input handling as if from an MQTT in node.
-  onSet: (msg: InputMessage, send: Send) => void
+  // The node's own input handling: a message on one of its set topics from
+  // the broker, as if from an MQTT in node, and its startup message on each
+  // connect.
+  handle: (msg: InputMessage, send: Send) => void
 ): PublishingSide {
   if (!broker) {
     const lifecycle = publishingLifecycle(RED, node, parts);
@@ -70,7 +75,8 @@ export function publishingSide(
     stopping: parts.stopping,
     statusTopic: parts.statusTopic,
     setTopics: parts.setTopics,
-    onSet: (message) => onSet({topic: message.topic, payload: message.payload, retain: false} as InputMessage, node.send.bind(node))
+    onSet: (message) => handle({topic: message.topic, payload: message.payload, retain: false} as InputMessage, node.send.bind(node)),
+    onConnected: () => handle(structuredClone(parts.startupMessage) as InputMessage, node.send.bind(node))
   }, trace);
   return {
     broker: true,

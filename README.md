@@ -960,7 +960,9 @@ Give the room a **Broker** (Node-RED's MQTT broker node) and it publishes this
 itself: each time the broker connects, reconnects included, and each time Home
 Assistant comes back (`online` on `<prefix>/status`, its birth message), it
 clears what it no longer publishes and announces its entities, availability and
-every light's control state, so they come back by themselves; `offline` as it
+every light's control state, so they come back by themselves (each connect runs
+its startup, as a Status node's "connected" did, so each light is also asked
+for a reading); `offline` as it
 stops, and everything cleared when it is deleted. The MQTT out on its first
 output and the Status node are then no longer needed: the first output sends
 nothing, and a Status node still wired in is ignored. The editor shows a room

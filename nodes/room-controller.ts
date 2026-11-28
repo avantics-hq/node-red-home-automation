@@ -147,7 +147,10 @@ const registerRoomController: NodeInitializer = (RED) => {
         retainedTopics: () => roomRetainedTopics(controllerConfig),
         announcement: () => roomAnnouncement(controllerConfig, node.context().get("state") as Partial<RoomState> | undefined),
         stopping: () => roomStoppingOutputs(controllerConfig),
-        statusTopic: controllerConfig.discovery ? controllerConfig.discoveryPrefix + "/status" : null
+        statusTopic: controllerConfig.discovery ? controllerConfig.discoveryPrefix + "/status" : null,
+        // Each connect runs its startup, as a Status node's "connected" did:
+        // its announcement, and each light asked for a reading.
+        onConnected: () => process({lighting: {kind: "startup"}}, node.send.bind(node))
       }, trace);
     } else {
       lifecycle = publishingLifecycle(RED, node, {

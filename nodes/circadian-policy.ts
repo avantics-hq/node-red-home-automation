@@ -130,6 +130,7 @@ const registerCircadianPolicy: NodeInitializer = (RED) => {
       stopping: () => circadianStoppingOutputs(publishing),
       output: 1,
       outputs: 2,
+      startupMessage: {lighting: {kind: "startup"}},
       statusTopic: publishing.discovery ? publishing.discoveryPrefix + "/status" : null,
       // Following a house, the wake and bed times are the house's to set.
       setTopics: publishesState(publishing) ? [

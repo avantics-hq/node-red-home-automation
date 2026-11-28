@@ -2881,6 +2881,41 @@ test("set topics from the broker are the node's own requests: a scene started an
   assert.deepEqual(commands.map((command) => [command?.operation, command?.position]), [["set_position", 100]]);
 });
 
+test("with a broker, each connect runs a node's own startup, not just its announcement (#202)", async (t) => {
+  type Envelope = Array<Array<Record<string, unknown>> | Record<string, unknown> | null>;
+  const port = (sent: unknown[], index: number) => sent.flatMap((envelope) => {
+    const out = (envelope as Envelope)[index];
+    return out === null || out === undefined ? [] : Array.isArray(out) ? out : [out];
+  });
+  const broker = fakeBroker();
+  builtNodes.set("broker-startup", broker);
+  const settings = {area: "test", homeAssistant: "discovery", broker: "broker-startup", idScheme: "node"};
+  const room = new (runtime(registerRoom).Constructor)({id: "room-startup", targets: "[{\"id\":\"main\"}]", ...settings});
+  const cover = new (runtime(registerCover).Constructor)({id: "cover-startup", topicName: "left", ...settings});
+  const circadian = new (runtime(registerCircadian).Constructor)({id: "circadian-startup", ...settings});
+  const contract = new (runtime(registerTheatreStateContract).Constructor)({id: "contract-startup", activities: "[\"off\",\"tv\"]", ...settings});
+  for (const node of [room, cover, circadian, contract]) t.after(() => close(node));
+  assert.deepEqual([room.errors, cover.errors, circadian.errors, contract.errors], [[], [], [], []]);
+  // A cover it has a target for, to read again (one with none stays idle).
+  await receive(cover, {payload: 40});
+  cover.sent.length = 0;
+  broker.connect();
+  // The room asks each light for a reading.
+  assert.deepEqual(port(room.sent, 1).map(({light}) => light), [{kind: "observe", target: "main"}]);
+  // The cover controller reads its cover.
+  assert.ok(port(cover.sent, 0).some((message) => (message.cover_command as {operation?: string} | undefined)?.operation === "observe"),
+    JSON.stringify(cover.sent));
+  // The circadian policy styles its rooms.
+  assert.ok(port(circadian.sent, 0).some((message) => (message.lighting as {kind?: string} | undefined)?.kind === "style"), JSON.stringify(circadian.sent));
+  // The theatre contract's startup republishes its entities and availability, through the broker (its state topics
+  // are retained and published with each snapshot, as before).
+  assert.ok(broker.published.some(({topic}) => topic === "homeassistant/select/nrha_contract-startup_theatre_activity/config"));
+  assert.ok(broker.published.some(({topic, payload}) => topic === "home/test/theatre/availability" && payload === "online"));
+  assert.equal(traces(contract).some(({event, outcome}) => event === "startup" && outcome === "discovery"), true, "its startup ran");
+  // And everything announced, as before.
+  assert.ok(broker.published.some(({topic, payload}) => topic === "home/test/lighting/availability" && payload === "online"));
+});
+
 test("activity lighting takes a light's reading as the room passes it on", async (t) => {
   const node = new (runtime(registerActivityLighting).Constructor)({area: "lounge", owner: "activity",
     profiles: JSON.stringify({off: {targets: [], values: {}}, tv: {targets: ["wall"], values: {brightnessPct: 25}}}), confirmationTimeoutMs: 15000, maxAttempts: 2});

@@ -46,6 +46,10 @@ export interface HomeAssistantParts {
   // The set topics it advertised, and what a person sent on one.
   setTopics?: string[];
   onSet?(message: BrokerMessage): void;
+  // On each connect, after clearing what it no longer publishes: the node's
+  // own startup (its announcement and whatever else a startup does, such as
+  // asking devices for readings), in place of this module's announcement.
+  onConnected?(): void;
 }
 
 export interface HomeAssistantDiscovery {
@@ -79,7 +83,15 @@ export function homeAssistantDiscovery(
     record("home-assistant", "announced", reason);
   }
 
-  link.onConnected(() => announce("connected"));
+  link.onConnected(() => {
+    if (!parts.onConnected) {
+      announce("connected");
+      return;
+    }
+    publish(clearStaleRetained(node, parts.retainedTopics(), "startup", possible()));
+    record("home-assistant", "startup", "connected");
+    parts.onConnected();
+  });
   if (parts.statusTopic) {
     link.subscribe(parts.statusTopic, (message) => {
       if (message.payload.trim().toLowerCase() === "online") announce("home-assistant-online");
