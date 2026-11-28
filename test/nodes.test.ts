@@ -2391,6 +2391,15 @@ test("cover node publishing: a Home Assistant cover entity, its state as it chan
   // Anything else on its set topics is ignored, with a trace.
   assert.deepEqual(await receive(node, {topic: "home/bedroom/cover/left/set", payload: "SIDEWAYS"}), []);
   assert.equal(traces(node).at(-1)?.reason, "not-open-close-or-stop");
+
+  // Its own published topics, back through a wildcard subscription (#198): ignored, never requests.
+  for (const [topic, payload] of [["home/bedroom/cover/left/state", "open"], ["home/bedroom/cover/left/position", "42"], ["home/bedroom/cover/left/availability", "online"]]) {
+    assert.deepEqual(await receive(node, {topic, payload}), [], topic);
+    assert.equal(traces(node).at(-1)?.reason, "not-a-set-topic", topic);
+  }
+  // A flow's request, with no topic, still works.
+  const fromFlow = await receive<SendEnvelope>(node, {payload: 10});
+  assert.ok(fromFlow.flatMap((envelope) => envelope[0] ?? []).some((message) => (message as {cover_command?: {position?: number}}).cover_command?.position === 10));
 });
 
 // The adapter has no timers, so nothing to close.

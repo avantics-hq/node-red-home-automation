@@ -107,6 +107,12 @@ export function coverInbound(
   if (!publishesState(config)) return null;
   const command = msg.topic === coverCommandTopic(config);
   const position = config.positions && msg.topic === coverSetPositionTopic(config);
+  // Anything else on its own topic tree, such as its own state, position and
+  // availability coming back through a wildcard subscription, is never a
+  // request.
+  if (!command && !position && typeof msg.topic === "string" && msg.topic.startsWith(coverTopic(config, ""))) {
+    return {request: null, traces: [{event: "own-topic", outcome: "ignored", reason: "not-a-set-topic", details: {topic: msg.topic}}]};
+  }
   if (!command && !position) return null;
   const event = command ? "command-set" : "position-set";
   const ignored = (reason: string, details: Record<string, unknown> = {}) =>

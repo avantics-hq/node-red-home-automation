@@ -60,8 +60,14 @@ test("Home Assistant's commands come back as the cover's own requests", () => {
   assert.equal(at("home/bedroom/cover/left/position/set", "140")?.traces[0]?.reason, "not-a-position");
   assert.equal(at("home/bedroom/cover/left/set", "OPEN", true)?.traces[0]?.reason, "retained-message");
   assert.equal(at("elsewhere/left/set", "OPEN"), null, "other topics pass through");
-  assert.equal(coverInbound({topic: "home/bedroom/cover/left/position/set", payload: "40"}, {...config, positions: false}), null,
-    "no positions on an open/close cover");
+  // Its own published topics, back through a wildcard subscription: never requests.
+  for (const [topic, payload] of [["home/bedroom/cover/left/state", "open"], ["home/bedroom/cover/left/position", "42"], ["home/bedroom/cover/left/availability", "online"]]) {
+    const echo = at(topic!, payload);
+    assert.deepEqual([echo?.request, echo?.traces.map(({event, reason}) => [event, reason])], [null, [["own-topic", "not-a-set-topic"]]], topic);
+  }
+  assert.equal(at("home/bedroom/cover/right/position", "42"), null, "another cover's topics pass through");
+  assert.deepEqual(coverInbound({topic: "home/bedroom/cover/left/position/set", payload: "40"}, {...config, positions: false})?.request, null,
+    "no positions on an open/close cover: its own topic, ignored");
   assert.equal(coverInbound({topic: "home/bedroom/cover/left/set", payload: "OPEN"}, {...config, publishState: false}), null);
 });
 

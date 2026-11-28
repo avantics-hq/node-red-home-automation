@@ -157,8 +157,9 @@
     its position on <code>…/position</code>, once it has reported, with <code>online</code> or <code>offline</code>
     on <code>…/availability</code>. It takes <code>OPEN</code>, <code>CLOSE</code> or <code>STOP</code> on
     <code>…/set</code>, and a position on <code>…/position/set</code>, as requests like any other, carried out and
-    confirmed as above; wire an MQTT in node on <code>home/&lt;area&gt;/cover/&lt;name&gt;/+</code> (and
-    <code>…/position/set</code>) into this node. Nothing commands the device through Home Assistant. With
+    confirmed as above; wire an MQTT in node on <code>home/&lt;area&gt;/cover/&lt;name&gt;/set</code> (and, for a position cover,
+    one on <code>…/position/set</code>) into this node. Anything else on its own topics, such as its own state coming
+    back through a wildcard subscription, is ignored. Nothing commands the device through Home Assistant. With
     <b>Home Assistant discovery</b>, a cover entity named by <b>Name in topics</b>, with open, close and stop, and
     for a position cover also its position and set position.</p>
   <h3>Open, close and stop only</h3>
