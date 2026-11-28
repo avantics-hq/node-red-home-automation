@@ -12,9 +12,10 @@
 // - on every light change it publishes the brightness, 0-255, on
 //   <device>/g (and the colour on /c and the XML API response on /v);
 // - it says nothing of who made a change.
-// Seen on a WLED device, not in its documentation: <device>/status carries
-// "online" or "offline", retained (its last will), and /g, /c and /v aren't
-// retained.
+// Not in its documentation, but seen on the firmware we tested:
+// <device>/status carries "online" or "offline" as its last will, retained,
+// and /g, /c and /v aren't retained. So online starts unknown, and only an
+// explicit offline refuses a command.
 
 import type {TraceEntry} from "./bounded-trace";
 import {isObject, type MqttPublication} from "./mqtt-message";
