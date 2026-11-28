@@ -40,7 +40,9 @@
 <aside class="callout neutral"><strong>Check before updating.</strong><p>This package is under active development. Pin the version you use, read the release notes and check your flows after an update. A major version can require changes to saved flows: the <a href="https://github.com/avantics-hq/node-red-home-automation#600">6.0.0 notes</a> list what to migrate.</p></aside>
 </section>
 <section id="tarball"><h2>Add it from a release tarball</h2>
-<p>Each <a href="https://github.com/avantics-hq/node-red-home-automation/releases">GitHub Release</a> also attaches the package tarball and its SHA-256 checksum. Check the checksum of the file you downloaded against the one in the release, then add it in either way:</p>
+<p>Each <a href="https://github.com/avantics-hq/node-red-home-automation/releases">GitHub Release</a> also attaches the package tarball and its SHA-256 checksum. Download both into one folder and check the tarball there: it prints the tarball’s name and <code>OK</code>. On macOS, use <code>shasum -a 256 -c</code>. Checksum files from releases up to 6.1.0 name it as <code>release/…tgz</code>: put the tarball in a <code>release</code> folder beside the checksum file to check those.</p>
+<div class="code-block"><div class="code-label"><span>Terminal · the folder with both downloads</span></div><pre><code>sha256sum -c avantics-node-red-home-automation-&lt;version&gt;.tgz.sha256</code></pre></div>
+<p>Then add it in either way:</p>
 <ul>
 <li>In the editor, choose <strong>Manage palette → Install → Upload module</strong> and pick the tarball.</li>
 <li>From your Node-RED user directory, install the tarball with npm and restart Node-RED.</li>
