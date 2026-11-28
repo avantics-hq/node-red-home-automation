@@ -1,6 +1,15 @@
 <script type="text/javascript">
   (function () {
     function on(value) { return value === true || value === "true"; }
+    // Its Publish choice: it always publishes state, so state or discovery,
+    // from the open dialog or its saved settings; a node saved before the
+    // choice reads its old discovery setting.
+    function publishChoice(node) {
+      var select = $("#node-input-homeAssistant");
+      if (select.length) return select.val();
+      if (node.homeAssistant === "state" || node.homeAssistant === "discovery") return node.homeAssistant;
+      return on(node.discovery) ? "discovery" : "state";
+    }
     RED.nodes.registerType("home-house-schedule-mqtt", {
       category: "home automation",
       color: "#ffd27f",
@@ -9,6 +18,16 @@
         // and paste keep the saved name, so onadd leaves a saved node's settings.
         name: {value: "_DEFAULT_"},
         schedule: {value: "", type: "home-house-schedule", required: true},
+        // Publish: state or discovery. null means "not set": a node saved
+        // before this setting, read from discovery, kept with no row.
+        homeAssistant: {value: null},
+        // Node-RED's MQTT broker node, through which it publishes and reads its
+        // set topics itself. It always publishes, so it needs one. The editor offers
+        // the first broker when the dialog is opened and saved, not when the
+        // node is dropped.
+        broker: {value: "", type: "mqtt-broker", required: false, validate: function (v) {
+          return Boolean(v) && v !== "_ADD_" ? true : "choose a broker";
+        }},
         discovery: {value: true},
         discoveryPrefix: {value: "homeassistant", required: true, validate: function (v) { var prefix = String(v || "").trim().replace(/^\/+|\/+$/g, ""); return Boolean(prefix) && !/[+#]/.test(prefix); }},
         // How Home Assistant IDs are named; this node has no older entities,
@@ -21,7 +40,10 @@
         this.idScheme = "node";
       },
       oneditprepare: function () {
-        $("#node-input-discovery").prop("checked", on(this.discovery));
+        $("#node-input-homeAssistant").val(publishChoice(this));
+        function publishRows() { $(".publish-discovery").toggle($("#node-input-homeAssistant").val() === "discovery"); }
+        $("#node-input-homeAssistant").on("change", publishRows);
+        publishRows();
       },
       inputs: 1,
       outputs: 1,
@@ -35,15 +57,24 @@
 <script type="text/html" data-template-name="home-house-schedule-mqtt">
   <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
   <div class="form-row"><label for="node-input-schedule">Schedule</label><input type="text" id="node-input-schedule"></div>
-  <div class="form-row"><label for="node-input-discovery">Home Assistant discovery</label><input type="checkbox" id="node-input-discovery" style="display:inline-block; width:auto;"></div>
-  <div class="form-row"><label for="node-input-discoveryPrefix">Discovery prefix</label><input type="text" id="node-input-discoveryPrefix"></div>
+  <div class="form-row">
+    <label for="node-input-homeAssistant">Publish</label>
+    <select id="node-input-homeAssistant">
+      <option value="state">MQTT state</option>
+      <option value="discovery">MQTT state and Home Assistant discovery</option>
+    </select>
+  </div>
+  <div class="form-row"><label for="node-input-broker">Broker</label><input type="text" id="node-input-broker"></div>
+  <div class="form-tips">With a broker, it publishes and reads its set topics itself: an MQTT out on its publication output, an
+    MQTT in on its its set topics, and a Status node are no longer needed and can be deleted.</div>
+  <div class="form-row publish-discovery"><label for="node-input-discoveryPrefix">Discovery prefix</label><input type="text" id="node-input-discoveryPrefix"></div>
 </script>
 
 <script type="text/html" data-help-name="home-house-schedule-mqtt">
   <p>A house schedule's MQTT and Home Assistant side. Optional: rooms follow the schedule without it.</p>
   <p>It publishes the schedule's times, retained, on <code>home/&lt;name&gt;/schedule/wake-time/state</code> and
     <code>bed-time/state</code>, with availability on <code>home/&lt;name&gt;/schedule/availability</code>; with
-    <b>Home Assistant discovery</b>, wake and bed time entities, named after the schedule so a replacement node keeps
+    <b>Publish</b> set to <i>MQTT state and Home Assistant discovery</i>, wake and bed time entities, named after the schedule so a replacement node keeps
     them. Use one per schedule: two would share the same topics and entities, and deleting one clears them for both
     until the other next starts. Wire its output to an MQTT out node, and an MQTT in node on the set topics to its input.</p>
   <h3>Inputs</h3>
@@ -58,8 +89,15 @@
   <ol class="node-ports">
     <li>MQTT publications.</li>
   </ol>
+  <h3>Broker</h3>
+  <p>Choose Node-RED's <b>MQTT broker</b> node, and it publishes and reads its set topics itself: it announces everything each time the
+    broker connects, reconnects included, and each time Home Assistant comes back (<code>online</code> on
+    <code>&lt;prefix&gt;/status</code>), so its entities come back by themselves. Its publication output then sends
+    nothing, and an MQTT out on it, an MQTT in on its set topics and a Status node are no longer needed: still wired, they change nothing.
+    Opening and saving the node offers the first broker in your flows. Without a broker it publishes on its output,
+    as below.</p>
   <h3>When MQTT out connects</h3>
-  <p>Wire a <b>Status node</b> whose scope is your MQTT out node into this node. Each time MQTT out shows
+  <p>Without a broker, wire a <b>Status node</b> whose scope is your MQTT out node into this node. Each time MQTT out shows
     "connected", this node takes it as its startup message (<code>msg.source = "startup"</code>) and announces itself again:
     Node-RED's MQTT broker node drops what it is given before it connects, so what the node sends as the flows
     start is lost on a first start, a full deploy or a restart. Any other status message is ignored.</p>

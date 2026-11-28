@@ -5,6 +5,23 @@
   // A dB bound. A node saved before 5.0 has none (its 0-98 bounds were
   // removed in 6.0), so it shows as invalid until they are set.
   function volumeBound(value) { return given(value) && Number.isFinite(Number(value)); }
+  // Its Publish choice (off, state or discovery), from the open dialog or
+  // its saved settings: a node saved before the choice reads its two old
+  // settings (lib/home-assistant-setting.ts).
+  function publishChoice(node) {
+    function on(value) { return value === true || value === "true"; }
+    var select = $("#node-input-homeAssistant");
+    if (select.length) return select.val();
+    if (node.homeAssistant === "off" || node.homeAssistant === "state" || node.homeAssistant === "discovery") return node.homeAssistant;
+    return !on(node.publishState) ? "off" : on(node.discovery) ? "discovery" : "state";
+  }
+  // Its area is needed while it publishes, and for a node saved before the
+  // choice whenever either old setting was on, as the runtime checks.
+  function needsArea(node) {
+    function on(value) { return value === true || value === "true"; }
+    var saved = !$("#node-input-homeAssistant").length && (node.homeAssistant === null || node.homeAssistant === undefined);
+    return publishChoice(node) !== "off" || (saved && (on(node.publishState) || on(node.discovery)));
+  }
   RED.nodes.registerType("home-avr-controller", {
     category: "home automation",
     color: "#c7d9f1",
@@ -14,10 +31,7 @@
       name: {value: "_DEFAULT_"},
       // Required only when the node publishes, and then with a letter or
       // digit, from which its topics and IDs are made.
-      area: {value: "", validate: function (v) {
-        var publishing = $("#node-input-publishState").length ? $("#node-input-publishState").prop("checked") : on(this.publishState);
-        return !publishing || /[a-z0-9]/i.test(String(v || ""));
-      }},
+      area: {value: "", validate: function (v) { return !needsArea(this) || /[a-z0-9]/i.test(String(v || "")); }},
       sources: {value: "{\"shield\":\"SAT/CBL\",\"playstation\":\"GAME\"}", required: true, validate: function (v) { try { JSON.parse(v); return true; } catch (e) { return false; } }},
       retryMs: {value: 2000, required: true, validate: RED.validators.number()},
       maxAttempts: {value: 3, required: true, validate: RED.validators.number()},
@@ -34,6 +48,16 @@
       minVolume: {value: ""},
       maxVolume: {value: ""},
       // The receiver published nothing before these settings, so both start off.
+      // Publish: off, state or discovery. null means "not set": a node saved
+      // before this setting, read from the two below, kept with no rows.
+      homeAssistant: {value: null},
+      // Node-RED's MQTT broker node, through which it publishes and reads its set
+      // topics itself. Needed unless Publish is "Don't publish". The editor offers
+      // the first broker when the dialog is opened and saved, not when the node
+      // is dropped.
+      broker: {value: "", type: "mqtt-broker", required: false, validate: function (v) {
+        return publishChoice(this) === "off" || (Boolean(v) && v !== "_ADD_") ? true : "choose a broker, or set Publish to Don't publish";
+      }},
       publishState: {value: false},
       discovery: {value: false},
       discoveryPrefix: {value: "homeassistant", required: true, validate: function (v) { var prefix = String(v || "").trim().replace(/^\/+|\/+$/g, ""); return Boolean(prefix) && !/[+#]/.test(prefix); }},
@@ -47,17 +71,16 @@
       this.idScheme = "node";
     },
     oneditprepare: function () {
-      $("#node-input-publishState").prop("checked", on(this.publishState));
-      $("#node-input-discovery").prop("checked", on(this.discovery));
-      // Discovery describes the published state, so it needs it.
-      function follow() {
-        var publishing = $("#node-input-publishState").prop("checked");
-        if (!publishing) $("#node-input-discovery").prop("checked", false);
-        $("#node-input-discovery").prop("disabled", !publishing);
-        $("#node-input-area").trigger("change");
+      $("#node-input-homeAssistant").val(publishChoice(this));
+      // The broker only while it publishes, the prefix only with discovery.
+      function publishRows() {
+        var choice = $("#node-input-homeAssistant").val();
+        $(".publish-broker").toggle(choice !== "off");
+        $(".publish-discovery").toggle(choice === "discovery");
+        $("#node-input-area, #node-input-broker").trigger("change");
       }
-      $("#node-input-publishState, #node-input-discovery").on("change", follow);
-      follow();
+      $("#node-input-homeAssistant").on("change", publishRows);
+      publishRows();
     },
     // Once the dB bounds are set, the removed 0-98 ones go.
     oneditsave: function () {
@@ -81,9 +104,18 @@
   <div class="form-row"><label for="node-input-maxAttempts">Maximum attempts</label><input type="number" id="node-input-maxAttempts"></div>
   <div class="form-row"><label for="node-input-minVolumeDb">Minimum volume (dB)</label><input type="number" step="0.5" id="node-input-minVolumeDb"></div>
   <div class="form-row"><label for="node-input-maxVolumeDb">Maximum volume (dB)</label><input type="number" step="0.5" id="node-input-maxVolumeDb"></div>
-  <div class="form-row"><label for="node-input-publishState">Publish state over MQTT</label><input type="checkbox" id="node-input-publishState" style="display:inline-block; width:auto;"></div>
-  <div class="form-row"><label for="node-input-discovery">Home Assistant discovery</label><input type="checkbox" id="node-input-discovery" style="display:inline-block; width:auto;"> <span>(needs Publish state)</span></div>
-  <div class="form-row"><label for="node-input-discoveryPrefix">Discovery prefix</label><input type="text" id="node-input-discoveryPrefix"></div>
+  <div class="form-row">
+    <label for="node-input-homeAssistant">Publish</label>
+    <select id="node-input-homeAssistant">
+      <option value="off">Don't publish</option>
+      <option value="state">MQTT state</option>
+      <option value="discovery">MQTT state and Home Assistant discovery</option>
+    </select>
+  </div>
+  <div class="form-row publish-broker"><label for="node-input-broker">Broker</label><input type="text" id="node-input-broker"></div>
+  <div class="form-tips publish-broker">With a broker, it publishes and reads its set topics itself: an MQTT out on its
+    publication output, an MQTT in on its set topics, and a Status node are no longer needed and can be deleted.</div>
+  <div class="form-row publish-discovery"><label for="node-input-discoveryPrefix">Discovery prefix</label><input type="text" id="node-input-discoveryPrefix"></div>
 </script>
 
 <script type="text/html" data-help-name="home-avr-controller">
@@ -104,12 +136,12 @@
   <h3>Publishing</h3>
   <p>Off unless switched on, and then named after the <b>Area</b>, which is needed.</p>
   <dl class="message-properties">
-    <dt>Publish state over MQTT</dt><dd>what the receiver reports, retained, whenever it changes:
+    <dt>Publish: MQTT state</dt><dd>what the receiver reports, retained, whenever it changes:
       <code>home/&lt;area&gt;/receiver/power/state</code> (<code>ON</code> or <code>OFF</code>),
       <code>…/source/state</code> (the source name) and <code>…/volume/state</code>, with <code>online</code> or
       <code>offline</code> on <code>…/availability</code>.</dd>
-    <dt>Home Assistant discovery</dt><dd>power and source sensors, and a volume number in dB between <b>Minimum volume</b>
-      and <b>Maximum volume</b>. It needs <b>Publish state</b>. A volume set there arrives on
+    <dt>Publish: MQTT state and Home Assistant discovery</dt><dd>power and source sensors, and a volume number in dB between <b>Minimum volume</b>
+      and <b>Maximum volume</b>. It includes the MQTT state, which they read. A volume set there arrives on
       <code>…/volume/set</code>; wire an MQTT in node on that topic into this node. Sets arriving within 0.3 seconds
       of each other (a slider, repeated taps) are settled to the last one, which becomes an ordinary absolute
       volume request, bounded and confirmed like any other: it waits for a power or source change in progress (such
@@ -117,8 +149,15 @@
   </dl>
   <p>These go on the third output; wire it to an MQTT out node. The node announces itself once the flows have
     started, and again at <code>kind: "startup"</code>.</p>
+  <h3>Broker</h3>
+  <p>Choose Node-RED's <b>MQTT broker</b> node, and it publishes and reads its set topic itself: it announces everything each time the
+    broker connects, reconnects included, and each time Home Assistant comes back (<code>online</code> on
+    <code>&lt;prefix&gt;/status</code>), so its entities come back by themselves. Its publication output then sends
+    nothing, and an MQTT out on it, an MQTT in on its set topic and a Status node are no longer needed: still wired, they change nothing.
+    Opening and saving the node offers the first broker in your flows. Without a broker it publishes on its output,
+    as below.</p>
   <h3>When MQTT out connects</h3>
-  <p>Wire a <b>Status node</b> whose scope is your MQTT out node into this node. Each time MQTT out shows
+  <p>Without a broker, wire a <b>Status node</b> whose scope is your MQTT out node into this node. Each time MQTT out shows
     "connected", this node takes it as its startup message (<code>msg.avr = {kind: "startup"}</code>) and announces itself again:
     Node-RED's MQTT broker node drops what it is given before it connects, so what the node sends as the flows
     start is lost on a first start, a full deploy or a restart. Any other status message is ignored.</p>

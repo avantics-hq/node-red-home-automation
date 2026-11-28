@@ -10,6 +10,8 @@ import {
   type MotionState
 } from "../lib/motion-policy";
 import {
+  motionDelayTopic,
+  motionEnabledTopic,
   motionInbound,
   motionRetainedTopics,
   motionStartingOutputs,
@@ -20,9 +22,11 @@ import {
 import {ID_SCHEMES, discoveryPrefixSetting} from "../lib/ha-discovery";
 import {optionalBooleanSetting, optionalChoiceSetting} from "../lib/settings";
 import {publishingArea} from "../lib/topic-names";
-import {guarded, invalidConfig, onInput, optionalArea, runReducer, type Send} from "./adapter";
+import {guarded, invalidConfig, onInput, optionalArea, runReducer, type Send, type InputMessage} from "./adapter";
 import {publishesState} from "../lib/publishing-node";
-import {publishingLifecycle} from "./publishing-lifecycle";
+import {brokerSetting, publishingSide} from "./publishing-side";
+import type {BrokerNode} from "./mqtt-broker-link";
+import {publishingChoice} from "../lib/home-assistant-setting";
 import {refusedEnables} from "./refused-enable";
 
 interface MotionPolicyConfig extends NodeDef {
@@ -31,6 +35,11 @@ interface MotionPolicyConfig extends NodeDef {
   offTargets?: string;
   defaultDelaySeconds?: number | string;
   defaultIlluminanceCutoff?: number | string;
+  // Publish: off, state or discovery; not set: from publishState and
+  // discovery, which it replaced.
+  homeAssistant?: string | null;
+  // Node-RED's mqtt-broker node, to publish and read its set topics itself.
+  broker?: string;
   publishState?: boolean | string | null;
   discovery?: boolean | string | null;
   discoveryPrefix?: string;
@@ -57,18 +66,19 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
 
     let policyConfig: MotionConfig & {area: string};
     let publishing: MotionPublishingConfig;
+    let broker: BrokerNode | null;
     try {
       const area = optionalArea(config);
       policyConfig = {area, ...normaliseMotionConfig(config)};
       // Off unless switched on, as motion published nothing before; there are
       // no older entities to keep, so not set names them after the node.
-      const publishState = optionalBooleanSetting(config.publishState, "publish state") ?? false;
-      const discovery = optionalBooleanSetting(config.discovery, "Home Assistant discovery") ?? false;
-      if (publishState || discovery) publishingArea(area, true);
+      const publish = publishingChoice(config, {publishState: false, discovery: false});
+      if (publish.needsArea) publishingArea(area, true);
+      broker = brokerSetting(RED, config.broker, publish.publishState);
       publishing = {
         area,
-        publishState,
-        discovery,
+        publishState: publish.publishState,
+        discovery: publish.discovery,
         discoveryPrefix: discoveryPrefixSetting(config.discoveryPrefix),
         nodeId: node.id,
         idScheme: optionalChoiceSetting(config.idScheme, "ID scheme", ID_SCHEMES) ?? "node"
@@ -121,14 +131,17 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
     // intents the room controller reads on the first. Available, and clear
     // of what it no longer publishes, as soon as it runs; offline as it
     // stops; nothing left behind when deleted.
-    const lifecycle = publishingLifecycle(RED, node, {
+    const trace = {area: policyConfig.area, component: "motion-policy"};
+    const lifecycle = publishingSide(RED, node, broker, {
       retainedTopics: () => motionRetainedTopics(publishing),
       possible: {owner: publishing, topics: () => publishesState(publishing) ? motionRetainedTopics({...publishing, publishState: true, discovery: true}) : []},
       starting: () => motionStartingOutputs(publishing, savedPolicyState()),
       stopping: () => motionStoppingOutputs(publishing),
       output: 1,
-      outputs: 2
-    });
+      outputs: 2,
+      statusTopic: publishing.discovery ? publishing.discoveryPrefix + "/status" : null,
+      setTopics: publishesState(publishing) ? [motionEnabledTopic(publishing.area, "set"), motionDelayTopic(publishing.area, "set")] : []
+    }, trace, (msg, send) => handle(msg, send));
 
     function process(input: MotionInput, send: Send, inboundTraces: ReturnType<typeof motionInbound> = null) {
       const globalEnabled = globalContext.get("MOTION_ENABLED_STATE") !== false;
@@ -176,7 +189,7 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
     } else if (savedState === undefined) {
       process({source: "cold-start"}, node.send.bind(node));
     }
-    onInput(node, (msg, send) => {
+    function handle(msg: InputMessage, send: Send) {
       if (msg.source === "startup") {
         lifecycle.startup(send, motionStartingOutputs(publishing, savedPolicyState()));
         return;
@@ -185,7 +198,12 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
       // else is an input as sent, with a pause's owner.
       const inbound = motionInbound(msg, publishing);
       process(inbound?.input ?? {source: String(msg.source ?? ""), payload: msg.payload, owner: typeof msg.owner === "string" ? msg.owner : undefined}, send, inbound);
-    }, {message: {source: "startup"}, trace: {area: policyConfig.area, component: "motion-policy"}});
+    }
+    onInput(node, (msg, send) => {
+      // With a broker, its set topics come from the broker: an MQTT in or a
+      // Status node still wired in changes nothing.
+      if (!lifecycle.fromBroker(msg)) handle(msg, send);
+    }, lifecycle.startupOption({source: "startup"}));
 
     node.on("close", (_removed: boolean, done: () => void) => {
       clearTimeout(offTimer);

@@ -2656,8 +2656,8 @@ const ANNOUNCING: Array<[string, NodeInitializer, Record<string, unknown>, Recor
   ["cover controller", registerCover, {topicName: "left"}, {cover: {kind: "startup"}}],
   ["AVR controller", registerAvr, {}, {avr: {kind: "startup"}}],
   ["theatre state contract", registerTheatreStateContract, {activities: "[\"off\",\"tv\"]"}, {theatreStateContract: {kind: "startup"}}],
-  // It publishes no retained state, but asks the device for its configuration as the flows start.
   ["scene", registerScene, {name: "Exercise mode", lights: "[{\"area\":\"test\",\"target\":\"main\",\"state\":\"OFF\"}]"}, {scene: {kind: "startup"}}],
+  // It publishes no retained state, but asks the device for its configuration as the flows start.
   ["shelly switch", registerShellySwitch, {topicPrefix: "shellyplus1-test", channel: "0"}, {shellySwitch: {kind: "startup"}}]
 ];
 const mqttStatus = (type: string, fill: string, text: string) =>
@@ -2810,6 +2810,75 @@ test("room: a broker that isn't in the flows is an invalid configuration; with P
   assert.match(String(missing.errors[0]), /MQTT broker node isn't in the flows/);
   const off = new room({id: "room-off", targets: "[{\"id\":\"main\"}]", homeAssistant: "off", broker: ""});
   assert.deepEqual(off.errors, []);
+});
+
+// Step 2's nodes, with a broker: their publication output and where it is.
+const WITH_BROKER: Array<[string, number]> = [
+  ["circadian lighting policy", 1], ["house schedule MQTT", 0], ["motion policy", 1], ["occupancy fusion", 1],
+  ["cover controller", 3], ["AVR controller", 2], ["theatre state contract", 1], ["scene", 2]
+];
+
+test("each publishing node with a broker publishes itself: announced on connect, set topics read from the broker only, output quiet, offline on close", async (t) => {
+  new (runtime(registerHouse).Constructor)({id: "announcing-house", name: "test", wakeTime: "07:00", bedTime: "23:00"});
+  for (const [label, publicationOutput] of WITH_BROKER) {
+    const [, register, settings] = ANNOUNCING.find(([name]) => name === label)!;
+    const broker = fakeBroker();
+    const brokerId = "broker-" + label.replace(/\W+/g, "-");
+    builtNodes.set(brokerId, broker);
+    const nodeRuntime = runtime(register);
+    const node = new nodeRuntime.Constructor({id: "b-" + brokerId, area: "test", name: "", ...settings, homeAssistant: "discovery", broker: brokerId});
+    t.after(() => close(node));
+    assert.deepEqual(node.errors, [], label);
+    nodeRuntime.events.emit("flows:started");
+    const published = (sent: unknown[]) => sent.some((envelope) => {
+      const out = (envelope as unknown[])[publicationOutput];
+      return out !== null && out !== undefined && (!Array.isArray(out) || out.length > 0);
+    });
+    assert.equal(published(node.sent), false, `${label}: nothing on its publication output`);
+    broker.connect();
+    assert.ok(broker.published.some(({payload, retain}) => payload === "online" && retain), `${label}: announced on connect`);
+    // Home Assistant's status, and exactly its own set topics.
+    const topics = [...broker.subscriptions.keys()];
+    assert.ok(topics.includes("homeassistant/status"), label);
+    assert.ok(topics.every((topic) => topic === "homeassistant/status" || /\/(set|request)$/.test(topic)), `${label}: ${topics.join(", ")}`);
+    // An MQTT in still wired on a set topic, or a Status node: ignored, with a trace.
+    const setTopic = topics.find((topic) => topic !== "homeassistant/status");
+    const before = node.sent.length;
+    if (setTopic) {
+      assert.deepEqual(await receive(node, {topic: setTopic, payload: "ON"}), [], `${label}: wired ${setTopic}`);
+      assert.equal(traces(node).at(-1)?.reason, "has-broker", label);
+    }
+    assert.deepEqual(await receive(node, mqttStatus("mqtt out", "green", "node-red:common.status.connected")), [], label);
+    assert.equal(traces(node).at(-1)?.reason, "has-broker", label);
+    assert.equal(node.sent.length, before, label);
+    // Offline as it stops.
+    broker.published.length = 0;
+    await new Promise<void>((resolve) => node.emit("close", false, resolve));
+    assert.ok(broker.published.some(({payload}) => payload === "offline"), `${label}: offline on close`);
+  }
+});
+
+test("set topics from the broker are the node's own requests: a scene started and a cover opened from Home Assistant", async (t) => {
+  const broker = fakeBroker();
+  builtNodes.set("broker-requests", broker);
+  const scene = new (runtime(registerScene).Constructor)({id: "scene-ha", name: "Bath", area: "test", homeAssistant: "state", broker: "broker-requests",
+    lights: "[{\"area\":\"test\",\"target\":\"main\",\"state\":\"ON\"}]"});
+  t.after(() => close(scene));
+  broker.connect();
+  broker.deliver("home/test/scene/bath/set", "ON");
+  assert.equal((scene.statuses.at(-1) as {text?: string}).text, "on · 4h 0m left");
+  assert.ok(broker.published.some(({topic, payload}) => topic === "home/test/scene/bath/state" && payload === "ON"));
+  // A retained set message, which the broker replays on every reconnect, is never a request.
+  broker.deliver("home/test/scene/bath/set", "OFF", true);
+  assert.equal((scene.statuses.at(-1) as {text?: string}).text, "on · 4h 0m left");
+
+  const cover = new (runtime(registerCover).Constructor)({id: "cover-ha2", area: "test", topicName: "left", homeAssistant: "discovery", broker: "broker-requests"});
+  t.after(() => close(cover));
+  const before = cover.sent.length;
+  broker.deliver("home/test/cover/left/set", "OPEN");
+  const commands = (cover.sent.slice(before) as SendEnvelope[]).flatMap((envelope) => envelope[0] ?? [])
+    .map((message) => (message as {cover_command?: {operation: string; position?: number}}).cover_command);
+  assert.deepEqual(commands.map((command) => [command?.operation, command?.position]), [["set_position", 100]]);
 });
 
 test("activity lighting takes a light's reading as the room passes it on", async (t) => {

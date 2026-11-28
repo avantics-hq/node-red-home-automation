@@ -55,7 +55,7 @@
 </section>
 <section id="home-assistant"><h2>Start and stop it from Home Assistant</h2>
 <ol class="step-list">
-<li><strong>Switch publishing on.</strong><p>Give the scene an area, and switch on <strong>Publish state over MQTT</strong> and <strong>Home Assistant discovery</strong>. Wire output 3 to an MQTT out node.</p></li>
+<li><strong>Switch publishing on.</strong><p>Give the scene an area, set <strong>Publish</strong> to <em>MQTT state and Home Assistant discovery</em>, and choose its <strong>Broker</strong>: the scene then publishes its switch and reads its set topic itself, and the next step isn’t needed. Without a broker, wire output 3 to an MQTT out node.</p></li>
 <li><strong>Wire its set topic back in.</strong><p>An MQTT in node on <code>home/&lt;area&gt;/scene/&lt;name&gt;/set</code> into the scene, where <code>&lt;name&gt;</code> is its name in lower case with other characters as <code>_</code> (<code>exercise_mode</code>).</p></li>
 </ol>
 <p>Home Assistant then shows a switch for the scene: on while it is on, off once it ends by any route. Switching it off ends the scene “by home-assistant”.</p>
