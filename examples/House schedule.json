@@ -3,7 +3,7 @@
     "id": "example-house-schedule-house-schedule-example",
     "type": "comment",
     "name": "House schedule example",
-    "info": "A house schedule shared by two areas. Each area's circadian lighting policy chooses the house schedule as its Schedule and follows it without wires, and styles its own room. \"wake earlier\" changes the schedule through the optional MQTT node, which publishes its times (wire its output to an MQTT out node, and an MQTT in node on its set topics to its input). Each room reaches its light through a zigbee2mqtt light node: set its friendly name, and wire its first output to MQTT out and an MQTT in node on the light's topics (zigbee2mqtt/<your light>/#) into it.",
+    "info": "A house schedule shared by two areas. Each area's circadian lighting policy chooses the house schedule as its Schedule and follows it without wires, and styles its own room. \"wake earlier\" changes the schedule through the optional MQTT node, which publishes its times and reads changes to them on its set topics, with Home Assistant time entities. Each room reaches its light through a zigbee2mqtt light node: set its friendly name.\n\nBefore deploying, open the \"your MQTT broker\" config node (any node's Broker setting) and set your broker's host: every node here that talks MQTT subscribes and publishes through it, with no MQTT in, MQTT out or status nodes.",
     "x": 170,
     "y": 40,
     "wires": []
@@ -37,16 +37,15 @@
     "type": "home-house-schedule-mqtt",
     "name": "",
     "schedule": "example-house-schedule-house",
-    "discovery": true,
     "discoveryPrefix": "homeassistant",
     "idScheme": "node",
     "x": 340,
     "y": 120,
     "wires": [
-      [
-        "example-house-schedule-publications"
-      ]
-    ]
+      []
+    ],
+    "broker": "example-mqtt-broker",
+    "homeAssistant": "discovery"
   },
   {
     "id": "example-house-schedule-living-circadian",
@@ -63,8 +62,6 @@
     "refreshTransitionSeconds": 60,
     "refreshSeconds": 60,
     "initialSleep": false,
-    "publishState": false,
-    "discovery": false,
     "discoveryPrefix": "homeassistant",
     "idScheme": "node",
     "x": 340,
@@ -74,7 +71,9 @@
         "example-house-schedule-living"
       ],
       []
-    ]
+    ],
+    "broker": "example-mqtt-broker",
+    "homeAssistant": "off"
   },
   {
     "id": "example-house-schedule-bedroom-circadian",
@@ -91,8 +90,6 @@
     "refreshTransitionSeconds": 60,
     "refreshSeconds": 60,
     "initialSleep": false,
-    "publishState": false,
-    "discovery": false,
     "discoveryPrefix": "homeassistant",
     "idScheme": "node",
     "x": 340,
@@ -102,7 +99,9 @@
         "example-house-schedule-bedroom"
       ],
       []
-    ]
+    ],
+    "broker": "example-mqtt-broker",
+    "homeAssistant": "off"
   },
   {
     "id": "example-house-schedule-living",
@@ -115,17 +114,15 @@
     "x": 600,
     "y": 100,
     "wires": [
-      [
-        "example-house-schedule-living-commands"
-      ],
+      [],
       [
         "example-house-schedule-living-light-main"
       ],
       []
     ],
-    "publishState": false,
-    "discovery": false,
-    "idScheme": "node"
+    "idScheme": "node",
+    "broker": "example-mqtt-broker",
+    "homeAssistant": "off"
   },
   {
     "id": "example-house-schedule-living-light-main",
@@ -138,13 +135,13 @@
     "x": 470,
     "y": 100,
     "wires": [
-      [
-        "example-house-schedule-living-commands"
-      ],
+      [],
       [
         "example-house-schedule-living"
       ]
-    ]
+    ],
+    "broker": "example-mqtt-broker",
+    "publishesThroughOutput": false
   },
   {
     "id": "example-house-schedule-bedroom",
@@ -157,17 +154,15 @@
     "x": 600,
     "y": 160,
     "wires": [
-      [
-        "example-house-schedule-bedroom-commands"
-      ],
+      [],
       [
         "example-house-schedule-bedroom-light-main"
       ],
       []
     ],
-    "publishState": false,
-    "discovery": false,
-    "idScheme": "node"
+    "idScheme": "node",
+    "broker": "example-mqtt-broker",
+    "homeAssistant": "off"
   },
   {
     "id": "example-house-schedule-bedroom-light-main",
@@ -180,61 +175,13 @@
     "x": 470,
     "y": 160,
     "wires": [
-      [
-        "example-house-schedule-bedroom-commands"
-      ],
+      [],
       [
         "example-house-schedule-bedroom"
       ]
-    ]
-  },
-  {
-    "id": "example-house-schedule-living-commands",
-    "type": "debug",
-    "name": "living room commands",
-    "active": true,
-    "tosidebar": true,
-    "console": false,
-    "tostatus": false,
-    "complete": "true",
-    "targetType": "full",
-    "statusVal": "",
-    "statusType": "auto",
-    "x": 850,
-    "y": 100,
-    "wires": []
-  },
-  {
-    "id": "example-house-schedule-bedroom-commands",
-    "type": "debug",
-    "name": "bedroom commands",
-    "active": true,
-    "tosidebar": true,
-    "console": false,
-    "tostatus": false,
-    "complete": "true",
-    "targetType": "full",
-    "statusVal": "",
-    "statusType": "auto",
-    "x": 850,
-    "y": 160,
-    "wires": []
-  },
-  {
-    "id": "example-house-schedule-publications",
-    "type": "debug",
-    "name": "MQTT publications",
-    "active": true,
-    "tosidebar": true,
-    "console": false,
-    "tostatus": false,
-    "complete": "true",
-    "targetType": "full",
-    "statusVal": "",
-    "statusType": "auto",
-    "x": 560,
-    "y": 240,
-    "wires": []
+    ],
+    "broker": "example-mqtt-broker",
+    "publishesThroughOutput": false
   },
   {
     "id": "example-house-schedule-house",
@@ -242,5 +189,36 @@
     "name": "house",
     "wakeTime": "07:00",
     "bedTime": "23:00"
+  },
+  {
+    "id": "example-mqtt-broker",
+    "type": "mqtt-broker",
+    "name": "your MQTT broker",
+    "broker": "your-mqtt-broker",
+    "port": 1883,
+    "clientid": "",
+    "autoConnect": true,
+    "usetls": false,
+    "protocolVersion": 4,
+    "keepalive": 60,
+    "cleansession": true,
+    "autoUnsubscribe": true,
+    "birthTopic": "",
+    "birthQos": "0",
+    "birthRetain": "false",
+    "birthPayload": "",
+    "birthMsg": {},
+    "closeTopic": "",
+    "closeQos": "0",
+    "closeRetain": "false",
+    "closePayload": "",
+    "closeMsg": {},
+    "willTopic": "",
+    "willQos": "0",
+    "willRetain": "false",
+    "willPayload": "",
+    "willMsg": {},
+    "userProps": "",
+    "sessionExpiry": ""
   }
 ]

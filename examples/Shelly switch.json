@@ -3,7 +3,7 @@
     "id": "example-shelly-switch-comment",
     "type": "comment",
     "name": "Shelly switch example",
-    "info": "A wall switch wired to a Shelly Gen2 relay in detached mode, where the relay is the room's main light: the switch's presses go through the switch policy to the room controller, and the room switches the relay through the same Shelly node, with no function nodes. The adapter reads the device's own configuration (its mode and input type) and shows it in its status. Its Target, main, is the light's id in the room's Targets JSON, marked onOffOnly; the room's light commands reach it on its input, and its readings go back to the room on its third output.\n\nIn your flow, replace the injects marked 'from the device' with an MQTT in node subscribed to <prefix>/# (output: auto-detect), and the debug node 'to the MQTT out node' with an MQTT out node, both on your broker. Set the adapter's MQTT topic prefix to your device's (its device ID unless you set one). If the relay powers smart bulbs instead, leave the Target empty and wire the switch policy to the room that drives the bulbs.\n\nThe \"MQTT out connected\" status node sends the adapter and the room their startup message each time an MQTT out node connects to the broker: the broker drops anything sent before it connects. It watches every node on this flow, and the nodes act only on an MQTT out node's connected status; you can scope it to your MQTT out node instead.",
+    "info": "A wall switch wired to a Shelly Gen2 relay in detached mode, where the relay is the room's main light: the switch's presses go through the switch policy to the room controller, and the room switches the relay through the same Shelly node, with no function nodes. The adapter reads the device's own configuration (its mode and input type) each time it connects and shows it in its status. Its Target, main, is the light's id in the room's Targets JSON, marked onOffOnly; the room's light commands reach it on its input, and its readings go back to the room on its third output.\n\nSet the adapter's MQTT topic prefix to your device's (its device ID unless you set one). If the relay powers smart bulbs instead, leave the Target empty and wire the switch policy to the room that drives the bulbs.\n\nBefore deploying, open the \"your MQTT broker\" config node (any node's Broker setting) and set your broker's host: every node here that talks MQTT subscribes and publishes through it, with no MQTT in, MQTT out or status nodes.",
     "x": 150,
     "y": 40,
     "wires": []
@@ -18,9 +18,7 @@
     "x": 460,
     "y": 200,
     "wires": [
-      [
-        "example-shelly-switch-to-device"
-      ],
+      [],
       [
         "example-shelly-switch-policy"
       ],
@@ -28,7 +26,9 @@
         "example-shelly-switch-room"
       ]
     ],
-    "target": "main"
+    "target": "main",
+    "broker": "example-mqtt-broker",
+    "publishesThroughOutput": false
   },
   {
     "id": "example-shelly-switch-policy",
@@ -47,142 +47,6 @@
     ]
   },
   {
-    "id": "example-shelly-switch-to-device",
-    "type": "debug",
-    "name": "to the MQTT out node",
-    "active": true,
-    "tosidebar": true,
-    "console": false,
-    "tostatus": false,
-    "complete": "true",
-    "targetType": "full",
-    "statusVal": "",
-    "statusType": "auto",
-    "x": 700,
-    "y": 160,
-    "wires": []
-  },
-  {
-    "id": "example-shelly-switch-config",
-    "type": "inject",
-    "name": "configuration reply, from the device",
-    "props": [
-      {
-        "p": "payload",
-        "v": "{\"id\": 1, \"src\": \"shellyplus1-a8032ab12345\", \"dst\": \"shellyplus1-a8032ab12345/home-automation-switch-0\", \"result\": {\"switch:0\": {\"id\": 0, \"in_mode\": \"detached\"}, \"input:0\": {\"id\": 0, \"type\": \"switch\"}}}",
-        "vt": "json"
-      }
-    ],
-    "repeat": "",
-    "crontab": "",
-    "once": false,
-    "onceDelay": 0.1,
-    "topic": "shellyplus1-a8032ab12345/home-automation-switch-0/rpc",
-    "x": 210,
-    "y": 120,
-    "wires": [
-      [
-        "example-shelly-switch-adapter"
-      ]
-    ]
-  },
-  {
-    "id": "example-shelly-switch-status",
-    "type": "inject",
-    "name": "device status, from the device",
-    "props": [
-      {
-        "p": "payload",
-        "v": "{\"switch:0\":{\"id\":0,\"output\":true},\"input:0\":{\"id\":0,\"state\":false}}",
-        "vt": "json"
-      }
-    ],
-    "repeat": "",
-    "crontab": "",
-    "once": false,
-    "onceDelay": 0.1,
-    "topic": "shellyplus1-a8032ab12345/status",
-    "x": 200,
-    "y": 160,
-    "wires": [
-      [
-        "example-shelly-switch-adapter"
-      ]
-    ]
-  },
-  {
-    "id": "example-shelly-switch-flip-on",
-    "type": "inject",
-    "name": "switch flipped on, from the device",
-    "props": [
-      {
-        "p": "payload",
-        "v": "{\"method\":\"NotifyStatus\",\"params\":{\"ts\":1764151200,\"input:0\":{\"id\":0,\"state\":true}}}",
-        "vt": "json"
-      }
-    ],
-    "repeat": "",
-    "crontab": "",
-    "once": false,
-    "onceDelay": 0.1,
-    "topic": "shellyplus1-a8032ab12345/events/rpc",
-    "x": 210,
-    "y": 200,
-    "wires": [
-      [
-        "example-shelly-switch-adapter"
-      ]
-    ]
-  },
-  {
-    "id": "example-shelly-switch-flip-off",
-    "type": "inject",
-    "name": "switch flipped off, from the device",
-    "props": [
-      {
-        "p": "payload",
-        "v": "{\"method\":\"NotifyStatus\",\"params\":{\"ts\":1764151201,\"input:0\":{\"id\":0,\"state\":false}}}",
-        "vt": "json"
-      }
-    ],
-    "repeat": "",
-    "crontab": "",
-    "once": false,
-    "onceDelay": 0.1,
-    "topic": "shellyplus1-a8032ab12345/events/rpc",
-    "x": 210,
-    "y": 240,
-    "wires": [
-      [
-        "example-shelly-switch-adapter"
-      ]
-    ]
-  },
-  {
-    "id": "example-shelly-switch-online",
-    "type": "inject",
-    "name": "online, from the device",
-    "props": [
-      {
-        "p": "payload",
-        "v": "true",
-        "vt": "str"
-      }
-    ],
-    "repeat": "",
-    "crontab": "",
-    "once": false,
-    "onceDelay": 0.1,
-    "topic": "shellyplus1-a8032ab12345/online",
-    "x": 180,
-    "y": 280,
-    "wires": [
-      [
-        "example-shelly-switch-adapter"
-      ]
-    ]
-  },
-  {
     "id": "example-shelly-switch-room",
     "type": "home-room-lighting-controller",
     "name": "",
@@ -193,44 +57,45 @@
     "x": 940,
     "y": 240,
     "wires": [
-      [
-        "example-shelly-switch-room-out"
-      ],
+      [],
       [
         "example-shelly-switch-adapter"
       ],
       []
     ],
-    "publishState": false,
-    "discovery": false,
-    "idScheme": "node"
+    "idScheme": "node",
+    "broker": "example-mqtt-broker",
+    "homeAssistant": "off"
   },
   {
-    "id": "example-shelly-switch-room-out",
-    "type": "debug",
-    "name": "room publications (to the MQTT out node)",
-    "active": true,
-    "tosidebar": true,
-    "console": false,
-    "tostatus": false,
-    "complete": "true",
-    "targetType": "full",
-    "x": 1210,
-    "y": 240,
-    "wires": []
-  },
-  {
-    "id": "example-shelly-switch-mqtt-connected",
-    "type": "status",
-    "name": "MQTT out connected",
-    "scope": null,
-    "x": 190,
-    "y": 330,
-    "wires": [
-      [
-        "example-shelly-switch-adapter",
-        "example-shelly-switch-room"
-      ]
-    ]
+    "id": "example-mqtt-broker",
+    "type": "mqtt-broker",
+    "name": "your MQTT broker",
+    "broker": "your-mqtt-broker",
+    "port": 1883,
+    "clientid": "",
+    "autoConnect": true,
+    "usetls": false,
+    "protocolVersion": 4,
+    "keepalive": 60,
+    "cleansession": true,
+    "autoUnsubscribe": true,
+    "birthTopic": "",
+    "birthQos": "0",
+    "birthRetain": "false",
+    "birthPayload": "",
+    "birthMsg": {},
+    "closeTopic": "",
+    "closeQos": "0",
+    "closeRetain": "false",
+    "closePayload": "",
+    "closeMsg": {},
+    "willTopic": "",
+    "willQos": "0",
+    "willRetain": "false",
+    "willPayload": "",
+    "willMsg": {},
+    "userProps": "",
+    "sessionExpiry": ""
   }
 ]

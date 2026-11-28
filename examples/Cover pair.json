@@ -118,7 +118,8 @@
         "example-cover-pair-group"
       ],
       []
-    ]
+    ],
+    "broker": "example-mqtt-broker"
   },
   {
     "id": "example-cover-pair-right",
@@ -145,7 +146,8 @@
         "example-cover-pair-group"
       ],
       []
-    ]
+    ],
+    "broker": "example-mqtt-broker"
   },
   {
     "id": "example-cover-pair-left-commands",
@@ -226,5 +228,36 @@
         "example-cover-pair-right"
       ]
     ]
+  },
+  {
+    "id": "example-mqtt-broker",
+    "type": "mqtt-broker",
+    "name": "your MQTT broker",
+    "broker": "your-mqtt-broker",
+    "port": 1883,
+    "clientid": "",
+    "autoConnect": true,
+    "usetls": false,
+    "protocolVersion": 4,
+    "keepalive": 60,
+    "cleansession": true,
+    "autoUnsubscribe": true,
+    "birthTopic": "",
+    "birthQos": "0",
+    "birthRetain": "false",
+    "birthPayload": "",
+    "birthMsg": {},
+    "closeTopic": "",
+    "closeQos": "0",
+    "closeRetain": "false",
+    "closePayload": "",
+    "closeMsg": {},
+    "willTopic": "",
+    "willQos": "0",
+    "willRetain": "false",
+    "willPayload": "",
+    "willMsg": {},
+    "userProps": "",
+    "sessionExpiry": ""
   }
 ]

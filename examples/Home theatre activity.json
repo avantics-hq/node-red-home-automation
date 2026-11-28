@@ -3,52 +3,10 @@
     "id": "example-home-theatre-activity-home-theatre-activity-example",
     "type": "comment",
     "name": "Home theatre activity example",
-    "info": "The state contract turns a request on home/<area>/theatre/request into an activity intent. The activity controller plans each target and sends msg.theatreCommand; the switch routes each command by its target, and a change node moves it onto that controller's input. Every controller reports msg.theatre target state on output 2, wired straight back to the activity controller, which publishes a complete snapshot through the contract.\n\nName the area on the state contract before deploying: it names the MQTT topics and Home Assistant entities, and until it is set the contract shows \"invalid configuration\". Put the same area in the \"request tv activity\" inject's topic. Set the display controller's device hosts and TV pre-shared key too; until then it shows \"invalid configuration\" and the activity waits for it. Wire the controllers' output 1 to your device transports and activity lighting to your room lighting controller. Activity lighting holds the room's lights through a room lighting controller, which reaches its light through a zigbee2mqtt light node and passes each light's reading back to activity lighting (its third output), so the lights confirm. Set the light's friendly name, wire the debug's place to MQTT out, and an MQTT in node on the light's topics (zigbee2mqtt/<your light>/#) into the light node.\n\nThe \"MQTT out connected\" status node sends the state contract its startup message each time an MQTT out node connects to the broker, so what it announces reaches it: the broker drops anything sent before it connects. It watches every node on this flow, and the nodes act only on an MQTT out node's connected status; you can scope it to your MQTT out node instead.",
+    "info": "The state contract turns a request on home/<area>/theatre/request, which it reads from the broker, into an activity intent: publish {\"requestId\":\"1\",\"activity\":\"tv\"} there to try it. The activity controller plans each target and sends msg.theatreCommand; the switch routes each command by its target, and a change node moves it onto that controller's input. Every controller reports msg.theatre target state on output 2, wired straight back to the activity controller, which publishes a complete snapshot through the contract.\n\nName the area on the state contract before deploying: it names the MQTT topics and Home Assistant entities, and until it is set the contract shows \"invalid configuration\". Set the display controller's device hosts and TV pre-shared key too; until then it shows \"invalid configuration\" and the activity waits for it. Wire the controllers' output 1 to your device transports. Activity lighting holds the room's lights through a room lighting controller, which reaches its light through a zigbee2mqtt light node and passes each light's reading back to activity lighting (its third output), so the lights confirm. Set the light's friendly name.\n\nBefore deploying, open the \"your MQTT broker\" config node (any node's Broker setting) and set your broker's host: every node here that talks MQTT subscribes and publishes through it, with no MQTT in, MQTT out or status nodes.",
     "x": 190,
     "y": 40,
     "wires": []
-  },
-  {
-    "id": "example-home-theatre-activity-request-tv-activity",
-    "type": "inject",
-    "name": "request tv activity",
-    "props": [
-      {
-        "p": "topic",
-        "v": "home/<area>/theatre/request",
-        "vt": "str"
-      },
-      {
-        "p": "payload",
-        "v": "{\"requestId\":\"example-request-1\",\"activity\":\"tv\"}",
-        "vt": "json"
-      }
-    ],
-    "repeat": "",
-    "crontab": "",
-    "once": false,
-    "onceDelay": 0.1,
-    "topic": "",
-    "x": 170,
-    "y": 100,
-    "wires": [
-      [
-        "example-home-theatre-activity-theatre-state-contract"
-      ]
-    ]
-  },
-  {
-    "id": "example-home-theatre-activity-contract-mqtt-connected",
-    "type": "status",
-    "name": "MQTT out connected",
-    "scope": null,
-    "x": 170,
-    "y": 140,
-    "wires": [
-      [
-        "example-home-theatre-activity-theatre-state-contract"
-      ]
-    ]
   },
   {
     "id": "example-home-theatre-activity-theatre-state-contract",
@@ -69,28 +27,11 @@
       [
         "example-home-theatre-activity-theatre-activity-controller"
       ],
-      [
-        "example-home-theatre-activity-retained-state"
-      ]
+      []
     ],
-    "discovery": false,
-    "idScheme": "node"
-  },
-  {
-    "id": "example-home-theatre-activity-retained-state",
-    "type": "debug",
-    "name": "retained state",
-    "active": true,
-    "tosidebar": true,
-    "console": false,
-    "tostatus": false,
-    "complete": "true",
-    "targetType": "full",
-    "statusVal": "",
-    "statusType": "auto",
-    "x": 680,
-    "y": 60,
-    "wires": []
+    "idScheme": "node",
+    "broker": "example-mqtt-broker",
+    "homeAssistant": "state"
   },
   {
     "id": "example-home-theatre-activity-theatre-activity-controller",
@@ -128,22 +69,6 @@
         "example-home-theatre-activity-theatre-activity-controller"
       ]
     ]
-  },
-  {
-    "id": "example-home-theatre-activity-room-lighting-intents",
-    "type": "debug",
-    "name": "room and light MQTT (MQTT out)",
-    "active": true,
-    "tosidebar": true,
-    "console": false,
-    "tostatus": false,
-    "complete": "true",
-    "targetType": "full",
-    "statusVal": "",
-    "statusType": "auto",
-    "x": 1880,
-    "y": 440,
-    "wires": []
   },
   {
     "id": "example-home-theatre-activity-route-by-target",
@@ -312,7 +237,8 @@
       [
         "example-home-theatre-activity-theatre-activity-controller"
       ]
-    ]
+    ],
+    "broker": "example-mqtt-broker"
   },
   {
     "id": "example-home-theatre-activity-avr-commands",
@@ -469,8 +395,6 @@
     "type": "home-room-lighting-controller",
     "name": "",
     "area": "",
-    "publishState": false,
-    "discovery": false,
     "idScheme": "node",
     "displayName": "",
     "discoveryPrefix": "homeassistant",
@@ -479,16 +403,16 @@
     "x": 1630,
     "y": 440,
     "wires": [
-      [
-        "example-home-theatre-activity-room-lighting-intents"
-      ],
+      [],
       [
         "example-home-theatre-activity-room-light-main"
       ],
       [
         "example-home-theatre-activity-activity-lighting-controller"
       ]
-    ]
+    ],
+    "broker": "example-mqtt-broker",
+    "homeAssistant": "off"
   },
   {
     "id": "example-home-theatre-activity-room-light-main",
@@ -501,12 +425,43 @@
     "x": 1630,
     "y": 520,
     "wires": [
-      [
-        "example-home-theatre-activity-room-lighting-intents"
-      ],
+      [],
       [
         "example-home-theatre-activity-room"
       ]
-    ]
+    ],
+    "broker": "example-mqtt-broker",
+    "publishesThroughOutput": false
+  },
+  {
+    "id": "example-mqtt-broker",
+    "type": "mqtt-broker",
+    "name": "your MQTT broker",
+    "broker": "your-mqtt-broker",
+    "port": 1883,
+    "clientid": "",
+    "autoConnect": true,
+    "usetls": false,
+    "protocolVersion": 4,
+    "keepalive": 60,
+    "cleansession": true,
+    "autoUnsubscribe": true,
+    "birthTopic": "",
+    "birthQos": "0",
+    "birthRetain": "false",
+    "birthPayload": "",
+    "birthMsg": {},
+    "closeTopic": "",
+    "closeQos": "0",
+    "closeRetain": "false",
+    "closePayload": "",
+    "closeMsg": {},
+    "willTopic": "",
+    "willQos": "0",
+    "willRetain": "false",
+    "willPayload": "",
+    "willMsg": {},
+    "userProps": "",
+    "sessionExpiry": ""
   }
 ]

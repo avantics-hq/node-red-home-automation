@@ -28,7 +28,7 @@
 </section>
 <section id="readiness-availability"><h2>Readiness and availability</h2><p>These are two different questions on two topics.</p>
 <ul class="rule-list"><li><code>&lt;base&gt;/readiness</code> says whether the theatre is ready: <code>unknown</code>, <code>available</code>, <code>degraded</code> or <code>unavailable</code>. Ready requires all mandatory targets. Before 4.0 this value was on <code>&lt;base&gt;/availability</code>.</li><li><code>&lt;base&gt;/availability</code> says whether the contract node is running: <code>online</code> once the flows have started, <code>offline</code> as it stops. Home Assistant shows the theatre entities as available only while it is <code>online</code>.</li></ul>
-<p>On a full deploy, a restart or a shutdown, Node-RED stops the MQTT out node at the same moment, so set the MQTT broker node's <b>Birth message</b> to <code>online</code> and its <b>Close message</b> and <b>Will message</b> to <code>offline</code>, all retained, on <code>&lt;base&gt;/availability</code>.</p>
+<p>On a full deploy, a restart or a shutdown, Node-RED closes the broker connection at the same moment, so set the MQTT broker node's <b>Birth message</b> to <code>online</code> and its <b>Close message</b> and <b>Will message</b> to <code>offline</code>, all retained, on <code>&lt;base&gt;/availability</code>.</p>
 </section>
 <section id="metrics"><h2>Metrics</h2><p><code>&lt;base&gt;/metrics</code> exposes transition latency and outcome counts plus per-target evidence. Before the first snapshot it carries zeros:</p>
 <div class="code-block"><div class="code-label"><span>Metrics · &lt;base&gt;/metrics</span></div><pre><code>{

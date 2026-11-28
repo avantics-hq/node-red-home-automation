@@ -3,7 +3,7 @@
     "id": "example-room-lighting-room-lighting-example",
     "type": "comment",
     "name": "Room lighting example",
-    "info": "Motion and illuminance feed occupancy fusion and the motion policy; a wall switch feeds the switch policy. Both send lighting intents to the room controller, which owns the light's commands. The circadian lighting policy sends the room how its lights should look over the day; the room uses it for lights nobody has set otherwise.\n\nReplace the inject nodes with your sensors. The room reaches its light through the zigbee2mqtt light node: set its friendly name, wire the room's first output and the light node's first output to MQTT out, and an MQTT in node on the light's topics (zigbee2mqtt/<your light>/#) into the light node. Set the circadian policy's wake and bed times (Node-RED host time) before deploying. Give the room controller an area to publish each light's control state and its Home Assistant discovery, and the circadian policy one to publish its circadian and sleep switches; without one they still control and style the lights.\n\nThe \"MQTT out connected\" status node sends the room controller and the circadian policy its startup message each time an MQTT out node connects to the broker, so what they announce reaches it: the broker drops anything sent before it connects. It watches every node on this flow, and the nodes act only on an MQTT out node's connected status; you can scope it to your MQTT out node instead.",
+    "info": "Motion and illuminance feed occupancy fusion and the motion policy; a wall switch feeds the switch policy. Both send lighting intents to the room controller, which owns the light's commands. The circadian lighting policy sends the room how its lights should look over the day; the room uses it for lights nobody has set otherwise.\n\nReplace the inject nodes with your sensors. The room reaches its light through the zigbee2mqtt light node: set its friendly name. Set the circadian policy's wake and bed times (Node-RED host time) before deploying. To see the room in Home Assistant, give the room controller an area and choose what it publishes (each light's control state, and its discovery); the same for the circadian policy's circadian and sleep switches. They control and style the lights either way.\n\nBefore deploying, open the \"your MQTT broker\" config node (any node's Broker setting) and set your broker's host: every node here that talks MQTT subscribes and publishes through it, with no MQTT in, MQTT out or status nodes.",
     "x": 170,
     "y": 40,
     "wires": []
@@ -96,20 +96,6 @@
     ]
   },
   {
-    "id": "example-room-lighting-room-mqtt-connected",
-    "type": "status",
-    "name": "MQTT out connected",
-    "scope": null,
-    "x": 150,
-    "y": 280,
-    "wires": [
-      [
-        "example-room-lighting-room-lighting-controller",
-        "example-room-lighting-circadian"
-      ]
-    ]
-  },
-  {
     "id": "example-room-lighting-occupancy-fusion",
     "type": "home-occupancy-fusion",
     "name": "",
@@ -121,7 +107,8 @@
       [
         "example-room-lighting-motion-lighting-policy"
       ]
-    ]
+    ],
+    "broker": "example-mqtt-broker"
   },
   {
     "id": "example-room-lighting-motion-lighting-policy",
@@ -138,7 +125,8 @@
       [
         "example-room-lighting-room-lighting-controller"
       ]
-    ]
+    ],
+    "broker": "example-mqtt-broker"
   },
   {
     "id": "example-room-lighting-switch-lighting-policy",
@@ -171,8 +159,6 @@
     "refreshTransitionSeconds": 60,
     "refreshSeconds": 60,
     "initialSleep": false,
-    "publishState": false,
-    "discovery": false,
     "discoveryPrefix": "homeassistant",
     "idScheme": "node",
     "x": 620,
@@ -182,7 +168,9 @@
         "example-room-lighting-room-lighting-controller"
       ],
       []
-    ]
+    ],
+    "broker": "example-mqtt-broker",
+    "homeAssistant": "off"
   },
   {
     "id": "example-room-lighting-room-lighting-controller",
@@ -195,17 +183,15 @@
     "x": 880,
     "y": 180,
     "wires": [
-      [
-        "example-room-lighting-room-commands"
-      ],
+      [],
       [
         "example-room-lighting-room-lighting-controller-light-main"
       ],
       []
     ],
-    "publishState": false,
-    "discovery": false,
-    "idScheme": "node"
+    "idScheme": "node",
+    "broker": "example-mqtt-broker",
+    "homeAssistant": "off"
   },
   {
     "id": "example-room-lighting-room-lighting-controller-light-main",
@@ -218,28 +204,43 @@
     "x": 880,
     "y": 240,
     "wires": [
-      [
-        "example-room-lighting-room-commands"
-      ],
+      [],
       [
         "example-room-lighting-room-lighting-controller"
       ]
-    ]
+    ],
+    "broker": "example-mqtt-broker",
+    "publishesThroughOutput": false
   },
   {
-    "id": "example-room-lighting-room-commands",
-    "type": "debug",
-    "name": "room commands",
-    "active": true,
-    "tosidebar": true,
-    "console": false,
-    "tostatus": false,
-    "complete": "true",
-    "targetType": "full",
-    "statusVal": "",
-    "statusType": "auto",
-    "x": 1100,
-    "y": 180,
-    "wires": []
+    "id": "example-mqtt-broker",
+    "type": "mqtt-broker",
+    "name": "your MQTT broker",
+    "broker": "your-mqtt-broker",
+    "port": 1883,
+    "clientid": "",
+    "autoConnect": true,
+    "usetls": false,
+    "protocolVersion": 4,
+    "keepalive": 60,
+    "cleansession": true,
+    "autoUnsubscribe": true,
+    "birthTopic": "",
+    "birthQos": "0",
+    "birthRetain": "false",
+    "birthPayload": "",
+    "birthMsg": {},
+    "closeTopic": "",
+    "closeQos": "0",
+    "closeRetain": "false",
+    "closePayload": "",
+    "closeMsg": {},
+    "willTopic": "",
+    "willQos": "0",
+    "willRetain": "false",
+    "willPayload": "",
+    "willMsg": {},
+    "userProps": "",
+    "sessionExpiry": ""
   }
 ]

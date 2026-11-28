@@ -66,9 +66,12 @@ Example: [`Room lighting.json`](https://github.com/avantics-hq/node-red-home-aut
 
 The room controller reaches each light through an adapter: a **zigbee2mqtt
 light** node per Zigbee2MQTT light or group. Wire the room's second output into
-every light's node and each node's second output back into the room; each
-node's first output goes to MQTT out unchanged, and an MQTT in node on the
-light's `<base>/<friendly name>/#` feeds it. The light's node tells the room's
+every light's node and each node's second output back into the room, and give
+each light's node a **Broker** (Node-RED's MQTT broker node): it subscribes to
+the light's topics and publishes its commands itself, and reads the light each
+time the broker connects. (Without a Broker, as before 6.2, its first output
+goes to MQTT out unchanged and an MQTT in node on the light's
+`<base>/<friendly name>/#` feeds it.) The light's node tells the room's
 own commands from other people's on the light's `/set` topic, so a function
 that rewrites them on the way makes them look like someone else's. To stop that
 becoming a loop, a bare ON or OFF that arrives within 5 seconds of one of its
@@ -90,11 +93,12 @@ restyle the light already shows.
 | `home-shelly-switch` | Connects one switch channel of a Shelly Gen2+ relay as the device is set up: a detached wall switch's presses to the switch policy, or the relay as the light; with a Target, the relay is a room light on the neutral light contract. |
 
 A Shelly Gen2 or later relay behind a wall switch wires straight in through the
-Shelly switch adapter, with no function nodes: an MQTT in node on the device's
-`<prefix>/#` feeds it, and its first output goes to an MQTT out node. It reads
-the device's own configuration for its channel (with `Shelly.GetConfig`, the
-reply addressed under the device's prefix so the same MQTT in node receives it)
-at startup and whenever the device comes online, and shows what it found. In
+Shelly switch adapter, with no function nodes: give it a **Broker** and it
+subscribes to the device's `<prefix>/#` and publishes to it itself (without
+one, an MQTT in node on `<prefix>/#` feeds it and its first output goes to an
+MQTT out node). It reads the device's own configuration for its channel (with
+`Shelly.GetConfig`, the reply addressed under the device's prefix so its own
+subscription receives it) each time the broker connects and whenever the device comes online, and shows what it found. In
 detached mode, the switch's
 presses go to the switch policy: a toggle switch's on/off as edges, with the
 device's status as the baseline, and a push button's single, double or long
@@ -146,9 +150,10 @@ scene stays theirs. Scenes stack: a newer scene holding the same light hands it
 back to the older one when it ends.
 
 Wire the scene's first output to each room lighting controller whose lights it
-sets, its second to each motion lighting policy to pause, and, to start and
-stop it from Home Assistant, its third to MQTT out, with an MQTT in node on
-`home/<area>/scene/<name>/set` and a Status node watching MQTT out into it.
+sets, and its second to each motion lighting policy to pause. To start and
+stop it from Home Assistant, give it an area, set **Publish** to *MQTT state
+and Home Assistant discovery* and choose its **Broker**: it reads
+`home/<area>/scene/<name>/set` from the broker itself.
 Its lights are listed by their room's Area and their ids in that room's
 Targets JSON; a socket is a target marked `"onOffOnly": true`. A room acts only
 on a scene's lights for its own Area, so set the Area on each room a scene uses;
@@ -270,10 +275,12 @@ or, if only some do, which did what.
 Example: [`Cover pair.json`](https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/Cover%20pair.json).
 
 A Shelly Gen2 or later device in cover mode wires straight to a cover
-controller through the Shelly cover adapter, with no function nodes: an MQTT in
-node subscribed to the device's `<prefix>/#` feeds the adapter, the
-controller's device commands go to it too, and its two outputs go to an MQTT
-out node and back to the controller. It speaks the device's own MQTT API, never
+controller through the Shelly cover adapter, with no function nodes: give it a
+**Broker** and it subscribes to the device's `<prefix>/#` and publishes to it
+itself, and reads the cover each time the broker connects; the controller's
+device commands go to it, and its second output goes back to the controller.
+(Without a Broker, an MQTT in node on `<prefix>/#` feeds it and its first
+output goes to an MQTT out node.) It speaks the device's own MQTT API, never
 Home Assistant: it sends `pos,<0-100>`, `stop`, and `status_update` (for a fresh
 reading) on `<prefix>/command/cover:<id>` (the device's MQTT Control, on by
 default), and turns the device's status and
@@ -283,9 +290,10 @@ fails the command in hand with the reason rather than reporting a position.
 Example: [`Shelly cover.json`](https://github.com/avantics-hq/node-red-home-automation/blob/main/examples/Shelly%20cover.json).
 
 A Zigbee2MQTT cover wires the same way through the Zigbee2MQTT cover adapter:
-set its base topic (`zigbee2mqtt` by default) and the device's friendly name,
-feed it from MQTT in nodes on `<base>/<friendly name>` and its `/availability`,
-and wire it between the cover controller and an MQTT out node. It sends
+set its base topic (`zigbee2mqtt` by default), the device's friendly name and
+its **Broker**, and it subscribes to `<base>/<friendly name>` and its
+`/availability` itself (without a Broker, MQTT in nodes on those feed it and
+its first output goes to an MQTT out node). It sends
 `{"position": n}` and `{"state": "OPEN" | "CLOSE" | "STOP"}` on the device's
 `/set`, and asks for a fresh reading on its `/get`. Each state report becomes a
 position reading, with motion from `motor_state` or `moving` where the device
@@ -335,6 +343,16 @@ npm install /path/to/avantics-node-red-home-automation-6.1.0.tgz
 
 Add the installed nodes from the **home automation** section of the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.
 
+**Choose a Broker on each node that talks MQTT** (Node-RED's own MQTT broker
+config node, the one MQTT in and out nodes use): the device adapters subscribe
+to their devices' topics and publish to them, and the publishing nodes publish
+their state and Home Assistant discovery and read their set topics, each by
+itself. No MQTT in, MQTT out or Status nodes are needed around them, and each
+announces itself again every time the broker connects. A node's edit dialog
+offers the first broker in your flows. Nodes saved before 6.2 keep working
+through their MQTT in and out nodes until you choose one; the example flows
+use one broker node, "your MQTT broker", whose host you set.
+
 ### 6.1.0
 
 Nothing to migrate from 6.0.0, but check one wiring change: publishing nodes
@@ -346,8 +364,9 @@ then, so in 6.0.0 the Home Assistant discovery and availability a node announced
 as the flows started could be lost after a restart or a full deploy (#185). A
 message from a Status node whose scope is your MQTT out node now counts as the
 node's startup message when it reports "connected", including after every
-reconnect. An existing startup inject keeps working. The examples now use the
-Status node.
+reconnect. An existing startup inject keeps working. From 6.2, choose a
+**Broker** on the node instead: it announces itself on every connect, and the
+Status node is no longer needed.
 
 **Room owners hold lights on or off, stack, and give lights back.** An owner,
 such as an activity or the coming scene node, now keeps a light it switches
@@ -729,9 +748,10 @@ Version 3.0 changed some behaviour, and later versions added to it. Check these 
   publishing node (room, circadian policy, house schedule MQTT, motion, occupancy, cover controller, AVR controller,
   theatre state contract, Shelly switch, scene). Each time MQTT out shows "connected", including after the broker
   reconnects, the Status node passes it on, and the node takes it as its startup message. Other status messages are
-  ignored, so a Status node watching every node on the flow works too; the example flows use one. Since 6.0.1; before
+  ignored, so a Status node watching every node on the flow works too. Since 6.0.1; before
   that, the examples sent the startup message from an inject node 3 seconds after a deploy, which is lost if the
-  broker takes longer. A node still takes its own startup message (each node's section gives it).
+  broker takes longer. A node still takes its own startup message (each node's section gives it). From 6.2, choose a
+  **Broker** on the node instead: it runs its startup on every connect itself, with no Status node.
 - **Removing entities:** deleting a node clears its Home Assistant entities and retained state, but only when you
   deploy with "Modified nodes" or "Modified flows". On a full deploy (the deploy button's default), Node-RED stops the
   MQTT out node at the same moment, so the clearing never reaches the broker. Disabling a node or its flow keeps its
@@ -974,7 +994,8 @@ that output by topic must pass the `/control` topics through.
 The circadian lighting policy publishes the circadian state on
 `home/<area>/circadian/state`, and acts on ON or OFF sent to
 `home/<area>/circadian/set`, which is where the Home Assistant circadian switch
-sends them: wire an MQTT in node subscribed to that topic into the policy. In
+sends them: with a **Broker** the policy reads it itself (without one, wire an
+MQTT in node subscribed to that topic into the policy). In
 the same way it publishes and acts on sleep (`home/<area>/sleep/state` and
 `/set`, ON or OFF) and its wake and bed times (`home/<area>/wake-time/state`
 and `/set`, likewise `bed-time`, as `HH:MM:SS`); subscribing to

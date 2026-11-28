@@ -1090,6 +1090,9 @@ test("the example theatre flow reaches ready with no translation and stays ready
     globalThis.fetch = realFetch;
   });
 
+  // The example's broker: the contract reads its requests from it, and the light publishes to it.
+  const broker = fakeBroker();
+  builtNodes.set("example-mqtt-broker", broker);
   const nodes = new Map<string, RuntimeNode>();
   for (const entry of flow) {
     const register = registers[entry.type];
@@ -1189,21 +1192,11 @@ test("the example theatre flow reaches ready with no translation and stays ready
   const activity = () => nodes.get(activityId)!.context().get("state") as
     {phase: string; currentActivity: string; degraded: Array<{target: string; reason: string}>};
 
-  // MQTT out connects: the example's status node starts the contract.
-  for (const entry of flow.filter((candidate) => candidate.type === "status")) {
-    queue.push([entry.wires![0]![0]!, {status: {fill: "green", shape: "dot", text: "node-red:common.status.connected", source: {id: "out", type: "mqtt out", name: ""}}}]);
-    await settle();
-  }
-  // The example's injects: ask for the tv activity.
-  for (const entry of flow.filter((candidate) => candidate.type === "inject")) {
-    const msg: Record<string, unknown> = {};
-    for (const prop of entry.props as Array<{p: string; v: string; vt: string}>) {
-      // The inject's topic names the area the user gives the contract.
-      msg[prop.p] = prop.vt === "json" ? JSON.parse(prop.v) : prop.v.replace("<area>", "lounge");
-    }
-    queue.push([entry.wires![0]![0]!, msg]);
-    await settle();
-  }
+  // The broker connects, and someone asks for the tv activity on the contract's request topic.
+  broker.connect();
+  await settle();
+  broker.deliver("home/lounge/theatre/request", JSON.stringify({requestId: "example-request-1", activity: "tv"}));
+  await settle();
   for (let second = 0; second < 180 && activity().phase !== "ready"; second += 1) {
     t.mock.timers.tick(1000);
     await settle();
@@ -1223,8 +1216,7 @@ test("the example theatre flow reaches ready with no translation and stays ready
   assert.deepEqual(activity().degraded.filter((entry) => entry.target !== "lighting"), []);
 
   // The example's off activity confirms too: the receiver goes to standby.
-  const contractId = idOf("home-theatre-state-contract");
-  queue.push([contractId, {topic: "home/lounge/theatre/request", payload: {requestId: "example-request-2", activity: "off"}}]);
+  broker.deliver("home/lounge/theatre/request", JSON.stringify({requestId: "example-request-2", activity: "off"}));
   await settle();
   for (let second = 0; second < 180 && activity().currentActivity !== "off"; second += 1) {
     t.mock.timers.tick(1000);

@@ -3,23 +3,10 @@
     "id": "example-scene-comment",
     "type": "comment",
     "name": "Scene example",
-    "info": "One scene, \"Exercise mode\": while it is on, it holds the room's main light off and its tv socket on, and pauses motion lighting. It ends by request, by its safety timer (4 hours), or when the trainer's power falls below 20 W for this flow's end trigger.\n\nWire output 1 to your room lighting controller, whose Targets JSON names main and tv (mark the socket \"onOffOnly\": true), and set each light's area in the scene's Lights to the room's Area (a room acts only on a scene's lights for its own Area). Wire output 2 to your motion lighting policy. To start and stop it from Home Assistant, give it an area, switch on Publish state and Home Assistant discovery, wire output 3 to an MQTT out node and an MQTT in node on home/<area>/scene/exercise_mode/set into it. Replace the \"trainer power\" inject with your power reading: the switch and change nodes are the end trigger, so the condition is yours to set.\n\nWhen it ends, the room gives each light back what it was before the scene, and motion lighting resumes.\n\nThe \"MQTT out connected\" status node sends the scene its startup message each time an MQTT out node connects to the broker, so what it announces reaches it: the broker drops anything sent before it connects. It watches every node on this flow, and the nodes act only on an MQTT out node's connected status; you can scope it to your MQTT out node instead.",
+    "info": "One scene, \"Exercise mode\": while it is on, it holds the room's main light off and its tv socket on, and pauses motion lighting. It ends by request, by its safety timer (4 hours), or when the trainer's power falls below 20 W for this flow's end trigger.\n\nWire output 1 to your room lighting controller, whose Targets JSON names main and tv (mark the socket \"onOffOnly\": true), and set each light's area in the scene's Lights to the room's Area (a room acts only on a scene's lights for its own Area). Wire output 2 to your motion lighting policy. To start and stop it from Home Assistant, give it an area and set Publish to MQTT state and Home Assistant discovery: it reads home/<area>/scene/exercise_mode/set from the broker. Replace the \"trainer power\" inject with your power reading: the switch and change nodes are the end trigger, so the condition is yours to set.\n\nWhen it ends, the room gives each light back what it was before the scene, and motion lighting resumes.\n\nBefore deploying, open the \"your MQTT broker\" config node (any node's Broker setting) and set your broker's host: every node here that talks MQTT subscribes and publishes through it, with no MQTT in, MQTT out or status nodes.",
     "x": 150,
     "y": 40,
     "wires": []
-  },
-  {
-    "id": "example-scene-mqtt-connected",
-    "type": "status",
-    "name": "MQTT out connected",
-    "scope": null,
-    "x": 130,
-    "y": 100,
-    "wires": [
-      [
-        "example-scene-scene"
-      ]
-    ]
   },
   {
     "id": "example-scene-start",
@@ -150,8 +137,6 @@
     "safetyHours": 4,
     "lights": "[{\"area\":\"<your room's area>\",\"target\":\"main\",\"state\":\"OFF\"},{\"area\":\"<your room's area>\",\"target\":\"tv\",\"state\":\"ON\"}]",
     "area": "",
-    "publishState": false,
-    "discovery": false,
     "discoveryPrefix": "homeassistant",
     "idScheme": "node",
     "x": 720,
@@ -163,10 +148,10 @@
       [
         "example-scene-motion"
       ],
-      [
-        "example-scene-mqtt"
-      ]
-    ]
+      []
+    ],
+    "broker": "example-mqtt-broker",
+    "homeAssistant": "off"
   },
   {
     "id": "example-scene-rooms",
@@ -197,17 +182,34 @@
     "wires": []
   },
   {
-    "id": "example-scene-mqtt",
-    "type": "debug",
-    "name": "to the MQTT out node",
-    "active": true,
-    "tosidebar": true,
-    "console": false,
-    "tostatus": false,
-    "complete": "true",
-    "targetType": "full",
-    "x": 960,
-    "y": 200,
-    "wires": []
+    "id": "example-mqtt-broker",
+    "type": "mqtt-broker",
+    "name": "your MQTT broker",
+    "broker": "your-mqtt-broker",
+    "port": 1883,
+    "clientid": "",
+    "autoConnect": true,
+    "usetls": false,
+    "protocolVersion": 4,
+    "keepalive": 60,
+    "cleansession": true,
+    "autoUnsubscribe": true,
+    "birthTopic": "",
+    "birthQos": "0",
+    "birthRetain": "false",
+    "birthPayload": "",
+    "birthMsg": {},
+    "closeTopic": "",
+    "closeQos": "0",
+    "closeRetain": "false",
+    "closePayload": "",
+    "closeMsg": {},
+    "willTopic": "",
+    "willQos": "0",
+    "willRetain": "false",
+    "willPayload": "",
+    "willMsg": {},
+    "userProps": "",
+    "sessionExpiry": ""
   }
 ]

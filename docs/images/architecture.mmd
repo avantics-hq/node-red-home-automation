@@ -59,7 +59,7 @@ flowchart TB
   AL -- held-light intents --> ROOM
   EQ -- device commands --> AV
 
-  Adapt <-- MQTT in and out --> BROKER
+  Adapt <-- subscribe and publish --> BROKER
   CON <-- requests in, retained state and discovery out --> BROKER
   BROKER <-- device topics --> DEV
   BROKER <-. entity state and set messages .-> HA

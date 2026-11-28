@@ -90,10 +90,14 @@ async function checkExamples() {
   RED.events.on("node-status", (event) => statuses.set(event.id, event.status));
   const problems = [];
   for (const file of readdirSync(examplesDir).filter((name) => name.endsWith(".json")).sort()) {
-    const flow = JSON.parse(readFileSync(join(examplesDir, file), "utf8"));
+    // The example's broker never connects (no network here): its nodes
+    // register with it, and it drops what they publish.
+    const flow = JSON.parse(readFileSync(join(examplesDir, file), "utf8"))
+      .map((node) => (node.type === "mqtt-broker" ? {...node, autoConnect: false} : node));
     const tab = {id: "smoke0example0tab", type: "tab", label: file};
     statuses.clear();
-    await RED.runtime.flows.setFlows({flows: {flows: [tab, ...flow.map((node) => ({...node, z: tab.id}))]}, deploymentType: "full"});
+    // Config nodes have no tab.
+    await RED.runtime.flows.setFlows({flows: {flows: [tab, ...flow.map((node) => (node.type === "mqtt-broker" ? node : {...node, z: tab.id}))]}, deploymentType: "full"});
     await new Promise((done) => setTimeout(done, 200));
     const notCreated = flow.filter((node) => !RED.nodes.getNode(node.id)).map((node) => node.type);
     const invalid = flow.filter((node) => statuses.get(node.id)?.text === "invalid configuration").map((node) => node.type);
