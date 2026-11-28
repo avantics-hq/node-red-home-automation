@@ -69,6 +69,7 @@ try {
   if (!failure && deepImport !== "ERR_PACKAGE_PATH_NOT_EXPORTED") failure = `a deep import into dist/ gave ${deepImport}, not ERR_PACKAGE_PATH_NOT_EXPORTED`;
   if (!failure) failure = await checkExamples();
   if (!failure) failure = await checkAnnounceOnConnect();
+  if (!failure) failure = await checkBrokerLink();
 } catch (error) {
   failure = error instanceof Error ? error.message : String(error);
 } finally {
@@ -152,9 +153,67 @@ async function checkAnnounceOnConnect() {
   return null;
 }
 
+// A room that publishes through its broker (nodes/mqtt-broker-link.ts),
+// pinned against this Node-RED's own mqtt-broker node, with no network: the
+// broker node never connects (autoConnect off, an .invalid host). The check
+// stands in only for its MQTT.js client, and calls the proxy's status as the
+// broker node does on a connect (10-mqtt.js setStatusConnected). It checks
+// that the room registers a proxy (so its own status stays its own), stores
+// its subscription with the broker node, publishes through it once connected,
+// announces again when Home Assistant comes back, and deregisters and clears
+// when deleted.
+async function checkBrokerLink() {
+  const tab = {id: "smoke0link0tab", type: "tab", label: "broker link"};
+  const brokerNode = {id: "smoke0link0broker", type: "mqtt-broker", name: "", broker: "broker.invalid", port: "1883", clientid: "", autoConnect: false,
+    usetls: false, protocolVersion: "4", keepalive: "60", cleansession: true};
+  const room = {id: "smoke0link0room", type: "home-room-lighting-controller", z: tab.id, name: "", area: "smoke", targets: "[{\"id\":\"main\"}]",
+    homeAssistant: "discovery", broker: brokerNode.id, idScheme: "node", discoveryPrefix: "homeassistant", initialTransitionSeconds: 1, wires: [[], [], []]};
+  const statuses = new Map();
+  const listener = (event) => statuses.set(event.id, event.status);
+  RED.events.on("node-status", listener);
+  const settle = () => new Promise((done) => setTimeout(done, 200));
+  const problems = [];
+  try {
+    await RED.runtime.flows.setFlows({flows: {flows: [tab, brokerNode, room]}, deploymentType: "full"});
+    await settle();
+    const broker = RED.nodes.getNode(brokerNode.id);
+    const proxy = broker.users["smoke0link0room-home-automation"];
+    if (!proxy || broker.users[room.id]) problems.push("the room didn't register a proxy of its own");
+    const subscription = broker.subscriptions["homeassistant/status"]?.["smoke0link0room-home-automation"];
+    if (!subscription) problems.push("the room's Home Assistant status subscription isn't stored with the broker node");
+    // Its MQTT.js client, as connected; everything above it is the broker node's own.
+    const published = [];
+    broker.client = {publish: (topic, payload, options, done) => { published.push([topic, String(payload), options.retain === true]); done?.(); },
+      on() {}, removeListener() {}, subscribe() {}, unsubscribe() {}};
+    broker.connected = true;
+    proxy?.status({fill: "green", shape: "dot", text: "node-red:common.status.connected"});
+    await settle();
+    const wanted = ["homeassistant/sensor/nrha_smoke0link0room_main_control/config", "home/smoke/lighting/availability", "home/smoke/lighting/main/control"];
+    if (!wanted.every((topic) => published.some(([sent, , retain]) => sent === topic && retain))) problems.push(`not announced on connect: ${JSON.stringify(published)}`);
+    if (String(statuses.get(room.id)?.text ?? "").includes("connected")) problems.push("the broker's status reached the room");
+    const announced = published.length;
+    subscription?.callback("homeassistant/status", Buffer.from("online"), {retain: false});
+    await settle();
+    if (published.length <= announced) problems.push("not announced again when Home Assistant came back");
+    // Deleted, with the broker node still running: it clears what it published, and deregisters.
+    published.length = 0;
+    await RED.runtime.flows.setFlows({flows: {flows: [tab, brokerNode]}, deploymentType: "nodes"});
+    await settle();
+    if (broker.users["smoke0link0room-home-automation"]) problems.push("the proxy wasn't deregistered");
+    if (!published.some(([topic, payload]) => topic === "home/smoke/lighting/availability" && payload === "")) problems.push(`not cleared when deleted: ${JSON.stringify(published)}`);
+    broker.connected = false;
+    console.log(JSON.stringify({brokerLink: {proxy: Boolean(proxy), announced, problems: problems.length}}));
+  } catch (error) {
+    problems.push(error instanceof Error ? error.message : String(error));
+  } finally {
+    RED.events.removeListener("node-status", listener);
+  }
+  return problems.length ? `broker link: ${problems.join("; ")}` : null;
+}
+
 if (failure) {
   console.error(`Node-RED smoke failed: ${failure}`);
   process.exit(1);
 }
-console.log(`Node-RED smoke passed: ${expected.length} node types registered, example flows deployed, announced again on MQTT out's connect.`);
+console.log(`Node-RED smoke passed: ${expected.length} node types registered, example flows deployed, announced again on MQTT out's connect, the broker link pinned.`);
 process.exit(0);

@@ -9,6 +9,7 @@
 import {roomCircadianDiscoveryTopics} from "./circadian-publishing";
 import {DEFAULT_DISCOVERY_PREFIX, type IdScheme} from "./ha-discovery";
 import {
+  createRoomState,
   transitionRoom,
   type RoomConfig,
   type RoomMessage,
@@ -118,6 +119,17 @@ export function roomStartingOutputs(config: PublishingRoomConfig): RoomOutput[] 
 // its entries removed.
 function roomStartupOutputs(config: PublishingRoomConfig): RoomOutput[] {
   return [...oldCircadianClears(config), ...roomDiscoveryOutputs(config), ...(roomPublishesState(config) ? [roomAvailabilityMessage(config.area, true)] : [])];
+}
+
+// Everything the room announces when its broker connects, or Home
+// Assistant comes back: as at the startup message, then every light's
+// control state, so Home Assistant has all of it again.
+export function roomAnnouncement(config: PublishingRoomConfig, saved: Partial<RoomState> | undefined): RoomOutput[] {
+  const state = createRoomState(config, saved);
+  return [
+    ...roomStartupOutputs(config),
+    ...(roomPublishesState(config) ? config.targets.map((target) => controlMessage(config, state, target.id)) : [])
+  ];
 }
 
 export function roomStoppingOutputs(config: PublishSettings): RoomOutput[] {

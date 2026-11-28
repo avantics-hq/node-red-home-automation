@@ -55,6 +55,33 @@ test("scene: a name another scene has, compared as in its topics, is marked in t
   assert.equal(name("s3", "--"), false, "no letter or digit");
 });
 
+test("room: one Home Assistant choice, a Broker needed unless it's off, and the two old settings kept and read as the runtime reads them", () => {
+  const definition = editorDefinition("room-controller.html");
+  for (const key of ["homeAssistant", "broker", "publishState", "discovery"]) assert.ok(key in definition.defaults, key);
+  assert.equal(definition.defaults.broker!.type, "mqtt-broker");
+  const added = newNode(definition);
+  assert.deepEqual([added.homeAssistant, added.publishState, added.discovery], ["off", false, false], "a new room starts off");
+  const broker = (node: Record<string, unknown>, value: string) => definition.defaults.broker!.validate!.call(node, value) as unknown;
+  assert.equal(broker({homeAssistant: "off"}, ""), true);
+  assert.equal(broker({homeAssistant: "state"}, ""), "choose a broker, or set Publish to Don't publish");
+  assert.equal(broker({homeAssistant: "discovery"}, "_ADD_"), "choose a broker, or set Publish to Don't publish");
+  assert.equal(broker({homeAssistant: "state"}, "b1"), true);
+  // A room saved before the choice: its old settings decide, and not set means on.
+  assert.equal(broker({homeAssistant: null, publishState: false, discovery: false}, ""), true);
+  // A room saved before the choice that published keeps publishing through output 1: valid with no broker (E1),
+  // as is one opened and saved since without one; a new one set to publish needs one.
+  assert.equal(broker({homeAssistant: null, publishState: true, discovery: true}, ""), true);
+  assert.equal(broker({homeAssistant: undefined}, ""), true, "6.1.0's unset settings: published, through output 1");
+  assert.equal(broker({homeAssistant: "discovery", publishState: true, discovery: true, publishesThroughOutput: true}, ""), true);
+  assert.equal(broker({homeAssistant: "state", publishesThroughOutput: false}, ""), "choose a broker, or set Publish to Don't publish");
+  assert.equal(definition.defaults.publishesThroughOutput!.value, false);
+  // Its area: needed whenever publishing, and for a saved room whenever either old setting was on.
+  const area = (node: Record<string, unknown>, value: string) => definition.defaults.area!.validate!.call(node, value);
+  assert.equal(area({homeAssistant: "off"}, ""), true);
+  assert.equal(area({homeAssistant: "state"}, ""), false);
+  assert.equal(area({homeAssistant: null, publishState: false, discovery: true}, ""), false, "as in 6.1.0");
+});
+
 const ONADD_NODES = ["room-controller.html", "theatre-state-contract.html", "occupancy-fusion.html", "motion-policy.html",
   "avr-controller.html", "house-schedule-mqtt.html", "cover-controller.html"];
 
