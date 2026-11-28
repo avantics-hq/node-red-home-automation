@@ -1,0 +1,63 @@
+<!--{
+ "title": "Scene",
+ "lead": "Message shapes, output ports and settings for a scene: lights held on or off and motion paused while it is on, all handed back when it ends.",
+ "description": "",
+ "htmlTitle": "Scene · Node-RED Home Automation",
+ "node": "home-scene"
+}-->
+<div class="meta"><span class="tag"><code>home-scene</code></span><span class="tag">1 input · 3 outputs</span><span class="tag">home automation</span></div>
+<section id="summary"><h2>Take the room for a while, then hand it back</h2>
+<p>The <strong>scene</strong> node (type <code>home-scene</code>; canvas label: its name, or “scene”) is one scene, such as <em>Bath</em> or <em>Exercise mode</em>. While it is on, it holds some of a room’s lights on or off with the values it gives them, and pauses motion lighting. When it ends, by request, by its safety timer or by a message your flow sends when its own condition is met, it lets them go, and each room gives its lights back what they were. It reaches lights only through <a href="node-room-controller.html">room lighting controllers</a>, so it works with any light adapter and never commands a device through Home Assistant.</p>
+<aside class="callout neutral"><strong>Looking for a walkthrough?</strong><p>Follow <a href="guide-scenes.html">Scenes</a>.</p></aside>
+</section>
+<section id="inputs"><h2>Inputs</h2>
+<div class="table-wrap" role="region" aria-label="Input messages; scroll horizontally on a phone" tabindex="0"><table><caption>Input messages</caption><thead><tr><th scope="col">Message</th><th scope="col">Shape</th><th scope="col">Effect</th></tr></thead><tbody>
+<tr><td>Start</td><td><code>msg.scene = {kind: "start"}</code></td><td>Turns it on. On again: a fresh safety timer and a renewed pause; its lights are left as they are, so a person’s change during the scene stands.</td></tr>
+<tr><td>End</td><td><code>msg.scene = {kind: "end", by?}</code></td><td>Ends it. <code>by</code>, optional, is shown as what ended it, such as <code>"trainer off"</code>; without it, <code>request</code>. Ignored, with a trace, when it is off.</td></tr>
+<tr><td>End trigger</td><td>The end above, sent by your flow</td><td>The condition is your flow’s: a switch node on a power reading, a light switched off, a door opened. See <a href="guide-scenes.html#end-trigger">End it when something happens</a>.</td></tr>
+<tr><td>Home Assistant</td><td><code>ON</code> or <code>OFF</code> on <code>home/&lt;area&gt;/scene/&lt;name&gt;/set</code></td><td>A start, or an end by <code>home-assistant</code>. Read only while it publishes; retained messages are ignored.</td></tr>
+<tr><td>Startup</td><td><code>msg.scene = {kind: "startup"}</code></td><td>Announces its switch again, and renews its pause while on.</td></tr>
+<tr><td><code>msg.status</code> from a Status node</td><td>MQTT out’s “connected”</td><td>Taken as the startup message (<code>msg.scene = {kind: "startup"}</code>), so the node announces itself again once the broker can take it. Wire in a Status node whose scope is your MQTT out node. Any other status message is ignored.</td></tr>
+</tbody></table></div>
+<p>Anything else is ignored, with a trace.</p>
+</section>
+<section id="outputs"><h2>Outputs</h2>
+<div class="table-wrap" role="region" aria-label="Three output ports; scroll horizontally on a phone" tabindex="0"><table><caption>Three output ports</caption><thead><tr><th scope="col">Port</th><th scope="col">Message</th><th scope="col">Connect to</th></tr></thead><tbody>
+<tr><td>1 · To rooms</td><td>As it starts, one owner intent per light: <code>{lighting: {kind: "intent", area, targets: [id], state, values?, owner: "scene:&lt;name&gt;", source: "scene"}}</code>. As it ends, one release per room: <code>{lighting: {kind: "release", area, owner, targets, source: "scene"}}</code>.</td><td>Each room lighting controller whose lights it sets.</td></tr>
+<tr><td>2 · To motion</td><td><code>{source: "pause", payload: true, owner}</code> as it starts and every minute while on; <code>payload: false</code> as it ends.</td><td>Each motion lighting policy to pause while it is on.</td></tr>
+<tr><td>3 · MQTT publications</td><td>Its switch’s state (<code>ON</code> or <code>OFF</code>), availability and discovery, retained.</td><td>An MQTT out node, when it publishes.</td></tr>
+</tbody></table></div>
+</section>
+<section id="settings"><h2>Settings</h2>
+<div class="table-wrap" role="region" aria-label="Editor settings and exact defaults; scroll horizontally on a phone" tabindex="0"><table><caption>Editor settings and exact defaults</caption><thead><tr><th scope="col">Setting / property</th><th scope="col">Default</th><th scope="col">Meaning</th></tr></thead><tbody>
+<tr><td>Name / <code>name</code></td><td>None: required</td><td>Names the scene to its rooms and motion policies (owner <code>scene:&lt;name&gt;</code>), in its topics and in Home Assistant. Each scene needs its own: the editor marks a name another scene has, compared as in topics (<code>Bath</code> and <code>bath</code> are the same).</td></tr>
+<tr><td>Lights / <code>lights</code></td><td><code>[]</code></td><td>A JSON array, one entry per light: <code>area</code> (its room controller’s Area), <code>target</code> (the light’s id in that room’s Targets JSON), <code>state</code> <code>ON</code> or <code>OFF</code>, and for an ON light <code>brightnessPct</code> (0-100) and <code>colorTempKelvin</code> (above 0), both optional. A socket is a room target marked on/off only: give it just its state. Empty: the scene only pauses motion.</td></tr>
+<tr><td>Safety timer / <code>safetyHours</code></td><td><code>4</code></td><td>Hours until it ends itself, so a forgotten scene doesn’t hold the room. <code>0</code> turns it off.</td></tr>
+<tr><td>Area / <code>area</code></td><td>Empty</td><td>Required only while it publishes: it names its topics, <code>home/&lt;area&gt;/scene/&lt;name&gt;/…</code>.</td></tr>
+<tr><td>Publish state over MQTT / <code>publishState</code></td><td>Off</td><td>Its state, availability and set topic.</td></tr>
+<tr><td>Home Assistant discovery / <code>discovery</code></td><td>Off</td><td>A switch entity for the scene. Needs Publish state.</td></tr>
+<tr><td>Discovery prefix / <code>discoveryPrefix</code></td><td><code>homeassistant</code></td><td>Home Assistant’s discovery prefix.</td></tr>
+</tbody></table></div>
+<p class="caption">Scenes use node-based Home Assistant identifiers (<code>idScheme = "node"</code>), so renaming its area keeps its entity. That is not an editor setting.</p>
+<div class="code-block"><div class="code-label"><span>Lights · a main light off, a TV socket on, a lamp dimmed warm</span></div><pre><code>[{"area": "gym", "target": "main", "state": "OFF"},
+ {"area": "gym", "target": "tv", "state": "ON"},
+ {"area": "gym", "target": "lamp", "state": "ON", "brightnessPct": 30, "colorTempKelvin": 2700}]</code></pre></div>
+</section>
+<section id="rules"><h2>What it holds, and what it hands back</h2>
+<ul class="rule-list">
+<li><strong>Which rooms:</strong> each light names its room by the room controller’s <strong>Area</strong>, and its intents and releases carry it; a room acts only on those for its own Area, so two rooms may each have a <code>main</code>. Set the Area on each room a scene uses.</li><li><strong>Through the room:</strong> each light is held under the scene’s owner, so motion, wall switches without a person’s mark, and the circadian style leave it alone while the scene is on, on or off. See <a href="node-room-controller.html#owners">owners stack</a>.</li>
+<li><strong>Handed back:</strong> when it ends, each room gives a light back what it was before the scene: on or off as it was, in the room’s style as it is now, or a person’s own values if they had set it.</li>
+<li><strong>Scenes stack:</strong> a newer scene holding a light another holds takes it, and hands it back to the older one when it ends. Ending the older one first leaves the light with the newer.</li>
+<li><strong>A person’s change stands:</strong> a person changing a light the scene holds makes it theirs; the scene’s end leaves it alone.</li>
+<li><strong>Motion:</strong> paused under the scene’s owner, renewed every minute, so it lapses within the motion policy’s maximum pause (10 minutes by default) if the scene node goes away. Keep that <strong>Maximum pause</strong> above a minute, or motion runs between renewals. Ending the scene lifts its pause; another owner’s pause stands. If the room went vacant during the scene, motion’s vacancy delay starts when the pause lifts.</li>
+<li><strong>Restarts:</strong> its state is kept in its node context. With a context store, a scene on when the flows stopped is still on when they start, with its timer; if its time ran out meanwhile, it ends as they start. Its lights aren’t asked again: the rooms still hold them.</li>
+<li><strong>Deleted while on:</strong> it lets its lights and motion go, when you deploy with “Modified nodes” or “Modified flows”, while the rooms and motion policies are still running. On a full deploy the rooms are stopping too, so its release is lost and its lights stay held: end the scene before you delete it, or change those lights by hand, which makes them a person’s. Its motion pause runs out by itself.</li>
+</ul>
+</section>
+<section id="publishing"><h2>Home Assistant</h2>
+<p>With an area, <strong>Publish state over MQTT</strong> and <strong>Home Assistant discovery</strong> on, Home Assistant gets a switch named after the scene. It shows whether the scene is on, and switching it sends <code>ON</code> or <code>OFF</code> to <code>home/&lt;area&gt;/scene/&lt;name&gt;/set</code>: wire an MQTT in node on that topic into the scene. Its availability is <code>home/&lt;area&gt;/scene/&lt;name&gt;/availability</code>; set the MQTT broker node’s Birth, Close and Will messages as for the other publishing nodes (see <a href="guide-home-assistant.html">Home Assistant</a>). <code>&lt;name&gt;</code> in topics is the scene’s name in lower case with other characters as <code>_</code>: <code>exercise_mode</code>.</p>
+</section>
+<section id="status"><h2>Status</h2>
+<ul class="rule-list"><li><strong>on · 3h 59m left</strong> (green dot) while on, or <strong>on</strong> with the timer off.</li><li><strong>off · ended by timer</strong> (grey dot), or by <code>request</code>, <code>home-assistant</code>, <code>deleted</code> or what the end gave.</li><li><strong>off</strong> (grey ring) before it has run.</li></ul>
+</section>
+<p class="caption">Sources: nodes/scene.html, nodes/scene.ts, lib/scene.ts, lib/scene-publishing.ts.</p>

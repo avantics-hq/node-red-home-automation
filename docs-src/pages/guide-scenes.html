@@ -1,0 +1,67 @@
+<!--{
+ "title": "Scenes",
+ "lead": "Turn on “Exercise mode” or “Bath”: the room’s lights and sockets change and motion lighting pauses. When the scene ends, by request, a safety timer or something you choose, everything goes back.",
+ "description": "",
+ "htmlTitle": "Scenes · Node-RED Home Automation"
+}-->
+<div class="meta"><span class="tag">Guide</span><span class="tag">One scene node per scene · safety timer 4 h</span><a class="tag" href="node-scene.html">Scene reference →</a></div>
+<section id="before"><h2>Before you wire it</h2>
+<p>A <strong>scene</strong> (<code>home-scene</code>) takes some of a room’s lights for a while. It holds each on or off with the values you give it, and pauses motion lighting, so motion doesn’t switch the bath lights off or the exercise light back on. When it ends, each room gives its lights back what they were before the scene.</p>
+<ul>
+<li>You need a <a href="guide-room-lighting.html">room lighting controller</a> for the room, with each light and socket in its Targets JSON. A socket is a target marked <code>"onOffOnly": true</code>, through its own adapter.</li>
+<li>To pause motion lighting, a <a href="guide-motion-occupancy.html">motion lighting policy</a> wired into that room.</li>
+<li>To start and stop it from Home Assistant, an MQTT broker node, as for the other publishing nodes (see <a href="guide-home-assistant.html">Home Assistant</a>).</li>
+</ul>
+</section>
+<section id="wiring"><h2>Wire a scene</h2>
+<p>Import <strong>Scene</strong> from the examples (Import → Examples → @avantics/node-red-home-automation), or add a <strong>scene</strong> node from the palette.</p>
+<div class="table-wrap" role="region" aria-label="Scene connections; scroll horizontally on a phone" tabindex="0"><table><caption>Scene connections</caption><thead><tr><th scope="col">From</th><th scope="col">To</th><th scope="col">Carries</th></tr></thead><tbody>
+<tr><td>Scene output 1</td><td>Each room lighting controller whose lights it sets</td><td>Owner intents as it starts, releases as it ends.</td></tr>
+<tr><td>Scene output 2</td><td>Each motion lighting policy to pause</td><td>An owner pause, renewed every minute, lifted as it ends.</td></tr>
+<tr><td>Scene output 3</td><td>MQTT out</td><td>Its Home Assistant switch, when it publishes.</td></tr>
+<tr><td>MQTT in on <code>home/&lt;area&gt;/scene/&lt;name&gt;/set</code></td><td>Scene input</td><td>Home Assistant’s ON and OFF.</td></tr>
+<tr><td>Status node watching MQTT out</td><td>Scene input</td><td>MQTT out’s “connected”, taken as the startup message, so its switch is announced once the broker can take it.</td></tr>
+</tbody></table></div>
+<ol class="step-list">
+<li><strong>Give each room it uses an Area.</strong><p>A scene names each light by its room’s <strong>Area</strong> and its id there, and a room acts only on a scene’s lights for its own Area, so two rooms may each have a <code>main</code>.</p></li>
+<li><strong>Name it.</strong><p>The name is how its rooms, its motion policies and Home Assistant know it, so each scene needs its own: <code>Exercise mode</code>, <code>Bath</code>. Two scenes with one name would share an owner, and one ending would release the other’s lights; the editor marks a name another scene has.</p></li>
+<li><strong>List its lights.</strong><p>One entry per light or socket, by its room’s Area and its id in that room’s Targets JSON:</p>
+<div class="code-block"><div class="code-label"><span>Exercise mode · main light off, TV socket on</span></div><pre><code>[{"area": "gym", "target": "main", "state": "OFF"},
+ {"area": "gym", "target": "tv", "state": "ON"}]</code></pre></div>
+<div class="code-block"><div class="code-label"><span>Bath · two lights dimmed warm</span></div><pre><code>[{"area": "bathroom", "target": "ceiling", "state": "ON", "brightnessPct": 30, "colorTempKelvin": 2700},
+ {"area": "bathroom", "target": "mirror", "state": "ON", "brightnessPct": 50}]</code></pre></div>
+<p>Brightness is 0-100 % and colour temperature in kelvin; a light given neither just switches on. A scene with no lights only pauses motion.</p></li>
+<li><strong>Set its safety timer.</strong><p>It ends itself after <strong>4 hours</strong> by default, so a scene left on doesn’t hold the room overnight. <code>0</code> turns the timer off.</p></li>
+<li><strong>Start and end it.</strong><p>Send <code>msg.scene = {kind: "start"}</code> and <code>msg.scene = {kind: "end"}</code> from your flow, or use its Home Assistant switch (below).</p></li>
+</ol>
+</section>
+<section id="end-trigger"><h2>End it when something happens</h2>
+<p>A scene can end on a condition, such as the trainer’s power falling, the bath lights being switched off or a door opening. The condition lives in your flow: when it is met, send the scene an end, with what ended it.</p>
+<div class="code-block"><div class="code-label"><span>Change node · after a switch node passing power below 20 W</span></div><pre><code>msg.scene = {kind: "end", by: "trainer off"};</code></pre></div>
+<p>The scene shows <strong>off · ended by trainer off</strong>. An end while it is off does nothing, so a condition that stays true can keep sending it. The example flow builds this from a switch node and a change node.</p>
+</section>
+<section id="hand-back"><h2>What happens when it ends</h2>
+<p>Each room gives each light back what it was when the scene took it:</p>
+<ul class="rule-list">
+<li><strong>A light the room was running</strong> is the room’s again, on or off as it was, in the room’s style as it is now: a bath from 20:00 to 21:30 gets the 21:30 style, not 20:00’s.</li>
+<li><strong>A light that was off</strong> goes off.</li>
+<li><strong>A light a person had set</strong> gets their brightness and colour back, and stays theirs.</li>
+<li><strong>A light a person changed during the scene</strong> is theirs: the scene’s end leaves it alone.</li>
+</ul>
+<p>Motion lighting resumes when its pause lifts. If the room went vacant during the scene, its vacancy delay starts then, and it switches the lights off as it normally would. Keep each motion policy’s <strong>Maximum pause</strong> above a minute (10 minutes by default), as the scene renews its pause every minute.</p>
+</section>
+<section id="stacking"><h2>Two scenes at once</h2>
+<p>Scenes stack. If <em>Bath</em> starts while <em>Exercise mode</em> holds the same light, Bath takes it; when Bath ends, the light goes back to what Exercise mode asked for, not to the room. If Exercise mode ends first, the light stays with Bath, and goes back to the room when Bath ends. Lights only one scene holds follow that scene. Each scene pauses motion under its own name, so motion resumes only when both have ended.</p>
+</section>
+<section id="home-assistant"><h2>Start and stop it from Home Assistant</h2>
+<ol class="step-list">
+<li><strong>Switch publishing on.</strong><p>Give the scene an area, and switch on <strong>Publish state over MQTT</strong> and <strong>Home Assistant discovery</strong>. Wire output 3 to an MQTT out node.</p></li>
+<li><strong>Wire its set topic back in.</strong><p>An MQTT in node on <code>home/&lt;area&gt;/scene/&lt;name&gt;/set</code> into the scene, where <code>&lt;name&gt;</code> is its name in lower case with other characters as <code>_</code> (<code>exercise_mode</code>).</p></li>
+</ol>
+<p>Home Assistant then shows a switch for the scene: on while it is on, off once it ends by any route. Switching it off ends the scene “by home-assistant”.</p>
+</section>
+<section id="restarts"><h2>Restarts and deploys</h2>
+<p>A scene keeps its state in its node context, which lasts across restarts and full deploys only with a context store (see <a href="install.html">Install</a>). With one, a scene that was on is still on, with its timer; if the timer ran out meanwhile, the scene ends as the flows start. Without one, the scene and its rooms both start with nothing saved: the scene is off, and the rooms no longer know it held their lights, so the lights stay as they are until something changes them.</p>
+<p>Deleting a scene while it is on lets its lights and motion go, when you deploy with “Modified nodes” or “Modified flows”.</p>
+</section>
+<p class="caption">Sources: nodes/scene.html, lib/scene.ts, lib/scene-publishing.ts, lib/room-holds.ts.</p>

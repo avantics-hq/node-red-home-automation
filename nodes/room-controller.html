@@ -308,6 +308,10 @@
     <dd>on an <code>intent</code>, holds its targets on or off for this owner (overridden), on top of any other
       owner's. With
       <code>preserveManual: true</code>, manual lights are skipped.</dd>
+    <dt>lighting.area <span class="property-type">string</span></dt>
+    <dd>on an <code>intent</code> or <code>release</code>, the room it is for: this room acts on it only when it
+      matches its <b>Area</b> (compared as in topics), so a scene wired to several rooms reaches only its own
+      lights. Without it, any room it reaches acts on it.</dd>
     <dt>lighting.kind = "release"</dt>
     <dd>lets go of overridden <code>targets</code> (default: all) for <code>owner</code>, or for every owner without
       one. A light goes to the owner beneath, or with none left back to what it was before the first.</dd>

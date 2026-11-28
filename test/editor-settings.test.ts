@@ -39,6 +39,22 @@ function newNode(definition: Definition): Record<string, unknown> {
   return node;
 }
 
+test("scene: a name another scene has, compared as in its topics, is marked in the editor", () => {
+  const html = readFileSync(resolve(__dirname, "../../nodes/scene.html"), "utf8");
+  const script = /<script type="text\/javascript">([\s\S]*?)<\/script>/.exec(html)![1]!;
+  const flow = [{id: "s1", type: "home-scene", name: "Bath"}, {id: "s2", type: "home-scene", name: "Exercise mode"}, {id: "r1", type: "home-room-lighting-controller", name: "Gym"}];
+  let definition: Definition | undefined;
+  const RED = {nodes: {registerType: (_name: string, value: Definition) => { definition = value; }, eachNode: (visit: (node: Record<string, unknown>) => void) => flow.forEach(visit)}};
+  new Function("RED", "$", script)(RED, () => ({length: 0}));
+  const name = (id: string, value: string) => definition!.defaults.name!.validate!.call({id}, value) as unknown;
+  assert.equal(name("s2", "Exercise mode"), true, "its own name");
+  assert.equal(name("s2", "BATH"), "another scene has this name");
+  assert.equal(name("s2", "exercise_mode"), true, "the same as its own, in topics");
+  assert.equal(name("s3", "exercise mode"), "another scene has this name");
+  assert.equal(name("s3", "Gym"), true, "another kind of node's name");
+  assert.equal(name("s3", "--"), false, "no letter or digit");
+});
+
 const ONADD_NODES = ["room-controller.html", "theatre-state-contract.html", "occupancy-fusion.html", "motion-policy.html",
   "avr-controller.html", "house-schedule-mqtt.html", "cover-controller.html"];
 

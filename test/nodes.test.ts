@@ -25,6 +25,7 @@ import registerHouseMqtt from "../nodes/house-schedule-mqtt";
 import registerShellyCover from "../nodes/shelly-cover";
 import registerShellySwitch from "../nodes/shelly-switch";
 import registerZ2mCover from "../nodes/z2m-cover";
+import registerScene from "../nodes/scene";
 import type {SharedSchedule} from "../lib/house-schedule";
 import registerSource from "../nodes/source-capability-controller";
 import type {TraceRecord} from "../lib/bounded-trace";
@@ -2655,6 +2656,7 @@ const ANNOUNCING: Array<[string, NodeInitializer, Record<string, unknown>, Recor
   ["AVR controller", registerAvr, {}, {avr: {kind: "startup"}}],
   ["theatre state contract", registerTheatreStateContract, {activities: "[\"off\",\"tv\"]"}, {theatreStateContract: {kind: "startup"}}],
   // It publishes no retained state, but asks the device for its configuration as the flows start.
+  ["scene", registerScene, {name: "Exercise mode", lights: "[{\"area\":\"test\",\"target\":\"main\",\"state\":\"OFF\"}]"}, {scene: {kind: "startup"}}],
   ["shelly switch", registerShellySwitch, {topicPrefix: "shellyplus1-test", channel: "0"}, {shellySwitch: {kind: "startup"}}]
 ];
 const mqttStatus = (type: string, fill: string, text: string) =>
@@ -2678,6 +2680,78 @@ test("each node that announces itself as the flows start announces again when MQ
     assert.deepEqual(timeless(await receive(viaStatus, mqttStatus("mqtt out", "green", "node-red:common.status.connected"))),
       timeless(expected), `${label}: connected`);
     assert.deepEqual([viaStartup.errors, viaStatus.errors], [[], []], label);
+  }
+});
+
+test("scene node: on and off from a flow and from Home Assistant, its switch, its status, and a deleted scene lets go", async (t) => {
+  type Envelope = Array<Array<Record<string, unknown>> | Record<string, unknown> | null>;
+  const sceneRuntime = runtime(registerScene, {}, STORE);
+  const config = {id: "scene-ex", name: "Exercise mode", area: "lounge", safetyHours: 4, publishState: true, discovery: true, idScheme: "node",
+    lights: JSON.stringify([{area: "lounge", target: "main", state: "OFF"}, {area: "lounge", target: "tv", state: "ON"}])};
+  const node = new sceneRuntime.Constructor(config);
+  t.after(() => close(node));
+  assert.deepEqual(node.errors, []);
+  const port = (sent: unknown[], index: number) => sent.flatMap((envelope) => {
+    const out = (envelope as Envelope)[index];
+    return out === null || out === undefined ? [] : Array.isArray(out) ? out : [out];
+  });
+
+  sceneRuntime.events.emit("flows:started");
+  const announced = port(node.sent, 2).map(({topic, payload}) => [topic, typeof payload === "string" && payload.startsWith("{") ? "config" : payload]);
+  assert.deepEqual(announced, [
+    ["homeassistant/switch/nrha_scene-ex_scene_exercise_mode/config", "config"],
+    ["home/lounge/scene/exercise_mode/availability", "online"],
+    ["home/lounge/scene/exercise_mode/state", "OFF"]
+  ]);
+
+  const on = await receive<Envelope>(node, {topic: "home/lounge/scene/exercise_mode/set", payload: "ON"});
+  assert.deepEqual(port(on, 0).map(({lighting}) => lighting), [
+    {kind: "intent", area: "lounge", targets: ["main"], state: "OFF", owner: "scene:Exercise mode", source: "scene"},
+    {kind: "intent", area: "lounge", targets: ["tv"], state: "ON", owner: "scene:Exercise mode", source: "scene"}
+  ]);
+  assert.deepEqual(port(on, 1), [{source: "pause", payload: true, owner: "scene:Exercise mode"}]);
+  assert.deepEqual(port(on, 2), [{topic: "home/lounge/scene/exercise_mode/state", payload: "ON", retain: true}]);
+  assert.equal((node.statuses.at(-1) as {text: string}).text, "on · 4h 0m left");
+
+  // A redeploy with a context store: still on, its pause renewed, its lights not asked again.
+  await close(node);
+  const after = new sceneRuntime.Constructor(config);
+  sceneRuntime.events.emit("flows:started");
+  assert.deepEqual(port(after.sent, 0), []);
+  assert.deepEqual(port(after.sent, 1), [{source: "pause", payload: true, owner: "scene:Exercise mode"}]);
+  assert.ok(port(after.sent, 2).some(({topic, payload}) => topic === "home/lounge/scene/exercise_mode/state" && payload === "ON"));
+
+  // Deleted while on: it lets go.
+  const before = after.sent.length;
+  sceneRuntime.flowNodeIds.delete("scene-ex");
+  await new Promise<void>((resolve) => after.emit("close", true, resolve));
+  const gone = after.sent.slice(before);
+  assert.deepEqual(port(gone, 0).map(({lighting}) => lighting), [{kind: "release", area: "lounge", owner: "scene:Exercise mode", targets: ["main", "tv"], source: "scene"}]);
+  assert.deepEqual(port(gone, 1), [{source: "pause", payload: false, owner: "scene:Exercise mode"}]);
+});
+
+test("scene node: an end trigger from the flow names what ended it; anything else is ignored with a trace", async (t) => {
+  const node = new (runtime(registerScene).Constructor)({id: "scene-bath", name: "Bath", safetyHours: 0, lights: "[{\"area\":\"bathroom\",\"target\":\"main\",\"state\":\"ON\",\"brightnessPct\":30}]"});
+  t.after(() => close(node));
+  await receive(node, {scene: {kind: "start"}});
+  assert.equal((node.statuses.at(-1) as {text: string}).text, "on");
+  assert.deepEqual(await receive(node, {payload: "ON"}), [], "not a scene message");
+  assert.equal(traces(node).at(-1)?.reason, "not-a-scene-message");
+  await receive(node, {scene: {kind: "end", by: "lights switched off"}});
+  assert.equal((node.statuses.at(-1) as {text: string}).text, "off · ended by lights switched off");
+});
+
+test("scene node: settings it can't use are an invalid configuration naming them", () => {
+  const Scene = runtime(registerScene).Constructor;
+  for (const [settings, message] of [
+    [{name: ""}, /name is required/],
+    [{name: "Bath", lights: "[{\"area\":\"bathroom\",\"target\":\"main\"}]"}, /state must be ON or OFF/],
+    [{name: "Bath", lights: "[{\"target\":\"main\",\"state\":\"ON\"}]"}, /needs an area/],
+    [{name: "Bath", safetyHours: -2}, /safety timer/],
+    [{name: "Bath", publishState: true}, /area/]
+  ] as const) {
+    const node = new Scene({id: "bad-scene", ...settings});
+    assert.match(String(node.errors[0]), message, JSON.stringify(settings));
   }
 });
 

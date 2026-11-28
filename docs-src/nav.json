@@ -13,6 +13,7 @@
       {"label": "Motion and occupancy", "href": "guide-motion-occupancy.html"},
       {"label": "Wall switches", "href": "guide-wall-switches.html"},
       {"label": "House schedule", "href": "guide-house-schedule.html"},
+      {"label": "Scenes", "href": "guide-scenes.html"},
       {"label": "Covers", "href": "guide-covers.html"},
       {"label": "Home theatre", "href": "home-theatre.html"},
       {"label": "Home Assistant", "href": "guide-home-assistant.html"},
@@ -28,7 +29,8 @@
       {"label": "Occupancy fusion", "href": "node-occupancy-fusion.html"},
       {"label": "Switch lighting policy", "href": "node-switch-policy.html"},
       {"label": "House schedule node", "href": "node-house-schedule.html"},
-      {"label": "House schedule MQTT", "href": "node-house-schedule-mqtt.html"}
+      {"label": "House schedule MQTT", "href": "node-house-schedule-mqtt.html"},
+      {"label": "Scene", "href": "node-scene.html"}
     ]
   },
   {
