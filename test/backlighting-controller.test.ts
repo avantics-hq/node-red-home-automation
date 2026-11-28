@@ -233,3 +233,11 @@ test("ready is stamped with the reading it rests on: a repeated intent doesn't m
   const confirming = apply(intent(undefined, "on", 2).state, {kind: "command_result", generation: 2, ok: true}, 5);
   assert.deepEqual([confirming.events[0]?.theatre.status, confirming.events[0]?.theatre.observedAt], ["confirming", at(5).toISOString()]);
 });
+
+test("the recovery probe: with no request it reads the backlight and answers with its power", () => {
+  let result = apply(undefined, {kind: "refresh", requestId: null, generation: 0});
+  assert.deepEqual(result.commands, [{operation: "observe", requestId: null, generation: 0, power: null, attempt: 0}]);
+  result = apply(result.state, {kind: "observed", generation: 0, power: "on", observedAt: at(1).toISOString()}, 1);
+  assert.deepEqual(result.observations.map(({theatre}) => [theatre.target, theatre.values]), [["backlighting", {power: "on"}]]);
+  assert.deepEqual([result.commands, result.events], [[], []]);
+});

@@ -1,5 +1,6 @@
 "use strict";
 
+import {isProbe, targetObservation, type TargetObservationOutput} from "./target-observation";
 import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration, adoptionReason, carryOn, answersRequest, savedCarried, type Carried} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {numberSetting} from "./settings";
@@ -56,6 +57,9 @@ export interface BacklightingState {
   adoptedGeneration: number | null;
   // The generation a request carried on from (see carryOn).
   carried?: Carried | null;
+  // Reading the backlight for the theatre's recovery probe, with no request
+  // of its own (see target-observation.ts).
+  probing?: boolean;
 }
 
 export type BacklightingEvent =
@@ -84,9 +88,10 @@ export interface BacklightingMessage {
 
 export interface BacklightingCommand {
   operation: "set_power" | "observe";
-  requestId: string;
+  // Null, with generation 0 and no power, for the recovery probe's observe.
+  requestId: string | null;
   generation: number;
-  power: BacklightingPower;
+  power: BacklightingPower | null;
   attempt: number;
 }
 
@@ -121,7 +126,8 @@ function initialState(saved: Partial<BacklightingState> = {}): BacklightingState
       ? saved.lastAttempt!
       : 0,
     adoptedGeneration: savedAdoptedGeneration(saved),
-    carried: savedCarried(saved)
+    carried: savedCarried(saved),
+    probing: saved.probing === true
   };
 }
 
@@ -162,6 +168,8 @@ export function transitionBacklighting(
   const event = msg?.backlighting;
   const commands: BacklightingCommand[] = [];
   const events: BacklightingOutputEvent[] = [];
+  // Its answer to the theatre's recovery probe, for output 2 as the events.
+  const observations: TargetObservationOutput[] = [];
   const traces: TraceEntry[] = [];
 
   if (!event || typeof event.kind !== "string") throw new Error("msg.backlighting.kind is required");
@@ -228,6 +236,20 @@ export function transitionBacklighting(
   }
 
   function acceptObservation(observation: Extract<BacklightingEvent, {kind: "observed"}>) {
+    if (!state.desired && state.probing) {
+      // The probe's answer, whatever generation the transport echoes.
+      if (!Object.hasOwn(POWERS, observation.power)) throw new Error("unknown observed backlighting power");
+      const parsedAt = parseObservedAt(observation.observedAt);
+      if (parsedAt === null || typeof observation.observedAt !== "string") {
+        throw new Error("backlighting observedAt must be an ISO timestamp");
+      }
+      const observedAt = boundObservedAt(observation.observedAt, parsedAt, nowMs).observedAt;
+      state.observed = {power: observation.power, observedAt};
+      state.probing = false;
+      observations.push(targetObservation("backlighting", observedAt, {power: observation.power}));
+      trace("probe", "answered", null, {power: observation.power});
+      return;
+    }
     if (!Number.isInteger(observation.generation) || observation.generation < 1) {
       throw new Error("backlighting observation generation must be a positive integer");
     }
@@ -339,6 +361,11 @@ export function transitionBacklighting(
       state.phase = "confirming";
       trace("command", "emitted", null, {operation: "observe", power: state.desired.power});
     }
+  } else if (!state.desired && isProbe(event)) {
+    // The theatre's recovery probe: read the backlight and say what it shows.
+    state.probing = true;
+    commands.push({operation: "observe", requestId: null, generation: 0, power: null, attempt: 0});
+    trace("probe", "observing");
   } else if (event.kind === "refresh" && state.desired && state.phase === "ready" && !state.pending) {
     // A settled, ready target is re-read without leaving ready, as the
     // display, source and receiver are: its target state follows the
@@ -402,5 +429,5 @@ export function transitionBacklighting(
     events.push({theatre});
   }
 
-  return {state, commands, events, traces, status: statusFor(state)};
+  return {state, commands, events, observations, traces, status: statusFor(state)};
 }

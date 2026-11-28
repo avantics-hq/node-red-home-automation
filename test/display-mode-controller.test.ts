@@ -831,3 +831,23 @@ test("projector mode with a viewing position and a lost position closes first, t
   assert.deepEqual([result.state.phase, result.state.failure?.device, result.state.failure?.reason], ["failed", "screen", "screen-not-calibrated"]);
   assert.equal(command(result, "screen", "open"), undefined);
 });
+
+test("the recovery probe: with no request it reads every device and answers with the one mode they show", () => {
+  let result = apply(undefined, {kind: "refresh", requestId: null, generation: 0}, 0);
+  assert.deepEqual(result.commands.map(({device, operation}) => [device, operation]),
+    [["tv", "query_power"], ["screen", "query_position"], ["projector", "query_power"]]);
+  assert.deepEqual(result.observations, []);
+  result = observe(result.state, "tv", {power: "on"}, 0.1, 0);
+  result = observe(result.state, "screen", {position: 0, state: "closed"}, 0.2, 0);
+  assert.deepEqual(result.observations, [], "not until every device has answered");
+  result = observe(result.state, "projector", {watts: 2.1}, 0.3, 0);
+  assert.deepEqual(result.observations.map(({theatre}) => [theatre.kind, theatre.target, theatre.values]),
+    [["target_observation", "display", {mode: "tv"}]]);
+  assert.deepEqual(result.commands, [], "nothing commanded");
+  // Devices in no mode's state: no mode.
+  result = apply(result.state, {kind: "refresh", requestId: null, generation: 0}, 1);
+  result = observe(result.state, "tv", {power: "on"}, 1.1, 0);
+  result = observe(result.state, "screen", {position: 82, state: "stopped"}, 1.2, 0);
+  result = observe(result.state, "projector", {watts: 2.1}, 1.3, 0);
+  assert.deepEqual(result.observations.map(({theatre}) => theatre.values), [{mode: null}]);
+});

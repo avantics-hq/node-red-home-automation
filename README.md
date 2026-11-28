@@ -909,9 +909,9 @@ Without a context store, after a node is redeployed or Node-RED restarts:
   times, set from Home Assistant or a message.
 - **The theatre starts its counts again:** its counters and operational SLO
   samples restart, and the activity controller no longer knows the current
-  activity. The activity is unknown, and the devices are left alone, until the
-  next request. Working the activity out from what the devices report after a
-  cold start is [issue #179](https://github.com/avantics-hq/node-red-home-automation/issues/179).
+  activity. It works it out again from what the devices show, when they show
+  exactly one activity; otherwise it is unknown, and the devices are left
+  alone, until the next request.
 - **Work in progress is not recovered:** a motion off-timer that was running,
   or a theatre device change still being confirmed. The node starts afresh
   and goes by what it next observes.

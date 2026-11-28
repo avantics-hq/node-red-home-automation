@@ -1257,6 +1257,171 @@ test("a zigbee2mqtt group with no state after 30 s says to have Zigbee2MQTT reta
   assert.equal(text(single), "waiting for the device");
 });
 
+test("the example theatre flow, started with nothing saved while the devices show tv, recovers the tv activity and commands nothing", async (t) => {
+  t.mock.timers.enable({apis: ["setTimeout", "setInterval", "Date"], now: Date.parse("2026-11-23T20:00:00Z")});
+  const flow = JSON.parse(readFileSync(resolve(__dirname, "../../examples/Home theatre activity.json"), "utf8")) as
+    Array<Record<string, unknown> & {id: string; type: string; name?: string; wires?: string[][]}>;
+  const registers: Record<string, NodeInitializer> = {
+    "home-theatre-state-contract": registerTheatreStateContract,
+    "home-theatre-activity-controller": registerTheatreActivity,
+    "home-display-mode-controller": registerDisplay,
+    "home-avr-controller": registerAvr,
+    "home-source-capability-controller": registerSource,
+    "home-activity-lighting-controller": registerActivityLighting,
+    "home-backlighting-controller": registerBacklighting,
+    "home-room-lighting-controller": registerRoom,
+    "home-z2m-light": registerZ2mLight
+  };
+
+  // The devices behind the controllers. The display controller reaches its
+  // devices itself, so they answer its HTTP calls.
+  // The tv activity, as the devices show it after a restart.
+  const devices = {tv: "on", screen: 0, projectorWatts: 0, avr: {PW: "ON", ZM: "ON", SI: "SAT/CBL", MV: "30"},
+    source: {status: "active", changedAt: ""}, backlighting: "on"};
+  // Anything the flow asks a device to change.
+  const changes: string[] = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: string | URL, init?: RequestInit) => {
+    const href = String(url);
+    const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
+    let answer: unknown = {};
+    if (href.endsWith("/sony/system")) {
+      if (body.method === "getPowerStatus") answer = {result: [{status: devices.tv === "on" ? "active" : "standby"}]};
+      else {
+        changes.push("tv set power");
+        devices.tv = (body.params as Array<{status: boolean}>)[0]!.status ? "on" : "standby";
+        answer = {result: []};
+      }
+    } else if (href.includes("Cover.GetStatus")) answer = {current_pos: devices.screen, state: "stopped"};
+    else if (href.includes("Cover.GoToPosition")) {
+      changes.push("screen move");
+      devices.screen = Number(body.pos);
+    }
+    else if (href.includes("Switch.GetStatus")) answer = {apower: devices.projectorWatts};
+    return new Response(JSON.stringify(answer), {status: 200, headers: {"content-type": "application/json"}});
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  // The example's broker: the contract reads its requests from it, and the light publishes to it.
+  const broker = fakeBroker();
+  builtNodes.set("example-mqtt-broker", broker);
+  const nodes = new Map<string, RuntimeNode>();
+  for (const entry of flow) {
+    const register = registers[entry.type];
+    if (!register) continue;
+    // What the example leaves for the user to fill in.
+    const config = entry.type === "home-display-mode-controller"
+      ? {...entry, tvHost: "tv.example", screenHost: "screen.example", projectorPowerMeterHost: "meter.example"}
+      : entry.type === "home-theatre-state-contract"
+        ? {...entry, area: "lounge"}
+        : entry;
+    const node = new (runtime(register, {tvPsk: "example"}).Constructor)(config);
+    assert.deepEqual(node.errors, [], entry.type);
+    nodes.set(entry.id, node);
+    t.after(() => close(node));
+  }
+  const byId = new Map(flow.map((entry) => [entry.id, entry]));
+  const property = (msg: Record<string, unknown>, path: string) =>
+    path.split(".").reduce<unknown>((value, key) => (value as Record<string, unknown> | undefined)?.[key], msg);
+  const queue: Array<[string, Record<string, unknown>]> = [];
+  const refreshes: string[] = [];
+  // The topics the state contract publishes on its MQTT output.
+  const contractTopics: string[] = [];
+
+  function route(id: string, envelope: unknown) {
+    const outputs = Array.isArray(envelope) ? envelope : [envelope];
+    outputs.forEach((output, index) => {
+      for (const msg of output === null || output === undefined ? [] : Array.isArray(output) ? output : [output]) {
+        if (byId.get(id)!.type === "home-theatre-state-contract" && index === 1) contractTopics.push(String((msg as {topic?: unknown}).topic));
+        for (const target of byId.get(id)!.wires?.[index] ?? []) queue.push([target, structuredClone(msg)]);
+      }
+    });
+  }
+
+  // The devices answer the commands that reach the example's debug nodes.
+  function device(name: string, msg: Record<string, unknown>) {
+    const now = new Date().toISOString();
+    if (name === "avr commands") {
+      for (const query of Buffer.from(msg.payload as Uint8Array).toString("utf8").split("\r").filter(Boolean)) {
+        const code = query.slice(0, 2) as keyof typeof devices.avr;
+        if (!query.endsWith("?")) changes.push(`avr ${query}`);
+        if (!query.endsWith("?")) devices.avr[code] = query.slice(2);
+        queue.push([avrId, {avr: {kind: "observed", line: code + devices.avr[code]}}]);
+      }
+    } else if (name === "source commands") {
+      const command = msg.sourceCommand as {operation: string; generation: number; sourceId: string};
+      if (command.operation !== "observe") {
+        changes.push(`source ${command.operation}`);
+        devices.source = {status: command.operation === "activate" ? "active" : "inactive", changedAt: now};
+      }
+      // A quiet source: its reading keeps the time it last changed.
+      queue.push([sourceId, {sourceCapability: {kind: "observed", generation: command.generation, sourceId: command.sourceId,
+        status: devices.source.status, observedAt: devices.source.changedAt || now}}]);
+    } else if (name === "backlighting commands") {
+      const command = msg.backlightingCommand as {operation: string; generation: number; power: string};
+      if (command.operation === "set_power") changes.push(`backlighting ${command.power}`);
+      if (command.operation === "set_power") devices.backlighting = command.power;
+      queue.push([backlightingId, {backlighting: {kind: "observed", generation: command.generation,
+        power: devices.backlighting, observedAt: now}}]);
+    }
+  }
+  const idOf = (type: string) => flow.find((entry) => entry.type === type)!.id;
+  const avrId = idOf("home-avr-controller");
+  const sourceId = idOf("home-source-capability-controller");
+  const backlightingId = idOf("home-backlighting-controller");
+  const activityId = idOf("home-theatre-activity-controller");
+
+  async function settle() {
+    for (let round = 0; round < 200; round += 1) {
+      for (let flush = 0; flush < 5; flush += 1) await new Promise((done) => setImmediate(done));
+      for (const [id, node] of nodes) for (const envelope of node.sent.splice(0)) route(id, envelope);
+      if (!queue.length) return;
+      while (queue.length) {
+        const [id, msg] = queue.shift()!;
+        const entry = byId.get(id)!;
+        const node = nodes.get(id);
+        if (node) {
+          for (const envelope of await receive<unknown>(node, msg)) route(id, envelope);
+        } else if (entry.type === "switch") {
+          const rules = entry.rules as Array<{t: string; v: string}>;
+          const value = property(msg, String(entry.property));
+          const envelope = rules.map((rule) => {
+            assert.equal(rule.t, "eq");
+            return rule.v === value ? msg : null;
+          });
+          if (property(msg, "theatreCommand.kind") === "refresh") refreshes.push(String(value));
+          route(id, envelope);
+        } else if (entry.type === "change") {
+          for (const rule of entry.rules as Array<{t: string; p: string; to: string}>) {
+            assert.equal(rule.t, "move");
+            msg[rule.to] = msg[rule.p];
+            delete msg[rule.p];
+          }
+          route(id, msg);
+        } else if (entry.type === "debug") {
+          device(String(entry.name), msg);
+        } else {
+          assert.fail(`unexpected node type ${entry.type}`);
+        }
+      }
+    }
+    assert.fail("the flow did not settle");
+  }
+  const activity = () => nodes.get(activityId)!.context().get("state") as {phase: string; currentActivity: string; metrics: {recoveriesAdopted: number}};
+
+  // Node-RED starts with nothing saved: the activity controller's startup probes every target.
+  queue.push([activityId, {theatre: {kind: "startup"}}]);
+  await settle();
+  for (let second = 0; second < 60 && activity().phase !== "ready"; second += 1) {
+    t.mock.timers.tick(1000);
+    await settle();
+  }
+  assert.deepEqual([activity().phase, activity().currentActivity, activity().metrics.recoveriesAdopted], ["ready", "tv", 1]);
+  assert.deepEqual(changes, [], "nothing commanded");
+});
+
 test("every adapter shows the same badge for a configuration it cannot use, and logs why", () => {
   // One badge text lets people, and the Node-RED smoke, spot any broken node;
   // the reason goes to node.error.

@@ -87,6 +87,10 @@ export type TheatreInputEvent =
     details?: Record<string, unknown>;
   }
   | {kind: "startup" | "refresh"}
+  // A target owner's answer to the recovery probe: what its device shows,
+  // in the activity profiles' terms (display {mode}, avr {power, source},
+  // source {action, sourceId}, backlighting {power}).
+  | {kind: "target_observation"; target: TheatreTarget; observedAt: string; values: Record<string, unknown>}
   | {kind: "tick"; generation?: number}
   | {kind: "recover"; reason: "startup" | "manual_override"; observations: RecoveryObservations};
 
@@ -575,6 +579,28 @@ export function transitionTheatre(
     reconcile();
   }
 
+  function acceptTargetObservation(event: Extract<TheatreInputEvent, {kind: "target_observation"}>) {
+    if (!TARGETS.includes(event.target)) throw new Error("unknown theatre target");
+    if (!event.values || typeof event.values !== "object" || Array.isArray(event.values)) {
+      throw new Error("target observation values must be an object");
+    }
+    const observedMs = observationTime(event);
+    if (observedMs === null) throw new Error("target observedAt must be an ISO timestamp");
+    if (state.desired || state.phase !== "recovering") {
+      trace("target-observation", "ignored", "not-recovering", {target: event.target});
+      return;
+    }
+    const bounded = boundObservedAt(event.observedAt, observedMs, nowMs);
+    state.recoveryObservations[event.target] = {observedAt: bounded.observedAt, values: {...event.values}};
+    state.refreshPending[event.target] = null;
+    trace("target-observation", "accepted", null, {target: event.target, values: event.values});
+    // Every target recovery reads has answered: recover now, rather than
+    // waiting for lighting's probe, which nobody answers, to run out.
+    if (RECOVERY_TARGETS.every((target) => state.recoveryObservations[target])) {
+      acceptRecovery({kind: "recover", reason: "startup", observations: state.recoveryObservations});
+    }
+  }
+
   function acceptRecovery(event: Extract<TheatreInputEvent, {kind: "recover"}>) {
     if (!event.observations || typeof event.observations !== "object" ||
       Array.isArray(event.observations)) {
@@ -589,6 +615,7 @@ export function transitionTheatre(
       return;
     }
 
+    state.recoveryObservations = {};
     const matches = Object.entries(config.activityProfiles)
       .filter(([, profile]) => recoveryMatches(profile, event.observations, nowMs, config.freshnessMs))
       .map(([activity]) => activity);
@@ -676,6 +703,8 @@ export function transitionTheatre(
     acceptTargetState(event);
   } else if (event.kind === "recover") {
     acceptRecovery(event);
+  } else if (event.kind === "target_observation") {
+    acceptTargetObservation(event);
   } else if (event.kind === "startup" || event.kind === "refresh") {
     state.targets = emptyTargets();
     state.refreshPending = emptyRefreshPending();
@@ -697,6 +726,7 @@ export function transitionTheatre(
     } else {
       commands.push(...targetProbeCommands());
       for (const target of TARGETS) state.refreshPending[target] = {sentAt: nowMs, attempts: 1, exhausted: false};
+      state.recoveryObservations = {};
       state.phase = "recovering";
       state.availability = "unknown";
       emit("recovery_required", {reason: "startup"});
@@ -708,10 +738,12 @@ export function transitionTheatre(
     } else {
       tickRefreshes();
       if (!state.desired && state.phase === "recovering" &&
-        TARGETS.every((target) => state.refreshPending[target]?.exhausted === true)) {
-        // Nobody supplied recovery observations: fall back as for no evidence.
-        trace("recovery", "timed-out", "no-observations");
-        acceptRecovery({kind: "recover", reason: "startup", observations: {}});
+        TARGETS.every((target) => state.refreshPending[target] === null || state.refreshPending[target]?.exhausted === true)) {
+        // The probes ran out: recover from what answered, which matches no
+        // profile unless every recovery target did.
+        trace("recovery", "timed-out", Object.keys(state.recoveryObservations).length ? "partial-observations" : "no-observations",
+          {answered: Object.keys(state.recoveryObservations)});
+        acceptRecovery({kind: "recover", reason: "startup", observations: state.recoveryObservations});
       } else {
         reconcile();
       }

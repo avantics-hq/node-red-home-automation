@@ -1,5 +1,6 @@
 "use strict";
 
+import {isProbe, targetObservation, type TargetObservationOutput} from "./target-observation";
 import {ADOPTED_MISMATCH, adoptableRefresh, readsOnly, savedAdoptedGeneration, adoptionReason, carryOn} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {numberSetting} from "./settings";
@@ -115,6 +116,9 @@ export interface AvrState {
   // Volumes here are in dB. A state saved before 5.0 has none of this and
   // its volumes in the receiver's own 0-98, converted as it is restored.
   volumeUnits: "dB";
+  // When the theatre's recovery probe asked, with no request of its own: it
+  // answers once the receiver has reported since (see target-observation.ts).
+  probeAt?: string | null;
 }
 
 export type AvrInputEvent =
@@ -250,7 +254,8 @@ export function createAvrState(
     lastAttempt: Number.isInteger(saved.lastAttempt) && (saved.lastAttempt ?? -1) >= 0
       ? saved.lastAttempt!
       : 0,
-    adoptedGeneration: savedAdoptedGeneration(saved)
+    adoptedGeneration: savedAdoptedGeneration(saved),
+    probeAt: typeof saved.probeAt === "string" ? saved.probeAt : null
   };
 }
 
@@ -308,6 +313,8 @@ export function transitionAvr(
   const commands: AvrCommand[] = [];
   const events: AvrOutputEvent[] = [];
   const targetStates: Array<{theatre: AvrTargetState}> = [];
+  // Its answer to the theatre's recovery probe, for output 2 as the target states.
+  const observations: TargetObservationOutput[] = [];
   const traces: TraceEntry[] = [];
   const event: AvrInputEvent | {kind: "unknown"} = msg.avr || {kind: "unknown"};
   const previousPhase = state.phase;
@@ -659,6 +666,12 @@ export function transitionAvr(
   }
 
   if (event.kind === "refresh" && !adopted) {
+    // The theatre's recovery probe: the query below, answered with what the
+    // receiver then reports.
+    if (!state.desired && isProbe(event)) {
+      state.probeAt = now.toISOString();
+      trace("probe", "querying");
+    }
     // Re-read the receiver without touching work in flight: desired state,
     // pending commands, the volume request and the phase all carry on.
     commands.push({
@@ -769,6 +782,18 @@ export function transitionAvr(
     if (recognised) {
       reconcile();
       forceStateEvent = true;
+    }
+    if (!state.desired && state.probeAt) {
+      // Its power since the probe, and its input too when it's on: a receiver
+      // in standby needn't say which input it's on.
+      const since = Date.parse(state.probeAt);
+      const fresh = (field: AvrField) => state.fieldObservedAt[field] !== null && Date.parse(state.fieldObservedAt[field]!) >= since;
+      if (fresh("power") && (state.observed.power === "standby" || fresh("source"))) {
+        const values = {power: state.observed.power, source: state.observed.source, mainZone: state.observed.mainZone};
+        observations.push(targetObservation("avr", now.toISOString(), values));
+        state.probeAt = null;
+        trace("probe", "answered", null, values);
+      }
     }
   } else if (event.kind === "intent") {
     const reason = validateIntent(event);
@@ -1095,5 +1120,5 @@ export function transitionAvr(
     }
   }
 
-  return {state, commands, events, targetStates, traces, status};
+  return {state, commands, events, targetStates, observations, traces, status};
 }

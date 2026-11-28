@@ -1,5 +1,6 @@
 "use strict";
 
+import {isProbe, targetObservation, type TargetObservationOutput} from "./target-observation";
 import {ADOPTED_MISMATCH, adoptableRefresh, readsOnly, savedAdoptedGeneration, adoptionReason, carryOn, answersRequest, savedCarried, type Carried} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {booleanSetting, numberSetting} from "./settings";
@@ -124,6 +125,9 @@ export interface DisplayState {
   adoptedGeneration: number | null;
   // The generation a request carried on from (see carryOn).
   carried?: Carried | null;
+  // When the theatre's recovery probe asked, with no request of its own: it
+  // answers once every device has reported since (see target-observation.ts).
+  probeAt?: string | null;
   // While discovering: when to re-query a device that hasn't reported, and
   // after maxAttempts, fail naming it. Absent otherwise.
   discovery?: {attempt: number; nextAt: number};
@@ -186,6 +190,7 @@ function initialState(saved: Partial<DisplayState> = {}): DisplayState {
     fallbackUsed: saved.fallbackUsed === true,
     adoptedGeneration: savedAdoptedGeneration(saved),
     carried: savedCarried(saved),
+    probeAt: typeof saved.probeAt === "string" ? saved.probeAt : null,
     ...(saved.discovery && Number.isFinite(saved.discovery.nextAt) ? {discovery: {...saved.discovery}} : {})
   };
 }
@@ -351,21 +356,26 @@ export function normaliseConfig(config: {[K in keyof DisplayConfig]?: unknown} =
   };
 }
 
+// Whether the devices show a mode: what each mode sets them to.
+function modeShown(mode: DisplayMode, observed: DisplayObserved, config: DisplayConfig): boolean {
+  if (mode === "tv") {
+    return observed.tv?.power === "on" &&
+      observed.projector?.power === "standby" &&
+      screenClosed(observed.screen, config);
+  }
+  if (mode === "projector") {
+    return observed.tv?.power === "standby" &&
+      observed.projector?.power === "on" &&
+      screenOpen(observed.screen, config);
+  }
+  return observed.tv?.power === "standby" &&
+    observed.projector?.power === "standby" &&
+    screenClosed(observed.screen, config);
+}
+
 function modeSatisfied(state: DisplayState, config: DisplayConfig): boolean {
   if (!state.desired || !allSeen(state)) return false;
-  if (state.desired.mode === "tv") {
-    return state.observed.tv?.power === "on" &&
-      state.observed.projector?.power === "standby" &&
-      screenClosed(state.observed.screen, config);
-  }
-  if (state.desired.mode === "projector") {
-    return state.observed.tv?.power === "standby" &&
-      state.observed.projector?.power === "on" &&
-      screenOpen(state.observed.screen, config);
-  }
-  return state.observed.tv?.power === "standby" &&
-    state.observed.projector?.power === "standby" &&
-    screenClosed(state.observed.screen, config);
+  return modeShown(state.desired.mode, state.observed, config);
 }
 
 export function transitionDisplay(
@@ -393,6 +403,8 @@ export function transitionDisplay(
   const commands: DisplayCommand[] = [];
   const events: DisplayOutputEvent[] = [];
   const targetStates: Array<{theatre: DisplayTargetState}> = [];
+  // Its answer to the theatre's recovery probe, for output 2 as the target states.
+  const observations: TargetObservationOutput[] = [];
   const traces: TraceEntry[] = [];
 
   function trace(name: string, outcome: string, reason: string | null = null, details: Record<string, unknown> = {}) {
@@ -832,8 +844,13 @@ export function transitionDisplay(
   } else if (event.kind === "refresh") {
     // Re-confirm a settled display from fresh readings; its target state
     // follows them. These queries are not discovery, so a failed one is
-    // ignored rather than failing the request.
-    if (state.desired && state.phase === "ready" && !state.pending) {
+    // ignored rather than failing the request. The theatre's recovery probe
+    // reads every device the same way, and is answered below.
+    if (!state.desired && isProbe(event)) {
+      state.probeAt = now.toISOString();
+      for (const device of DEVICES) commands.push(queryFor(state, device));
+      trace("probe", "querying");
+    } else if (state.desired && state.phase === "ready" && !state.pending) {
       for (const device of DEVICES) commands.push(queryFor(state, device));
       trace("refresh", "querying");
     } else {
@@ -907,5 +924,18 @@ export function transitionDisplay(
       fallbackUsed: state.fallbackUsed
     }
   }));
-  return {state, commands, events, targetStates, traces, status: statusFor(state)};
+  if (!state.desired && state.probeAt) {
+    // Every device read since the probe: the one mode they show, by the
+    // modes' own definitions, or none.
+    const since = Date.parse(state.probeAt);
+    if (DEVICES.every((device) => state.observed[device] && Date.parse(state.observed[device]!.observedAt) >= since)) {
+      const shown = (Object.keys(MODES) as DisplayMode[]).filter((mode) => modeShown(mode, state.observed, config));
+      const values = {mode: shown.length === 1 ? shown[0] : null};
+      observations.push(targetObservation("display", now.toISOString(), values));
+      state.probeAt = null;
+      trace("probe", "answered", null, values);
+    }
+  }
+
+  return {state, commands, events, targetStates, observations, traces, status: statusFor(state)};
 }

@@ -415,3 +415,27 @@ test("after carrying on, the activation's result and reading for the replaced ge
   result = observed(result.state, "streamer", "active", 1, 0.3);
   assert.deepEqual([result.state.phase, theatreState(result).generation], ["ready", 2]);
 });
+
+test("the recovery probe: with no request it reads every readable source and answers with the active one, or deactivate", () => {
+  let result = apply(undefined, {kind: "refresh", requestId: null, generation: 0});
+  assert.deepEqual(result.commands.map(({sourceId, operation, generation}) => [sourceId, operation, generation]),
+    [["streamer", "observe", 0], ["player", "observe", 0], ["autoplay", "observe", 0], ["console", "observe", 0]]);
+  result = observed(result.state, "streamer", "active", 0, 1);
+  result = observed(result.state, "player", "inactive", 0, 1);
+  result = observed(result.state, "autoplay", "inactive", 0, 1);
+  assert.deepEqual(result.observations, [], "not until every source has answered");
+  result = observed(result.state, "console", "inactive", 0, 1);
+  assert.deepEqual(result.observations.map(({theatre}) => [theatre.target, theatre.values]),
+    [["source", {action: "activate", sourceId: "streamer"}]]);
+  // All inactive: deactivate. Two active, or any unknown: nothing known.
+  const answer = (statuses: Array<"active" | "inactive" | "unknown">) => {
+    let probed = apply(undefined, {kind: "refresh", requestId: null, generation: 0});
+    ["streamer", "player", "autoplay", "console"].forEach((sourceId, index) => {
+      probed = observed(probed.state, sourceId, statuses[index]!, 0, 1);
+    });
+    return probed.observations[0]?.theatre.values;
+  };
+  assert.deepEqual(answer(["inactive", "inactive", "inactive", "inactive"]), {action: "deactivate"});
+  assert.deepEqual(answer(["active", "active", "inactive", "inactive"]), {});
+  assert.deepEqual(answer(["inactive", "unknown", "inactive", "inactive"]), {});
+});

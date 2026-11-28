@@ -130,7 +130,7 @@ const registerDisplayModeController: NodeInitializer = (RED) => {
     function process(msg: DisplayMessage, send: Send) {
       const result = runReducer(node, {area: optionalArea(config), component: "display-mode-controller"},
         (saved: Partial<DisplayState> | undefined, now) => transitionDisplay(saved, msg, controllerConfig, now));
-      const outputs = [...result.events, ...result.targetStates];
+      const outputs = [...result.events, ...result.targetStates, ...result.observations];
       if (outputs.length) {
         send([null, outputs.map((event) => ({payload: undefined, ...event})), null]);
       }
