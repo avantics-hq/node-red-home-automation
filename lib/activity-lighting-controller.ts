@@ -88,6 +88,10 @@ export interface ActivityLightingState {
   // takes back.
   held?: string[];
   overridden?: string[];
+  // Profile lights with no reading at all by the confirmation deadline (a
+  // Zigbee2MQTT group with no retained state, say): the profile is ready
+  // without them, and the theatre is told so. A reading clears one.
+  unobserved?: string[];
 }
 
 export type ActivityLightingEvent =
@@ -247,7 +251,8 @@ function initialState(
     reported: Object.fromEntries(Object.entries(saved.reported || {})
       .filter(([, fields]) => Array.isArray(fields)).map(([target, fields]) => [target, fields.map(String)])),
     held: Array.isArray(saved.held) ? saved.held.map(String) : [],
-    overridden: Array.isArray(saved.overridden) ? saved.overridden.map(String) : []
+    overridden: Array.isArray(saved.overridden) ? saved.overridden.map(String) : [],
+    unobserved: Array.isArray(saved.unobserved) ? saved.unobserved.map(String) : []
   };
 }
 
@@ -291,7 +296,8 @@ function commandFor(
 function statusFor(state: ActivityLightingState) {
   return {
     phase: state.phase,
-    text: `${state.desired?.profile || "none"}: ${state.phase}`
+    text: `${state.desired?.profile || "none"}: ${state.phase}` +
+      (state.unobserved?.length ? ` · ${state.unobserved.length} unobserved` : "")
   };
 }
 
@@ -361,6 +367,7 @@ export function transitionActivityLighting(
     }
     for (const target of profile.targets) {
       const observation = state.observed[target];
+      if (!observation && state.unobserved?.includes(target)) continue;
       if (!observation) {
         state.phase = state.phase === "transitioning" ? "transitioning" : "confirming";
         return;
@@ -414,7 +421,8 @@ export function transitionActivityLighting(
     trace("lighting", "ready", null, {
       profile: state.desired.profile,
       matched: counts.matched,
-      preserved: counts.preserved
+      preserved: counts.preserved,
+      ...(state.unobserved?.length ? {unobserved: state.unobserved} : {})
     });
   }
 
@@ -466,6 +474,7 @@ export function transitionActivityLighting(
     state.generation = intent.generation;
     state.observed = {};
     state.held = [];
+    state.unobserved = [];
     state.pending = null;
     state.failure = null;
     state.blockedGeneration = null;
@@ -522,6 +531,9 @@ export function transitionActivityLighting(
       showsLast: observation.showsLast === true,
       observedAt: bounded.observedAt
     };
+    if (state.unobserved?.includes(observation.target)) {
+      state.unobserved = state.unobserved.filter((target) => target !== observation.target);
+    }
     trace("observation", "accepted", null, {target: observation.target});
     reconcile();
   }
@@ -573,8 +585,22 @@ export function transitionActivityLighting(
     if (!state.desired || event.generation !== state.generation || !state.pending) {
       trace("tick", "ignored", "stale-generation");
     } else if (nowMs >= state.pending.deadlineAt) {
-      if (state.pending.attempt < config.maxAttempts) issueApply(state.pending.attempt + 1);
-      else fail("confirmation-timeout");
+      // A light with no reading at all by now isn't going to answer: it is
+      // unobserved, not re-applied, and fails nothing. The others go on as
+      // before: re-applied, then failed.
+      const attempt = state.pending.attempt;
+      const missing = profileFor(state, config).targets.filter((target) => !state.observed[target]);
+      if (missing.length) {
+        state.unobserved = [...new Set([...(state.unobserved ?? []), ...missing])];
+        trace("lighting", "unobserved", "no-reading", {targets: missing});
+        reconcile();
+      }
+      // Still waiting on a light that reported (reconcile ends the deadline
+      // once ready or a person's).
+      if (state.pending) {
+        if (attempt < config.maxAttempts) issueApply(attempt + 1);
+        else fail("confirmation-timeout");
+      }
     }
   } else if (event.kind === "refresh" && state.desired && state.phase === "ready" && !state.pending &&
     profileFor(state, config).targets.length > 0) {
@@ -588,15 +614,18 @@ export function transitionActivityLighting(
     state.observed = {};
     // Since start: what each light reports is learned again.
     if (event.kind === "startup") state.reported = {};
+    state.unobserved = [];
     state.pending = null;
     if (state.desired) {
       if (profileFor(state, config).targets.length === 0) reconcile();
       else {
         commands.push(commandFor(state, config, "observe", 0));
         state.phase = "confirming";
-        // After a restart nothing else would end an unanswered observe: give
-        // it a deadline, so it re-applies and then fails as a live request.
-        if ((event.kind === "startup" || adopted) && state.blockedGeneration !== state.generation) {
+        // After a restart or a refresh nothing else would end an unanswered
+        // observe: give it a deadline, by which a light with no reading is
+        // unobserved, and one that doesn't match is re-applied and then
+        // failed, as for a live request.
+        if (state.blockedGeneration !== state.generation) {
           state.pending = {attempt: 0, deadlineAt: nowMs + config.confirmationTimeoutMs};
         }
         trace(event.kind, "observing", null, {profile: state.desired.profile});
@@ -632,6 +661,7 @@ export function transitionActivityLighting(
         matched: counts.matched,
         preserved: counts.preserved,
         expected: profileFor(state, config).targets.length,
+        ...(state.unobserved?.length ? {unobserved: [...state.unobserved]} : {}),
         metrics: {
           attempts: state.pending?.attempt ?? 0,
           retries: Math.max(0, (state.pending?.attempt ?? 1) - 1),

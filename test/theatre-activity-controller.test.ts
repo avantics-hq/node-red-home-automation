@@ -575,6 +575,17 @@ test("a target's confirmation time is how long it took to confirm, refreshes asi
   assert.equal(result.state.metrics.targets.display.lastConfirmationMs, 3000);
 });
 
+test("unobserved lights leave the activity ready and the theatre degraded, naming them", () => {
+  let result = confirmActivity("tv_shield", 1);
+  result = target(result.state, "lighting", "ready", 1, 2, {details: {profile: "tv", unobserved: ["lamp"]}});
+  assert.equal(result.state.phase, "ready");
+  assert.equal(result.state.availability, "degraded");
+  assert.deepEqual(result.state.degraded, [{target: "lighting", reason: "unobserved"}]);
+  // The lamp reports: no longer degraded.
+  result = target(result.state, "lighting", "ready", 1, 3, {details: {profile: "tv"}});
+  assert.deepEqual([result.state.availability, result.state.degraded], ["available", []]);
+});
+
 function sloSnapshot(state: TheatreState) {
   return {
     generation: state.generation,

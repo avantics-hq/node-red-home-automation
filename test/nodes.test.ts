@@ -1238,6 +1238,25 @@ test("the example theatre flow reaches ready with no translation and stays ready
   assert.equal(devices.avr.PW, "STANDBY");
 });
 
+test("a zigbee2mqtt group with no state after 30 s says to have Zigbee2MQTT retain it; one that reported doesn't", async (t) => {
+  const Light = runtime(registerZ2mLight).Constructor;
+  const text = (node: RuntimeNode) => (node.statuses.at(-1) as {text?: string} | undefined)?.text;
+  // One that reports at once (its hint timer is a real one, cleared on close).
+  const heard = new Light({id: "group-heard", target: "main", baseTopic: "z2m", friendlyName: "hall", group: true});
+  t.after(() => close(heard));
+  await receive(heard, {topic: "z2m/hall", payload: "{\"state\":\"ON\"}"});
+  t.mock.timers.enable({apis: ["setTimeout"]});
+  const silent = new Light({id: "group-silent", target: "main", baseTopic: "z2m", friendlyName: "lounge", group: true});
+  const single = new Light({id: "single-silent", target: "main", baseTopic: "z2m", friendlyName: "lamp"});
+  for (const node of [silent, single]) t.after(() => close(node));
+  t.mock.timers.tick(29_000);
+  assert.equal(text(silent), "group · waiting for its state");
+  t.mock.timers.tick(1_000);
+  assert.deepEqual(silent.statuses.at(-1), {fill: "yellow", shape: "ring", text: "group · no state yet: set retain: true for it in Zigbee2MQTT"});
+  assert.equal(text(heard), "on");
+  assert.equal(text(single), "waiting for the device");
+});
+
 test("every adapter shows the same badge for a configuration it cannot use, and logs why", () => {
   // One badge text lets people, and the Node-RED smoke, spot any broken node;
   // the reason goes to node.error.

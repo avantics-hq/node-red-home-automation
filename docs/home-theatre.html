@@ -120,7 +120,7 @@ return msg;</code></pre></div>
 <li><strong>waiting_for_source</strong><p>Every required device is ready, but a source with <code>readiness: "required"</code> is not yet confirmed. This is expected waiting, not a failure.</p></li>
 <li><strong>ready</strong><p>The display, receiver and backlight each reported ready within <strong>Freshness ms</strong> (default <code>30000</code>), and so did the source if it is required.</p></li>
 </ol>
-<p>Room lighting is optional: a light that is not confirmed, or a source with <code>readiness: "optional"</code> that is not, leaves the activity ready with availability <code>degraded</code> and the target listed as degraded, rather than holding it back.</p>
+<p>Room lighting is optional: a light that is not confirmed (or, with no reading at all by activity lighting’s confirmation timeout, <code>unobserved</code>), or a source with <code>readiness: "optional"</code> that is not, leaves the activity ready with availability <code>degraded</code> and the target listed as degraded, rather than holding it back.</p>
 <p>Once ready, the activity controller sends each settled target a <code>refresh</code> at half the freshness window, and each controller answers it from fresh readings. A target that stops answering is asked up to three times, then shown as degraded with reason <code>no-response</code>; it does not undo a ready activity, and it is asked again once per freshness window.</p>
 <div class="code-block"><div class="code-label"><span>Each equipment controller’s output 2 · target state</span></div><pre><code>msg.theatre = {kind: "target_state", target: "avr", requestId, generation,
   status: "ready", observedAt: "2026-01-01T20:00:01.000Z"};</code></pre></div>
