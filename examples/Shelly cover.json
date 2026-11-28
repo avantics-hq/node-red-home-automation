@@ -3,7 +3,7 @@
     "id": "example-shelly-cover-comment",
     "type": "comment",
     "name": "Shelly cover example",
-    "info": "A Shelly Gen2 device in cover mode, owned by the cover controller, with no function nodes. Set the adapter's MQTT topic prefix to your device's (its device ID unless you set one). The controller's device commands go to the adapter, which sends them to the device as its MQTT control commands; the device's status, change notifications and online state come back from the broker through the adapter as the controller's readings.\n\nBefore deploying, open the \"your MQTT broker\" config node (any node's Broker setting) and set your broker's host: every node here that talks MQTT subscribes and publishes through it, with no MQTT in, MQTT out or status nodes.",
+    "info": "Needs: A Shelly Gen2 or later device in cover mode, on your broker.\n\nA Shelly Gen2 device in cover mode, owned by the cover controller, with no function nodes. Set the adapter's MQTT topic prefix to your device's (its device ID unless you set one). The controller's device commands go to the adapter, which sends them to the device as its MQTT control commands; the device's status, change notifications and online state come back from the broker through the adapter as the controller's readings.\n\nBefore deploying, open the \"your MQTT broker\" config node (any node's Broker setting) and set your broker's host: every node here that talks MQTT subscribes and publishes through it, with no MQTT in, MQTT out or status nodes.",
     "x": 150,
     "y": 40,
     "wires": []

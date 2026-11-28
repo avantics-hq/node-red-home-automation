@@ -3,7 +3,7 @@
     "id": "example-home-theatre-equipment-home-theatre-equipment-example",
     "type": "comment",
     "name": "Home theatre equipment example",
-    "info": "Each equipment controller accepts a generation-scoped intent and reports target state. Output 1 carries commands for your device transport; output 2 carries theatre target state.\n\nThe display controller talks to the TV, screen and projector relay directly: set their hosts and the TV pre-shared key before deploying. Until then it shows \"invalid configuration\".",
+    "info": "Needs: For the display controller, your TV, screen and projector power meter on the network (its device hosts). The other controllers' commands go to Debug nodes.\n\nEach equipment controller accepts a generation-scoped intent and reports target state. Output 1 carries commands for your device transport; output 2 carries theatre target state.\n\nThe display controller talks to the TV, screen and projector relay directly: set their hosts and the TV pre-shared key before deploying. Until then it shows \"invalid configuration\".",
     "x": 190,
     "y": 40,
     "wires": []
