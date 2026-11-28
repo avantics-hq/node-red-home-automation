@@ -472,7 +472,7 @@ window.DOCS_SEARCH = [
   "section": "Before you wire it",
   "description": "A home theatre is built from seven nodes. Two coordinate the activity, and five each own one kind of device: T",
   "url": "home-theatre.html#before",
-  "text": "A home theatre is built from seven nodes. Two coordinate the activity, and five each own one kind of device: The theatre nodes Palette name Type Owns theatre state contract home-theatre-state-contract Turns MQTT activity requests into activity intents, and publishes the activity controller’s state as retained MQTT topics, with optional Home Assistant discovery. theatre activity home-theatre-activity-controller The latest request’s activity: plans each target, collects its evidence and decides when the activity is ready, waiting or failed. display mode home-display-mode-controller The TV, the projector and the projector screen, for the off , tv and projector modes. AVR controller home-avr-controller The receiver’s power, main zone, source and bounded volume. source capability controller home-source-capability-controller Whether a media source is available, active, running an application or playing. TV backlighting home-backlighting-controller The TV backlight’s power. activity lighting home-activity-lighting-controller The activity’s style for room lights that are already on, through a room lighting controller . A broker connection in Node-RED, for the request topic and the retained state. A transport for each device the package doesn’t reach itself: a TCP connection for the receiver, and your own adapters for the media source, the TV backlight and the projector’s infrared power toggle. The display controller reaches the TV and the screen directly over their LAN APIs. A room lighting controller for the lights the activity styles. See Light a room . Home Assistant is optional. It can show the activity and request one, through the MQTT topics; it is never the path to a device."
+  "text": "A home theatre is built from seven nodes. Two coordinate the activity, and five each own one kind of device: The theatre nodes Palette name Type Owns theatre state contract home-theatre-state-contract Turns MQTT activity requests into activity intents, and publishes the activity controller’s state as retained MQTT topics, with optional Home Assistant discovery. theatre activity home-theatre-activity-controller The latest request’s activity: plans each target, collects its evidence and decides when the activity is ready, waiting or failed. display mode home-display-mode-controller The TV, the projector and the projector screen, for the off , tv and projector modes. AVR controller home-avr-controller The receiver’s power, main zone, source and bounded volume. source capability controller home-source-capability-controller Whether a media source is available, active, running an application or playing. TV backlighting home-backlighting-controller The TV backlight’s power. activity lighting home-activity-lighting-controller The activity’s style for room lights that are already on, through a room lighting controller . A broker connection in Node-RED, for the request topic and the retained state. A transport for each device the package doesn’t reach itself: a TCP connection for the receiver, and your own adapters for the media source and the projector’s infrared power toggle. For a WLED TV backlight, the wled node is the transport; for another backlight, your own. The display controller reaches the TV and the screen directly over their LAN APIs. A room lighting controller for the lights the activity styles. See Light a room . Home Assistant is optional. It can show the activity and request one, through the MQTT topics; it is never the path to a device."
  },
  {
   "title": "Run a home theatre",
@@ -684,6 +684,13 @@ window.DOCS_SEARCH = [
  },
  {
   "title": "Connect a device",
+  "section": "Wire a wled backlight",
+  "description": "The wled node connects a WLED light strip behind a TV to a backlighting controller , over WLED’s own MQTT: the",
+  "url": "guide-device-adapters.html#wled",
+  "text": "The wled node connects a WLED light strip behind a TV to a backlighting controller , over WLED’s own MQTT: the controller’s on and off become WLED’s ON and OFF , and the brightness WLED reports after every change becomes its readings (0 is off). Turn on MQTT in WLED. Under Config → Sync Interfaces → MQTT, set your broker and note the Device Topic (WLED’s default is wled/ and its MAC address). Add a wled node. Choose its Broker and set Device topic to WLED’s. It subscribes to <device topic>/g and /status itself. Wire it to the controller both ways. The backlighting controller’s first output into the wled node; the wled node’s output back into the controller. WLED doesn’t say who changed it, so switching it from its own app reads as a manual change, as it should. It keeps none of its state retained, so after a Node-RED restart the backlight has no reading until it next changes. Full reference: WLED ."
+ },
+ {
+  "title": "Connect a device",
   "section": "Wire a zigbee2mqtt light",
   "description": "The zigbee2mqtt light node connects one Zigbee2MQTT light, or a Zigbee2MQTT group, to a room lighting controll",
   "url": "guide-device-adapters.html#zigbee2mqtt-light",
@@ -694,7 +701,7 @@ window.DOCS_SEARCH = [
   "section": "Choose an adapter",
   "description": "shelly cover A Gen2-or-later relay device in cover mode, calibrated on the device. Position covers only. It su",
   "url": "guide-device-adapters.html#choose",
-  "text": "shelly cover A Gen2-or-later relay device in cover mode, calibrated on the device. Position covers only. It subscribes to <prefix>/# . zigbee2mqtt cover A Zigbee cover paired with Zigbee2MQTT. Position covers, or open, close and stop only. It subscribes to the device topic and its availability. zigbee2mqtt light A Zigbee light or group paired with Zigbee2MQTT, for a room lighting controller. It subscribes to the light’s state, /set and availability. shelly switch A Gen2-or-later relay behind a wall switch: in detached mode, the switch’s presses for the switch policy; otherwise, the relay as the light. It subscribes to <prefix>/# . For any other device, the controller’s neutral commands and readings are the contract to map to; for a light, the room’s neutral light contract ."
+  "text": "shelly cover A Gen2-or-later relay device in cover mode, calibrated on the device. Position covers only. It subscribes to <prefix>/# . zigbee2mqtt cover A Zigbee cover paired with Zigbee2MQTT. Position covers, or open, close and stop only. It subscribes to the device topic and its availability. zigbee2mqtt light A Zigbee light or group paired with Zigbee2MQTT, for a room lighting controller. It subscribes to the light’s state, /set and availability. shelly switch A Gen2-or-later relay behind a wall switch: in detached mode, the switch’s presses for the switch policy; otherwise, the relay as the light. It subscribes to <prefix>/# . wled A WLED strip as a TV backlight, for a backlighting controller: on and off. It subscribes to its device topic’s /g and /status . For any other device, the controller’s neutral commands and readings are the contract to map to; for a light, the room’s neutral light contract ."
  },
  {
   "title": "Connect a device",
@@ -1497,7 +1504,7 @@ window.DOCS_SEARCH = [
   "section": "On or off, confirmed by a reading.",
   "description": "Owns the power intent of a TV backlight (bias lighting behind the screen) with bounded command retries. It is ",
   "url": "node-backlighting-controller.html#summary",
-  "text": "Owns the power intent of a TV backlight (bias lighting behind the screen) with bounded command retries. It is confirmed only when the device reports the wanted power. Your flow’s transport switches the device and reports its power back. In the palette it is backlighting controller under home automation ; on the canvas it shows its name, or TV backlighting when unnamed. Looking for wiring? Follow Home theatre , where the theatre activity controller sends this node its backlighting commands. Backlighting is a required target: an activity isn’t ready until it confirms."
+  "text": "Owns the power intent of a TV backlight (bias lighting behind the screen) with bounded command retries. It is confirmed only when the device reports the wanted power. Your flow’s transport switches the device and reports its power back; for a WLED strip, the wled node is that transport. In the palette it is backlighting controller under home automation ; on the canvas it shows its name, or TV backlighting when unnamed. Looking for wiring? Follow Home theatre , where the theatre activity controller sends this node its backlighting commands. Backlighting is a required target: an activity isn’t ready until it confirms."
  },
  {
   "title": "Backlighting controller",
@@ -1850,6 +1857,47 @@ window.DOCS_SEARCH = [
   "description": "reading the device’s configuration (grey ring) while the request is out. configuration unreadable: set Mode (r",
   "url": "node-shelly-switch.html#status",
   "text": "reading the device’s configuration (grey ring) while the request is out. configuration unreadable: set Mode (red ring). The mode found, such as detached, switch input (green). With Mode set, it reads detached (set) or relay (set) , followed by what the device says, if read. Relay mode adds the relay state: · on or · off ; with a Target, the light’s: · hall on . Detached, without a Target, with the relay off adds · relay off: bulbs unpowered (yellow ring). offline (grey ring)."
+ },
+ {
+  "title": "WLED",
+  "description": "Message shapes, output port and settings for the adapter between a backlighting controller and a WLED light strip.",
+  "url": "node-wled.html",
+  "text": "Message shapes, output port and settings for the adapter between a backlighting controller and a WLED light strip."
+ },
+ {
+  "title": "WLED",
+  "section": "Backlight power through WLED’s own MQTT",
+  "description": "The wled node (type home-wled ; canvas label: its name, its device topic, or “wled”) turns a backlighting cont",
+  "url": "node-wled.html#summary",
+  "text": "The wled node (type home-wled ; canvas label: its name, its device topic, or “wled”) turns a backlighting controller ’s set_power into WLED’s ON or OFF , and WLED’s brightness reports into the controller’s readings. It talks to WLED through Node-RED’s MQTT broker node, with no MQTT in or out nodes, no function nodes, and never Home Assistant."
+ },
+ {
+  "title": "WLED",
+  "section": "Inputs",
+  "description": "Input messages From Message Effect Backlighting controller, output 1 msg.backlightingCommand = {operation: \"se",
+  "url": "node-wled.html#inputs",
+  "text": "Input messages From Message Effect Backlighting controller, output 1 msg.backlightingCommand = {operation: \"set_power\", generation, power} Publishes ON or OFF on the device topic and answers command_result ok; while WLED is offline, publishes nothing and answers not ok, reason unavailable . Backlighting controller, output 1 msg.backlightingCommand = {operation: \"observe\", generation} Answers with the last power WLED reported, while it is online. With no report since Node-RED started, it answers when WLED next reports. The broker <device topic>/g , <device topic>/status Its readings and availability (see below). An MQTT in node wired to its input changes nothing."
+ },
+ {
+  "title": "WLED",
+  "section": "Output",
+  "description": "One output port Port Message Connect to 1 · To the backlighting controller msg.backlighting = {kind: \"observed",
+  "url": "node-wled.html#outputs",
+  "text": "One output port Port Message Connect to 1 · To the backlighting controller msg.backlighting = {kind: \"observed\", generation, power, observedAt} or {kind: \"command_result\", generation, ok, reason} The backlighting controller’s input. generation is the command in hand’s; nothing is passed on before the controller’s first command. observedAt is when the answer is given."
+ },
+ {
+  "title": "WLED",
+  "section": "Settings",
+  "description": "Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label. ",
+  "url": "node-wled.html#settings",
+  "text": "Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label. Broker broker · mqtt-broker None Required. Node-RED’s MQTT broker node, the one WLED connects to. The node subscribes to exactly <device topic>/g and <device topic>/status , and publishes on the device topic. Device topic deviceTopic · string Empty Required. WLED’s Device Topic, from its Config → Sync Interfaces → MQTT (WLED’s own default is wled/ and its MAC address). It cannot contain + or # ."
+ },
+ {
+  "title": "WLED",
+  "section": "How WLED is read",
+  "description": "Power comes from the brightness WLED publishes on <device topic>/g after every change: 0 is off, anything else",
+  "url": "node-wled.html#readings",
+  "text": "Power comes from the brightness WLED publishes on <device topic>/g after every change: 0 is off, anything else on. Whose change isn’t said: WLED reports a change from its own app, a button or another system the same as one from this node. The backlighting controller judges a reading against what it wants, so a change it didn’t make is a manual change. Availability is online or offline on <device topic>/status , which WLED keeps retained. After a restart there is no reading until WLED next reports: it keeps none of its state topics retained."
  },
  {
   "title": "Theatre MQTT contract",

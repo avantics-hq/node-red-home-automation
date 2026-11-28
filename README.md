@@ -184,6 +184,7 @@ on output 2. Example: [`Home theatre equipment.json`](https://github.com/avantic
 | `home-display-mode-controller` | Coordinates TV, projector, and screen transitions. |
 | `home-source-capability-controller` | Gates source readiness on fresh availability, active-device, application or playback evidence. |
 | `home-backlighting-controller` | Owns TV-backlight power with observation-gated confirmation. |
+| `home-wled` | Connects a WLED strip to a backlighting controller over WLED's own MQTT: on and off, read back from the brightness WLED reports. |
 
 The display controller reads the projector's power from any meter or adapter:
 send `msg.display = {kind: "observed", device: "projector", power: "on"}`

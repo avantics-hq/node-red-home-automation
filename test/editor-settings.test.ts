@@ -331,6 +331,15 @@ test("the shelly switch adapter has no default device, a mode as the device is s
   assert.equal(definition.defaults.target!.value, "", "not a room light unless set");
 });
 
+test("the WLED adapter needs a broker and its device topic, which has no default, and has one labelled output", () => {
+  const definition = editorDefinition("wled.html");
+  assert.deepEqual([definition.defaults.broker!.type, definition.defaults.broker!.required, definition.defaults.deviceTopic!.value],
+    ["mqtt-broker", true, ""]);
+  const valid = (value: unknown) => definition.defaults.deviceTopic!.validate!.call({}, value);
+  assert.deepEqual([valid(""), valid("wled/strip"), valid("wled/#")], [false, true, false]);
+  assert.deepEqual([definition.outputs, definition.outputLabels], [1, ["to the backlighting controller"]]);
+});
+
 test("the zigbee2mqtt cover adapter defaults the base topic, has no default device, and two labelled outputs", () => {
   const definition = editorDefinition("z2m-cover.html");
   assert.deepEqual([definition.defaults.baseTopic!.value, definition.defaults.friendlyName!.value], ["zigbee2mqtt", ""]);

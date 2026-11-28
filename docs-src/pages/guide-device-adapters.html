@@ -105,6 +105,15 @@ return msg;</code></pre></div>
 </ol>
 <aside class="callout neutral"><strong>No configuration, no guess.</strong><p>If the device doesn’t answer within 10 seconds, the status says <em>configuration unreadable: set Mode</em>, and nothing is passed on until the Mode setting says how.</p></aside>
 </section>
+<section id="wled"><h2>Wire a wled backlight</h2>
+<p>The <strong>wled</strong> node connects a WLED light strip behind a TV to a <strong>backlighting controller</strong>, over WLED’s own MQTT: the controller’s on and off become WLED’s <code>ON</code> and <code>OFF</code>, and the brightness WLED reports after every change becomes its readings (0 is off).</p>
+<ol class="step-list">
+<li><strong>Turn on MQTT in WLED.</strong><p>Under Config → Sync Interfaces → MQTT, set your broker and note the Device Topic (WLED’s default is <code>wled/</code> and its MAC address).</p></li>
+<li><strong>Add a wled node.</strong><p>Choose its <strong>Broker</strong> and set <strong>Device topic</strong> to WLED’s. It subscribes to <code>&lt;device topic&gt;/g</code> and <code>/status</code> itself.</p></li>
+<li><strong>Wire it to the controller both ways.</strong><p>The backlighting controller’s first output into the wled node; the wled node’s output back into the controller.</p></li>
+</ol>
+<p>WLED doesn’t say who changed it, so switching it from its own app reads as a manual change, as it should. It keeps none of its state retained, so after a Node-RED restart the backlight has no reading until it next changes. Full reference: <a href="node-wled.html">WLED</a>.</p>
+</section>
 <section id="zigbee2mqtt-light"><h2>Wire a zigbee2mqtt light</h2>
 <p>The <strong>zigbee2mqtt light</strong> node connects one Zigbee2MQTT light, or a Zigbee2MQTT group, to a <strong>room lighting controller</strong>: the room’s neutral commands become Zigbee2MQTT’s <code>/set</code> messages, exactly as the room sent them before 6.0, and the light’s reports become readings. Use one per light in the room’s Targets JSON.</p>
 <div class="table-wrap" role="region" aria-label="zigbee2mqtt light settings; scroll horizontally on a phone" tabindex="0"><table><caption>zigbee2mqtt light settings</caption><thead><tr><th scope="col">Setting</th><th scope="col">Default</th><th scope="col">What to set</th></tr></thead><tbody>
@@ -125,6 +134,7 @@ return msg;</code></pre></div>
 <div class="card"><h3>zigbee2mqtt cover</h3><p>A Zigbee cover paired with Zigbee2MQTT. Position covers, or open, close and stop only. It subscribes to the device topic and its availability.</p></div>
 <div class="card"><h3>zigbee2mqtt light</h3><p>A Zigbee light or group paired with Zigbee2MQTT, for a room lighting controller. It subscribes to the light’s state, <code>/set</code> and availability.</p></div>
 <div class="card"><h3>shelly switch</h3><p>A Gen2-or-later relay behind a wall switch: in detached mode, the switch’s presses for the switch policy; otherwise, the relay as the light. It subscribes to <code>&lt;prefix&gt;/#</code>.</p></div>
+<div class="card"><h3>wled</h3><p>A WLED strip as a TV backlight, for a backlighting controller: on and off. It subscribes to its device topic’s <code>/g</code> and <code>/status</code>.</p></div>
 </div>
 <p>For any other device, the controller’s neutral commands and readings are the contract to map to; for a light, the room’s <a href="node-room-controller.html#light-contract">neutral light contract</a>.</p>
 </section>
