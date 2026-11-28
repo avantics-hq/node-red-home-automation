@@ -30,6 +30,30 @@ test("a target's report records attempts, fallback use and confirmation time", (
   assert.deepEqual([metric.attempts, metric.fallbackUsed, metric.availability, metric.failures], [0, false, "unknown", 1]);
 });
 
+test("a target's confirmation time is set at its first ready report in a transition, and its refreshes leave it", () => {
+  const {metrics} = createTheatreState({}, {});
+  const metric = metrics.targets.display;
+  const started = "2026-11-23T18:00:00.000Z";
+  const ready = (seconds: number) => {
+    const observedAt = Date.parse(started) + seconds * 1000;
+    recordTargetReport(metric, {status: "ready", observedAt: new Date(observedAt).toISOString(), classification: null, failure: null, details: {}},
+      null, observedAt, started, observedAt);
+  };
+  ready(4);
+  assert.equal(metric.lastConfirmationMs, 4000);
+  // Re-confirmed every minute: still how long it took to confirm.
+  for (const seconds of [64, 124, 184]) ready(seconds);
+  assert.equal(metric.lastConfirmationMs, 4000);
+  // The next transition times it again.
+  resetTransitionMetrics(metrics);
+  assert.equal(metric.lastConfirmationMs, null);
+  const next = "2026-11-23T19:00:00.000Z";
+  const observedAt = Date.parse(next) + 7000;
+  recordTargetReport(metric, {status: "ready", observedAt: new Date(observedAt).toISOString(), classification: null, failure: null, details: {}},
+    null, observedAt, next, observedAt);
+  assert.equal(metric.lastConfirmationMs, 7000);
+});
+
 test("refreshes are planned per target: send, retry, give up, then re-ask", () => {
   const none = {display: null, avr: null, source: null, lighting: null, backlighting: null} as Record<TheatreTarget, RefreshPending | null>;
   const observed = (target: TheatreTarget) => (target === "avr" ? 0 : null);

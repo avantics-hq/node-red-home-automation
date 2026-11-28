@@ -45,7 +45,7 @@
   "lastOutcome": null,
   "targets": {}
 }</code></pre></div>
-<p>Under <code>targets</code>, each target carries retry, fallback, confirmation-latency, failure, manual-override and availability evidence.</p>
+<p>Under <code>targets</code>, each target carries retry, fallback, confirmation-latency, failure, manual-override and availability evidence. Its <code>lastConfirmationMs</code> is how long after the transition started the target first reported ready; its refreshes leave it, and the next transition times it again.</p>
 </section>
 <section id="slo"><h2>Operational objective</h2><p>The contract keeps a bounded window of transition outcomes and publishes the success rate and the p50 and p95 transition latency on <code>&lt;base&gt;/slo</code>, with a <code>status</code> and a <code>reason</code>. A ready outcome whose transition wasn’t timed counts towards the success rate but not the latency, and stays untimed after a restart.</p>
 <div class="table-wrap" role="region" aria-label="Objective settings and limits; scroll horizontally on a phone" tabindex="0"><table><caption>Objective settings and limits</caption><thead><tr><th scope="col">Setting</th><th scope="col">Default</th><th scope="col">Range</th></tr></thead><tbody><tr><td>Latency budget (ms)</td><td><code>60000</code></td><td>1000 to 3600000</td></tr><tr><td>Success objective (%)</td><td><code>95</code></td><td>50 to 100</td></tr><tr><td>SLO window</td><td><code>20</code></td><td>5 to 100 outcomes</td></tr><tr><td>Minimum samples</td><td><code>5</code></td><td>1 to the window size</td></tr></tbody></table></div>

@@ -1904,7 +1904,7 @@ window.DOCS_SEARCH = [
   "section": "Metrics",
   "description": "<base>/metrics exposes transition latency and outcome counts plus per-target evidence. Before the first snapsh",
   "url": "contract-theatre-mqtt.html#metrics",
-  "text": "<base>/metrics exposes transition latency and outcome counts plus per-target evidence. Before the first snapshot it carries zeros: Metrics · <base>/metrics { \"requests\": 0, \"ready\": 0, \"failed\": 0, \"superseded\": 0, \"manualOverrides\": 0, \"driftEvents\": 0, \"recoveriesAdopted\": 0, \"recoveriesUnknown\": 0, \"lastTransitionMs\": null, \"maxTransitionMs\": null, \"lastOutcome\": null, \"targets\": {} } Under targets , each target carries retry, fallback, confirmation-latency, failure, manual-override and availability evidence."
+  "text": "<base>/metrics exposes transition latency and outcome counts plus per-target evidence. Before the first snapshot it carries zeros: Metrics · <base>/metrics { \"requests\": 0, \"ready\": 0, \"failed\": 0, \"superseded\": 0, \"manualOverrides\": 0, \"driftEvents\": 0, \"recoveriesAdopted\": 0, \"recoveriesUnknown\": 0, \"lastTransitionMs\": null, \"maxTransitionMs\": null, \"lastOutcome\": null, \"targets\": {} } Under targets , each target carries retry, fallback, confirmation-latency, failure, manual-override and availability evidence. Its lastConfirmationMs is how long after the transition started the target first reported ready; its refreshes leave it, and the next transition times it again."
  },
  {
   "title": "Theatre MQTT contract",

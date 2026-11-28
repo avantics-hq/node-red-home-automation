@@ -561,6 +561,20 @@ test("metrics retain transition latency, retries, fallback use and target availa
   assert.equal(result.state.metrics.targets.display.availability, "available");
 });
 
+test("a target's confirmation time is how long it took to confirm, refreshes aside, and a restart times it again", () => {
+  let result = confirmActivity("tv_shield", 1);
+  const confirmed = result.state.metrics.targets.display.lastConfirmationMs;
+  assert.ok(confirmed !== null && confirmed < 2000);
+  // Refreshed and re-confirmed for a few minutes: unchanged.
+  for (let seconds = 60; seconds <= 180; seconds += 60) result = target(result.state, "display", "ready", 1, seconds);
+  assert.equal(result.state.metrics.targets.display.lastConfirmationMs, confirmed);
+  // After a restart it confirms again: timed from then.
+  result = apply(result.state, {kind: "startup"}, 300);
+  assert.equal(result.state.metrics.targets.display.lastConfirmationMs, null);
+  result = target(result.state, "display", "ready", 1, 303);
+  assert.equal(result.state.metrics.targets.display.lastConfirmationMs, 3000);
+});
+
 function sloSnapshot(state: TheatreState) {
   return {
     generation: state.generation,
