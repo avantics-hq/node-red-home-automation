@@ -1,14 +1,18 @@
 "use strict";
 
 import type {Node, NodeDef, NodeInitializer} from "node-red";
-import {normaliseZ2mLightConfig, transitionZ2mLight, type Z2mLightConfig, type Z2mLightState} from "../lib/z2m-light-adapter";
-import {invalidConfig, onInput, runReducer} from "./adapter";
+import {normaliseZ2mLightConfig, transitionZ2mLight, z2mLightTopics, type Z2mLightConfig, type Z2mLightState} from "../lib/z2m-light-adapter";
+import {invalidConfig, onInput, runReducer, type InputMessage, type Send} from "./adapter";
+import {deviceBroker, deviceSide} from "./device-side";
+import type {BrokerNode} from "./mqtt-broker-link";
 
 interface Z2mLightNodeConfig extends NodeDef {
   target?: string;
   baseTopic?: string;
   friendlyName?: string;
   group?: boolean | string;
+  // Node-RED's mqtt-broker node, to subscribe and publish itself.
+  broker?: string;
 }
 
 const registerZ2mLight: NodeInitializer = (RED) => {
@@ -16,8 +20,10 @@ const registerZ2mLight: NodeInitializer = (RED) => {
     RED.nodes.createNode(this, config);
     const node = this;
     let light: Z2mLightConfig;
+    let broker: BrokerNode | null;
     try {
       light = normaliseZ2mLightConfig(config);
+      broker = deviceBroker(RED, config.broker);
     } catch (error) {
       invalidConfig(node, error);
       return;
@@ -25,7 +31,9 @@ const registerZ2mLight: NodeInitializer = (RED) => {
     const trace = {area: "", component: "z2m-light"};
     node.status({fill: "grey", shape: "ring", text: light.group ? "group · waiting for its state" : "waiting for the device"});
 
-    onInput(node, (msg, send) => {
+    const side = deviceSide(node, broker, z2mLightTopics(light).device, trace, (msg, send) => handle(msg, send));
+
+    function handle(msg: InputMessage, send: Send) {
       const result = runReducer(node, trace, (saved: Partial<Z2mLightState> | undefined, now) => {
         const decided = transitionZ2mLight(saved, msg, light, now);
         // Another light's command: nothing to keep or trace, and the result
@@ -33,10 +41,10 @@ const registerZ2mLight: NodeInitializer = (RED) => {
         return decided.ignored ? {...decided, state: saved ?? decided.state, traces: []} : decided;
       }) as ReturnType<typeof transitionZ2mLight>;
       if (result.ignored) return;
-      // MQTT publications for the device on output 1, for an MQTT out node;
-      // readings for the room controller on output 2.
+      // MQTT publications for the device: to the broker, or on output 1 for
+      // an MQTT out node; readings for the room controller on output 2.
       const outputs = [
-        result.publications.length ? result.publications.map((publication) => ({...publication})) : null,
+        side.publish(result.publications),
         result.readings.length ? result.readings.map((reading) => ({payload: undefined, light: reading})) : null
       ];
       if (outputs.some((output) => output !== null)) send(outputs);
@@ -50,6 +58,11 @@ const registerZ2mLight: NodeInitializer = (RED) => {
         ].filter(Boolean).join(" ");
         node.status({fill: state.report.on ? "green" : "grey", shape: "dot", text: (state.report.on ? "on" : "off") + (state.report.on && values ? " · " + values : "")});
       }
+    }
+    onInput(node, (msg, send) => {
+      // With a broker, its device's messages come from the broker: an MQTT
+      // in or a Status node still wired in changes nothing.
+      if (!side.fromBroker(msg)) handle(msg, send);
     });
   }
 

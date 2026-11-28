@@ -1,12 +1,16 @@
 "use strict";
 
 import type {Node, NodeDef, NodeInitializer} from "node-red";
-import {normaliseZ2mCoverConfig, transitionZ2mCover, type Z2mCoverConfig, type Z2mCoverState} from "../lib/z2m-cover";
-import {invalidConfig, onInput, runReducer} from "./adapter";
+import {normaliseZ2mCoverConfig, transitionZ2mCover, z2mCoverTopics, type Z2mCoverConfig, type Z2mCoverState} from "../lib/z2m-cover";
+import {invalidConfig, onInput, runReducer, type InputMessage, type Send} from "./adapter";
+import {deviceBroker, deviceSide} from "./device-side";
+import type {BrokerNode} from "./mqtt-broker-link";
 
 interface Z2mCoverNodeConfig extends NodeDef {
   baseTopic?: string;
   friendlyName?: string;
+  // Node-RED's mqtt-broker node, to subscribe and publish itself.
+  broker?: string;
 }
 
 const registerZ2mCover: NodeInitializer = (RED) => {
@@ -14,8 +18,10 @@ const registerZ2mCover: NodeInitializer = (RED) => {
     RED.nodes.createNode(this, config);
     const node = this;
     let device: Z2mCoverConfig;
+    let broker: BrokerNode | null;
     try {
       device = normaliseZ2mCoverConfig(config);
+      broker = deviceBroker(RED, config.broker);
     } catch (error) {
       invalidConfig(node, error);
       return;
@@ -23,13 +29,15 @@ const registerZ2mCover: NodeInitializer = (RED) => {
     const trace = {area: "", component: "z2m-cover"};
     node.status({fill: "grey", shape: "ring", text: "waiting for the device"});
 
-    onInput(node, (msg, send) => {
+    const side = deviceSide(node, broker, z2mCoverTopics(device).device, trace, (msg, send) => handle(msg, send));
+
+    function handle(msg: InputMessage, send: Send) {
       const result = runReducer(node, trace, (saved: Partial<Z2mCoverState> | undefined, now) =>
         transitionZ2mCover(saved, msg, device, now));
-      // MQTT publications for the device on output 1, for an MQTT out node;
-      // readings for the cover controller on output 2.
+      // MQTT publications for the device: to the broker, or on output 1 for
+      // an MQTT out node; readings for the cover controller on output 2.
       const outputs = [
-        result.publications.length ? result.publications.map((publication) => ({...publication})) : null,
+        side.publish(result.publications),
         result.readings.length ? result.readings.map((reading) => ({payload: undefined, ...reading})) : null
       ];
       if (outputs.some((output) => output !== null)) send(outputs);
@@ -40,6 +48,11 @@ const registerZ2mCover: NodeInitializer = (RED) => {
         const where = last.position !== undefined ? `${last.position}%` : last.state ?? "position unknown";
         node.status({fill: "green", shape: "dot", text: last.motion && last.motion !== "stopped" ? `${last.motion} · ${where}` : where});
       }
+    }
+    onInput(node, (msg, send) => {
+      // With a broker, its device's messages come from the broker: an MQTT
+      // in or a Status node still wired in changes nothing.
+      if (!side.fromBroker(msg)) handle(msg, send);
     });
   }
 
