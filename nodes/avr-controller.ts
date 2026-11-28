@@ -166,7 +166,7 @@ const registerAvrController: NodeInitializer = (RED) => {
         node.warn("volume requests with value in the receiver's own 0-98 were removed in 6.0 and are rejected: " +
           "send valueDb (dB, where the receiver's 80 is 0 dB) instead");
       }
-      const outputs = [...result.events, ...result.targetStates];
+      const outputs = [...result.events, ...result.targetStates, ...result.observations];
       if (commands.length || outputs.length) {
         send([
           commands.length ? commands : null,

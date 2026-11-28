@@ -972,3 +972,40 @@ test("a silent backlighting device is still reported when its node gets its requ
   const last = rounds.at(-1)!;
   assert.deepEqual([last.status, last.degraded], ["ready", null], "recovers once the device answers");
 });
+
+test("after a start with nothing saved, the targets' answers to the probe recover the one activity they show, commanding nothing", () => {
+  const observation = (target: TheatreTarget, values: Record<string, unknown>, seconds: number) =>
+    ({kind: "target_observation", target, observedAt: at(seconds).toISOString(), values}) as TheatreInputEvent;
+  const shows = {
+    display: {mode: "tv"}, avr: {power: "on", source: "shield", mainZone: "on"},
+    source: {action: "activate", sourceId: "shield"}, backlighting: {power: "on"}
+  } as const;
+  let result = apply(undefined, {kind: "startup"}, 0);
+  assert.equal(result.state.phase, "recovering");
+  assert.ok(result.commands.every((command) => command.kind === "refresh" && command.requestId === null && command.generation === 0));
+  for (const [index, target] of (["display", "avr", "source"] as const).entries()) {
+    result = apply(result.state, observation(target, shows[target], 1 + index * 0.1), 1 + index * 0.1);
+    assert.equal(result.state.phase, "recovering", `still waiting after ${target}`);
+  }
+  result = apply(result.state, observation("backlighting", shows.backlighting, 1.3), 1.3);
+  assert.deepEqual([result.state.phase, result.state.currentActivity], ["ready", "tv_shield"]);
+  assert.equal(result.state.metrics.recoveriesAdopted, 1);
+  assert.deepEqual(result.commands, []);
+
+  // Answers that fit no single activity: unknown once the probes run out, still commanding nothing.
+  result = apply(undefined, {kind: "startup"}, 0);
+  result = apply(result.state, observation("display", {mode: "tv"}, 1), 1);
+  result = apply(result.state, observation("avr", {power: "on", source: "shield"}, 1), 1);
+  for (let seconds = 5; seconds <= 60; seconds += 5) {
+    result = apply(result.state, {kind: "tick"}, seconds);
+    assert.ok(result.commands.every((command) => command.kind === "refresh"), `at ${seconds} s`);
+  }
+  assert.deepEqual([result.state.phase, result.state.currentActivity], ["idle", "unknown"]);
+  assert.equal(result.state.metrics.recoveriesUnknown, 1);
+
+  // An answer outside recovery is ignored.
+  result = confirmActivity("tv_shield", 1);
+  result = apply(result.state, observation("display", {mode: "off"}, 3), 3);
+  assert.equal(result.traces.at(-1)?.reason, "not-recovering");
+  assert.equal(result.state.currentActivity, "tv_shield");
+});

@@ -111,6 +111,9 @@ export interface TheatreState {
   transitionStartedAt: string | null;
   transitionCompletedAt: string | null;
   metrics: TheatreMetrics;
+  // While recovering after a start with nothing saved: what each target
+  // owner reported its device shows, in answer to the probe.
+  recoveryObservations: RecoveryObservations;
 }
 
 export function emptyTargets(
@@ -227,7 +230,13 @@ export function createTheatreState(
     transitionCompletedAt: typeof saved.transitionCompletedAt === "string"
       ? saved.transitionCompletedAt
       : null,
-    metrics: createMetrics(saved.metrics)
+    metrics: createMetrics(saved.metrics),
+    recoveryObservations: saved.recoveryObservations && typeof saved.recoveryObservations === "object" &&
+      !Array.isArray(saved.recoveryObservations)
+      ? Object.fromEntries(Object.entries(saved.recoveryObservations)
+        .filter(([target, entry]) => (TARGETS as readonly string[]).includes(target) && entry && typeof entry === "object")
+        .map(([target, entry]) => [target, {...entry}]))
+      : {}
   };
 }
 

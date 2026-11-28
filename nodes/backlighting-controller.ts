@@ -77,8 +77,9 @@ const registerBacklightingController: NodeInitializer = (RED) => {
           null
         ]);
       }
-      if (result.events.length) {
-        send([null, result.events.map((event) => ({payload: undefined, ...event}))]);
+      const theatre = [...result.events, ...result.observations];
+      if (theatre.length) {
+        send([null, theatre.map((event) => ({payload: undefined, ...event}))]);
       }
       updateStatus(result.status);
       schedule(result.state);

@@ -566,3 +566,21 @@ test("a volume request's valueDb may be a numeric string", () => {
   assert.deepEqual(result.commands, []);
   assert.ok(result.events.some(({avr}) => avr.kind === "volume_rejected" && avr.reason === "invalid-volume-value"));
 });
+
+test("the recovery probe: with no request it queries the receiver and answers with its power and input", () => {
+  let result = transitionAvr(undefined, {avr: {kind: "refresh", requestId: null, generation: 0}}, config, at(0));
+  assert.equal(result.commands.length, 1);
+  result = observed(result.state, "PWON\r", 1);
+  assert.deepEqual(result.observations, [], "on: its input too");
+  result = observed(result.state, "SISAT/CBL\rZMON\r", 1.1);
+  assert.deepEqual(result.observations.map(({theatre}) => [theatre.target, theatre.values]),
+    [["avr", {power: "on", source: "shield", mainZone: "on"}]]);
+  // In standby its power is enough.
+  result = transitionAvr(result.state, {avr: {kind: "refresh", requestId: null, generation: 0}}, config, at(5));
+  result = observed(result.state, "PWSTANDBY\r", 6);
+  assert.deepEqual(result.observations.map(({theatre}) => (theatre.values as {power: string}).power), ["standby"]);
+  // An ordinary refresh, with a request, is no probe.
+  result = transitionAvr(result.state, {avr: {kind: "refresh", requestId: "tv-1", generation: 1, power: "on"}}, config, at(7));
+  result = observed(result.state, "PWON\rSISAT/CBL\r", 8);
+  assert.deepEqual(result.observations, []);
+});

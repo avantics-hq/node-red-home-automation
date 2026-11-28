@@ -75,7 +75,7 @@
 <ul>
 <li><strong>A room forgets which lights are held or manual.</strong> Every light an activity held, or a person set by hand, is back under the room’s control, so the next style restyles them.</li>
 <li><strong>Changes made at runtime go back to the node’s settings.</strong> For example motion lighting’s enable, vacancy delay and lux cutoff, a circadian policy’s circadian lighting, sleep, and wake and bed times, and the house schedule’s times, set from Home Assistant or a message.</li>
-<li><strong>The theatre starts its counts again.</strong> Its counters and operational SLO samples restart, and the activity controller no longer knows the current activity. The activity is unknown, and the devices are left alone, until the next request. Working the activity out from what the devices report after a cold start is <a href="https://github.com/avantics-hq/node-red-home-automation/issues/179">issue #179</a>.</li>
+<li><strong>The theatre starts its counts again.</strong> Its counters and operational SLO samples restart, and the activity controller no longer knows the current activity. It works the activity out again from what the devices show, when they show exactly one; otherwise it is unknown, and the devices are left alone, until the next request.</li>
 <li><strong>Work in progress is not recovered.</strong> A motion off-timer that was running, or a theatre device change still being confirmed, is gone. The node starts afresh and goes by what it next observes.</li>
 <li><strong>Old retained topics are not cleared.</strong> A node can’t remember what it published, so after you change an area, base topic, discovery prefix or targets, the old retained topics and Home Assistant entities stay until you remove them yourself.</li>
 </ul>

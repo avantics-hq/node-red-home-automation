@@ -1,5 +1,6 @@
 "use strict";
 
+import {isProbe, targetObservation, type TargetObservationOutput} from "./target-observation";
 import {ADOPTED_MISMATCH, adoptableRefresh, isAdopted, readsOnly, savedAdoptedGeneration, adoptionReason, carryOn, answersRequest, savedCarried, type Carried} from "./adopted-request";
 import type {TraceEntry} from "./bounded-trace";
 import {numberSetting} from "./settings";
@@ -105,6 +106,10 @@ export interface SourceState {
   adoptedGeneration: number | null;
   // The generation a request carried on from (see carryOn).
   carried?: Carried | null;
+  // Reading every observable source for the theatre's recovery probe, with
+  // no request of its own: each one's status once it answers (see
+  // target-observation.ts).
+  probe?: Record<string, SourceObservationStatus | null> | null;
 }
 
 export type SourceEvent =
@@ -221,14 +226,16 @@ function initialState(
     fallbackUsed: saved.fallbackUsed === true,
     refreshAsked: saved.refreshAsked === true,
     adoptedGeneration: savedAdoptedGeneration(saved),
-    carried: savedCarried(saved)
+    carried: savedCarried(saved),
+    probe: saved.probe && typeof saved.probe === "object" && !Array.isArray(saved.probe) ? {...saved.probe} : null
   };
 }
 
 export interface SourceCommand {
   sourceId: string | null;
   operation: SourceAction | "observe";
-  requestId: string;
+  // Null, with generation 0, for the recovery probe's observe.
+  requestId: string | null;
   generation: number;
   attempt: number;
 }
@@ -362,6 +369,18 @@ export function transitionSource(
   const event = msg?.sourceCapability;
   const commands: SourceCommand[] = [];
   const events: SourceOutputEvent[] = [];
+  // Its answer to the theatre's recovery probe, for output 2 as the events.
+  const observations: TargetObservationOutput[] = [];
+
+  // What the probed sources show, in the activity profiles' terms: the one
+  // active source, or every source inactive; otherwise nothing is known.
+  function probeValues(statuses: Record<string, SourceObservationStatus | null>): Record<string, unknown> {
+    const entries = Object.entries(statuses);
+    const active = entries.filter(([, status]) => status === "active" || status === "available").map(([sourceId]) => sourceId);
+    if (active.length === 1) return {action: "activate", sourceId: active[0]};
+    if (entries.length && entries.every(([, status]) => status === "inactive")) return {action: "deactivate"};
+    return {};
+  }
   const traces: TraceEntry[] = [];
 
   if (!event || typeof event.kind !== "string") {
@@ -511,6 +530,21 @@ export function transitionSource(
   }
 
   function acceptObservation(event: Extract<SourceEvent, {kind: "observed"}>) {
+    if (!state.desired && state.probe && Object.hasOwn(state.probe, event.sourceId)) {
+      // The probe's answer, whatever generation the transport echoes.
+      if (!Object.hasOwn(OBSERVATION_STATUSES, event.status)) throw new Error("unknown source observation status");
+      const probedAt = parseObservedAt(event.observedAt);
+      if (probedAt === null || typeof event.observedAt !== "string") throw new Error("source observedAt must be an ISO timestamp");
+      state.probe[event.sourceId] = event.status;
+      trace("probe", "read", null, {sourceId: event.sourceId, status: event.status});
+      if (Object.values(state.probe).every((status) => status !== null)) {
+        const values = probeValues(state.probe);
+        observations.push(targetObservation("source", boundObservedAt(event.observedAt, probedAt, nowMs).observedAt, values));
+        state.probe = null;
+        trace("probe", "answered", null, values);
+      }
+      return;
+    }
     if (!Number.isInteger(event.generation) || event.generation < 1) {
       throw new Error("source observation generation must be a positive integer");
     }
@@ -644,6 +678,18 @@ export function transitionSource(
     commands.push(commandFor(state, "observe"));
     state.refreshAsked = true;
     trace("refresh", "querying", null, {sourceId: state.desired.sourceId});
+  } else if (!state.desired && isProbe(event)) {
+    // The theatre's recovery probe: read every source that can be read, and
+    // say what they show. With none, nothing is known.
+    const readable = Object.entries(config.sources).filter(([, source]) => source.confirmation !== "unavailable").map(([sourceId]) => sourceId);
+    if (readable.length) {
+      state.probe = Object.fromEntries(readable.map((sourceId) => [sourceId, null]));
+      for (const sourceId of readable) commands.push({sourceId, operation: "observe", requestId: null, generation: 0, attempt: 0});
+      trace("probe", "querying", null, {sources: readable});
+    } else {
+      observations.push(targetObservation("source", now.toISOString(), {}));
+      trace("probe", "answered", "no-readable-source");
+    }
   } else if (event.kind === "startup" || event.kind === "refresh") {
     state.refreshAsked = false;
     if (state.desired) {
@@ -682,5 +728,5 @@ export function transitionSource(
 
   const outputEvent = (event.kind === "refresh" && state.refreshAsked) || replacedRequest ? null : targetEvent(state, now, config.sources);
   if (outputEvent) events.push(outputEvent);
-  return {state, commands, events, traces, status: statusFor(state)};
+  return {state, commands, events, observations, traces, status: statusFor(state)};
 }
