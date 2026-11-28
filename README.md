@@ -937,18 +937,33 @@ intents, with or without values, reach a held light only with `manual: true` or
 `person: true`; a flow acting for a person, such as a dashboard, sets one.
 A person switching a held light off returns it to `in-control`; a person
 switching on a light an owner holds off makes it `manual`. Either way it leaves
-every owner, and their later releases leave it alone. With
-**Publish state over MQTT** on (new nodes start with it off; nodes saved before
-the setting existed keep it on), on startup and whenever a target's state
-changes, the controller sends a retained message on its command output:
+every owner, and their later releases leave it alone. With **Home Assistant**
+set to *State only* or *State and discovery* (new nodes start with it off; it
+replaced the Publish state over MQTT and Home Assistant discovery settings,
+which a room saved before keeps: off/off reads as Off, on/off State only,
+on/on State and discovery, and not set at all keeps publishing both), on
+startup and whenever a target's state changes, the controller publishes a
+retained message:
 
 ```js
 {topic: "home/<area>/lighting/<target>/control", payload: {state: "overridden", owner: "theatre"}, retain: true}
 ```
 
-Flows that filter that output by topic must pass the `/control` topics through.
-With discovery on, Home Assistant gets a diagnostic sensor per light showing
-its control state, with the owner as an attribute.
+With *State and discovery*, Home Assistant gets a diagnostic sensor per light
+showing its control state, with the owner as an attribute.
+
+Give the room a **Broker** (Node-RED's MQTT broker node) and it publishes this
+itself: each time the broker connects, reconnects included, and each time Home
+Assistant comes back (`online` on `<prefix>/status`, its birth message), it
+clears what it no longer publishes and announces its entities, availability and
+every light's control state, so they come back by themselves; `offline` as it
+stops, and everything cleared when it is deleted. The MQTT out on its first
+output and the Status node are then no longer needed: the first output sends
+nothing, and a Status node still wired in is ignored. The editor shows a room
+with Home Assistant on and no Broker as needing one; opening and saving the
+room offers the first broker in your flows. Without a Broker, the room sends
+these on its first output, for an MQTT out node, as before; flows that filter
+that output by topic must pass the `/control` topics through.
 
 The circadian lighting policy publishes the circadian state on
 `home/<area>/circadian/state`, and acts on ON or OFF sent to

@@ -3,6 +3,15 @@
     // A setting is on unless it was explicitly switched off; null ("not set")
     // shows as ticked.
     function on(value) { return value !== false && value !== "false"; }
+    // Its Home Assistant choice, from the open dialog or its saved settings: a
+    // room saved before the choice reads its two old settings, where not set
+    // means on (lib/home-assistant-setting.ts).
+    function choiceOf(node) {
+      var select = $("#node-input-homeAssistant");
+      if (select.length) return select.val();
+      if (node.homeAssistant === "off" || node.homeAssistant === "state" || node.homeAssistant === "discovery") return node.homeAssistant;
+      return !on(node.publishState) ? "off" : on(node.discovery) ? "discovery" : "state";
+    }
     // Each old setting, and the circadian lighting policy field it goes into.
     var MOVED = {
       houseSchedule: "Schedule", wakeTime: "Wake time", bedTime: "Bed time",
@@ -89,14 +98,25 @@
         // Required only when the room publishes something named after it, and
         // then with a letter or digit, from which its topics and IDs are made.
         area: {value: "", validate: function (v) {
-          var publishing = $("#node-input-publishState").length
-            ? $("#node-input-publishState").prop("checked") || $("#node-input-discovery").prop("checked")
-            : on(this.publishState) || on(this.discovery);
-          return !publishing || /[a-z0-9]/i.test(String(v || ""));
+          // A room saved before the choice needed one whenever either old
+          // setting was on, as the runtime still checks.
+          var legacy = !$("#node-input-homeAssistant").length && (this.homeAssistant === null || this.homeAssistant === undefined) &&
+            (on(this.publishState) || on(this.discovery));
+          return (choiceOf(this) === "off" && !legacy) || /[a-z0-9]/i.test(String(v || ""));
         }},
-        // null means "not set": Node-RED fills it into a saved flow from before
-        // these settings, which keeps publishing. New nodes start with both
-        // off (onadd).
+        // off, state or discovery. null means "not set": a room saved before
+        // this setting, read from the two below. New nodes start off (onadd).
+        homeAssistant: {value: null},
+        // Node-RED's MQTT broker node, through which it publishes itself.
+        // Needed unless Home Assistant is off. The editor offers the first
+        // broker when the dialog is opened and saved, not when the node is
+        // dropped.
+        broker: {value: "", type: "mqtt-broker", required: false, validate: function (v) {
+          return choiceOf(this) === "off" || (Boolean(v) && v !== "_ADD_") ? true : "choose a broker, or set Home Assistant to off";
+        }},
+        // The two settings the choice replaced, kept with no form rows so the
+        // editor carries a saved room's: null means "not set", which kept
+        // publishing (on) before the choice.
         publishState: {value: null},
         discovery: {value: null},
         // How Home Assistant IDs are named. null means "not set": a node saved
@@ -129,21 +149,21 @@
         if (this.name !== "_DEFAULT_") return;
         this.name = "";
         this.idScheme = "node";
+        this.homeAssistant = "off";
         this.publishState = false;
         this.discovery = false;
       },
       oneditprepare: function () {
         var node = this;
-        $("#node-input-publishState").prop("checked", on(node.publishState));
-        $("#node-input-discovery").prop("checked", on(node.discovery));
-        // Discovery describes the published state, so it needs it.
+        $("#node-input-homeAssistant").val(choiceOf(node));
+        // The broker only for publishing, the prefix only for discovery.
         function follow() {
-          var publishing = $("#node-input-publishState").prop("checked");
-          if (!publishing) $("#node-input-discovery").prop("checked", false);
-          $("#node-input-discovery").prop("disabled", !publishing);
-          $("#node-input-area").trigger("change");
+          var choice = $("#node-input-homeAssistant").val();
+          $(".room-broker").toggle(choice !== "off");
+          $(".room-discovery").toggle(choice === "discovery");
+          $("#node-input-area, #node-input-broker").trigger("change");
         }
-        $("#node-input-publishState, #node-input-discovery").on("change", follow);
+        $("#node-input-homeAssistant").on("change", follow);
         follow();
         // A room saved before 6.0: its circadian settings, to copy into a
         // circadian lighting policy.
@@ -175,6 +195,10 @@
       // Saving the dialog migrates the room: its old circadian settings go.
       oneditsave: function () {
         var node = this;
+        // The two settings it replaced, kept in step.
+        var choice = $("#node-input-homeAssistant").val();
+        node.publishState = choice !== "off";
+        node.discovery = choice === "discovery";
         Object.keys(MOVED).forEach(function (key) { node[key] = ""; });
         // Its targets become ids: their topics are the lights' adapters' now.
         var targets = parsedTargets($("#node-input-targets").val());
@@ -211,10 +235,19 @@
   </div>
   <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
   <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area" placeholder="needed when publishing"></div>
-  <div class="form-row"><label for="node-input-publishState">Publish state over MQTT</label><input type="checkbox" id="node-input-publishState" style="display:inline-block; width:auto;"></div>
-  <div class="form-row"><label for="node-input-discovery">Home Assistant discovery</label><input type="checkbox" id="node-input-discovery" style="display:inline-block; width:auto;"> <span>(needs Publish state)</span></div>
+  <div class="form-row">
+    <label for="node-input-homeAssistant">Home Assistant</label>
+    <select id="node-input-homeAssistant">
+      <option value="off">Off</option>
+      <option value="state">State only</option>
+      <option value="discovery">State and discovery</option>
+    </select>
+  </div>
+  <div class="form-row room-broker"><label for="node-input-broker">Broker</label><input type="text" id="node-input-broker"></div>
+  <div class="form-tips room-broker">With a broker, the room publishes itself: an MQTT out on its first output, and a
+    Status node, are no longer needed and can be deleted.</div>
   <div class="form-row"><label for="node-input-displayName">Display name</label><input type="text" id="node-input-displayName"></div>
-  <div class="form-row"><label for="node-input-discoveryPrefix">Discovery prefix</label><input type="text" id="node-input-discoveryPrefix"></div>
+  <div class="form-row room-discovery"><label for="node-input-discoveryPrefix">Discovery prefix</label><input type="text" id="node-input-discoveryPrefix"></div>
   <div class="form-row"><label for="node-input-targets">Targets JSON</label><input type="text" id="node-input-targets"></div>
   <div class="form-row"><label for="node-input-initialTransitionSeconds">Turn-on transition seconds</label><input type="number" id="node-input-initialTransitionSeconds"></div>
 </script>
@@ -243,25 +276,31 @@
     nothing. For a light that isn't Zigbee2MQTT's, any flow that answers <code>msg.light</code> commands with
     <code>msg.light</code> readings works in the adapter's place (see the README's neutral light contract).</p>
   <h3>Publishing</h3>
-  <p>Two settings add what it publishes
-    for other systems to see; both are named after the <b>Area</b>, which is needed only when one of them is on. Topics
-    and IDs use it in lowercase, with spaces and other characters (anything but letters, digits, <code>_</code> and
-    <code>-</code>) as <code>_</code>: <i>Living Room</i> publishes under <code>home/living_room/…</code>.</p>
+  <p><b>Home Assistant</b> adds what it publishes for other systems to see, named after the <b>Area</b>, which is
+    needed only when it isn't off. Topics and IDs use it in lowercase, with spaces and other characters (anything but
+    letters, digits, <code>_</code> and <code>-</code>) as <code>_</code>: <i>Living Room</i> publishes under
+    <code>home/living_room/…</code>.</p>
   <dl class="message-properties">
-    <dt>Publish state over MQTT</dt><dd>each light's control state on
-      <code>home/&lt;area&gt;/lighting/&lt;target&gt;/control</code>, and a retained <code>online</code> on
-      <code>home/&lt;area&gt;/lighting/availability</code> once the flows start and <code>offline</code> as it stops.
-      These get through only when this node is deployed on its own, so set the MQTT broker node's Birth, Close and
-      Will messages to the same (see the README).</dd>
-    <dt>Home Assistant discovery</dt><dd>a control sensor for each light. It needs <b>Publish state</b>. The entities
-      are announced once the flows start, before <code>online</code>, and again at the startup message. Switching it
-      off removes them from Home Assistant at the next startup message. At every start the room also clears the
-      circadian, sleep, wake and bed entities it published before 6.0; the circadian lighting policy publishes its
-      own.</dd>
+    <dt>Home Assistant</dt><dd><i>Off</i>; <i>State only</i>: each light's control state on
+      <code>home/&lt;area&gt;/lighting/&lt;target&gt;/control</code>, and the room's availability on
+      <code>home/&lt;area&gt;/lighting/availability</code>; <i>State and discovery</i>: a control sensor for each light
+      too. At every start the room also clears the circadian, sleep, wake and bed entities it published before 6.0.
+      A room saved before this setting reads its two old ones (Publish state over MQTT, Home Assistant discovery):
+      off/off is Off, on/off State only, on/on State and discovery, and not set at all keeps publishing both.</dd>
+    <dt>Broker</dt><dd>Node-RED's MQTT broker node. With one, the room publishes itself: each time the broker connects,
+      reconnects included, and each time Home Assistant comes back (<code>online</code> on
+      <code>&lt;prefix&gt;/status</code>), it clears what it no longer publishes and announces its entities,
+      availability and every light's control state, so they come back by themselves. <code>offline</code> as it stops;
+      deleted, everything it published is cleared. An MQTT out on output 1 and a Status node are then no longer needed:
+      output 1 sends nothing, and a Status node still wired in is ignored. Needed unless Home Assistant is off; opening
+      and saving the room offers the first broker in your flows. Without one, the room publishes through output 1 as
+      before: once the flows start and at its startup message, which a Status node watching your MQTT out sends each
+      time it connects, with <code>offline</code> getting through only when this node is deployed on its own, so set
+      the MQTT broker node's Birth, Close and Will messages to the same (see the README).</dd>
     <dt>Discovery prefix</dt><dd>the topic prefix Home Assistant listens on for discovery: <code>homeassistant</code>
-      unless you changed it in Home Assistant's MQTT settings.</dd>
+      unless you changed it in Home Assistant's MQTT settings. Shown with <i>State and discovery</i>.</dd>
   </dl>
-  <p>New nodes start with both off. A node saved before these settings existed keeps publishing both.</p>
+  <p>New nodes start with Home Assistant off.</p>
   <h3>Targets</h3>
   <p>A JSON list of lights, each <code>{"id"}</code>: the name its adapter's <b>Target</b> and the policies use. Add <code>"onOffOnly": true</code>
     for a light that only switches on and off: it is never sent brightness, colour or a transition, styles skip it,
@@ -318,7 +357,8 @@
   </dl>
   <h3>Outputs</h3>
   <ol class="node-ports">
-    <li>MQTT publications, for an MQTT out node: with <b>Publish state</b> on, on startup and whenever a target's
+    <li>MQTT publications, for an MQTT out node, when it has no <b>Broker</b> (with one, it publishes itself and this
+      output sends nothing): with <b>Home Assistant</b> on, on startup and whenever a target's
       control state or availability changes, a retained message on <code>home/&lt;area&gt;/lighting/&lt;target&gt;/control</code>
       with payload <code>{"state": "in-control" | "overridden" | "manual", "owner": string | null, "available"?: boolean}</code>
       (<code>available</code> once its adapter has reported it), and the room's availability and discovery.</li>

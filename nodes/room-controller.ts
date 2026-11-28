@@ -16,15 +16,24 @@ import {
 } from "../lib/room-controller";
 import {isLightReading} from "../lib/light-contract";
 import {publishingLifecycle} from "./publishing-lifecycle";
-import {publishRoom, roomRetainedTopics, roomStartingOutputs, roomStoppingOutputs, withoutCircadianState, type RoomPublishingConfig} from "../lib/room-publishing";
+import {publishRoom, roomAnnouncement, roomRetainedTopics, roomStartingOutputs, roomStoppingOutputs, withoutCircadianState, type RoomPublishingConfig} from "../lib/room-publishing";
 import {invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
 import {jsonSetting, numberSetting, optionalBooleanSetting, optionalChoiceSetting} from "../lib/settings";
+import {homeAssistantSetting} from "../lib/home-assistant-setting";
+import {appendTrace} from "../lib/bounded-trace";
+import {brokerLink, type BrokerNode} from "./mqtt-broker-link";
+import {homeAssistantDiscovery, type HomeAssistantDiscovery} from "./home-assistant-discovery";
 import {ID_SCHEMES, discoveryPrefixSetting} from "../lib/ha-discovery";
 import {publishingArea} from "../lib/topic-names";
 
 interface RoomControllerConfig extends NodeDef {
   idScheme?: string | null;
   area?: string;
+  // off, state or discovery; not set: from publishState and discovery,
+  // which it replaced.
+  homeAssistant?: string | null;
+  // Node-RED's mqtt-broker node, to publish through itself.
+  broker?: string;
   publishState?: boolean | string;
   discovery?: boolean | string;
   displayName?: string;
@@ -64,6 +73,7 @@ const registerRoomController: NodeInitializer = (RED) => {
     const area = optionalArea(config);
 
     let controllerConfig: RoomConfig & RoomPublishingConfig;
+    let broker: BrokerNode | null = null;
     try {
       // A room saved before 6.0 still has its circadian settings, which moved
       // to the circadian lighting policy: it runs only once migrated, so it
@@ -82,11 +92,24 @@ const registerRoomController: NodeInitializer = (RED) => {
       }
       // Not set (null, or absent from a flow saved before these settings)
       // means on, so an older flow keeps publishing as before.
-      const publishState = optionalBooleanSetting(config.publishState, "publish state") ?? true;
-      const discovery = optionalBooleanSetting(config.discovery, "Home Assistant discovery") ?? true;
+      const homeAssistant = homeAssistantSetting(config, {publishState: true, discovery: true});
+      const publishState = homeAssistant !== "off";
+      const discovery = homeAssistant === "discovery";
+      // A room saved before the choice needed an area whenever either old
+      // setting was on, even discovery alone, which published nothing: kept,
+      // so it validates as before.
+      const legacyArea = (config.homeAssistant === undefined || config.homeAssistant === null) &&
+        ((optionalBooleanSetting(config.publishState, "publish state") ?? true) || (optionalBooleanSetting(config.discovery, "Home Assistant discovery") ?? true));
+      // With a broker, it publishes itself; without one, through output 1,
+      // as before 6.2.
+      const brokerId = typeof config.broker === "string" ? config.broker.trim() : "";
+      if (publishState && brokerId) {
+        broker = RED.nodes.getNode(brokerId) as unknown as BrokerNode | null;
+        if (!broker) throw new Error("its MQTT broker node isn't in the flows: choose one, or set Home Assistant to off");
+      }
       // Both publish under topics and IDs named after the area; otherwise the
       // area is only a label.
-      if (publishState || discovery) publishingArea(area, true);
+      if (publishState || legacyArea) publishingArea(area, true);
       controllerConfig = {
         nodeId: node.id,
         // Not set: a node saved before node IDs, which keeps its area-named
@@ -112,15 +135,29 @@ const registerRoomController: NodeInitializer = (RED) => {
     const recorded = node.context().get("retainedTopics");
     if (Array.isArray(recorded)) node.context().set("retainedTopics", withoutCircadianState(recorded as string[]));
 
-    // Available, and clear of what it no longer publishes, as soon as it
-    // runs; offline as it stops; nothing left behind when deleted.
-    const lifecycle = publishingLifecycle(RED, node, {
-      retainedTopics: () => roomRetainedTopics(controllerConfig),
-      starting: () => roomStartingOutputs(controllerConfig),
-      stopping: () => roomStoppingOutputs(controllerConfig),
-      output: 0,
-      outputs: 3
-    });
+    const trace = {area: controllerConfig.area, component: "room-controller"};
+    // With a broker: everything announced on each connect and when Home
+    // Assistant comes back, offline as it stops, nothing left behind when
+    // deleted. Without one: the same through output 1, from the flows start
+    // and the startup message.
+    let homeAssistant: HomeAssistantDiscovery | null = null;
+    let lifecycle: ReturnType<typeof publishingLifecycle> | null = null;
+    if (broker) {
+      homeAssistant = homeAssistantDiscovery(RED, node, brokerLink(broker, node.id, (error) => node.error(error)), {
+        retainedTopics: () => roomRetainedTopics(controllerConfig),
+        announcement: () => roomAnnouncement(controllerConfig, node.context().get("state") as Partial<RoomState> | undefined),
+        stopping: () => roomStoppingOutputs(controllerConfig),
+        statusTopic: controllerConfig.discovery ? controllerConfig.discoveryPrefix + "/status" : null
+      }, trace);
+    } else {
+      lifecycle = publishingLifecycle(RED, node, {
+        retainedTopics: () => roomRetainedTopics(controllerConfig),
+        starting: () => roomStartingOutputs(controllerConfig),
+        stopping: () => roomStoppingOutputs(controllerConfig),
+        output: 0,
+        outputs: 3
+      });
+    }
 
     function updateStatus(status: RoomStatus) {
       node.status({
@@ -144,8 +181,10 @@ const registerRoomController: NodeInitializer = (RED) => {
     const warned = new Set<string>();
 
     function process(msg: RoomMessage, send: Send) {
-      const result = runReducer(node, {area: controllerConfig.area, component: "room-controller"},
+      const result = runReducer(node, trace,
         (saved: Partial<RoomState> | undefined, now) => publishRoom(saved, msg, controllerConfig, now));
+      // With a broker, the publications go to it, and output 1 is quiet.
+      if (homeAssistant) homeAssistant.publish(result.outputs);
       // Output 1: MQTT publications (control states, availability,
       // discovery). Output 2: light commands, for the lights' adapters.
       // Output 3: each light's reading passed on with its control state, for
@@ -154,7 +193,7 @@ const registerRoomController: NodeInitializer = (RED) => {
         controllerConfig.targets.some(({id}) => id === (msg.light as {target: string}).target) ? msg.light : null;
       const control = reading ? result.status.control[reading.target] : undefined;
       const outputs = [
-        result.outputs.length ? result.outputs.map((output) => ({...output, payload: output.payload})) : null,
+        !homeAssistant && result.outputs.length ? result.outputs.map((output) => ({...output, payload: output.payload})) : null,
         result.commands.length ? result.commands.map((light) => ({payload: undefined, light})) : null,
         reading ? {payload: undefined, light: {...reading, control, manual: control === "manual"}} : null
       ];
@@ -170,8 +209,15 @@ const registerRoomController: NodeInitializer = (RED) => {
     }
 
     onInput(node, (msg, send) => {
+      // With a broker it announces itself on every connect: a Status node
+      // still wired in, from before, changes nothing.
+      const status = objectField<{source?: unknown; text?: unknown}>(msg, "status");
+      if (homeAssistant && status && status.source && typeof status.source === "object") {
+        appendTrace(node.context(), trace, [{event: "input", outcome: "ignored", reason: "has-broker", details: {status: String(status.text ?? "")}}]);
+        return;
+      }
       // The startup's own announcement comes from publishRoom.
-      if (objectField<RoomMessage["lighting"]>(msg, "lighting")?.kind === "startup") lifecycle.startup(send);
+      if (objectField<RoomMessage["lighting"]>(msg, "lighting")?.kind === "startup") lifecycle?.startup(send);
       process({
         lighting: objectField<RoomMessage["lighting"]>(msg, "lighting"),
         light: msg.light,
@@ -179,7 +225,7 @@ const registerRoomController: NodeInitializer = (RED) => {
         payload: msg.payload,
         retain: msg.retain === true
       }, send);
-    }, {message: {lighting: {kind: "startup"}}, trace: {area: controllerConfig.area, component: "room-controller"}});
+    }, broker ? undefined : {message: {lighting: {kind: "startup"}}, trace});
   }
 
   RED.nodes.registerType("home-room-lighting-controller", HomeRoomLightingController);

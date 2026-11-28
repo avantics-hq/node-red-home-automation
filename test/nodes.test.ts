@@ -26,6 +26,7 @@ import registerShellyCover from "../nodes/shelly-cover";
 import registerShellySwitch from "../nodes/shelly-switch";
 import registerZ2mCover from "../nodes/z2m-cover";
 import registerScene from "../nodes/scene";
+import {fakeBroker} from "./helpers/fake-broker";
 import type {SharedSchedule} from "../lib/house-schedule";
 import registerSource from "../nodes/source-capability-controller";
 import type {TraceRecord} from "../lib/bounded-trace";
@@ -2753,6 +2754,62 @@ test("scene node: settings it can't use are an invalid configuration naming them
     const node = new Scene({id: "bad-scene", ...settings});
     assert.match(String(node.errors[0]), message, JSON.stringify(settings));
   }
+});
+
+test("room with a broker: publishes itself, announcing on every connect; output 1 quiet; a Status node left wired changes nothing", async (t) => {
+  type Envelope = Array<Array<Record<string, unknown>> | Record<string, unknown> | null>;
+  const broker = fakeBroker();
+  builtNodes.set("broker-room", broker);
+  const roomRuntime = runtime(registerRoom);
+  const node = new roomRuntime.Constructor({id: "room-broker", targets: "[{\"id\":\"main\"}]", area: "hall", idScheme: "node",
+    homeAssistant: "discovery", broker: "broker-room"});
+  t.after(() => close(node));
+  assert.deepEqual(node.errors, []);
+  roomRuntime.events.emit("flows:started");
+  assert.deepEqual(node.sent, [], "nothing on output 1 as the flows start");
+  broker.connect();
+  // As at the startup message: the circadian entities it published before 6.0 cleared, its own, then every control state.
+  assert.deepEqual(broker.published.map(({topic, payload}) => [topic, payload === "" ? "" : "set"]), [
+    ["homeassistant/switch/nrha_room-broker_circadian_lighting/config", ""],
+    ["homeassistant/switch/nrha_room-broker_sleep/config", ""],
+    ["homeassistant/time/nrha_room-broker_wake_time/config", ""],
+    ["homeassistant/time/nrha_room-broker_bed_time/config", ""],
+    ["homeassistant/sensor/nrha_room-broker_main_control/config", "set"],
+    ["home/hall/lighting/availability", "set"],
+    ["home/hall/lighting/main/control", "set"]
+  ]);
+  assert.ok(!node.statuses.some((status) => String((status as {text?: string}).text).includes("connected")), "the broker never sets the room's status");
+  assert.deepEqual([...broker.subscriptions.keys()], ["homeassistant/status"]);
+
+  // A person's change: the control state goes to the broker, not output 1.
+  broker.published.length = 0;
+  const changed = await receive<Envelope>(node, {lighting: {kind: "intent", targets: ["main"], state: "ON", source: "wall", manual: true, values: {brightnessPct: 30}}});
+  assert.deepEqual(changed.map((envelope) => (envelope as Envelope)[0]), [null]);
+  assert.deepEqual(broker.published.map(({topic, payload}) => [topic, payload]),
+    [["home/hall/lighting/main/control", "{\"state\":\"manual\",\"owner\":null}"]]);
+
+  // Home Assistant restarted: everything again, with the current state.
+  broker.published.length = 0;
+  broker.deliver("homeassistant/status", "online");
+  assert.deepEqual(broker.published.at(-1)?.payload, "{\"state\":\"manual\",\"owner\":null}");
+
+  // A Status node from before, still wired: ignored, with a trace.
+  assert.deepEqual(await receive(node, {status: {fill: "green", shape: "dot", text: "node-red:common.status.connected", source: {id: "o", type: "mqtt out", name: ""}}}), []);
+  assert.equal(traces(node).at(-1)?.reason, "has-broker");
+
+  // Stopping: offline, then the link deregisters.
+  broker.published.length = 0;
+  await new Promise<void>((resolve) => node.emit("close", false, resolve));
+  assert.deepEqual(broker.published.map(({topic, payload}) => [topic, payload]), [["home/hall/lighting/availability", "offline"]]);
+  assert.deepEqual(broker.deregistered.map(({id}) => id), ["room-broker-home-automation"]);
+});
+
+test("room: a broker that isn't in the flows is an invalid configuration; with Home Assistant off, no broker is needed", () => {
+  const room = runtime(registerRoom).Constructor;
+  const missing = new room({id: "room-nobroker", targets: "[{\"id\":\"main\"}]", area: "hall", homeAssistant: "state", broker: "gone"});
+  assert.match(String(missing.errors[0]), /MQTT broker node isn't in the flows/);
+  const off = new room({id: "room-off", targets: "[{\"id\":\"main\"}]", homeAssistant: "off", broker: ""});
+  assert.deepEqual(off.errors, []);
 });
 
 test("activity lighting takes a light's reading as the room passes it on", async (t) => {
