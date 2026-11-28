@@ -2804,7 +2804,7 @@ test("room with a broker: publishes itself, announcing on every connect; output 
   assert.deepEqual(broker.deregistered.map(({id}) => id), ["room-broker-home-automation"]);
 });
 
-test("room: a broker that isn't in the flows is an invalid configuration; with Home Assistant off, no broker is needed", () => {
+test("room: a broker that isn't in the flows is an invalid configuration; with Publish set to Don't publish, no broker is needed", () => {
   const room = runtime(registerRoom).Constructor;
   const missing = new room({id: "room-nobroker", targets: "[{\"id\":\"main\"}]", area: "hall", homeAssistant: "state", broker: "gone"});
   assert.match(String(missing.errors[0]), /MQTT broker node isn't in the flows/);

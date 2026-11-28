@@ -105,7 +105,7 @@ const registerRoomController: NodeInitializer = (RED) => {
       const brokerId = typeof config.broker === "string" ? config.broker.trim() : "";
       if (publishState && brokerId) {
         broker = RED.nodes.getNode(brokerId) as unknown as BrokerNode | null;
-        if (!broker) throw new Error("its MQTT broker node isn't in the flows: choose one, or set Home Assistant to off");
+        if (!broker) throw new Error("its MQTT broker node isn't in the flows: choose one, or set Publish to Don't publish");
       }
       // Both publish under topics and IDs named after the area; otherwise the
       // area is only a label.

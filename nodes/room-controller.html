@@ -108,11 +108,11 @@
         // this setting, read from the two below. New nodes start off (onadd).
         homeAssistant: {value: null},
         // Node-RED's MQTT broker node, through which it publishes itself.
-        // Needed unless Home Assistant is off. The editor offers the first
+        // Needed unless Publish is "Don't publish". The editor offers the first
         // broker when the dialog is opened and saved, not when the node is
         // dropped.
         broker: {value: "", type: "mqtt-broker", required: false, validate: function (v) {
-          return choiceOf(this) === "off" || (Boolean(v) && v !== "_ADD_") ? true : "choose a broker, or set Home Assistant to off";
+          return choiceOf(this) === "off" || (Boolean(v) && v !== "_ADD_") ? true : "choose a broker, or set Publish to Don't publish";
         }},
         // The two settings the choice replaced, kept with no form rows so the
         // editor carries a saved room's: null means "not set", which kept
@@ -236,11 +236,11 @@
   <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
   <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area" placeholder="needed when publishing"></div>
   <div class="form-row">
-    <label for="node-input-homeAssistant">Home Assistant</label>
+    <label for="node-input-homeAssistant">Publish</label>
     <select id="node-input-homeAssistant">
-      <option value="off">Off</option>
-      <option value="state">State only</option>
-      <option value="discovery">State and discovery</option>
+      <option value="off">Don't publish</option>
+      <option value="state">MQTT state</option>
+      <option value="discovery">MQTT state and Home Assistant discovery</option>
     </select>
   </div>
   <div class="form-row room-broker"><label for="node-input-broker">Broker</label><input type="text" id="node-input-broker"></div>
@@ -276,31 +276,32 @@
     nothing. For a light that isn't Zigbee2MQTT's, any flow that answers <code>msg.light</code> commands with
     <code>msg.light</code> readings works in the adapter's place (see the README's neutral light contract).</p>
   <h3>Publishing</h3>
-  <p><b>Home Assistant</b> adds what it publishes for other systems to see, named after the <b>Area</b>, which is
-    needed only when it isn't off. Topics and IDs use it in lowercase, with spaces and other characters (anything but
+  <p><b>Publish</b> adds what it publishes for other systems to see, named after the <b>Area</b>, which is
+    needed unless it is <i>Don't publish</i>. Topics and IDs use it in lowercase, with spaces and other characters (anything but
     letters, digits, <code>_</code> and <code>-</code>) as <code>_</code>: <i>Living Room</i> publishes under
     <code>home/living_room/…</code>.</p>
   <dl class="message-properties">
-    <dt>Home Assistant</dt><dd><i>Off</i>; <i>State only</i>: each light's control state on
+    <dt>Publish</dt><dd><i>Don't publish</i>; <i>MQTT state</i>, plain MQTT for any system to read: each light's control state on
       <code>home/&lt;area&gt;/lighting/&lt;target&gt;/control</code>, and the room's availability on
-      <code>home/&lt;area&gt;/lighting/availability</code>; <i>State and discovery</i>: a control sensor for each light
-      too. At every start the room also clears the circadian, sleep, wake and bed entities it published before 6.0.
+      <code>home/&lt;area&gt;/lighting/availability</code>; <i>MQTT state and Home Assistant discovery</i>: that, and
+      a control sensor for each light announced to Home Assistant, which reads that state. At every start the room also clears the circadian, sleep, wake and bed entities it published before 6.0.
       A room saved before this setting reads its two old ones (Publish state over MQTT, Home Assistant discovery):
-      off/off is Off, on/off State only, on/on State and discovery, and not set at all keeps publishing both.</dd>
+      off/off is Don't publish, on/off MQTT state, on/on MQTT state and Home Assistant discovery, and not set at all
+      keeps publishing both.</dd>
     <dt>Broker</dt><dd>Node-RED's MQTT broker node. With one, the room publishes itself: each time the broker connects,
       reconnects included, and each time Home Assistant comes back (<code>online</code> on
       <code>&lt;prefix&gt;/status</code>), it clears what it no longer publishes and announces its entities,
       availability and every light's control state, so they come back by themselves. <code>offline</code> as it stops;
       deleted, everything it published is cleared. An MQTT out on output 1 and a Status node are then no longer needed:
-      output 1 sends nothing, and a Status node still wired in is ignored. Needed unless Home Assistant is off; opening
+      output 1 sends nothing, and a Status node still wired in is ignored. Needed unless Publish is <i>Don't publish</i>; opening
       and saving the room offers the first broker in your flows. Without one, the room publishes through output 1 as
       before: once the flows start and at its startup message, which a Status node watching your MQTT out sends each
       time it connects, with <code>offline</code> getting through only when this node is deployed on its own, so set
       the MQTT broker node's Birth, Close and Will messages to the same (see the README).</dd>
     <dt>Discovery prefix</dt><dd>the topic prefix Home Assistant listens on for discovery: <code>homeassistant</code>
-      unless you changed it in Home Assistant's MQTT settings. Shown with <i>State and discovery</i>.</dd>
+      unless you changed it in Home Assistant's MQTT settings. Shown with Home Assistant discovery.</dd>
   </dl>
-  <p>New nodes start with Home Assistant off.</p>
+  <p>New nodes start with <i>Don't publish</i>.</p>
   <h3>Targets</h3>
   <p>A JSON list of lights, each <code>{"id"}</code>: the name its adapter's <b>Target</b> and the policies use. Add <code>"onOffOnly": true</code>
     for a light that only switches on and off: it is never sent brightness, colour or a transition, styles skip it,
@@ -358,7 +359,7 @@
   <h3>Outputs</h3>
   <ol class="node-ports">
     <li>MQTT publications, for an MQTT out node, when it has no <b>Broker</b> (with one, it publishes itself and this
-      output sends nothing): with <b>Home Assistant</b> on, on startup and whenever a target's
+      output sends nothing): unless <b>Publish</b> is <i>Don't publish</i>, on startup and whenever a target's
       control state or availability changes, a retained message on <code>home/&lt;area&gt;/lighting/&lt;target&gt;/control</code>
       with payload <code>{"state": "in-control" | "overridden" | "manual", "owner": string | null, "available"?: boolean}</code>
       (<code>available</code> once its adapter has reported it), and the room's availability and discovery.</li>

@@ -63,11 +63,11 @@ test("room: one Home Assistant choice, a Broker needed unless it's off, and the 
   assert.deepEqual([added.homeAssistant, added.publishState, added.discovery], ["off", false, false], "a new room starts off");
   const broker = (node: Record<string, unknown>, value: string) => definition.defaults.broker!.validate!.call(node, value) as unknown;
   assert.equal(broker({homeAssistant: "off"}, ""), true);
-  assert.equal(broker({homeAssistant: "state"}, ""), "choose a broker, or set Home Assistant to off");
-  assert.equal(broker({homeAssistant: "discovery"}, "_ADD_"), "choose a broker, or set Home Assistant to off");
+  assert.equal(broker({homeAssistant: "state"}, ""), "choose a broker, or set Publish to Don't publish");
+  assert.equal(broker({homeAssistant: "discovery"}, "_ADD_"), "choose a broker, or set Publish to Don't publish");
   assert.equal(broker({homeAssistant: "state"}, "b1"), true);
   // A room saved before the choice: its old settings decide, and not set means on.
-  assert.equal(broker({homeAssistant: null, publishState: null, discovery: null}, ""), "choose a broker, or set Home Assistant to off");
+  assert.equal(broker({homeAssistant: null, publishState: null, discovery: null}, ""), "choose a broker, or set Publish to Don't publish");
   assert.equal(broker({homeAssistant: null, publishState: false, discovery: false}, ""), true);
   // Its area: needed whenever publishing, and for a saved room whenever either old setting was on.
   const area = (node: Record<string, unknown>, value: string) => definition.defaults.area!.validate!.call(node, value);

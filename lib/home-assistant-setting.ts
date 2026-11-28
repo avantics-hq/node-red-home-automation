@@ -1,8 +1,10 @@
 "use strict";
 
-// The one Home Assistant setting a publishing node has: off, state only
-// (state and availability) or state and discovery (its entities announced
-// too). It replaced two on/off settings, publishState and discovery, which
+// The one publishing setting a node has, Publish in the editor: off ("Don't
+// publish"), state ("MQTT state": its state and availability as retained
+// MQTT topics, plain MQTT) or discovery ("MQTT state and Home Assistant
+// discovery": its entities announced to Home Assistant too, which read that
+// state). It replaced two on/off settings, publishState and discovery, which
 // stay in a node's saved flow: a node saved before reads as they said.
 // Decided by the person on 2026-11-28.
 
