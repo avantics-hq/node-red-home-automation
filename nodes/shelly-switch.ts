@@ -40,7 +40,8 @@ const registerShellySwitch: NodeInitializer = (RED) => {
     // With a broker, it reads the device's configuration each time it
     // connects; without one, once the flows have started (and at a Status
     // node's "connected").
-    const side = deviceSide(node, broker, device.topicPrefix, trace, (msg, send) => process(msg as ShellySwitchMessage, send),
+    // Its prefix is one device: everything under it.
+    const side = deviceSide(node, broker, device.topicPrefix, [device.topicPrefix + "/#"], trace, (msg, send) => process(msg as ShellySwitchMessage, send),
       () => process({shellySwitch: {kind: "startup"}}, node.send.bind(node)));
 
     function process(msg: ShellySwitchMessage, send: Send) {

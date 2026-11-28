@@ -10,12 +10,14 @@
       // topics and publishes on them itself. The editor offers the first broker
       // when the dialog is opened and saved, not when the node is dropped.
       broker: {value: "", type: "mqtt-broker", required: false, validate: function (v) {
-        return (Boolean(v) && v !== "_ADD_") || this.publishesThroughOutput === true ? true : "choose a broker";
+        return (Boolean(v) && v !== "_ADD_") || this.publishesThroughOutput !== false ? true : "choose a broker";
       }},
-      // true for a node that reaches its device through MQTT in and out nodes, as
-      // before 6.2: a saved flow without this setting gets it, and it stays valid
-      // with no broker until one is chosen. A new node clears it (onadd). No row.
-      publishesThroughOutput: {value: true},
+      // Whether it reaches its device through MQTT in and out nodes, as before
+      // 6.2, and so needs no broker until one is chosen. A node saved before
+      // this setting loads without it (the editor applies no defaults to the
+      // deployed flows), which counts as true; a new node sets false (onadd).
+      // No row.
+      publishesThroughOutput: {value: false},
       // No default: it names the user's own device.
       topicPrefix: {value: "", required: true, validate: function (v) {
         var prefix = String(v || "").trim().replace(/^\/+|\/+$/g, "");
@@ -41,7 +43,7 @@
       // until given a broker.
       function rows() {
         var broker = $("#node-input-broker").val();
-        $(".device-through-output").toggle(node.publishesThroughOutput === true && (!broker || broker === "_ADD_"));
+        $(".device-through-output").toggle(node.publishesThroughOutput !== false && (!broker || broker === "_ADD_"));
       }
       $("#node-input-broker").on("change", rows);
       rows();
@@ -50,6 +52,7 @@
       // A broker chosen: it publishes itself from now on.
       var broker = $("#node-input-broker").val();
       if (broker && broker !== "_ADD_") this.publishesThroughOutput = false;
+      else if (this.publishesThroughOutput !== false) this.publishesThroughOutput = true;
     },
     inputs: 1,
     outputs: 3,

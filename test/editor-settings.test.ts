@@ -113,10 +113,12 @@ test("device adapters: a Broker, needed for a new node; one saved before 6.2 kee
   for (const file of ["z2m-light.html", "z2m-cover.html", "shelly-cover.html", "shelly-switch.html"]) {
     const definition = editorDefinition(file);
     assert.equal(definition.defaults.broker!.type, "mqtt-broker", file);
-    // A saved flow without the setting gets its default: through its MQTT in and out nodes.
-    assert.equal(definition.defaults.publishesThroughOutput!.value, true, file);
+    // A node saved before 6.2 loads without the setting: the editor applies no defaults to the deployed flows
+    // (Node-RED 5.0.10 red.js importNodes, applyNodeDefaults false). It counts as using its MQTT in and out nodes.
     const broker = (node: Record<string, unknown>, value: string) => definition.defaults.broker!.validate!.call(node, value) as unknown;
+    assert.equal(broker({name: "", topicPrefix: "x", friendlyName: "y"}, ""), true, `${file}: loaded without the setting`);
     assert.equal(broker({publishesThroughOutput: true}, ""), true, file);
+    assert.equal(definition.defaults.publishesThroughOutput!.value, false, `${file}: nothing relies on the default`);
     const added = newNode(definition);
     assert.deepEqual([added.name, added.publishesThroughOutput], ["", false], file);
     assert.equal(broker(added, ""), "choose a broker", file);

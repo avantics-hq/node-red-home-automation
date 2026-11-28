@@ -31,7 +31,11 @@ const registerZ2mLight: NodeInitializer = (RED) => {
     const trace = {area: "", component: "z2m-light"};
     node.status({fill: "grey", shape: "ring", text: light.group ? "group · waiting for its state" : "waiting for the device"});
 
-    const side = deviceSide(node, broker, z2mLightTopics(light).device, trace, (msg, send) => handle(msg, send));
+    // Exactly its own topics: a friendly name can contain "/", so <name>/#
+    // would take in other devices' too.
+    const topics = z2mLightTopics(light);
+    const side = deviceSide(node, broker, topics.device, [topics.device, topics.set, ...(light.group ? [] : [topics.availability])],
+      trace, (msg, send) => handle(msg, send));
 
     function handle(msg: InputMessage, send: Send) {
       const result = runReducer(node, trace, (saved: Partial<Z2mLightState> | undefined, now) => {

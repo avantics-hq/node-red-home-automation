@@ -2931,7 +2931,9 @@ test("device adapters with a broker: their device's topics from the broker, comm
   const shellySwitch = new switchRuntime.Constructor({id: "switch-broker", topicPrefix: "shellyplus1-test", channel: "0", mode: "detached", target: "hall", broker: "broker-adapters"});
   for (const node of [light, z2mCover, shellyCover, shellySwitch]) t.after(() => close(node));
   assert.deepEqual([light.errors, z2mCover.errors, shellyCover.errors, shellySwitch.errors], [[], [], [], []]);
-  assert.deepEqual([...broker.subscriptions.keys()].sort(), ["shellyplus1-test/#", "shellyplus2pm-test/#", "z2m/blind/#", "z2m/hall-main/#"]);
+  // A Shelly prefix is one device: all of it. A Zigbee2MQTT friendly name can contain "/": exactly its own topics.
+  assert.deepEqual([...broker.subscriptions.keys()].sort(), ["shellyplus1-test/#", "shellyplus2pm-test/#", "z2m/blind", "z2m/blind/availability",
+    "z2m/hall-main", "z2m/hall-main/availability", "z2m/hall-main/set"]);
   // The Shelly switch reads its device's configuration once connected, not before.
   switchRuntime.events.emit("flows:started");
   assert.equal(broker.published.length, 0);
@@ -2952,6 +2954,10 @@ test("device adapters with a broker: their device's topics from the broker, comm
   light.sent.length = 0;
   broker.deliver("z2m/hall-main", "{\"state\":\"OFF\",\"brightness\":64}");
   assert.deepEqual(port(light.sent, 1).map(({light: reading}) => (reading as {kind: string; on: boolean}).kind), ["observed"]);
+  // Another device named under it ("hall-main/spots") never reaches it.
+  const traced = traces(light).length;
+  broker.deliver("z2m/hall-main/spots", "{\"state\":\"ON\"}");
+  assert.equal(traces(light).length, traced);
   // An MQTT in still wired in: ignored, with a trace.
   assert.deepEqual(await receive(light, {topic: "z2m/hall-main", payload: {state: "ON"}}), []);
   assert.equal(traces(light).at(-1)?.reason, "has-broker");

@@ -29,7 +29,8 @@ const registerShellyCover: NodeInitializer = (RED) => {
     const trace = {area: "", component: "shelly-cover"};
     node.status({fill: "grey", shape: "ring", text: "waiting for the device"});
 
-    const side = deviceSide(node, broker, device.topicPrefix, trace, (msg, send) => handle(msg, send));
+    // Its prefix is one device: everything under it.
+    const side = deviceSide(node, broker, device.topicPrefix, [device.topicPrefix + "/#"], trace, (msg, send) => handle(msg, send));
 
     function handle(msg: InputMessage, send: Send) {
       const result = runReducer(node, trace, (saved: Partial<ShellyCoverState> | undefined, now) =>

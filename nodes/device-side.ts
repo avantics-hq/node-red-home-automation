@@ -43,8 +43,11 @@ function text(payload: unknown): string {
 export function deviceSide(
   node: Node,
   broker: BrokerNode | null,
-  // Every topic of its device lies under this prefix (or is it).
+  // Every topic of its device lies under this prefix (or is it): a message
+  // on its input there is one it now gets from the broker.
   prefix: string,
+  // What it subscribes to: its device's topics.
+  subscriptions: string[],
   trace: TraceMetadata,
   // The node's own input handling, for a device message from the broker.
   handle: (msg: InputMessage, send: Send) => void,
@@ -59,8 +62,9 @@ export function deviceSide(
     };
   }
   const link = brokerLink(broker, node.id, (error) => node.error(error));
-  // "#" matches the prefix itself too: the device's state topic.
-  link.subscribe(prefix + "/#", (message) => handle({topic: message.topic, payload: message.payload, retain: message.retain} as InputMessage, node.send.bind(node)));
+  for (const topic of subscriptions) {
+    link.subscribe(topic, (message) => handle({topic: message.topic, payload: message.payload, retain: message.retain} as InputMessage, node.send.bind(node)));
+  }
   if (onConnected) link.onConnected(onConnected);
   node.on("close", (removed: boolean, done: () => void) => link.close(removed, done));
   return {
