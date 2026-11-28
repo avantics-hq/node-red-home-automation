@@ -635,6 +635,13 @@ window.DOCS_SEARCH = [
  },
  {
   "title": "Connect a device",
+  "section": "Give each adapter a broker",
+  "description": "Each adapter has a Broker setting: Node-RED’s MQTT broker node. With one, it subscribes to its device’s topics",
+  "url": "guide-device-adapters.html#broker",
+  "text": "Each adapter has a Broker setting: Node-RED’s MQTT broker node. With one, it subscribes to its device’s topics (exactly <base>/<friendly name> and its /set and /availability for a Zigbee2MQTT device, as a friendly name can contain / ; <prefix>/# for a Shelly) and publishes on them itself, so the MQTT in and MQTT out nodes around it in the wiring below aren’t needed; still wired, they change nothing. Opening and saving a new adapter offers the first broker in your flows. An adapter saved before 6.2 keeps using its MQTT in and out nodes until you choose one."
+ },
+ {
+  "title": "Connect a device",
   "section": "Wire either adapter the same way",
   "description": "Both adapters have one input and two outputs. Output 1 goes to the device; output 2 goes to the cover controll",
   "url": "guide-device-adapters.html#shape",
@@ -1614,7 +1621,7 @@ window.DOCS_SEARCH = [
   "section": "Settings",
   "description": "Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label. ",
   "url": "node-shelly-cover.html#settings",
-  "text": "Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label. MQTT topic prefix topicPrefix · string Empty Required. The device’s topic prefix: its device ID unless a custom prefix is set on the device. It cannot contain + or # . Cover ID channel · number 0 0 , or 1 for a device’s second cover. On the device, MQTT must be on with Enable MQTT Control (the default), or it ignores the commands. RPC status notifications (also the default) report each change. Calibrate the cover on the device first."
+  "text": "Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label. Broker broker · mqtt-broker None Node-RED’s MQTT broker node. With one, the node subscribes to its device’s topics ( <prefix>/# ) and publishes on them itself: output 1 sends nothing, and the MQTT in and MQTT out nodes around it are no longer needed (still wired, a device message on its input is ignored, with a trace, so nothing is doubled). Its own commands come back through its subscription, as through an MQTT in node before, so it still tells them from someone else’s. Needed for a new node; opening and saving the node offers the first broker in your flows. A node saved before 6.2 keeps using its MQTT in and out nodes, and needs no broker until you choose one ( publishesThroughOutput , with no form row, true for it and cleared when a broker is chosen). MQTT topic prefix topicPrefix · string Empty Required. The device’s topic prefix: its device ID unless a custom prefix is set on the device. It cannot contain + or # . Cover ID channel · number 0 0 , or 1 for a device’s second cover. On the device, MQTT must be on with Enable MQTT Control (the default), or it ignores the commands. RPC status notifications (also the default) report each change. Calibrate the cover on the device first."
  },
  {
   "title": "Shelly cover",
@@ -1676,7 +1683,7 @@ window.DOCS_SEARCH = [
   "section": "Settings",
   "description": "Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label. ",
   "url": "node-z2m-cover.html#settings",
-  "text": "Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label. Base topic baseTopic · string zigbee2mqtt Zigbee2MQTT’s base topic, unless changed in its settings. It cannot contain + or # . Friendly name friendlyName · string Empty Required. The device’s friendly name in Zigbee2MQTT. It cannot contain + or # ."
+  "text": "Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label. Broker broker · mqtt-broker None Node-RED’s MQTT broker node. With one, the node subscribes to its device’s topics ( <base>/<friendly name> and its /availability (exactly these: a friendly name can contain / )) and publishes on them itself: output 1 sends nothing, and the MQTT in and MQTT out nodes around it are no longer needed (still wired, a device message on its input is ignored, with a trace, so nothing is doubled). Its own commands come back through its subscription, as through an MQTT in node before, so it still tells them from someone else’s. Needed for a new node; opening and saving the node offers the first broker in your flows. A node saved before 6.2 keeps using its MQTT in and out nodes, and needs no broker until you choose one ( publishesThroughOutput , with no form row, true for it and cleared when a broker is chosen). Base topic baseTopic · string zigbee2mqtt Zigbee2MQTT’s base topic, unless changed in its settings. It cannot contain + or # . Friendly name friendlyName · string Empty Required. The device’s friendly name in Zigbee2MQTT. It cannot contain + or # ."
  },
  {
   "title": "Zigbee2MQTT cover",
@@ -1736,9 +1743,9 @@ window.DOCS_SEARCH = [
  {
   "title": "Zigbee2MQTT light",
   "section": "Settings",
-  "description": "Editor settings and exact defaults Setting / property Default Meaning Name / name Empty The canvas label. Targ",
+  "description": "Editor settings and exact defaults Setting / property Default Meaning Name / name Empty The canvas label. Brok",
   "url": "node-z2m-light.html#settings",
-  "text": "Editor settings and exact defaults Setting / property Default Meaning Name / name Empty The canvas label. Target / target None: required The light’s id in the room controller’s Targets JSON. Base topic / baseTopic zigbee2mqtt Zigbee2MQTT’s base topic. It cannot contain + or # . Friendly name / friendlyName None: required The light’s or group’s name in Zigbee2MQTT. It cannot contain + or # . Zigbee2MQTT group / group Off On for a Zigbee2MQTT group of lights rather than one light."
+  "text": "Editor settings and exact defaults Setting / property Default Meaning Name / name Empty The canvas label. Broker / broker None Node-RED’s MQTT broker node. With one, the node subscribes to its device’s topics ( <base>/<friendly name> , its /set and its /availability (exactly these: a friendly name can contain / )) and publishes on them itself: output 1 sends nothing, and the MQTT in and MQTT out nodes around it are no longer needed (still wired, a device message on its input is ignored, with a trace, so nothing is doubled). Its own commands come back through its subscription, as through an MQTT in node before, so it still tells them from someone else’s. Needed for a new node; opening and saving the node offers the first broker in your flows. A node saved before 6.2 keeps using its MQTT in and out nodes, and needs no broker until you choose one ( publishesThroughOutput , with no form row, true for it and cleared when a broker is chosen). Target / target None: required The light’s id in the room controller’s Targets JSON. Base topic / baseTopic zigbee2mqtt Zigbee2MQTT’s base topic. It cannot contain + or # . Friendly name / friendlyName None: required The light’s or group’s name in Zigbee2MQTT. It cannot contain + or # . Zigbee2MQTT group / group Off On for a Zigbee2MQTT group of lights rather than one light."
  },
  {
   "title": "Zigbee2MQTT light",
@@ -1807,7 +1814,7 @@ window.DOCS_SEARCH = [
   "section": "Settings",
   "description": "Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label. ",
   "url": "node-shelly-switch.html#settings",
-  "text": "Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label. MQTT topic prefix topicPrefix · string Empty Required. The device’s topic prefix: its device ID unless a custom prefix is set on the device. It cannot contain + or # . Switch ID channel · number 0 0 , or the number of another switch on a device with more than one. Use one node per switch. Mode mode · enum auto auto (“As the device is set up”) reads the device’s configuration; detached or relay override it, and are needed when it can’t be read. Target target · string Empty Optional. The room’s id for the light the relay is, in the room controller’s Targets JSON, marked \"onOffOnly\": true . Set, the node is that light’s adapter in either mode. Empty, the relay isn’t a room light, as before. On the device, MQTT must be on with Enable MQTT Control and RPC status notifications (both the default)."
+  "text": "Editor settings and exact defaults Setting / property Default Meaning Name name · string Empty Display label. Broker broker · mqtt-broker None Node-RED’s MQTT broker node. With one, the node subscribes to its device’s topics ( <prefix>/# ) and publishes on them itself: output 1 sends nothing, and the MQTT in and MQTT out nodes around it are no longer needed (still wired, a device message on its input is ignored, with a trace, so nothing is doubled). Its own commands come back through its subscription, as through an MQTT in node before, so it still tells them from someone else’s. Needed for a new node; opening and saving the node offers the first broker in your flows. A node saved before 6.2 keeps using its MQTT in and out nodes, and needs no broker until you choose one ( publishesThroughOutput , with no form row, true for it and cleared when a broker is chosen). MQTT topic prefix topicPrefix · string Empty Required. The device’s topic prefix: its device ID unless a custom prefix is set on the device. It cannot contain + or # . Switch ID channel · number 0 0 , or the number of another switch on a device with more than one. Use one node per switch. Mode mode · enum auto auto (“As the device is set up”) reads the device’s configuration; detached or relay override it, and are needed when it can’t be read. Target target · string Empty Optional. The room’s id for the light the relay is, in the room controller’s Targets JSON, marked \"onOffOnly\": true . Set, the node is that light’s adapter in either mode. Empty, the relay isn’t a room light, as before. On the device, MQTT must be on with Enable MQTT Control and RPC status notifications (both the default)."
  },
  {
   "title": "Shelly switch",

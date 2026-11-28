@@ -2916,6 +2916,66 @@ test("with a broker, each connect runs a node's own startup, not just its announ
   assert.ok(broker.published.some(({topic, payload}) => topic === "home/test/lighting/availability" && payload === "online"));
 });
 
+test("device adapters with a broker: their device's topics from the broker, commands to it, output 1 quiet, echoes still their own", async (t) => {
+  type Envelope = Array<Array<Record<string, unknown>> | Record<string, unknown> | null>;
+  const port = (sent: unknown[], index: number) => sent.flatMap((envelope) => {
+    const out = (envelope as Envelope)[index];
+    return out === null || out === undefined ? [] : Array.isArray(out) ? out : [out];
+  });
+  const broker = fakeBroker();
+  builtNodes.set("broker-adapters", broker);
+  const light = new (runtime(registerZ2mLight).Constructor)({id: "light-broker", target: "main", baseTopic: "z2m", friendlyName: "hall-main", broker: "broker-adapters"});
+  const z2mCover = new (runtime(registerZ2mCover).Constructor)({id: "z2mcover-broker", baseTopic: "z2m", friendlyName: "blind", broker: "broker-adapters"});
+  const shellyCover = new (runtime(registerShellyCover).Constructor)({id: "shellycover-broker", topicPrefix: "shellyplus2pm-test", channel: "0", broker: "broker-adapters"});
+  const switchRuntime = runtime(registerShellySwitch);
+  const shellySwitch = new switchRuntime.Constructor({id: "switch-broker", topicPrefix: "shellyplus1-test", channel: "0", mode: "detached", target: "hall", broker: "broker-adapters"});
+  for (const node of [light, z2mCover, shellyCover, shellySwitch]) t.after(() => close(node));
+  assert.deepEqual([light.errors, z2mCover.errors, shellyCover.errors, shellySwitch.errors], [[], [], [], []]);
+  // A Shelly prefix is one device: all of it. A Zigbee2MQTT friendly name can contain "/": exactly its own topics.
+  assert.deepEqual([...broker.subscriptions.keys()].sort(), ["shellyplus1-test/#", "shellyplus2pm-test/#", "z2m/blind", "z2m/blind/availability",
+    "z2m/hall-main", "z2m/hall-main/availability", "z2m/hall-main/set"]);
+  // The Shelly switch reads its device's configuration once connected, not before.
+  switchRuntime.events.emit("flows:started");
+  assert.equal(broker.published.length, 0);
+  broker.connect();
+  assert.deepEqual(broker.published.map(({topic}) => topic), ["shellyplus1-test/rpc", "shellyplus1-test/command"]);
+  broker.published.length = 0;
+
+  // The room's command: published on the light's /set, nothing on output 1.
+  const sent = await receive<Envelope>(light, {light: {kind: "command", target: "main", state: "ON", brightnessPct: 25, transitionSeconds: 1, source: "wall", id: "1"}});
+  assert.deepEqual(port(sent, 0), []);
+  assert.deepEqual(broker.published, [{topic: "z2m/hall-main/set", payload: "{\"state\":\"ON\",\"brightness\":64,\"transition\":1}", retain: false}]);
+  // Its own command back through its subscription is its own; someone else's is external; the report is a reading.
+  light.sent.length = 0;
+  broker.deliver("z2m/hall-main/set", "{\"state\":\"ON\",\"brightness\":64,\"transition\":1}");
+  assert.deepEqual(port(light.sent, 1), [], "its own echo");
+  broker.deliver("z2m/hall-main/set", "{\"state\":\"OFF\"}");
+  assert.deepEqual(port(light.sent, 1).map(({light: reading}) => (reading as {kind: string}).kind), ["external"]);
+  light.sent.length = 0;
+  broker.deliver("z2m/hall-main", "{\"state\":\"OFF\",\"brightness\":64}");
+  assert.deepEqual(port(light.sent, 1).map(({light: reading}) => (reading as {kind: string; on: boolean}).kind), ["observed"]);
+  // Another device named under it ("hall-main/spots") never reaches it.
+  const traced = traces(light).length;
+  broker.deliver("z2m/hall-main/spots", "{\"state\":\"ON\"}");
+  assert.equal(traces(light).length, traced);
+  // An MQTT in still wired in: ignored, with a trace.
+  assert.deepEqual(await receive(light, {topic: "z2m/hall-main", payload: {state: "ON"}}), []);
+  assert.equal(traces(light).at(-1)?.reason, "has-broker");
+
+  // The covers: their device's reports from the broker become readings.
+  z2mCover.sent.length = 0;
+  broker.deliver("z2m/blind", "{\"position\":40,\"state\":\"STOP\"}");
+  assert.ok(port(z2mCover.sent, 1).length > 0, "a zigbee2mqtt cover reading");
+  shellyCover.sent.length = 0;
+  broker.deliver("shellyplus2pm-test/status/cover:0", "{\"id\":0,\"state\":\"stopped\",\"current_pos\":30,\"pos_control\":true}");
+  assert.deepEqual(port(shellyCover.sent, 1).map(({cover}) => [(cover as {position: number}).position]), [[30]]);
+  // A cover command: to the broker.
+  broker.published.length = 0;
+  const observe = await receive<Envelope>(shellyCover, {cover_command: {operation: "observe", requestId: "r", generation: 1, attempt: 1}});
+  assert.deepEqual(port(observe, 0), []);
+  assert.deepEqual(broker.published, [{topic: "shellyplus2pm-test/command/cover:0", payload: "status_update", retain: false}]);
+});
+
 test("activity lighting takes a light's reading as the room passes it on", async (t) => {
   const node = new (runtime(registerActivityLighting).Constructor)({area: "lounge", owner: "activity",
     profiles: JSON.stringify({off: {targets: [], values: {}}, tv: {targets: ["wall"], values: {brightnessPct: 25}}}), confirmationTimeoutMs: 15000, maxAttempts: 2});

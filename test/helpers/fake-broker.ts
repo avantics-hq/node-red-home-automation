@@ -7,6 +7,17 @@
 
 type Callback = (topic: string, payload: Buffer, packet: {retain?: boolean}) => void;
 
+function matches(filter: string, topic: string): boolean {
+  const want = filter.split("/");
+  const got = topic.split("/");
+  for (let index = 0; index < want.length; index += 1) {
+    if (want[index] === "#") return true;
+    if (index >= got.length) return false;
+    if (want[index] !== "+" && want[index] !== got[index]) return false;
+  }
+  return want.length === got.length;
+}
+
 export function fakeBroker() {
   const users = new Map<string, {id: string; status(status: {text?: string}): void}>();
   const subscriptions = new Map<string, Map<string, Callback>>();
@@ -46,8 +57,13 @@ export function fakeBroker() {
       broker.connected = false;
       for (const user of users.values()) user.status({text: "node-red:common.status.disconnected"});
     },
+    // To every subscription whose filter matches, wildcards included: "+" one
+    // level, a trailing "#" any number, and the parent itself.
     deliver(topic: string, payload: string, retain = false) {
-      for (const callback of subscriptions.get(topic)?.values() ?? []) callback(topic, Buffer.from(payload), {retain});
+      for (const [filter, callbacks] of subscriptions) {
+        if (!matches(filter, topic)) continue;
+        for (const callback of callbacks.values()) callback(topic, Buffer.from(payload), {retain});
+      }
     }
   };
   return broker;

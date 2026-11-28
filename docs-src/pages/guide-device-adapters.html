@@ -15,6 +15,9 @@
 </ul>
 <p>Both adapters report <strong>0 = closed</strong> and <strong>100 = open</strong>. If your device runs the other way, set <strong>Invert positions</strong> on the controller.</p>
 </section>
+<section id="broker"><h2>Give each adapter a broker</h2>
+<p>Each adapter has a <strong>Broker</strong> setting: Node-RED’s MQTT broker node. With one, it subscribes to its device’s topics (exactly <code>&lt;base&gt;/&lt;friendly name&gt;</code> and its <code>/set</code> and <code>/availability</code> for a Zigbee2MQTT device, as a friendly name can contain <code>/</code>; <code>&lt;prefix&gt;/#</code> for a Shelly) and publishes on them itself, so the MQTT in and MQTT out nodes around it in the wiring below aren’t needed; still wired, they change nothing. Opening and saving a new adapter offers the first broker in your flows. An adapter saved before 6.2 keeps using its MQTT in and out nodes until you choose one.</p>
+</section>
 <section id="shape"><h2>Wire either adapter the same way</h2>
 <p>Both adapters have one input and two outputs. Output 1 goes to the device; output 2 goes to the cover controller.</p>
 <figure class="diagram"><div class="wiring-flow"><div class="flow-node">MQTT in<small>The device’s topics</small></div><span class="arrow" aria-hidden="true">→</span><div class="flow-node">Adapter<small>Device messages ↔ neutral messages</small></div><span class="arrow controller-arrow" aria-hidden="true">⇄</span><div class="flow-node owner controller">Cover controller<small>Requests and confirmation</small></div><div class="return">Adapter output 1 → MQTT out → device</div><div class="flow-node broker-out" style="grid-column:1 / -1">MQTT out<small>Same broker · leave its topic empty</small></div></div><figcaption>Reports: MQTT in → adapter → controller. Commands: controller output 1 → adapter → MQTT out.</figcaption></figure>
