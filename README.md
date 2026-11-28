@@ -338,7 +338,7 @@ the checksum file to check those. Install a downloaded tarball through
 **Manage palette → Install → Upload module**, or with:
 
 ```sh
-npm install /path/to/avantics-node-red-home-automation-6.1.0.tgz
+npm install /path/to/avantics-node-red-home-automation-6.2.0.tgz
 ```
 
 Add the installed nodes from the **home automation** section of the Node-RED palette, then configure the room, device hosts, MQTT topics, source mappings, and timing limits for your deployment.
@@ -352,6 +352,61 @@ announces itself again every time the broker connects. A node's edit dialog
 offers the first broker in your flows. Nodes saved before 6.2 keep working
 through their MQTT in and out nodes until you choose one; the example flows
 use one broker node, "your MQTT broker", whose host you set.
+
+### 6.2.0
+
+Nothing to migrate from 6.1.0: flows wired the 6.1.0 way keep working. Two
+things are worth doing when you're ready.
+
+**Choose a Broker, and delete the MQTT plumbing around your nodes.** Every
+node that publishes, and every device adapter, has a new **Broker** setting:
+Node-RED's own MQTT broker node. With one, the node talks MQTT itself:
+
+- publishing nodes publish their state and Home Assistant discovery, and read
+  their set topics, themselves;
+- device adapters (zigbee2mqtt light and cover, Shelly cover and switch)
+  subscribe to their device's topics and send its commands themselves, and read
+  the device each time the broker connects;
+- each time the broker connects, and each time Home Assistant restarts, a node
+  runs its startup and announces everything again, so entities come back by
+  themselves.
+
+The MQTT out, the MQTT in for set or device topics, and the Status node around
+that node can then be deleted. A node keeps working through its old wiring
+until you choose a broker: an output it no longer needs goes quiet, and a
+message it now gets from the broker itself is ignored, with a trace. Opening
+and saving a node offers the first broker in your flows. The examples show the
+new wiring.
+
+**One Publish setting.** "Publish state over MQTT" and "Home Assistant
+discovery" become one choice, **Publish**: Don't publish, MQTT state, or MQTT
+state and Home Assistant discovery. Saved nodes read their old settings
+exactly as before.
+
+Also new in 6.2.0:
+
+- **A scene node** (`home-scene`): one per scene, such as Bath or Exercise mode.
+  While on, it holds some rooms' lights on or off and pauses motion lighting.
+  When it ends, by request, by its safety timer (4 hours by default) or by a
+  message your flow sends, each room gives its lights back what they were.
+  Scenes stack, a person's change during a scene stands, and Home Assistant
+  gets a switch for each. Lights are named by their room's Area and id.
+- **A Shelly relay as a room light.** Give a Shelly switch node a Target and it
+  becomes that light's adapter, in detached or relay mode.
+
+Fixed:
+
+- Motion lighting acts on a vacancy that came while it was paused or switched
+  off, so lights in an empty room go off when a scene or activity ends (#193).
+- A cover acts only on its own set topics; wired to a wildcard, its own or
+  another cover's published state no longer moves it (#198).
+- The theatre state contract publishes a retained topic only when it changes,
+  instead of every topic on each target refresh (#206).
+- A theatre target's confirmation time is measured once per transition (#208),
+  and an untimed transition no longer counts as 0 ms in the latency objective
+  (#210).
+- The release checksum file names the tarball alone, so `sha256sum -c` works
+  next to a download (#178).
 
 ### 6.1.0
 
