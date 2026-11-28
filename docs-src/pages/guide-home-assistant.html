@@ -25,7 +25,7 @@
 <tr><td>occupancy fusion (<code>home-occupancy-fusion</code>)</td><td>Output 2. Output 1 still feeds the motion policy.</td><td>None: the occupancy sensor is read-only.</td></tr>
 <tr><td>motion policy (<code>home-motion-lighting-policy</code>)</td><td>Output 2. Output 1 carries lighting intents.</td><td><code>home/&lt;area&gt;/motion/+/set</code></td></tr>
 <tr><td>AVR controller (<code>home-avr-controller</code>)</td><td>Output 3, apart from receiver commands (1) and state and results (2).</td><td><code>home/&lt;area&gt;/receiver/volume/set</code></td></tr>
-<tr><td>cover controller (<code>home-cover-controller</code>)</td><td>Output 4.</td><td><code>home/&lt;area&gt;/cover/&lt;name&gt;/+</code> and, for a position cover, <code>…/position/set</code></td></tr>
+<tr><td>cover controller (<code>home-cover-controller</code>)</td><td>Output 4.</td><td><code>home/&lt;area&gt;/cover/&lt;name&gt;/set</code> and, for a position cover, <code>…/position/set</code></td></tr>
 <tr><td>house schedule MQTT (<code>home-house-schedule-mqtt</code>)</td><td>Output 1, its only output.</td><td><code>home/&lt;name&gt;/schedule/wake-time/set</code> and <code>…/bed-time/set</code></td></tr>
 </tbody></table></div>
 <p>The room lighting controller’s first output carries only its publications; its light commands leave through each light’s adapter. Flows that filter the first output by topic must pass the <code>/control</code> topics through. A light’s control sensor shows its availability as an attribute once its adapter reports it.</p>
