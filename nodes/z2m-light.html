@@ -108,7 +108,8 @@
   <p>Switch on the group's <b>retain</b> in Zigbee2MQTT: <code>retain: true</code> under the group in Zigbee2MQTT's
     <code>configuration.yaml</code> (it is off by default). Zigbee2MQTT doesn't retain a group's state by default, so after a restart the
     room has no reading for the group until it changes, and an activity that holds it waits on it. With retain, the broker
-    gives this node the group's last state as soon as its MQTT in node subscribes.</p>
+    gives this node the group's last state as soon as it (or its MQTT in node) subscribes. A group that has had no state 30 seconds
+    after it started shows <i>group · no state yet: set retain: true for it in Zigbee2MQTT</i> on its status.</p>
   <h3>Settings</h3>
   <dl class="message-properties">
     <dt>Target</dt><dd>The light's id in the room controller's Targets JSON.</dd>

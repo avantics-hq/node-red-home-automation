@@ -307,6 +307,9 @@ export function transitionTheatre(
         state.degraded.push({target, reason: "stale"});
       } else if (targetState.status !== "ready") {
         state.degraded.push({target, reason: targetState.failure?.reason || targetState.status});
+      } else if (Array.isArray(targetState.details?.unobserved) && targetState.details.unobserved.length) {
+        // Ready without lights that never reported (activity lighting).
+        state.degraded.push({target, reason: "unobserved"});
       }
     }
 

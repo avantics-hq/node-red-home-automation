@@ -61,7 +61,7 @@
 <p><code>zigbee2mqtt/&lt;device&gt;/availability</code> becomes <code>{kind: "availability", target, online}</code> on output 2. The room shows it on the light’s control sensor and in its status, and changes nothing because of it. It needs Zigbee2MQTT’s <strong>availability</strong> setting on.</p>
 </section>
 <section id="status"><h2>Status</h2>
-<ul class="rule-list"><li><strong>waiting for the device</strong> (or <strong>group · waiting for its state</strong>), grey ring, until the first report.</li><li><strong>on · 25% 2500K</strong> (green) or <strong>off</strong> (grey) after a report.</li><li><strong>offline</strong> (grey ring) after an availability message saying so.</li></ul>
+<ul class="rule-list"><li><strong>waiting for the device</strong> (or <strong>group · waiting for its state</strong>), grey ring, until the first report.</li><li><strong>group · no state yet: set retain: true for it in Zigbee2MQTT</strong> (yellow ring): a group that has had no state 30 seconds after it started. A group can’t be asked for its state, so without Zigbee2MQTT retaining it there is none until it changes, and an activity holding it reports it <code>unobserved</code>.</li><li><strong>on · 25% 2500K</strong> (green) or <strong>off</strong> (grey) after a report.</li><li><strong>offline</strong> (grey ring) after an availability message saying so.</li></ul>
 </section>
 <p class="caption">Sources: nodes/z2m-light.html, nodes/z2m-light.ts, lib/z2m-light-adapter.ts, lib/light-contract.ts.</p>
 <nav class="pager" aria-label="Adjacent pages"><a href="node-z2m-cover.html"><small>Previous</small>← Zigbee2MQTT cover</a><a href="node-shelly-switch.html"><small>Continue</small>Shelly switch →</a></nav>

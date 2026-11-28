@@ -135,12 +135,47 @@ test("unavailable or unconfirmed room lighting becomes bounded optional failure 
   assert.equal(result.state.phase, "failed");
   assert.equal(result.state.failure?.reason, "lighting-unavailable");
 
+  // A light that reports but never shows the profile: re-applied, then failed.
   result = intent(result.state, "tv", 2, 2);
+  for (const target of ["wall", "lamp"]) {
+    result = apply(result.state, {kind: "observed", generation: 2, target, on: true, fields: ["brightness"], showsLast: false,
+      observedAt: at(3).toISOString()}, 3);
+  }
   result = apply(result.state, {kind: "tick", generation: 2}, 7);
   assert.equal(result.commands[0]?.attempt, 2);
   result = apply(result.state, {kind: "tick", generation: 2}, 12);
   assert.equal(result.state.phase, "failed");
   assert.equal(result.state.failure?.reason, "confirmation-timeout");
+});
+
+test("a light with no reading at all by the deadline is unobserved: the profile is ready without it, and the theatre is told", () => {
+  // The lamp (a Zigbee2MQTT group with no retained state, say) never reports.
+  let result = intent(undefined, "tv", 1, 0);
+  result = apply(result.state, {kind: "observed", generation: 1, target: "wall", on: true, fields: ["brightness"], showsLast: true,
+    observedAt: at(1).toISOString()}, 1);
+  assert.notEqual(result.state.phase, "ready", "waiting for the lamp");
+  result = apply(result.state, {kind: "tick", generation: 1}, 5);
+  assert.equal(result.state.phase, "ready");
+  assert.deepEqual(result.state.unobserved, ["lamp"]);
+  assert.deepEqual(result.commands, [], "not re-applied");
+  const report = result.events.at(-1)!.theatre as {status: string; details: {unobserved?: string[]}};
+  assert.deepEqual([report.status, report.details.unobserved], ["ready", ["lamp"]]);
+  assert.match(result.status.text, /1 unobserved/);
+  // Its first reading clears it, and is judged as any other.
+  result = apply(result.state, {kind: "observed", generation: 1, target: "lamp", on: true, fields: ["brightness"], showsLast: true,
+    observedAt: at(30).toISOString()}, 30);
+  assert.deepEqual([result.state.phase, result.state.unobserved], ["ready", []]);
+  assert.equal((result.events.at(-1)!.theatre as {details: {unobserved?: string[]}}).details.unobserved, undefined);
+
+  // A refresh that finds no reading arms the same deadline (before, it confirmed forever).
+  // (Its readings are learned again from the refresh on.)
+  result = apply(result.state, {kind: "startup"}, 40);
+  result = apply(result.state, {kind: "refresh", requestId: "tv-1", generation: 1, profile: "tv"}, 41);
+  assert.ok(result.state.pending, "the refresh's observe has a deadline");
+  result = apply(result.state, {kind: "observed", generation: 1, target: "wall", on: true, fields: ["brightness"], showsLast: true,
+    observedAt: at(42).toISOString()}, 42);
+  for (let seconds = 43; seconds <= 60; seconds += 1) result = apply(result.state, {kind: "tick", generation: 1}, seconds);
+  assert.deepEqual([result.state.phase, result.state.unobserved], ["ready", ["lamp"]]);
 });
 
 test("restart observes restored lighting intent without reapplying a profile", () => {
@@ -257,16 +292,15 @@ test("a restart's observe has a deadline and ends as a live request would", () =
   assert.equal(result.state.phase, "confirming");
   assert.ok(result.state.pending, "the startup observe has a deadline");
 
-  // No light answers: at the deadline the profile is applied again, and
-  // after the last attempt the request fails instead of confirming forever.
+  // No light answers: at the deadline they are unobserved rather than
+  // confirming forever, and nothing is applied to lights it can't see.
   const operations: string[] = [];
   for (let seconds = 11; seconds <= 40; seconds += 1) {
     result = apply(result.state, {kind: "tick", generation: 1}, seconds);
     operations.push(...result.commands.map((command) => String(command.operation)));
   }
-  assert.ok(operations.includes("apply"));
-  assert.equal(result.state.phase, "failed");
-  assert.equal(result.state.failure?.reason, "confirmation-timeout");
+  assert.deepEqual(operations, []);
+  assert.deepEqual([result.state.phase, result.state.unobserved], ["ready", ["wall", "lamp"]]);
 });
 
 test("a node with nothing saved adopts a refresh's wanted profile and observes, sending no apply when the lights match", () => {

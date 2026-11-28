@@ -2,7 +2,7 @@
 
 import type {Node, NodeDef, NodeInitializer} from "node-red";
 import {normaliseZ2mLightConfig, transitionZ2mLight, z2mLightTopics, type Z2mLightConfig, type Z2mLightState} from "../lib/z2m-light-adapter";
-import {invalidConfig, onInput, runReducer, type InputMessage, type Send} from "./adapter";
+import {guarded, invalidConfig, onInput, runReducer, type InputMessage, type Send} from "./adapter";
 import {deviceBroker, deviceSide} from "./device-side";
 import type {BrokerNode} from "./mqtt-broker-link";
 
@@ -14,6 +14,10 @@ interface Z2mLightNodeConfig extends NodeDef {
   // Node-RED's mqtt-broker node, to subscribe and publish itself.
   broker?: string;
 }
+
+// How long a group waits for its state before its status says why it may
+// have none.
+const GROUP_HINT_MS = 30_000;
 
 const registerZ2mLight: NodeInitializer = (RED) => {
   function HomeZ2mLight(this: Node, config: Z2mLightNodeConfig) {
@@ -30,6 +34,17 @@ const registerZ2mLight: NodeInitializer = (RED) => {
     }
     const trace = {area: "", component: "z2m-light"};
     node.status({fill: "grey", shape: "ring", text: light.group ? "group · waiting for its state" : "waiting for the device"});
+    // A group can't be asked for its state, so after a restart it has none
+    // until it changes, unless Zigbee2MQTT retains it: say so if nothing
+    // has come by then.
+    let reported = false;
+    const hint = light.group ? setTimeout(guarded(node, () => {
+      if (!reported) node.status({fill: "yellow", shape: "ring", text: "group · no state yet: set retain: true for it in Zigbee2MQTT"});
+    }), GROUP_HINT_MS) : undefined;
+    node.on("close", (_removed: boolean, done: () => void) => {
+      clearTimeout(hint);
+      done();
+    });
 
     // With a broker, it reads its device on each connect, reconnects
     // included, through its own observe: after a restart nothing reported it
@@ -58,6 +73,7 @@ const registerZ2mLight: NodeInitializer = (RED) => {
         result.readings.length ? result.readings.map((reading) => ({payload: undefined, light: reading})) : null
       ];
       if (outputs.some((output) => output !== null)) send(outputs);
+      if (result.readings.some((reading) => reading.kind === "observed")) reported = true;
       const state = result.state;
       if (state.online === false) {
         node.status({fill: "grey", shape: "ring", text: "offline"});
