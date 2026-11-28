@@ -139,6 +139,7 @@ const registerMotionPolicy: NodeInitializer = (RED) => {
       stopping: () => motionStoppingOutputs(publishing),
       output: 1,
       outputs: 2,
+      startupMessage: {source: "startup"},
       statusTopic: publishing.discovery ? publishing.discoveryPrefix + "/status" : null,
       setTopics: publishesState(publishing) ? [motionEnabledTopic(publishing.area, "set"), motionDelayTopic(publishing.area, "set")] : []
     }, trace, (msg, send) => handle(msg, send));

@@ -17,7 +17,7 @@ import {
 import {ID_SCHEMES, discoveryPrefixSetting} from "../lib/ha-discovery";
 import {optionalBooleanSetting, optionalChoiceSetting, textSetting} from "../lib/settings";
 import {publishingArea} from "../lib/topic-names";
-import {invalidConfig, onInput, optionalArea, runReducer} from "./adapter";
+import {invalidConfig, onInput, optionalArea, runReducer, type InputMessage, type Send} from "./adapter";
 import {publishesState} from "../lib/publishing-node";
 import {brokerSetting, publishingSide} from "./publishing-side";
 import type {BrokerNode} from "./mqtt-broker-link";
@@ -100,13 +100,12 @@ const registerOccupancyFusion: NodeInitializer = (RED) => {
       stopping: () => occupancyStoppingOutputs(publishing),
       output: 1,
       outputs: 2,
+      startupMessage: {source: "startup"},
       statusTopic: publishing.discovery ? publishing.discoveryPrefix + "/status" : null,
       setTopics: []
-    }, trace, () => {});
+    }, trace, (msg, send) => handle(msg, send));
 
-    onInput(node, (msg, send) => {
-      // With a broker, a Status node still wired in changes nothing.
-      if (lifecycle.fromBroker(msg)) return;
+    function handle(msg: InputMessage, send: Send) {
       if (msg.source === "startup") {
         lifecycle.startup(send, occupancyStartingOutputs(publishing, occupied()));
         return;
@@ -122,6 +121,10 @@ const registerOccupancyFusion: NodeInitializer = (RED) => {
         lifecycle.publish(send, occupancyStateOutputs(publishing, output.payload.occupied));
       }
       updateStatus(result.status);
+    }
+    onInput(node, (msg, send) => {
+      // With a broker, a Status node still wired in changes nothing.
+      if (!lifecycle.fromBroker(msg)) handle(msg, send);
     }, lifecycle.startupOption({source: "startup"}));
 
   }

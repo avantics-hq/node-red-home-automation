@@ -93,6 +93,7 @@ const registerTheatreStateContract: NodeInitializer = (RED) => {
       stopping: () => theatreStoppingPublications(controllerConfig),
       output: 1,
       outputs: 2,
+      startupMessage: {theatreStateContract: {kind: "startup"}},
       statusTopic: controllerConfig.discovery ? controllerConfig.discoveryPrefix + "/status" : null,
       setTopics: [theatreTopic(controllerConfig.baseTopic, "request")]
     }, trace, (msg, send) => handle(msg, send));

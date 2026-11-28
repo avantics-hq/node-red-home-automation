@@ -315,7 +315,8 @@
     <dt>Broker</dt><dd>Node-RED's MQTT broker node. With one, the room publishes itself: each time the broker connects,
       reconnects included, and each time Home Assistant comes back (<code>online</code> on
       <code>&lt;prefix&gt;/status</code>), it clears what it no longer publishes and announces its entities,
-      availability and every light's control state, so they come back by themselves. <code>offline</code> as it stops;
+      availability and every light's control state, so they come back by themselves. Each connect also runs its
+      startup, as a Status node's "connected" did without a broker: each light is asked for a reading. <code>offline</code> as it stops;
       deleted, everything it published is cleared. An MQTT out on output 1 and a Status node are then no longer needed:
       output 1 sends nothing, and a Status node still wired in is ignored. Needed for a new room unless Publish is <i>Don't publish</i>;
       opening and saving the room offers the first broker in your flows. A room saved before 6.2 that publishes keeps

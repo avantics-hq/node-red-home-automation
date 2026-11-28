@@ -81,6 +81,7 @@ const registerHouseScheduleMqtt: NodeInitializer = (RED) => {
       stopping: () => houseStoppingOutputs(publishing),
       output: 0,
       outputs: 1,
+      startupMessage: {lighting: {kind: "startup"}},
       statusTopic: publishing.discovery ? publishing.discoveryPrefix + "/status" : null,
       setTopics: [houseCommandTopic(publishing.area, "wake-time"), houseCommandTopic(publishing.area, "bed-time")]
     }, trace, (msg, send) => handle(msg, send));
