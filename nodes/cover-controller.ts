@@ -3,7 +3,9 @@
 import type {Node, NodeDef, NodeInitializer} from "node-red";
 import {COVER_TYPES, openCloseCover, positionCover, type CoverModel} from "../lib/cover-models";
 import {
+  coverCommandTopic,
   coverInbound,
+  coverSetPositionTopic,
   coverRetainedTopics,
   coverStartingOutputs,
   coverStateOutputs,
@@ -17,7 +19,9 @@ import {optionalBooleanSetting, optionalChoiceSetting, textSetting} from "../lib
 import {targetStateEvent} from "../lib/target-state";
 import {REQUEST_ID, areaId, publishingArea} from "../lib/topic-names";
 import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type InputMessage, type Send} from "./adapter";
-import {publishingLifecycle} from "./publishing-lifecycle";
+import {brokerSetting, publishingSide} from "./publishing-side";
+import type {BrokerNode} from "./mqtt-broker-link";
+import {publishingChoice} from "../lib/home-assistant-setting";
 
 interface CoverControllerConfig extends NodeDef {
   area?: string;
@@ -32,6 +36,11 @@ interface CoverControllerConfig extends NodeDef {
   pollMs?: number | string;
   settleMs?: number | string;
   topicName?: string;
+  // Publish: off, state or discovery; not set: from publishState and
+  // discovery, which it replaced.
+  homeAssistant?: string | null;
+  // Node-RED's mqtt-broker node, to publish and read its set topics itself.
+  broker?: string;
   publishState?: boolean | string | null;
   discovery?: boolean | string | null;
   discoveryPrefix?: string;
@@ -59,6 +68,7 @@ const registerCoverController: NodeInitializer = (RED) => {
     let presets: CoverPresets;
     let area: string;
     let publishing: CoverPublishingConfig;
+    let broker: BrokerNode | null;
     try {
       area = optionalArea(config);
       // Not set: a position cover, as every cover node was before the type.
@@ -67,16 +77,16 @@ const registerCoverController: NodeInitializer = (RED) => {
       presets = coverPresets(config.presets);
       // Off unless switched on, as the cover published nothing before; not
       // set names its entity after the node.
-      const publishState = optionalBooleanSetting(config.publishState, "publish state") ?? false;
-      const discovery = optionalBooleanSetting(config.discovery, "Home Assistant discovery") ?? false;
-      if (publishState || discovery) publishingArea(area, true);
+      const publish = publishingChoice(config, {publishState: false, discovery: false});
+      if (publish.needsArea) publishingArea(area, true);
+      broker = brokerSetting(RED, config.broker, publish.publishState);
       publishing = {
         area,
         // No default: two covers in a room must not share topics.
-        name: publishState || discovery ? coverTopicName(config.topicName) : "",
+        name: publish.needsArea ? coverTopicName(config.topicName) : "",
         positions: model.positions,
-        publishState,
-        discovery,
+        publishState: publish.publishState,
+        discovery: publish.discovery,
         discoveryPrefix: discoveryPrefixSetting(config.discoveryPrefix),
         nodeId: node.id,
         idScheme: optionalChoiceSetting(config.idScheme, "ID scheme", ID_SCHEMES) ?? "node"
@@ -104,14 +114,18 @@ const registerCoverController: NodeInitializer = (RED) => {
     // MQTT publications on output 4, apart from the cover's own outputs:
     // available and clear of what it no longer publishes as soon as it runs,
     // offline as it stops, nothing left behind when deleted.
-    const lifecycle = publishingLifecycle(RED, node, {
+    const lifecycle = publishingSide(RED, node, broker, {
       retainedTopics: () => coverRetainedTopics(publishing),
       possible: {owner: publishing, topics: () => publishesState(publishing) ? coverRetainedTopics({...publishing, discovery: true}) : []},
       starting: () => coverStartingOutputs(publishing, model.view(saved())),
       stopping: () => coverStoppingOutputs(publishing),
       output: 3,
-      outputs: 4
-    });
+      outputs: 4,
+      statusTopic: publishing.discovery ? publishing.discoveryPrefix + "/status" : null,
+      setTopics: publishesState(publishing)
+        ? [coverCommandTopic(publishing), ...(publishing.positions ? [coverSetPositionTopic(publishing)] : [])]
+        : []
+    }, trace, (msg, send) => handle(msg, send));
 
     function process(event: unknown, send: Send) {
       const wasMoving = model.moving(saved());
@@ -149,7 +163,7 @@ const registerCoverController: NodeInitializer = (RED) => {
       }), 0);
     }
 
-    onInput(node, (msg, send) => {
+    function handle(msg: InputMessage, send: Send) {
       const cover = objectField<Record<string, unknown>>(msg, "cover");
       if (cover) {
         if (cover.kind === "startup") lifecycle.startup(send, coverStartingOutputs(publishing, model.view(saved())));
@@ -164,7 +178,12 @@ const registerCoverController: NodeInitializer = (RED) => {
         return;
       }
       handleRequest(inbound ? {payload: inbound.request, source: "home-assistant"} as InputMessage : msg, send);
-    }, {message: {cover: {kind: "startup"}}, trace: trace});
+    }
+    onInput(node, (msg, send) => {
+      // With a broker, its set topics come from the broker: an MQTT in or a
+      // Status node still wired in changes nothing.
+      if (!lifecycle.fromBroker(msg)) handle(msg, send);
+    }, lifecycle.startupOption({cover: {kind: "startup"}}));
 
     function handleRequest(msg: InputMessage, send: Send) {
       requests += 1;

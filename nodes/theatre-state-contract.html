@@ -3,6 +3,23 @@
     // A setting is on unless it was explicitly switched off; null ("not set")
     // shows as ticked.
     function on(value) { return value !== false && value !== "false"; }
+    // Its Publish choice: it always publishes its state, so state or
+    // discovery, from the open dialog or its saved settings; a contract saved
+    // before the choice reads its old discovery setting (not set: on).
+    function publishChoice(node) {
+      var select = $("#node-input-homeAssistant");
+      if (select.length) return select.val();
+      if (node.homeAssistant === "state" || node.homeAssistant === "discovery") return node.homeAssistant;
+      return on(node.discovery) ? "discovery" : "state";
+    }
+    // Whether it publishes through its output, as before 6.2: a node saved
+    // before the Publish choice that published, or one opened and saved since
+    // without a broker (publishesThroughOutput). It needs no broker until one
+    // is chosen; from saved values only, not the open dialog.
+    function throughOutput(node) {
+      if (node.publishesThroughOutput === true) return true;
+      return node.homeAssistant === null || node.homeAssistant === undefined;
+    }
     RED.nodes.registerType("home-theatre-state-contract", {
       category: "home automation",
       color: "#d9c7f1",
@@ -14,8 +31,8 @@
         // discovery of a contract saved before node IDs; when set, it needs a
         // letter or digit, from which topics and IDs are made.
         area: {value: "", validate: function (v) {
-          var dialog = $("#node-input-discovery").length > 0;
-          var discovery = dialog ? $("#node-input-discovery").prop("checked") : on(this.discovery);
+          var dialog = $("#node-input-homeAssistant").length > 0;
+          var discovery = publishChoice(this) === "discovery";
           var baseTopic = dialog ? $("#node-input-baseTopic").val() : this.baseTopic;
           var area = String(v || "").trim();
           // Needed for the default base topic, and for the entities of a
@@ -27,6 +44,20 @@
         // this setting, which keeps publishing discovery. New nodes start with
         // it off (onadd).
         discovery: {value: null},
+        // true for a node that publishes through its output, as before 6.2, and
+        // was opened and saved without a broker: it stays valid until a broker is
+        // chosen. No form row.
+        publishesThroughOutput: {value: false},
+        // Publish: state or discovery. null means "not set": a contract saved
+        // before this setting, read from discovery above, kept with no row.
+        homeAssistant: {value: null},
+        // Node-RED's MQTT broker node, through which it publishes and reads its
+        // requests itself. It always publishes, so it needs one. The editor offers
+        // the first broker when the dialog is opened and saved, not when the
+        // node is dropped.
+        broker: {value: "", type: "mqtt-broker", required: false, validate: function (v) {
+          return Boolean(v) && v !== "_ADD_" || throughOutput(this) ? true : "choose a broker";
+        }},
         // How Home Assistant IDs are named. null means "not set": a node saved
         // before this setting, which keeps its area-named entities. New nodes
         // name them after the node (onadd), so renaming the area keeps them.
@@ -47,12 +78,25 @@
         this.name = "";
         this.idScheme = "node";
         this.discovery = false;
+        this.homeAssistant = "state";
+      },
+      oneditsave: function () {
+        // Through its output until a broker is chosen (read before the
+        // dialog's values are applied).
+        var broker = $("#node-input-broker").val();
+        this.publishesThroughOutput = throughOutput(this) && (!broker || broker === "_ADD_");
       },
       oneditprepare: function () {
-        $("#node-input-discovery").prop("checked", on(this.discovery));
-        $("#node-input-discovery, #node-input-baseTopic").on("change keyup", function () {
+        $("#node-input-homeAssistant").val(publishChoice(this));
+        var outputBefore = throughOutput(this);
+        function publishRows() {
+          var broker = $("#node-input-broker").val();
+          $(".publish-through-output").toggle($("#node-input-homeAssistant").val() !== "off" && outputBefore && (!broker || broker === "_ADD_")); $(".publish-discovery").toggle($("#node-input-homeAssistant").val() === "discovery"); }
+        $("#node-input-homeAssistant, #node-input-broker, #node-input-baseTopic").on("change keyup", function () {
+          publishRows();
           $("#node-input-area").trigger("change");
         });
+        publishRows();
       },
       inputs: 1,
       outputs: 2,
@@ -68,8 +112,19 @@
   <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area"></div>
   <div class="form-row"><label for="node-input-displayName">Display name</label><input type="text" id="node-input-displayName"></div>
   <div class="form-row"><label for="node-input-baseTopic">Base topic</label><input type="text" id="node-input-baseTopic"></div>
-  <div class="form-row"><label for="node-input-discovery">Home Assistant discovery</label><input type="checkbox" id="node-input-discovery" style="display:inline-block; width:auto;"></div>
-  <div class="form-row"><label for="node-input-discoveryPrefix">Discovery prefix</label><input type="text" id="node-input-discoveryPrefix"></div>
+  <div class="form-row">
+    <label for="node-input-homeAssistant">Publish</label>
+    <select id="node-input-homeAssistant">
+      <option value="state">MQTT state</option>
+      <option value="discovery">MQTT state and Home Assistant discovery</option>
+    </select>
+  </div>
+  <div class="form-row"><label for="node-input-broker">Broker</label><input type="text" id="node-input-broker"></div>
+  <div class="form-tips">With a broker, it publishes and reads its requests itself: an MQTT out on its publication output, an
+    MQTT in on its its request topic, and a Status node are no longer needed and can be deleted.</div>
+  <div class="form-tips publish-through-output">This node publishes through its output, as before 6.2, and keeps
+    working that way. Choose a Broker to let it publish itself.</div>
+  <div class="form-row publish-discovery"><label for="node-input-discoveryPrefix">Discovery prefix</label><input type="text" id="node-input-discoveryPrefix"></div>
   <div class="form-row"><label for="node-input-activities">Activities JSON</label><input type="text" id="node-input-activities"></div>
   <div class="form-row"><label for="node-input-sloWindowSize">SLO window</label><input type="number" id="node-input-sloWindowSize"></div>
   <div class="form-row"><label for="node-input-sloMinimumSamples">Minimum samples</label><input type="number" id="node-input-sloMinimumSamples"></div>
@@ -88,15 +143,22 @@
     <code>offline</code> as it stops; its Home Assistant entities follow it. These get through only
     when this node is deployed on its own, so set the MQTT broker node's Birth, Close and Will messages to the same (see the
     README).</p>
-  <p>With <b>Home Assistant discovery</b> on, it publishes discovery for the activity selector and status sensors once
+  <p>With <b>Publish</b> set to <i>MQTT state and Home Assistant discovery</i>, it publishes discovery for the activity selector and status sensors once
     the flows start, before <code>online</code>, and again at a startup event. Switched off, the next startup event
     clears them, so Home Assistant removes them. New nodes start with it off; a node saved before the setting existed
     keeps it on.</p>
   <p>The <b>Area</b> names the discovery entities and the default base topic <code>home/&lt;area&gt;/theatre</code>,
     so it is needed when discovery is on or the base topic is empty. With discovery off and a base topic set, it is
     optional.</p>
+  <h3>Broker</h3>
+  <p>Choose Node-RED's <b>MQTT broker</b> node, and it publishes and reads its request topic itself: it announces everything each time the
+    broker connects, reconnects included, and each time Home Assistant comes back (<code>online</code> on
+    <code>&lt;prefix&gt;/status</code>), so its entities come back by themselves. Its publication output then sends
+    nothing, and an MQTT out on it, an MQTT in on its request topic and a Status node are no longer needed: still wired, they change nothing.
+    Opening and saving the node offers the first broker in your flows. A node saved before 6.2 that publishes keeps
+    publishing on its output, as below, and needs no broker until you choose one.</p>
   <h3>When MQTT out connects</h3>
-  <p>Wire a <b>Status node</b> whose scope is your MQTT out node into this node. Each time MQTT out shows
+  <p>Without a broker, wire a <b>Status node</b> whose scope is your MQTT out node into this node. Each time MQTT out shows
     "connected", this node takes it as its startup message (<code>msg.theatreStateContract = {kind: "startup"}</code>) and announces itself again:
     Node-RED's MQTT broker node drops what it is given before it connects, so what the node sends as the flows
     start is lost on a first start, a full deploy or a restart. Any other status message is ignored.</p>

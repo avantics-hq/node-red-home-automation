@@ -27,3 +27,19 @@ export function homeAssistantSetting(
   const discovery = optionalBooleanSetting(config.discovery, "Home Assistant discovery") ?? unsetMeans.discovery;
   return !state ? "off" : discovery ? "discovery" : "state";
 }
+
+// The choice as a node's publishing reads it, and whether it needs an area:
+// with the choice set, unless off; for a node saved before it, whenever
+// either old setting was on, even discovery alone, which published nothing:
+// as each node checked it before the choice.
+export function publishingChoice(
+  config: {homeAssistant?: unknown; publishState?: unknown; discovery?: unknown},
+  unsetMeans: {publishState: boolean; discovery: boolean}
+): {choice: HomeAssistantChoice; publishState: boolean; discovery: boolean; needsArea: boolean} {
+  const choice = homeAssistantSetting(config, unsetMeans);
+  const saved = config.homeAssistant === undefined || config.homeAssistant === null;
+  const needsArea = choice !== "off" || (saved &&
+    ((optionalBooleanSetting(config.publishState, "publish state") ?? unsetMeans.publishState) ||
+      (optionalBooleanSetting(config.discovery, "Home Assistant discovery") ?? unsetMeans.discovery)));
+  return {choice, publishState: choice !== "off", discovery: choice === "discovery", needsArea};
+}

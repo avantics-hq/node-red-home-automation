@@ -1,6 +1,31 @@
 <script type="text/javascript">
   (function () {
     function clockTime(v) { return /^([01]\d|2[0-3]):[0-5]\d$/.test(String(v || "")); }
+    // Its Publish choice (off, state or discovery), from the open dialog or
+    // its saved settings: a node saved before the choice reads its two old
+    // settings (lib/home-assistant-setting.ts).
+    function publishChoice(node) {
+      function on(value) { return value === true || value === "true"; }
+      var select = $("#node-input-homeAssistant");
+      if (select.length) return select.val();
+      if (node.homeAssistant === "off" || node.homeAssistant === "state" || node.homeAssistant === "discovery") return node.homeAssistant;
+      return !on(node.publishState) ? "off" : on(node.discovery) ? "discovery" : "state";
+    }
+    // Whether it publishes through its output, as before 6.2: a node saved
+    // before the Publish choice that published, or one opened and saved since
+    // without a broker (publishesThroughOutput). It needs no broker until one
+    // is chosen; from saved values only, not the open dialog.
+    function throughOutput(node) {
+      if (node.publishesThroughOutput === true) return true;
+      return (node.homeAssistant === null || node.homeAssistant === undefined) && (node.publishState === true || node.publishState === "true");
+    }
+    // Its area is needed while it publishes, and for a node saved before the
+    // choice whenever either old setting was on, as the runtime checks.
+    function needsArea(node) {
+      function on(value) { return value === true || value === "true"; }
+      var saved = !$("#node-input-homeAssistant").length && (node.homeAssistant === null || node.homeAssistant === undefined);
+      return publishChoice(node) !== "off" || (saved && (on(node.publishState) || on(node.discovery)));
+    }
     RED.nodes.registerType("home-circadian-lighting-policy", {
       category: "home automation",
       color: "#ffd27f",
@@ -8,12 +33,7 @@
         name: {value: ""},
         // Required only when the node publishes, and then with a letter or
         // digit, from which its topics are made.
-        area: {value: "", validate: function (v) {
-          var publishing = $("#node-input-publishState").length
-            ? $("#node-input-publishState").prop("checked") || $("#node-input-discovery").prop("checked")
-            : this.publishState === true || this.discovery === true;
-          return !publishing || /[a-z0-9]/i.test(String(v || ""));
-        }},
+        area: {value: "", validate: function (v) { return !needsArea(this) || /[a-z0-9]/i.test(String(v || "")); }},
         // The house schedule it follows; none: its own wake and bed times.
         houseSchedule: {value: "", type: "home-house-schedule", required: false},
         wakeTime: {value: "07:00", validate: function (v) { return Boolean(this.houseSchedule) || clockTime(v); }},
@@ -25,22 +45,46 @@
         refreshTransitionSeconds: {value: 60, required: true, validate: RED.validators.number()},
         refreshSeconds: {value: 60, required: true, validate: function (v) { return RED.validators.number()(v) && Number(v) >= 10; }},
         initialSleep: {value: false},
+        // Publish: off, state or discovery. null means "not set": a node saved
+        // before this setting, read from the two below, kept with no rows.
+        homeAssistant: {value: null},
+        // Node-RED's MQTT broker node, through which it publishes and reads its set
+        // topics itself. Needed unless Publish is "Don't publish". The editor offers
+        // the first broker when the dialog is opened and saved, not when the node
+        // is dropped.
+        broker: {value: "", type: "mqtt-broker", required: false, validate: function (v) {
+          return publishChoice(this) === "off" || (Boolean(v) && v !== "_ADD_") || throughOutput(this) ? true : "choose a broker, or set Publish to Don't publish";
+        }},
         publishState: {value: false},
         discovery: {value: false},
+        // true for a node that publishes through its output, as before 6.2, and
+        // was opened and saved without a broker: it stays valid until a broker is
+        // chosen. No form row.
+        publishesThroughOutput: {value: false},
         discoveryPrefix: {value: "homeassistant", required: true, validate: function (v) { var prefix = String(v || "").trim().replace(/^\/+|\/+$/g, ""); return Boolean(prefix) && !/[+#]/.test(prefix); }},
         // A new node, so its Home Assistant entities are named after it.
         idScheme: {value: "node"}
       },
+      oneditsave: function () {
+        // Through its output until a broker is chosen (read before the
+        // dialog's values are applied).
+        var broker = $("#node-input-broker").val();
+        this.publishesThroughOutput = throughOutput(this) && (!broker || broker === "_ADD_");
+      },
       oneditprepare: function () {
-        // Discovery describes the published state, so it needs it.
-        function follow() {
-          var publishing = $("#node-input-publishState").prop("checked");
-          if (!publishing) $("#node-input-discovery").prop("checked", false);
-          $("#node-input-discovery").prop("disabled", !publishing);
-          $("#node-input-area").trigger("change");
+        $("#node-input-homeAssistant").val(publishChoice(this));
+        // The broker only while it publishes, the prefix only with discovery.
+        var outputBefore = throughOutput(this);
+        function publishRows() {
+          var broker = $("#node-input-broker").val();
+          $(".publish-through-output").toggle($("#node-input-homeAssistant").val() !== "off" && outputBefore && (!broker || broker === "_ADD_"));
+          var choice = $("#node-input-homeAssistant").val();
+          $(".publish-broker").toggle(choice !== "off");
+          $(".publish-discovery").toggle(choice === "discovery");
+          $("#node-input-area, #node-input-broker").trigger("change");
         }
-        $("#node-input-publishState, #node-input-discovery").on("change", follow);
-        follow();
+        $("#node-input-homeAssistant, #node-input-broker").on("change", publishRows);
+        publishRows();
         // Following a house, the times are the house's.
         function times() {
           var own = !$("#node-input-houseSchedule").val() || $("#node-input-houseSchedule").val() === "_ADD_";
@@ -71,9 +115,20 @@
   <div class="form-row"><label for="node-input-refreshSeconds">Restyle interval (s)</label><input type="number" min="10" id="node-input-refreshSeconds"></div>
   <div class="form-row"><label for="node-input-initialSleep">Start in sleep mode</label><input type="checkbox" id="node-input-initialSleep" style="display:inline-block; width:auto;"></div>
   <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area" placeholder="needed when publishing"></div>
-  <div class="form-row"><label for="node-input-publishState">Publish state over MQTT</label><input type="checkbox" id="node-input-publishState" style="display:inline-block; width:auto;"></div>
-  <div class="form-row"><label for="node-input-discovery">Home Assistant discovery</label><input type="checkbox" id="node-input-discovery" style="display:inline-block; width:auto;"> <span>(needs Publish state)</span></div>
-  <div class="form-row"><label for="node-input-discoveryPrefix">Discovery prefix</label><input type="text" id="node-input-discoveryPrefix"></div>
+  <div class="form-row">
+    <label for="node-input-homeAssistant">Publish</label>
+    <select id="node-input-homeAssistant">
+      <option value="off">Don't publish</option>
+      <option value="state">MQTT state</option>
+      <option value="discovery">MQTT state and Home Assistant discovery</option>
+    </select>
+  </div>
+  <div class="form-row publish-broker"><label for="node-input-broker">Broker</label><input type="text" id="node-input-broker"></div>
+  <div class="form-tips publish-broker">With a broker, it publishes and reads its set topics itself: an MQTT out on its
+    publication output, an MQTT in on its set topics, and a Status node are no longer needed and can be deleted.</div>
+  <div class="form-tips publish-through-output">This node publishes through its output, as before 6.2, and keeps
+    working that way. Choose a Broker to let it publish itself.</div>
+  <div class="form-row publish-discovery"><label for="node-input-discoveryPrefix">Discovery prefix</label><input type="text" id="node-input-discoveryPrefix"></div>
 </script>
 
 <script type="text/html" data-help-name="home-circadian-lighting-policy">
@@ -107,7 +162,7 @@
       the flows start, as the examples do.</dd>
     <dt>topic = home/&lt;area&gt;/circadian/set, home/&lt;area&gt;/sleep/set</dt>
     <dd><code>ON</code> or <code>OFF</code> from Home Assistant, as <code>lighting.kind = "circadian"</code> or
-      <code>"sleep"</code> does. Read only while <b>Publish state</b> is on. Retained messages and other payloads are
+      <code>"sleep"</code> does. Read only while it publishes. Retained messages and other payloads are
       ignored.</dd>
     <dt>topic = home/&lt;area&gt;/wake-time/set or bed-time/set</dt>
     <dd>A time from Home Assistant, with its own times only.</dd>
@@ -130,15 +185,23 @@
     <dt>Restyle transition</dt><dd>How long a room takes to move a light that is on to a new style. A light turning
       on uses the room's own transition.</dd>
     <dt>Restyle interval</dt><dd>How often it sends its style, at least 10 seconds.</dd>
-    <dt>Publish state over MQTT, Home Assistant discovery</dt><dd>Off unless switched on. With both on, Home Assistant
+    <dt>Publish</dt><dd><i>Don't publish</i> unless chosen. <i>MQTT state</i> publishes its state and reads its set
+      topics, plain MQTT; with <i>MQTT state and Home Assistant discovery</i>, Home Assistant
       shows Circadian lighting and Sleep switches and, with its own times, Wake time and Bed time, named after this
       node. The topics keep the names the room controller used before 6.0, so a flow already writing
       <code>home/&lt;area&gt;/circadian/set</code> keeps working when this node has that area. Before announcing, it
       clears the circadian entities older room controllers in its area published, migrated or not, in the same batch,
       so Home Assistant can give the new ones the same entity IDs.</dd>
   </dl>
+  <h3>Broker</h3>
+  <p>Choose Node-RED's <b>MQTT broker</b> node, and it publishes and reads its set topics itself: it announces everything each time the
+    broker connects, reconnects included, and each time Home Assistant comes back (<code>online</code> on
+    <code>&lt;prefix&gt;/status</code>), so its entities come back by themselves. Its publication output then sends
+    nothing, and an MQTT out on it, an MQTT in on its set topics and a Status node are no longer needed: still wired, they change nothing.
+    Opening and saving the node offers the first broker in your flows. A node saved before 6.2 that publishes keeps
+    publishing on its output, as below, and needs no broker until you choose one.</p>
   <h3>When MQTT out connects</h3>
-  <p>Wire a <b>Status node</b> whose scope is your MQTT out node into this node. Each time MQTT out shows
+  <p>Without a broker, wire a <b>Status node</b> whose scope is your MQTT out node into this node. Each time MQTT out shows
     "connected", this node takes it as its startup message (<code>msg.lighting = {kind: "startup"}</code>) and announces itself again:
     Node-RED's MQTT broker node drops what it is given before it connects, so what the node sends as the flows
     start is lost on a first start, a full deploy or a restart. Any other status message is ignored.</p>

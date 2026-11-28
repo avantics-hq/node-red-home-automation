@@ -16,7 +16,7 @@ import {
   type AvrMessage,
   type AvrState
 } from "../lib/avr-controller";
-import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type Send} from "./adapter";
+import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, type Send, type InputMessage} from "./adapter";
 import {jsonSetting, optionalBooleanSetting, optionalChoiceSetting} from "../lib/settings";
 import {
   avrRetainedTopics,
@@ -25,12 +25,15 @@ import {
   avrStartingOutputs,
   avrStateOutputs,
   avrStoppingOutputs,
+  receiverTopic,
   type AvrPublishingConfig
 } from "../lib/avr-publishing";
 import {ID_SCHEMES, discoveryPrefixSetting} from "../lib/ha-discovery";
 import {publishingArea} from "../lib/topic-names";
 import {publishesState} from "../lib/publishing-node";
-import {publishingLifecycle} from "./publishing-lifecycle";
+import {brokerSetting, publishingSide} from "./publishing-side";
+import type {BrokerNode} from "./mqtt-broker-link";
+import {publishingChoice} from "../lib/home-assistant-setting";
 
 interface AvrControllerConfig extends NodeDef {
   area?: string;
@@ -43,6 +46,11 @@ interface AvrControllerConfig extends NodeDef {
   // the dB ones, an invalid configuration.
   minVolume?: number | string;
   maxVolume?: number | string;
+  // Publish: off, state or discovery; not set: from publishState and
+  // discovery, which it replaced.
+  homeAssistant?: string | null;
+  // Node-RED's mqtt-broker node, to publish and read its set topic itself.
+  broker?: string;
   publishState?: boolean | string | null;
   discovery?: boolean | string | null;
   discoveryPrefix?: string;
@@ -70,6 +78,7 @@ const registerAvrController: NodeInitializer = (RED) => {
 
     let controllerConfig: AvrConfig;
     let publishing: AvrPublishingConfig;
+    let broker: BrokerNode | null;
     try {
       // The same validation the reducer applies, so a bad configuration
       // fails here at deploy rather than on every message.
@@ -77,13 +86,13 @@ const registerAvrController: NodeInitializer = (RED) => {
       // Off unless switched on, as the receiver published nothing before;
       // there are no older entities to keep, so not set names them after
       // the node.
-      const publishState = optionalBooleanSetting(config.publishState, "publish state") ?? false;
-      const discovery = optionalBooleanSetting(config.discovery, "Home Assistant discovery") ?? false;
-      if (publishState || discovery) publishingArea(controllerConfig.area, true);
+      const publish = publishingChoice(config, {publishState: false, discovery: false});
+      if (publish.needsArea) publishingArea(controllerConfig.area, true);
+      broker = brokerSetting(RED, config.broker, publish.publishState);
       publishing = {
         area: controllerConfig.area,
-        publishState,
-        discovery,
+        publishState: publish.publishState,
+        discovery: publish.discovery,
         discoveryPrefix: discoveryPrefixSetting(config.discoveryPrefix),
         nodeId: node.id,
         idScheme: optionalChoiceSetting(config.idScheme, "ID scheme", ID_SCHEMES) ?? "node",
@@ -128,14 +137,17 @@ const registerAvrController: NodeInitializer = (RED) => {
     // commands and the theatre's events. Available, and clear of what it no
     // longer publishes, as soon as it runs; offline as it stops; nothing
     // left behind when deleted.
-    const lifecycle = publishingLifecycle(RED, node, {
+    const trace = {area: controllerConfig.area, component: "avr-controller"};
+    const lifecycle = publishingSide(RED, node, broker, {
       retainedTopics: () => avrRetainedTopics(publishing),
       possible: {owner: publishing, topics: () => publishesState(publishing) ? avrRetainedTopics({...publishing, publishState: true, discovery: true}) : []},
       starting: () => avrStartingOutputs(publishing, observed()),
       stopping: () => avrStoppingOutputs(publishing),
       output: 2,
-      outputs: 3
-    });
+      outputs: 3,
+      statusTopic: publishing.discovery ? publishing.discoveryPrefix + "/status" : null,
+      setTopics: publishesState(publishing) ? [receiverTopic(publishing.area, "volume/set")] : []
+    }, trace, (msg, send) => handle(msg, send));
 
     let warnedRemovedVolume = false;
     function process(msg: AvrMessage, send: Send) {
@@ -192,7 +204,7 @@ const registerAvrController: NodeInitializer = (RED) => {
       process({avr: {kind: "volume", requestId: `mqtt-volume-${Date.now()}-${volumeRequests}`, mode: "absolute", valueDb}}, node.send.bind(node));
     }
 
-    onInput(node, (msg, send) => {
+    function handle(msg: InputMessage, send: Send) {
       const volume = avrVolumeRequest(msg, publishing);
       if (volume && "ignored" in volume) {
         runReducer(node, {area: controllerConfig.area, component: "avr-controller"}, (saved: Partial<AvrState> | undefined) =>
@@ -214,7 +226,12 @@ const registerAvrController: NodeInitializer = (RED) => {
         avr: objectField<AvrMessage["avr"]>(msg, "avr"),
         payload: msg.payload
       }, send);
-    }, {message: {avr: {kind: "startup"}}, trace: {area: controllerConfig.area, component: "avr-controller"}});
+    }
+    onInput(node, (msg, send) => {
+      // With a broker, its set topic comes from the broker: an MQTT in or a
+      // Status node still wired in changes nothing.
+      if (!lifecycle.fromBroker(msg)) handle(msg, send);
+    }, lifecycle.startupOption({avr: {kind: "startup"}}));
 
     node.on("close", (_removed: boolean, done: () => void) => {
       clearTimeout(retryTimer);

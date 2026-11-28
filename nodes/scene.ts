@@ -5,6 +5,7 @@ import {ID_SCHEMES, discoveryPrefixSetting} from "../lib/ha-discovery";
 import {publishesState} from "../lib/publishing-node";
 import {normaliseSceneConfig, sceneTickAt, transitionScene, type SceneConfig, type SceneEvent, type SceneState} from "../lib/scene";
 import {
+  sceneCommandTopic,
   sceneInbound,
   sceneRetainedTopics,
   sceneStartingOutputs,
@@ -12,15 +13,22 @@ import {
   sceneStoppingOutputs,
   type ScenePublishingConfig
 } from "../lib/scene-publishing";
-import {optionalBooleanSetting, optionalChoiceSetting, textSetting} from "../lib/settings";
+import {optionalChoiceSetting, textSetting} from "../lib/settings";
 import {areaId, publishingArea} from "../lib/topic-names";
-import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, wasDeleted, whenFlowsStarted, type Send} from "./adapter";
-import {publishingLifecycle} from "./publishing-lifecycle";
+import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, wasDeleted, whenFlowsStarted, type InputMessage, type Send} from "./adapter";
+import {brokerSetting, publishingSide} from "./publishing-side";
+import type {BrokerNode} from "./mqtt-broker-link";
+import {publishingChoice} from "../lib/home-assistant-setting";
 
 interface SceneNodeConfig extends NodeDef {
   lights?: string;
   safetyHours?: number | string;
   area?: string;
+  // Publish: off, state or discovery; not set: from publishState and
+  // discovery, which it replaced.
+  homeAssistant?: string | null;
+  // Node-RED's mqtt-broker node, to publish and read its set topic itself.
+  broker?: string;
   publishState?: boolean | string | null;
   discovery?: boolean | string | null;
   discoveryPrefix?: string;
@@ -37,6 +45,7 @@ const registerScene: NodeInitializer = (RED) => {
     let scene: SceneConfig;
     let publishing: ScenePublishingConfig;
     let area: string;
+    let broker: BrokerNode | null;
     try {
       // No default: it names the scene to its rooms, motion policies and
       // Home Assistant.
@@ -44,14 +53,14 @@ const registerScene: NodeInitializer = (RED) => {
       if (!areaId(name)) throw new Error("name must contain a letter or digit");
       scene = normaliseSceneConfig({owner: "scene:" + name, lights: config.lights, safetyHours: config.safetyHours});
       area = optionalArea(config);
-      const publishState = optionalBooleanSetting(config.publishState, "publish state") ?? false;
-      const discovery = optionalBooleanSetting(config.discovery, "Home Assistant discovery") ?? false;
-      if (publishState || discovery) publishingArea(area, true);
+      const publish = publishingChoice(config, {publishState: false, discovery: false});
+      if (publish.needsArea) publishingArea(area, true);
+      broker = brokerSetting(RED, config.broker, publish.publishState);
       publishing = {
         area,
         name,
-        publishState,
-        discovery,
+        publishState: publish.publishState,
+        discovery: publish.discovery,
         discoveryPrefix: discoveryPrefixSetting(config.discoveryPrefix),
         nodeId: node.id,
         idScheme: optionalChoiceSetting(config.idScheme, "ID scheme", ID_SCHEMES) ?? "node"
@@ -64,17 +73,20 @@ const registerScene: NodeInitializer = (RED) => {
     const saved = () => context.get("state") as Partial<SceneState> | undefined;
     const active = () => saved()?.active === true;
 
-    // MQTT publications on output 3: its switch, available and clear of
-    // what it no longer publishes once the flows have started, offline as
-    // it stops, nothing left behind when deleted.
-    const lifecycle = publishingLifecycle(RED, node, {
+    // Its switch, available and clear of what it no longer publishes once
+    // it can be (with a broker, on each connect; without one, on output 3
+    // once the flows have started), offline as it stops, nothing left
+    // behind when deleted.
+    const lifecycle = publishingSide(RED, node, broker, {
       retainedTopics: () => sceneRetainedTopics(publishing),
       possible: {owner: publishing, topics: () => publishesState(publishing) ? sceneRetainedTopics({...publishing, discovery: true}) : []},
       starting: () => sceneStartingOutputs(publishing, active()),
       stopping: () => sceneStoppingOutputs(publishing),
       output: 2,
-      outputs: 3
-    });
+      outputs: 3,
+      statusTopic: publishing.discovery ? publishing.discoveryPrefix + "/status" : null,
+      setTopics: publishesState(publishing) ? [sceneCommandTopic(publishing)] : []
+    }, trace, (msg, send) => handle(msg, send));
 
     function process(event: SceneEvent, send: Send) {
       const wasActive = active();
@@ -95,7 +107,7 @@ const registerScene: NodeInitializer = (RED) => {
     // timer, or end it if its time ran out meanwhile.
     whenFlowsStarted(RED, node, () => process({kind: "startup"}, node.send.bind(node)));
 
-    onInput(node, (msg, send) => {
+    function handle(msg: InputMessage, send: Send) {
       const event = objectField<SceneEvent>(msg, "scene");
       if (event) {
         if (event.kind === "startup") lifecycle.startup(send, sceneStartingOutputs(publishing, active()));
@@ -111,7 +123,12 @@ const registerScene: NodeInitializer = (RED) => {
       } else {
         runReducer(node, trace, (state: unknown) => ({state, traces: [{event: "input", outcome: "ignored", reason: "not-a-scene-message", details: {}}]}));
       }
-    }, {message: {scene: {kind: "startup"}}, trace});
+    }
+    onInput(node, (msg, send) => {
+      // With a broker, its set topic comes from the broker: an MQTT in or a
+      // Status node still wired in changes nothing.
+      if (!lifecycle.fromBroker(msg)) handle(msg, send);
+    }, lifecycle.startupOption({scene: {kind: "startup"}}));
 
     node.on("close", (removed: boolean, done: () => void) => {
       clearTimeout(timer);

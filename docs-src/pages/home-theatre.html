@@ -99,7 +99,7 @@ return msg;</code></pre></div>
 <li><strong>The latest request again is a duplicate.</strong><p>Sent again with the same request ID, it is passed on unchanged and starts nothing new. Only the latest request is compared: an older request ID sent again is a new request. Reusing the latest request ID for a different activity is an error.</p></li>
 <li><strong>An invalid request is an error on the message.</strong><p>An unknown activity or a malformed request ID is reported against the message, where a Catch node can see it.</p></li>
 </ul>
-<p>With <strong>Home Assistant discovery</strong> on, the contract adds a <i>Requested activity</i> selector that publishes the same request with a request ID of its own. The topics and payloads are listed in the <a href="contract-theatre-mqtt.html">Theatre MQTT contract</a>.</p>
+<p>With <strong>Publish</strong> set to <em>MQTT state and Home Assistant discovery</em>, the contract adds a <i>Requested activity</i> selector that publishes the same request with a request ID of its own. The topics and payloads are listed in the <a href="contract-theatre-mqtt.html">Theatre MQTT contract</a>.</p>
 </section>
 <section id="complete"><h2>How an activity completes</h2>
 <p>The activity controller moves through these phases, shown in its node status as <code>&lt;activity&gt;: &lt;phase&gt;</code>:</p>
@@ -145,7 +145,7 @@ return msg;</code></pre></div>
 <li><strong>0-98 values are gone.</strong><p>A request with <code>value</code> in the receiver’s 0-98 and no <code>valueDb</code> is answered <code>volume_rejected</code> with reason <code>removed-volume-value</code>, with a warning in the log. A node saved with only the old 0-98 <code>minVolume</code> and <code>maxVolume</code> is an invalid configuration until its dB bounds are set.</p></li>
 <li><strong>Activities own power and source, not volume.</strong><p>A volume request waits while an activity is switching the receiver’s power or source, and is rejected with <code>receiver-not-ready</code> while the receiver is off. One still pending at a restart is reported <code>volume_failed</code> with reason <code>restart</code>.</p></li>
 </ul>
-<p>With <strong>Publish state over MQTT</strong> and <strong>Home Assistant discovery</strong> on, Home Assistant gets a volume number in dB. Its sets arrive on <code>home/&lt;area&gt;/receiver/volume/set</code>: wire an MQTT in node on that topic into the AVR controller. Sets within 0.3 seconds of each other are settled to the last, which becomes an ordinary absolute request.</p>
+<p>With <strong>Publish</strong> set to <em>MQTT state and Home Assistant discovery</em>, Home Assistant gets a volume number in dB. Its sets arrive on <code>home/&lt;area&gt;/receiver/volume/set</code>: with a <strong>Broker</strong>, the AVR controller reads them itself; without one, wire an MQTT in node on that topic into it. Sets within 0.3 seconds of each other are settled to the last, which becomes an ordinary absolute request.</p>
 </section>
 <section id="projector-power"><h2>Report projector power from a meter</h2>
 <p>The display controller needs a fresh projector power reading at every request and while it confirms a change. With <strong>Projector power meter host</strong> set, it reads a Shelly Gen2 switch with power metering on the projector’s supply itself. Left empty, your flow reports the power from any meter or adapter:</p>

@@ -19,11 +19,18 @@ import {optionalBooleanSetting, optionalChoiceSetting, textSetting} from "../lib
 import {publishingArea} from "../lib/topic-names";
 import {invalidConfig, onInput, optionalArea, runReducer} from "./adapter";
 import {publishesState} from "../lib/publishing-node";
-import {publishingLifecycle} from "./publishing-lifecycle";
+import {brokerSetting, publishingSide} from "./publishing-side";
+import type {BrokerNode} from "./mqtt-broker-link";
+import {publishingChoice} from "../lib/home-assistant-setting";
 
 interface OccupancyFusionConfig extends NodeDef {
   area?: string;
   presenceMode?: "hold" | "none";
+  // Publish: off, state or discovery; not set: from publishState and
+  // discovery, which it replaced.
+  homeAssistant?: string | null;
+  // Node-RED's mqtt-broker node, to publish itself.
+  broker?: string;
   publishState?: boolean | string | null;
   discovery?: boolean | string | null;
   discoveryPrefix?: string;
@@ -40,6 +47,7 @@ const registerOccupancyFusion: NodeInitializer = (RED) => {
     const node = this;
     let fusionConfig: OccupancyConfig & {area: string};
     let publishing: OccupancyPublishingConfig;
+    let broker: BrokerNode | null;
     try {
       // The editor offers "none" (PIR only) and "hold" (PIR plus presence).
       const presence = textSetting(config.presenceMode, "presence sensor", "none");
@@ -48,13 +56,13 @@ const registerOccupancyFusion: NodeInitializer = (RED) => {
       fusionConfig = {area, presenceMode: presence === "hold" ? "hold" : "ignore"};
       // Off unless switched on, as occupancy published nothing before; there
       // are no older entities to keep, so not set names them after the node.
-      const publishState = optionalBooleanSetting(config.publishState, "publish state") ?? false;
-      const discovery = optionalBooleanSetting(config.discovery, "Home Assistant discovery") ?? false;
-      if (publishState || discovery) publishingArea(area, true);
+      const publish = publishingChoice(config, {publishState: false, discovery: false});
+      if (publish.needsArea) publishingArea(area, true);
+      broker = brokerSetting(RED, config.broker, publish.publishState);
       publishing = {
         area,
-        publishState,
-        discovery,
+        publishState: publish.publishState,
+        discovery: publish.discovery,
         discoveryPrefix: discoveryPrefixSetting(config.discoveryPrefix),
         nodeId: node.id,
         idScheme: optionalChoiceSetting(config.idScheme, "ID scheme", ID_SCHEMES) ?? "node"
@@ -83,16 +91,22 @@ const registerOccupancyFusion: NodeInitializer = (RED) => {
     // events the motion policy reads on the first. Available, and clear of
     // what it no longer publishes, as soon as it runs; offline as it stops;
     // nothing left behind when deleted.
-    const lifecycle = publishingLifecycle(RED, node, {
+    const trace = {area: fusionConfig.area, component: "occupancy-fusion"};
+    // No set topics: it only publishes.
+    const lifecycle = publishingSide(RED, node, broker, {
       retainedTopics: () => occupancyRetainedTopics(publishing),
       possible: {owner: publishing, topics: () => publishesState(publishing) ? occupancyRetainedTopics({...publishing, publishState: true, discovery: true}) : []},
       starting: () => occupancyStartingOutputs(publishing, occupied()),
       stopping: () => occupancyStoppingOutputs(publishing),
       output: 1,
-      outputs: 2
-    });
+      outputs: 2,
+      statusTopic: publishing.discovery ? publishing.discoveryPrefix + "/status" : null,
+      setTopics: []
+    }, trace, () => {});
 
     onInput(node, (msg, send) => {
+      // With a broker, a Status node still wired in changes nothing.
+      if (lifecycle.fromBroker(msg)) return;
       if (msg.source === "startup") {
         lifecycle.startup(send, occupancyStartingOutputs(publishing, occupied()));
         return;
@@ -108,7 +122,7 @@ const registerOccupancyFusion: NodeInitializer = (RED) => {
         lifecycle.publish(send, occupancyStateOutputs(publishing, output.payload.occupied));
       }
       updateStatus(result.status);
-    }, {message: {source: "startup"}, trace: {area: fusionConfig.area, component: "occupancy-fusion"}});
+    }, lifecycle.startupOption({source: "startup"}));
 
   }
 

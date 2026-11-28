@@ -1,12 +1,5 @@
 <script type="text/javascript">
   (function () {
-    // Whether the node publishes, from the open dialog or its saved settings.
-    function publishes(node) {
-      function on(value) { return value === true || value === "true"; }
-      var state = $("#node-input-publishState");
-      var discovery = $("#node-input-discovery");
-      return state.length ? state.prop("checked") || discovery.prop("checked") : on(node.publishState) || on(node.discovery);
-    }
     // The lights as lib/scene.ts reads them: its room's area and its id there,
     // ON or OFF, and for an ON light optional brightnessPct (0-100) and
     // colorTempKelvin (above 0); each light once.
@@ -35,6 +28,31 @@
     }
     // A name or area as topics and Home Assistant IDs read it (lib/topic-names.ts areaId).
     function topicName(v) { return String(v || "").trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "_").replace(/^[_-]+|[_-]+$/g, ""); }
+    // Its Publish choice (off, state or discovery), from the open dialog or
+    // its saved settings: a node saved before the choice reads its two old
+    // settings (lib/home-assistant-setting.ts).
+    function publishChoice(node) {
+      function on(value) { return value === true || value === "true"; }
+      var select = $("#node-input-homeAssistant");
+      if (select.length) return select.val();
+      if (node.homeAssistant === "off" || node.homeAssistant === "state" || node.homeAssistant === "discovery") return node.homeAssistant;
+      return !on(node.publishState) ? "off" : on(node.discovery) ? "discovery" : "state";
+    }
+    // Whether it publishes through its output, as before 6.2: a node saved
+    // before the Publish choice that published, or one opened and saved since
+    // without a broker (publishesThroughOutput). It needs no broker until one
+    // is chosen; from saved values only, not the open dialog.
+    function throughOutput(node) {
+      if (node.publishesThroughOutput === true) return true;
+      return (node.homeAssistant === null || node.homeAssistant === undefined) && (node.publishState === true || node.publishState === "true");
+    }
+    // Its area is needed while it publishes, and for a node saved before the
+    // choice whenever either old setting was on, as the runtime checks.
+    function needsArea(node) {
+      function on(value) { return value === true || value === "true"; }
+      var saved = !$("#node-input-homeAssistant").length && (node.homeAssistant === null || node.homeAssistant === undefined);
+      return publishChoice(node) !== "off" || (saved && (on(node.publishState) || on(node.discovery)));
+    }
     RED.nodes.registerType("home-scene", {
       category: "home automation",
       color: "#e2d96e",
@@ -54,25 +72,48 @@
         }},
         lights: {value: "[]", required: true, validate: validLights},
         safetyHours: {value: 4, required: true, validate: function (v) { var n = Number(v); return String(v).trim() !== "" && isFinite(n) && n >= 0; }},
-        area: {value: "", validate: function (v) { return !publishes(this) || /[a-z0-9]/i.test(String(v || "")); }},
+        area: {value: "", validate: function (v) { return !needsArea(this) || /[a-z0-9]/i.test(String(v || "")); }},
         // Off until switched on.
+        // Publish: off, state or discovery. null means "not set": a node saved
+        // before this setting, read from the two below, kept with no rows.
+        homeAssistant: {value: null},
+        // Node-RED's MQTT broker node, through which it publishes and reads its set
+        // topics itself. Needed unless Publish is "Don't publish". The editor offers
+        // the first broker when the dialog is opened and saved, not when the node
+        // is dropped.
+        broker: {value: "", type: "mqtt-broker", required: false, validate: function (v) {
+          return publishChoice(this) === "off" || (Boolean(v) && v !== "_ADD_") || throughOutput(this) ? true : "choose a broker, or set Publish to Don't publish";
+        }},
         publishState: {value: false},
         discovery: {value: false},
+        // true for a node that publishes through its output, as before 6.2, and
+        // was opened and saved without a broker: it stays valid until a broker is
+        // chosen. No form row.
+        publishesThroughOutput: {value: false},
         discoveryPrefix: {value: "homeassistant", required: true, validate: function (v) { var prefix = String(v || "").trim().replace(/^\/+|\/+$/g, ""); return Boolean(prefix) && !/[+#]/.test(prefix); }},
         idScheme: {value: "node"}
       },
+      oneditsave: function () {
+        // Through its output until a broker is chosen (read before the
+        // dialog's values are applied).
+        var broker = $("#node-input-broker").val();
+        this.publishesThroughOutput = throughOutput(this) && (!broker || broker === "_ADD_");
+      },
       oneditprepare: function () {
         function on(value) { return value === true || value === "true"; }
-        $("#node-input-publishState").prop("checked", on(this.publishState));
-        $("#node-input-discovery").prop("checked", on(this.discovery));
-        // Discovery describes the published state, so it needs it.
-        function publishing() {
-          var state = $("#node-input-publishState").prop("checked");
-          if (!state) $("#node-input-discovery").prop("checked", false);
-          $("#node-input-discovery").prop("disabled", !state);
+        $("#node-input-homeAssistant").val(publishChoice(this));
+        // The broker only while it publishes, the prefix only with discovery.
+        var outputBefore = throughOutput(this);
+        function publishRows() {
+          var broker = $("#node-input-broker").val();
+          $(".publish-through-output").toggle($("#node-input-homeAssistant").val() !== "off" && outputBefore && (!broker || broker === "_ADD_"));
+          var choice = $("#node-input-homeAssistant").val();
+          $(".publish-broker").toggle(choice !== "off");
+          $(".publish-discovery").toggle(choice === "discovery");
+          $("#node-input-area, #node-input-broker").trigger("change");
         }
-        $("#node-input-publishState, #node-input-discovery").on("change", publishing);
-        publishing();
+        $("#node-input-homeAssistant, #node-input-broker").on("change", publishRows);
+        publishRows();
       },
       inputs: 1,
       outputs: 3,
@@ -89,9 +130,20 @@
   <div class="form-row"><label for="node-input-lights">Lights</label><input type="text" id="node-input-lights" placeholder='[{"area":"gym","target":"main","state":"OFF"}]'></div>
   <div class="form-row"><label for="node-input-safetyHours">Safety timer (hours)</label><input type="number" id="node-input-safetyHours" min="0" step="0.25"> <span>(0: off)</span></div>
   <div class="form-row"><label for="node-input-area">Area</label><input type="text" id="node-input-area"></div>
-  <div class="form-row"><label for="node-input-publishState">Publish state over MQTT</label><input type="checkbox" id="node-input-publishState" style="display:inline-block; width:auto;"></div>
-  <div class="form-row"><label for="node-input-discovery">Home Assistant discovery</label><input type="checkbox" id="node-input-discovery" style="display:inline-block; width:auto;"> <span>(needs Publish state)</span></div>
-  <div class="form-row"><label for="node-input-discoveryPrefix">Discovery prefix</label><input type="text" id="node-input-discoveryPrefix"></div>
+  <div class="form-row">
+    <label for="node-input-homeAssistant">Publish</label>
+    <select id="node-input-homeAssistant">
+      <option value="off">Don't publish</option>
+      <option value="state">MQTT state</option>
+      <option value="discovery">MQTT state and Home Assistant discovery</option>
+    </select>
+  </div>
+  <div class="form-row publish-broker"><label for="node-input-broker">Broker</label><input type="text" id="node-input-broker"></div>
+  <div class="form-tips publish-broker">With a broker, it publishes and reads its set topics itself: an MQTT out on its
+    publication output, an MQTT in on its set topics, and a Status node are no longer needed and can be deleted.</div>
+  <div class="form-tips publish-through-output">This node publishes through its output, as before 6.2, and keeps
+    working that way. Choose a Broker to let it publish itself.</div>
+  <div class="form-row publish-discovery"><label for="node-input-discoveryPrefix">Discovery prefix</label><input type="text" id="node-input-discoveryPrefix"></div>
 </script>
 
 <script type="text/html" data-help-name="home-scene">
@@ -117,8 +169,15 @@
     <dd><code>ON</code> or <code>OFF</code> on its set topic, from Home Assistant: a start, or an end by
       <code>home-assistant</code>.</dd>
   </dl>
+  <h3>Broker</h3>
+  <p>Choose Node-RED's <b>MQTT broker</b> node, and it publishes and reads its set topic itself: it announces everything each time the
+    broker connects, reconnects included, and each time Home Assistant comes back (<code>online</code> on
+    <code>&lt;prefix&gt;/status</code>), so its entities come back by themselves. Its publication output then sends
+    nothing, and an MQTT out on it, an MQTT in on its set topic and a Status node are no longer needed: still wired, they change nothing.
+    Opening and saving the node offers the first broker in your flows. A node saved before 6.2 that publishes keeps
+    publishing on its output, as below, and needs no broker until you choose one.</p>
   <h3>When MQTT out connects</h3>
-  <p>Wire a <b>Status node</b> whose scope is your MQTT out node into this node. Each time MQTT out shows
+  <p>Without a broker, wire a <b>Status node</b> whose scope is your MQTT out node into this node. Each time MQTT out shows
     "connected", this node takes it as its startup message (<code>msg.scene = {kind: "startup"}</code>) and announces
     itself again: Node-RED's MQTT broker node drops what it is given before it connects, so what the node sends as
     the flows start is lost on a first start, a full deploy or a restart. Any other status message is ignored.</p>
@@ -145,7 +204,8 @@
       <code>[{"area": "gym", "target": "main", "state": "OFF"}, {"area": "gym", "target": "tv", "state": "ON"}]</code>.</dd>
     <dt>Safety timer</dt><dd>Hours until it ends itself, so a forgotten scene doesn't hold the room: 4 by
       default; 0 turns it off.</dd>
-    <dt>Area, Publish state, Home Assistant discovery</dt><dd>Off unless switched on: a switch entity for the scene
+    <dt>Area, Publish</dt><dd><i>Don't publish</i> unless chosen. <i>MQTT state</i>: its state and set topic, plain
+      MQTT; <i>MQTT state and Home Assistant discovery</i>: also a switch entity for the scene
       that shows whether it is on and turns it on and off, on <code>home/&lt;area&gt;/scene/&lt;name&gt;/…</code>.</dd>
   </dl>
   <h3>Rules</h3>

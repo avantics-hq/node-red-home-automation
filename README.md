@@ -407,9 +407,10 @@ edit covers both moves:
    schedule), the daytime and sleep brightness and kelvin, the refresh
    transition and interval (now *Restyle transition* and *Restyle interval*),
    and initial sleep. The room's edit dialog lists its old values.
-4. To keep the Home Assistant switches, give the policy the room's area, switch
-   on **Publish state** and **Home Assistant discovery**, and wire its second
-   output to MQTT out. Move any MQTT in node on `home/<area>/circadian/set`,
+4. To keep the Home Assistant switches, give the policy the room's area, set
+   **Publish** to *MQTT state and Home Assistant discovery* (before 6.2: switch
+   on **Publish state** and **Home Assistant discovery**), and choose its
+   **Broker**, or wire its second output to MQTT out. Move any MQTT in node on `home/<area>/circadian/set`,
    `…/sleep/set`, `…/wake-time/set` or `…/bed-time/set` from the room to the
    policy, and any flow sending `{kind: "circadian" | "sleep" | "schedule"}`.
 5. Click **Done**: saving keeps only each light's id in Targets JSON and clears

@@ -6,6 +6,8 @@ import {createCircadianState, styleMessage, transitionCircadian, type CircadianC
 import {
   circadianInbound,
   circadianRetainedTopics,
+  circadianSwitchTopic,
+  circadianTimeTopic,
   circadianStartingOutputs,
   circadianStateOutputs,
   circadianStoppingOutputs,
@@ -17,8 +19,10 @@ import type {LightLevels} from "../lib/light-styling";
 import {publishesState} from "../lib/publishing-node";
 import {booleanSetting, numberSetting, optionalBooleanSetting, textSetting} from "../lib/settings";
 import {areaId, publishingArea} from "../lib/topic-names";
-import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, wasDeleted, whenFlowsStarted, type Send} from "./adapter";
-import {publishingLifecycle} from "./publishing-lifecycle";
+import {guarded, invalidConfig, objectField, onInput, optionalArea, runReducer, wasDeleted, whenFlowsStarted, type Send, type InputMessage} from "./adapter";
+import {brokerSetting, publishingSide} from "./publishing-side";
+import type {BrokerNode} from "./mqtt-broker-link";
+import {publishingChoice} from "../lib/home-assistant-setting";
 import {refusedEnables} from "./refused-enable";
 import {referencedSchedule} from "./shared-schedule";
 
@@ -35,6 +39,11 @@ interface CircadianPolicyConfig extends NodeDef {
   refreshTransitionSeconds?: number | string;
   refreshSeconds?: number | string;
   initialSleep?: boolean | string;
+  // Publish: off, state or discovery; not set: from publishState and
+  // discovery, which it replaced.
+  homeAssistant?: string | null;
+  // Node-RED's mqtt-broker node, to publish and read its set topics itself.
+  broker?: string;
   publishState?: boolean | string | null;
   discovery?: boolean | string | null;
   discoveryPrefix?: string;
@@ -53,6 +62,7 @@ const registerCircadianPolicy: NodeInitializer = (RED) => {
     const {schedule: house, missing: houseMissing} = referencedSchedule(RED, config.houseSchedule);
     let policyConfig: CircadianConfig;
     let publishing: CircadianPublishingConfig;
+    let broker: BrokerNode | null;
     try {
       const area = optionalArea(config);
       const levels: LightLevels = {
@@ -74,13 +84,13 @@ const registerCircadianPolicy: NodeInitializer = (RED) => {
       };
       // Off unless switched on; a new node, so its entities are named after
       // it.
-      const publishState = optionalBooleanSetting(config.publishState, "publish state") ?? false;
-      const discovery = optionalBooleanSetting(config.discovery, "Home Assistant discovery") ?? false;
-      if (publishState || discovery) publishingArea(area, true);
+      const publish = publishingChoice(config, {publishState: false, discovery: false});
+      if (publish.needsArea) publishingArea(area, true);
+      broker = brokerSetting(RED, config.broker, publish.publishState);
       publishing = {
         area,
-        publishState,
-        discovery,
+        publishState: publish.publishState,
+        discovery: publish.discovery,
         discoveryPrefix: discoveryPrefixSetting(config.discoveryPrefix),
         nodeId: node.id,
         // Always named after the node, so its entries never share a topic
@@ -112,14 +122,24 @@ const registerCircadianPolicy: NodeInitializer = (RED) => {
 
     // Styles go to rooms on the first output; MQTT publications on the
     // second.
-    const lifecycle = publishingLifecycle(RED, node, {
+    const trace = {area: publishing.area, component: "circadian-policy"};
+    const lifecycle = publishingSide(RED, node, broker, {
       retainedTopics: () => circadianRetainedTopics(publishing),
       possible: {owner: publishing, topics: () => publishesState(publishing) ? circadianRetainedTopics({...publishing, publishState: true, discovery: true}) : []},
       starting: () => circadianStartingOutputs(publishing, savedState(), roomsInArea()),
       stopping: () => circadianStoppingOutputs(publishing),
       output: 1,
-      outputs: 2
-    });
+      outputs: 2,
+      statusTopic: publishing.discovery ? publishing.discoveryPrefix + "/status" : null,
+      // Following a house, the wake and bed times are the house's to set.
+      setTopics: publishesState(publishing) ? [
+        circadianSwitchTopic(publishing.area, "circadian", "set"),
+        circadianSwitchTopic(publishing.area, "sleep", "set"),
+        ...(publishing.timesFrom !== "house"
+          ? [circadianTimeTopic(publishing.area, "wake-time", "set"), circadianTimeTopic(publishing.area, "bed-time", "set")]
+          : [])
+      ] : []
+    }, trace, (msg, send) => handle(msg, send));
 
     function updateStatus(status: ReturnType<typeof transitionCircadian>["status"]) {
       const values = status.values;
@@ -161,7 +181,7 @@ const registerCircadianPolicy: NodeInitializer = (RED) => {
       })));
     }
 
-    onInput(node, (msg, send) => {
+    function handle(msg: InputMessage, send: Send) {
       const lighting = objectField<CircadianEvent>(msg, "lighting");
       if (lighting?.kind === "startup") {
         lifecycle.startup(send, circadianStartingOutputs(publishing, savedState(), roomsInArea()));
@@ -176,7 +196,12 @@ const registerCircadianPolicy: NodeInitializer = (RED) => {
       } else {
         process(lighting ?? {kind: undefined}, send);
       }
-    }, {message: {lighting: {kind: "startup"}}, trace: {area: publishing.area, component: "circadian-policy"}});
+    }
+    onInput(node, (msg, send) => {
+      // With a broker, its set topics come from the broker: an MQTT in or a
+      // Status node still wired in changes nothing.
+      if (!lifecycle.fromBroker(msg)) handle(msg, send);
+    }, lifecycle.startupOption({lighting: {kind: "startup"}}));
 
     tickTimer = setInterval(guarded(node, () => process({kind: "tick"}, node.send.bind(node))), policyConfig.intervalSeconds * 1000);
 
