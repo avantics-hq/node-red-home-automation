@@ -108,3 +108,18 @@ test("an over-budget active transition breaches while expected source waiting do
   assert.equal(waiting.assessment.status, "learning");
   assert.equal(waiting.assessment.reason, "minimum_samples");
 });
+
+test("an untimed transition is no latency sample, not 0 ms, and stays untimed across a restart", () => {
+  // No metric: the latency comes from the transition's own times.
+  let result = evaluate(undefined, {...snapshot(1, "ready", 4000), metrics: {lastTransitionMs: null}});
+  assert.equal(result.state.samples[0]?.transitionMs, 4000);
+  // Neither a metric nor a completed time: no latency, not 0 ms.
+  result = evaluate(result.state, {...snapshot(2, "ready", 0), transitionCompletedAt: null, metrics: {lastTransitionMs: null}},
+    config, new Date(start + 3 * 60000).toISOString());
+  assert.equal(result.state.samples[1]?.transitionMs, null);
+  assert.deepEqual([result.assessment.p50TransitionMs, result.assessment.p95TransitionMs], [4000, 4000]);
+  // Saved and read back (a restart): still untimed, still out of the percentiles.
+  const restored = evaluate(JSON.parse(JSON.stringify(result.state)) as TheatreSloState, snapshot(3, "ready", 6000));
+  assert.deepEqual(restored.state.samples.map(({transitionMs}) => transitionMs), [4000, null, 6000]);
+  assert.deepEqual([restored.assessment.p50TransitionMs, restored.assessment.p95TransitionMs], [4000, 6000]);
+});
