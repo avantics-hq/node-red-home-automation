@@ -134,7 +134,7 @@
 
 <script type="text/html" data-help-name="home-theatre-state-contract">
   <p>Bridges non-retained MQTT activity requests to the theatre controller and publishes retained controller truth.</p>
-  <p>Requests arrive on <code>&lt;base&gt;/request</code> with a request ID and activity. Retained requests are inert. Complete <code>msg.theatre</code> state snapshots publish desired, current, phase, transition (started and completed times and degraded targets, shown as the
+  <p>Requests arrive on <code>&lt;base&gt;/request</code> with a request ID and activity. Retained requests are inert. Complete <code>msg.theatre</code> state snapshots publish, each topic only when it changes beyond its times (a steady activity publishes nothing new), desired, current, phase, transition (started and completed times and degraded targets, shown as the
     Phase sensor's attributes in Home Assistant), failure, readiness, operational SLO and per-target health topics. </p>
   <p>With discovery, a contract added since node IDs suggests its <b>Area</b> to Home Assistant for its device, and
     Home Assistant creates an area of that name if none exists. With no area, its entity IDs come from the

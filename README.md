@@ -776,7 +776,12 @@ The whole-theatre MQTT contract uses non-retained requests at
 `home/<area>/theatre/request`; every request supplies a unique `requestId` and an
 explicit configured activity. Controller output is retained under `desired`,
 `current`, `phase`, `transition` (when the latest transition started and finished, and which
-targets it left degraded), `failure`, `readiness`, `metrics`, `slo`, and `health/<target>`. Metrics expose transition latency and outcome counts plus
+targets it left degraded), `failure`, `readiness`, `metrics`, `slo`, and `health/<target>`,
+each only when it changes beyond its times (`observedAt`, `evaluatedAt`, and
+each target's `observationAgeMs` and `lastConfirmationMs`): a steady activity
+publishes nothing new on each refresh, and a target's health keeps the time it
+last changed. A startup, and with a Broker each connect, republishes them all
+with the next snapshot. Metrics expose transition latency and outcome counts plus
 per-target retry, fallback, confirmation-latency, failure, manual-override, and
 availability evidence. The SLO evaluator keeps a bounded outcome window,
 publishes success rate plus p50/p95 transition latency, and exposes an

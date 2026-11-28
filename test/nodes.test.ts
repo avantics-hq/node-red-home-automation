@@ -1113,11 +1113,14 @@ test("the example theatre flow reaches ready with no translation and stays ready
     path.split(".").reduce<unknown>((value, key) => (value as Record<string, unknown> | undefined)?.[key], msg);
   const queue: Array<[string, Record<string, unknown>]> = [];
   const refreshes: string[] = [];
+  // The topics the state contract publishes on its MQTT output.
+  const contractTopics: string[] = [];
 
   function route(id: string, envelope: unknown) {
     const outputs = Array.isArray(envelope) ? envelope : [envelope];
     outputs.forEach((output, index) => {
       for (const msg of output === null || output === undefined ? [] : Array.isArray(output) ? output : [output]) {
+        if (byId.get(id)!.type === "home-theatre-state-contract" && index === 1) contractTopics.push(String((msg as {topic?: unknown}).topic));
         for (const target of byId.get(id)!.wires?.[index] ?? []) queue.push([target, structuredClone(msg)]);
       }
     });
@@ -1206,13 +1209,20 @@ test("the example theatre flow reaches ready with no translation and stays ready
   assert.equal(activity().currentActivity, "tv");
 
   // Five minutes of refreshes: every required target and the source keep
-  // re-confirming, so none of them is reported stale or unanswered.
+  // re-confirming, so none of them is reported stale or unanswered, and the
+  // contract publishes no state topic again: nothing but times changed (#206).
+  for (let second = 0; second < 15; second += 1) {
+    t.mock.timers.tick(1000);
+    await settle();
+  }
+  contractTopics.length = 0;
   for (let second = 0; second < 300; second += 1) {
     t.mock.timers.tick(1000);
     await settle();
     assert.equal(activity().phase, "ready", `at ${second} s: ${JSON.stringify(activity().degraded)}`);
   }
   for (const target of ["display", "avr", "source", "backlighting"]) assert.ok(refreshes.includes(target), target);
+  assert.deepEqual(contractTopics.filter((topic) => topic.startsWith("home/lounge/theatre/")), []);
   assert.deepEqual(activity().degraded.filter((entry) => entry.target !== "lighting"), []);
 
   // The example's off activity confirms too: the receiver goes to standby.
