@@ -23,7 +23,11 @@ import {homeTopic, IDENTIFIER, publishingArea} from "./topic-names";
 
 
 export type {ContractRequest, TheatreStateSnapshot} from "./theatre-requests";
-export type TheatreStateContractState = TheatreRequestState;
+export type TheatreStateContractState = TheatreRequestState & {
+  // Each retained state topic's payload as last published, without its
+  // time-only fields: a topic is published again only when this changes.
+  published: Record<string, string>;
+};
 
 export interface TheatreStateContractConfig {
   // The Node-RED node's ID, and how the contract names its Home Assistant
@@ -192,6 +196,37 @@ function statePublications(
   return STATE_TOPICS.map(([name, value]) => publication(theatreTopic(config.baseTopic, name), value(event, slo)));
 }
 
+// Fields that only say when, or how long ago, something was seen: they move
+// on every refresh of a steady target, so a payload that differs only in
+// them is not a change. A target's health keeps the time it last changed.
+const TIME_ONLY_FIELDS = new Set(["observedAt", "evaluatedAt", "observationAgeMs", "lastConfirmationMs"]);
+
+function comparable(payload: string): string {
+  let value: unknown;
+  try {
+    value = JSON.parse(payload) as unknown;
+  } catch {
+    return payload;
+  }
+  const strip = (entry: unknown): unknown => Array.isArray(entry)
+    ? entry.map(strip)
+    : entry && typeof entry === "object"
+      ? Object.fromEntries(Object.entries(entry).filter(([key]) => !TIME_ONLY_FIELDS.has(key)).map(([key, inner]) => [key, strip(inner)]))
+      : entry;
+  return JSON.stringify(strip(value));
+}
+
+// Only the publications whose payload changed, beyond its time-only
+// fields, since the contract last published that topic; it records them.
+function changed(state: TheatreStateContractState, publications: ContractPublication[]): ContractPublication[] {
+  return publications.filter(({topic, payload}) => {
+    const key = comparable(payload);
+    if (state.published[topic] === key) return false;
+    state.published[topic] = key;
+    return true;
+  });
+}
+
 
 function requestPublications(
   request: ContractRequest,
@@ -245,7 +280,10 @@ export function transitionTheatreStateContract(
   nowValue: Date | string | number = new Date()
 ) {
   const config = normaliseStateContractConfig(suppliedConfig);
-  const state = createTheatreRequestState(saved);
+  const state: TheatreStateContractState = {
+    ...createTheatreRequestState(saved),
+    published: saved?.published && typeof saved.published === "object" && !Array.isArray(saved.published) ? {...saved.published} : {}
+  };
   const now = nowValue instanceof Date ? nowValue : new Date(nowValue);
   if (!Number.isFinite(now.getTime())) throw new Error("now must be a valid date");
   const requests: ContractRequestOutput[] = [];
@@ -263,6 +301,9 @@ export function transitionTheatreStateContract(
     publications.push(...entries.map(({topic, payload}) =>
       publication(topic, config.discovery !== false ? payload : "")));
     publications.push(publication(theatreTopic(config.baseTopic, "availability"), ONLINE));
+    // Each startup, and with a broker each connect: the next snapshot
+    // publishes every state topic again, in case the broker lost them.
+    state.published = {};
     trace("startup", "discovery", null, {publications: publications.length});
   } else if (msg.topic === theatreTopic(config.baseTopic, "request")) {
     if (msg.retain === true) {
@@ -277,7 +318,7 @@ export function transitionTheatreStateContract(
       } else {
         trace("request", "accepted", null, {requestId: request.requestId, generation: state.generation, activity: request.activity});
       }
-      publications.push(...requestPublications(request, config));
+      publications.push(...changed(state, requestPublications(request, config)));
     }
   } else if (msg.theatre && typeof msg.theatre === "object" && msg.theatre.kind === "state") {
     const event = asTheatreSnapshot(msg.theatre);
@@ -285,12 +326,17 @@ export function transitionTheatreStateContract(
     if (!assessment) {
       trace("state", "ignored", "stale-generation", {generation: event.generation});
     } else {
-      publications.push(...statePublications(event, config, assessment));
-      trace("state", "published", null, {
-        generation: event.generation,
-        phase: event.phase,
-        publications: publications.length
-      });
+      const all = statePublications(event, config, assessment);
+      publications.push(...changed(state, all));
+      if (!publications.length) {
+        trace("state", "unchanged", null, {generation: event.generation, phase: event.phase});
+      } else {
+        trace("state", "published", null, {
+          generation: event.generation,
+          phase: event.phase,
+          publications: publications.length
+        });
+      }
     }
   } else {
     trace("message", "ignored", "unrelated-message");

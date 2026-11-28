@@ -138,7 +138,8 @@ test("non-retained requests allocate generations and exact duplicates are idempo
   }, false, 1);
   assert.equal(result.requests[0]?.theatre.generation, 1);
   assert.equal(result.traces.at(-1)?.outcome, "duplicate");
-  assert.equal(result.publications.length, 4);
+  // Its topics already say so: nothing is published again.
+  assert.equal(result.publications.length, 0);
 
   assert.throws(() => request(result.state, {
     requestId: "ha-request-1",
@@ -332,4 +333,42 @@ test("a node-named contract needs no area: entity IDs come from the display name
   // An area-named contract's entries are as before: no suggested area.
   const legacy = transitionTheatreStateContract(undefined, {theatreStateContract: {kind: "startup"}}, config, at(0)).publications;
   assert.ok(legacy.filter(({topic}) => topic.endsWith("/config")).every(({payload}) => !("suggested_area" in (JSON.parse(payload) as {device: object}).device)));
+});
+
+test("a steady activity publishes nothing again until something other than a time changes", () => {
+  const ready = (seconds: number, avr = "ready") => transitionTheatreStateContract(state, {theatre: snapshot({
+    phase: "ready", currentActivity: "tv_streamer", availability: "available", transitionCompletedAt: at(5).toISOString(),
+    targets: {
+      display: {status: "ready", observedAt: at(seconds).toISOString()},
+      avr: {status: avr, observedAt: at(seconds).toISOString()},
+      source: null, lighting: null, backlighting: null
+    },
+    metrics: {requests: 1, ready: 1, failed: 0, superseded: 0, manualOverrides: 0, driftEvents: 0, recoveriesAdopted: 0,
+      recoveriesUnknown: 0, lastTransitionMs: 5000, maxTransitionMs: 5000, lastOutcome: "ready",
+      targets: {display: {attempts: 1, retries: 0, failures: 0, manualOverrides: 0, fallbackUses: 0, fallbackUsed: false,
+        lastConfirmationMs: seconds * 1000, observationAgeMs: seconds % 7, availability: "available"}}} as never
+  })}, config, at(seconds));
+  let state: TheatreStateContractState | undefined;
+  let result = ready(10);
+  state = result.state;
+  const topics = result.publications.map(({topic}) => topic);
+  assert.ok(topics.includes("home/lounge/theatre/health/avr") && topics.includes("home/lounge/theatre/slo"));
+  // A minute of refreshes: new observation times, ages and SLO evaluation times only.
+  for (let seconds = 20; seconds <= 70; seconds += 10) {
+    result = ready(seconds);
+    state = result.state;
+    assert.deepEqual(result.publications, [], `at ${seconds} s`);
+    assert.equal(result.traces.at(-1)?.outcome, "unchanged");
+  }
+  // The receiver degrades: only its health changes.
+  result = ready(80, "degraded");
+  state = result.state;
+  assert.deepEqual(result.publications.map(({topic}) => topic), ["home/lounge/theatre/health/avr"]);
+  // The health topic keeps the time it changed.
+  assert.equal(jsonObject(result.publications[0]!.payload).observedAt, at(80).toISOString());
+
+  // A startup (with a broker, each connect) republishes everything with the next snapshot.
+  state = transitionTheatreStateContract(state, {theatreStateContract: {kind: "startup"}}, config, at(90)).state;
+  result = ready(100, "degraded");
+  assert.deepEqual(result.publications.map(({topic}) => topic), topics);
 });
