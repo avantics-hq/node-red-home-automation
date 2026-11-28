@@ -29,8 +29,13 @@ const registerShellyCover: NodeInitializer = (RED) => {
     const trace = {area: "", component: "shelly-cover"};
     node.status({fill: "grey", shape: "ring", text: "waiting for the device"});
 
+    // With a broker, it reads its device on each connect, reconnects
+    // included, through its own observe: after a restart nothing reported it
+    // while it was away, and the controller acts on the reading as on one it
+    // asked for.
     // Its prefix is one device: everything under it.
-    const side = deviceSide(node, broker, device.topicPrefix, [device.topicPrefix + "/#"], trace, (msg, send) => handle(msg, send));
+    const side = deviceSide(node, broker, device.topicPrefix, [device.topicPrefix + "/#"], trace, (msg, send) => handle(msg, send),
+      () => handle({cover_command: {operation: "observe"}} as InputMessage, node.send.bind(node)));
 
     function handle(msg: InputMessage, send: Send) {
       const result = runReducer(node, trace, (saved: Partial<ShellyCoverState> | undefined, now) =>

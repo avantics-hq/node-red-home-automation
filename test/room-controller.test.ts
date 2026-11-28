@@ -9,6 +9,7 @@ import {DEFAULT_BED_TIME, DEFAULT_WAKE_TIME, resolveSchedule, scheduleLevel} fro
 import type {LightLevels} from "../lib/light-styling";
 import {lightCommand} from "../lib/z2m-light";
 import {
+  transitionRoom,
   type RoomMessage,
   type RoomState
 } from "../lib/room-controller";
@@ -1081,4 +1082,23 @@ test("a style never counts as a person: motion still switches off a vacant room 
   result = publishRoom(result.state, style(later(120_000)), config, later(120_000));
   const off = publishRoom(result.state, {lighting: {kind: "intent", targets: ["cooking"], state: "OFF", source: "motion", vacantSince: later(60_000).toISOString()}}, config, later(180_000));
   assert.deepEqual(payload(off, 0), {state: "OFF"});
+});
+
+test("after a restart, a light's reading it didn't ask for counts as the answer to its startup's observe", () => {
+  const room = {area: "kitchen", displayName: "Kitchen", targets: [{id: "main"}], initialTransitionSeconds: 1};
+  const reading = (on: boolean, ms: number) => ({light: {kind: "observed", target: "main", on, fields: [], showsLast: false,
+    observedAt: later(ms).toISOString()}}) as unknown as RoomMessage;
+  // Before the restart: on, by motion, and read back on.
+  let before = transitionRoom(undefined, {lighting: {kind: "intent", targets: ["main"], state: "ON", source: "motion"}} as RoomMessage, room, now);
+  before = transitionRoom(before.state, reading(true, 200), room, later(200));
+  // Switched off at the wall while Node-RED was down. With a Status node, its
+  // startup asked for a reading; with a broker, the light's adapter reads it on
+  // connecting, unasked.
+  const startup = transitionRoom(before.state, {lighting: {kind: "startup"}} as RoomMessage, room, later(60000));
+  assert.deepEqual(startup.commands, [{kind: "observe", target: "main"}]);
+  const asked = transitionRoom(startup.state, reading(false, 60100), room, later(60100));
+  const unasked = transitionRoom(before.state, reading(false, 60100), room, later(60100));
+  assert.deepEqual(unasked.state, asked.state);
+  assert.deepEqual(unasked.commands, asked.commands);
+  assert.equal(unasked.state.desired.main, false);
 });

@@ -2934,11 +2934,16 @@ test("device adapters with a broker: their device's topics from the broker, comm
   // A Shelly prefix is one device: all of it. A Zigbee2MQTT friendly name can contain "/": exactly its own topics.
   assert.deepEqual([...broker.subscriptions.keys()].sort(), ["shellyplus1-test/#", "shellyplus2pm-test/#", "z2m/blind", "z2m/blind/availability",
     "z2m/hall-main", "z2m/hall-main/availability", "z2m/hall-main/set"]);
-  // The Shelly switch reads its device's configuration once connected, not before.
+  // Each reads its device once connected, not before: the light and covers through their observe (nothing
+  // reported them while Node-RED was away), the Shelly switch its configuration.
   switchRuntime.events.emit("flows:started");
   assert.equal(broker.published.length, 0);
   broker.connect();
-  assert.deepEqual(broker.published.map(({topic}) => topic), ["shellyplus1-test/rpc", "shellyplus1-test/command"]);
+  assert.deepEqual(broker.published.map(({topic, payload}) => [topic, payload]).slice(0, 3), [
+    ["z2m/hall-main/get", "{\"state\":\"\"}"], ["z2m/blind/get", "{\"position\":\"\"}"], ["shellyplus2pm-test/command/cover:0", "status_update"]]);
+  assert.deepEqual(broker.published.slice(3).map(({topic}) => topic), ["shellyplus1-test/rpc", "shellyplus1-test/command"]);
+  // Its own read answers no command of the controller's.
+  assert.equal(port(shellyCover.sent, 1).length, 0);
   broker.published.length = 0;
 
   // The room's command: published on the light's /set, nothing on output 1.
