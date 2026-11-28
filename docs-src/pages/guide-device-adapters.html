@@ -7,24 +7,22 @@
 <div class="meta"><span class="tag">Guide</span><span class="tag">shelly cover</span><span class="tag">zigbee2mqtt cover</span><span class="tag">shelly switch</span><a class="tag" href="guide-covers.html">Covers guide →</a></div>
 <section id="before"><h2>Before you wire it</h2>
 <p>The cover controller (<code>home-cover-controller</code>) is device-neutral. It sends commands as <code>msg.cover_command = {operation, position, requestId, generation, attempt}</code>, where <code>operation</code> is <code>set_position</code>, <code>stop</code> or <code>observe</code> (read the cover now). An <i>Open, close and stop only</i> cover sends <code>open</code>, <code>close</code>, <code>stop</code> or <code>observe</code>. It expects readings back as <code>msg.cover = {kind: "observed", …}</code> and <code>{kind: "availability", online}</code>.</p>
-<p>An adapter does the translation for one kind of device, so the controller never needs to know which device it drives. An adapter has no broker connection of its own: device messages arrive from an <strong>MQTT in</strong> node, and its publications leave through an <strong>MQTT out</strong> node.</p>
+<p>An adapter does the translation for one kind of device, so the controller never needs to know which device it drives. With its <strong>Broker</strong> set, an adapter subscribes to its device’s topics and publishes to them itself.</p>
 <ul>
 <li>Pick the adapter for your device: the <strong>shelly cover</strong> node (<code>home-shelly-cover</code>) or the <strong>zigbee2mqtt cover</strong> node (<code>home-z2m-cover</code>).</li>
-<li>Have a broker connection in Node-RED that both the MQTT in and MQTT out nodes use.</li>
+<li>Have Node-RED’s MQTT broker node set up for your broker, to choose as each adapter’s Broker.</li>
 <li>Both adapters speak the device’s own MQTT messages, with no function nodes. Neither commands the device through Home Assistant.</li>
 </ul>
 <p>Both adapters report <strong>0 = closed</strong> and <strong>100 = open</strong>. If your device runs the other way, set <strong>Invert positions</strong> on the controller.</p>
 </section>
 <section id="broker"><h2>Give each adapter a broker</h2>
-<p>Each adapter has a <strong>Broker</strong> setting: Node-RED’s MQTT broker node. With one, it subscribes to its device’s topics (exactly <code>&lt;base&gt;/&lt;friendly name&gt;</code> and its <code>/set</code> and <code>/availability</code> for a Zigbee2MQTT device, as a friendly name can contain <code>/</code>; <code>&lt;prefix&gt;/#</code> for a Shelly) and publishes on them itself, so the MQTT in and MQTT out nodes around it in the wiring below aren’t needed; still wired, they change nothing. It reads its device on each connect too (a Zigbee2MQTT group excepted, as it can’t be asked), so a room or cover controller has a fresh reading after a restart without a Status node. Opening and saving a new adapter offers the first broker in your flows. An adapter saved before 6.2 keeps using its MQTT in and out nodes until you choose one.</p>
+<p>Each adapter has a <strong>Broker</strong> setting: Node-RED’s MQTT broker node. With one, it subscribes to its device’s topics (exactly <code>&lt;base&gt;/&lt;friendly name&gt;</code>, its <code>/availability</code> and, for a light, its <code>/set</code> for a Zigbee2MQTT device, as a friendly name can contain <code>/</code>; <code>&lt;prefix&gt;/#</code> for a Shelly) and publishes on them itself, with no MQTT in or MQTT out nodes; still wired, they change nothing. It reads its device on each connect too (a Zigbee2MQTT group excepted, as it can’t be asked), so a room or cover controller has a fresh reading after a restart without a Status node. Opening and saving a new adapter offers the first broker in your flows. An adapter saved before 6.2 keeps using its MQTT in and out nodes until you choose one: an MQTT in node on its device’s topics (output: auto-detect) into its input, and its first output to an MQTT out node on the same broker with the topic left empty. This guide’s topic tables say which topics.</p>
 </section>
 <section id="shape"><h2>Wire either adapter the same way</h2>
-<p>Both adapters have one input and two outputs. Output 1 goes to the device; output 2 goes to the cover controller.</p>
-<figure class="diagram"><div class="wiring-flow"><div class="flow-node">MQTT in<small>The device’s topics</small></div><span class="arrow" aria-hidden="true">→</span><div class="flow-node">Adapter<small>Device messages ↔ neutral messages</small></div><span class="arrow controller-arrow" aria-hidden="true">⇄</span><div class="flow-node owner controller">Cover controller<small>Requests and confirmation</small></div><div class="return">Adapter output 1 → MQTT out → device</div><div class="flow-node broker-out" style="grid-column:1 / -1">MQTT out<small>Same broker · leave its topic empty</small></div></div><figcaption>Reports: MQTT in → adapter → controller. Commands: controller output 1 → adapter → MQTT out.</figcaption></figure>
-<div class="table-wrap" role="region" aria-label="Four connections for either adapter; scroll horizontally on a phone" tabindex="0"><table><caption>Four connections for either adapter</caption><thead><tr><th scope="col">From</th><th scope="col">Connect to</th><th scope="col">Why</th></tr></thead><tbody>
-<tr><td>MQTT in (output: auto-detect)</td><td>Adapter input</td><td>The device’s reports and availability.</td></tr>
+<p>Both adapters have one input and two outputs. Output 2 goes to the cover controller; output 1 is for an MQTT out node, and sends nothing with a Broker.</p>
+<figure class="diagram"><div class="wiring-flow"><div class="flow-node">Its Broker<small>The device’s topics</small></div><span class="arrow" aria-hidden="true">⇄</span><div class="flow-node">Adapter<small>Device messages ↔ neutral messages</small></div><span class="arrow controller-arrow" aria-hidden="true">⇄</span><div class="flow-node owner controller">Cover controller<small>Requests and confirmation</small></div></div><figcaption>Reports: the adapter reads them from the broker → controller. Commands: controller output 1 → adapter, which publishes them.</figcaption></figure>
+<div class="table-wrap" role="region" aria-label="Two wires for either adapter; scroll horizontally on a phone" tabindex="0"><table><caption>Two wires for either adapter</caption><thead><tr><th scope="col">From</th><th scope="col">Connect to</th><th scope="col">Why</th></tr></thead><tbody>
 <tr><td>Controller output 1</td><td>Adapter input</td><td>Neutral device commands.</td></tr>
-<tr><td>Adapter output 1</td><td>MQTT out</td><td>Same broker; leave the MQTT out topic empty, because each message carries its own topic.</td></tr>
 <tr><td>Adapter output 2</td><td>Controller input</td><td>Readings and availability for the controller.</td></tr>
 </tbody></table></div>
 <p>Anything else that reaches an adapter’s input is ignored.</p>
@@ -37,7 +35,7 @@
 </tbody></table></div>
 <ol class="step-list">
 <li><strong>Prepare the device.</strong><p>Calibrate the cover on the device. Turn MQTT on with <strong>Enable MQTT Control</strong> (the default); without it the device ignores the commands. Keep <strong>RPC status notifications</strong> on (also the default) so each change is reported.</p></li>
-<li><strong>Subscribe to the whole prefix.</strong><p>One MQTT in node on <code>&lt;prefix&gt;/#</code> feeds the adapter. It reads <code>&lt;prefix&gt;/status/cover:&lt;id&gt;</code>, change notifications on <code>&lt;prefix&gt;/events/rpc</code>, and availability on <code>&lt;prefix&gt;/online</code>.</p></li>
+<li><strong>Choose its Broker.</strong><p>It subscribes to <code>&lt;prefix&gt;/#</code> and reads <code>&lt;prefix&gt;/status/cover:&lt;id&gt;</code>, change notifications on <code>&lt;prefix&gt;/events/rpc</code>, and availability on <code>&lt;prefix&gt;/online</code>.</p></li>
 <li><strong>Keep the controller as a position cover.</strong><p>Leave <strong>Cover</strong> as “Takes a position (0 to 100)”. The adapter translates <code>set_position</code>, <code>stop</code> and <code>observe</code>; it does not translate the <code>open</code> and <code>close</code> commands of an <i>Open, close and stop only</i> cover.</p></li>
 </ol>
 <aside class="callout neutral"><strong>No position, no guess.</strong><p>A cover that is not calibrated, or does not know its position, has no position to report. The controller’s command in hand fails with reason <code>not-calibrated</code> or <code>position-unknown</code>, and no position is sent to an uncalibrated cover.</p></aside>
@@ -50,13 +48,13 @@
 </tbody></table></div>
 <p>Neither setting can contain <code>+</code> or <code>#</code>. With no <strong>Name</strong>, the node is labelled with the friendly name.</p>
 <div class="table-wrap" role="region" aria-label="zigbee2mqtt cover topics; scroll horizontally on a phone" tabindex="0"><table><caption>zigbee2mqtt cover topics</caption><thead><tr><th scope="col">Topic</th><th scope="col">Direction</th><th scope="col">Carries</th></tr></thead><tbody>
-<tr><td><code>&lt;base&gt;/&lt;friendly name&gt;</code></td><td>MQTT in → adapter</td><td>The device’s whole state as JSON.</td></tr>
-<tr><td><code>&lt;base&gt;/&lt;friendly name&gt;/availability</code></td><td>MQTT in → adapter</td><td>Online or offline.</td></tr>
-<tr><td><code>&lt;base&gt;/&lt;friendly name&gt;/set</code></td><td>Adapter → MQTT out</td><td>Position and open, close or stop commands.</td></tr>
-<tr><td><code>&lt;base&gt;/&lt;friendly name&gt;/get</code></td><td>Adapter → MQTT out</td><td>A request for a fresh reading.</td></tr>
+<tr><td><code>&lt;base&gt;/&lt;friendly name&gt;</code></td><td>Broker → adapter</td><td>The device’s whole state as JSON.</td></tr>
+<tr><td><code>&lt;base&gt;/&lt;friendly name&gt;/availability</code></td><td>Broker → adapter</td><td>Online or offline.</td></tr>
+<tr><td><code>&lt;base&gt;/&lt;friendly name&gt;/set</code></td><td>Adapter → broker</td><td>Position and open, close or stop commands.</td></tr>
+<tr><td><code>&lt;base&gt;/&lt;friendly name&gt;/get</code></td><td>Adapter → broker</td><td>A request for a fresh reading, each time the broker connects and when the controller asks.</td></tr>
 </tbody></table></div>
 <ol class="step-list">
-<li><strong>Add two MQTT in nodes.</strong><p>Subscribe one to <code>&lt;base&gt;/&lt;friendly name&gt;</code> and another to <code>&lt;base&gt;/&lt;friendly name&gt;/availability</code>, both with output auto-detect, and wire both to the adapter.</p></li>
+<li><strong>Choose its Broker.</strong><p>It subscribes to <code>&lt;base&gt;/&lt;friendly name&gt;</code> and its <code>/availability</code> itself.</p></li>
 <li><strong>Turn on availability in Zigbee2MQTT.</strong><p>Availability needs Zigbee2MQTT’s <strong>availability</strong> setting. Without it, the cover is taken as available. The adapter accepts <code>{"state": "online"}</code> or <code>{"state": "offline"}</code>, or plain <code>online</code> or <code>offline</code>, and turns it into <code>{kind: "availability", online}</code>.</p></li>
 <li><strong>Choose the controller’s cover type.</strong><p>See <a href="#cover-type">which cover type fits</a> below.</p></li>
 </ol>
@@ -87,12 +85,12 @@
 <tr><td><code>observe</code></td><td><code>status_update</code>: the device reports a fresh status</td><td><code>{"position": ""}</code> on <code>…/get</code>, or <code>{"state": ""}</code> for a cover with no position</td></tr>
 </tbody></table></div>
 <p>Some Zigbee2MQTT devices cannot be read through <code>…/get</code>; they still report their position whenever it changes.</p>
-<div class="code-block"><div class="code-label"><span>Inject → cover controller · read the cover again (a Status node watching MQTT out does this each time it connects)</span></div><pre><code>msg.cover = {kind: "startup"};
+<p>With a Broker, the adapter reads the cover each time the broker connects, so the controller has a fresh reading after a restart. To make the controller read it again yourself, send it its startup message:</p>
+<div class="code-block"><div class="code-label"><span>Inject → cover controller · read the cover again</span></div><pre><code>msg.cover = {kind: "startup"};
 return msg;</code></pre></div>
-<p>On startup the controller reads the cover again rather than trusting old state, so the adapter sends its <code>observe</code> message.</p>
 </section>
 <section id="shelly-switch"><h2>Wire a shelly switch</h2>
-<p>The <strong>shelly switch</strong> node connects one switch channel of a Gen2-or-later relay, over the device’s own MQTT API, used the way the device is set up. It reads the device’s configuration for its channel at startup and whenever the device comes online, and shows what it found in its status.</p>
+<p>The <strong>shelly switch</strong> node connects one switch channel of a Gen2-or-later relay, over the device’s own MQTT API, used the way the device is set up. It reads the device’s configuration for its channel each time the broker connects and whenever the device comes online, and shows what it found in its status.</p>
 <div class="table-wrap" role="region" aria-label="shelly switch settings; scroll horizontally on a phone" tabindex="0"><table><caption>shelly switch settings</caption><thead><tr><th scope="col">Setting</th><th scope="col">Default</th><th scope="col">What to set</th></tr></thead><tbody>
 <tr><td>MQTT topic prefix</td><td>None: required</td><td>The device’s topic prefix: its device ID unless a custom prefix is set on the device. It cannot contain <code>+</code> or <code>#</code>.</td></tr>
 <tr><td>Switch ID</td><td><code>0</code></td><td><code>0</code>, or the number of another switch on a device with more than one. Use one node per switch.</td></tr>
@@ -100,7 +98,7 @@ return msg;</code></pre></div>
 <tr><td>Target</td><td>Empty</td><td>When the relay is a room light: its id in the room’s Targets JSON, marked <code>"onOffOnly": true</code>. Empty when the relay only powers smart bulbs.</td></tr>
 </tbody></table></div>
 <ol class="step-list">
-<li><strong>Subscribe to the whole prefix.</strong><p>One MQTT in node on <code>&lt;prefix&gt;/#</code> feeds the adapter, and its first output goes to an MQTT out node with no topic set. The configuration request’s reply is addressed under the same prefix, so nothing more is needed.</p></li>
+<li><strong>Choose its Broker.</strong><p>It subscribes to <code>&lt;prefix&gt;/#</code> and publishes to the device itself. The configuration request’s reply is addressed under the same prefix, so nothing more is needed.</p></li>
 <li><strong>Detached: the switch drives the room.</strong><p>Without a Target, the relay stays on to power smart bulbs. Wire the adapter’s second output to a <strong>switch lighting policy</strong>: a toggle switch’s flips become edges, with the device’s status as the baseline, and a push button’s single, double or long presses become actions (the switch policy acts on single and double; long is passed on for later use). The relay is never commanded, and a relay that reports off is flagged in the status: the bulbs have lost power.</p></li>
 <li><strong>Any other mode: the relay is the light.</strong><p>The adapter reports the relay’s on/off state on its second output, with whether a person changed it at the switch, and takes on and off.</p></li>
 <li><strong>With a Target: the relay is a room light, in either mode.</strong><p>Wire the room controller’s second output (its light commands) into the adapter, and the adapter’s third output back into the room. The room’s ON and OFF for the Target switch the relay, and its state comes back as the room’s readings, with a change nobody here asked for (a person at a switch the relay follows, the Shelly app) as a person’s. Detached, the presses still go to the switch policy on the second output. See <a href="node-shelly-switch.html#room-light">As a room light</a>.</p></li>
@@ -116,33 +114,32 @@ return msg;</code></pre></div>
 <tr><td>Zigbee2MQTT group</td><td>Off</td><td>On for a group.</td></tr>
 </tbody></table></div>
 <ol class="step-list">
-<li><strong>Subscribe to the light’s topics.</strong><p>One MQTT in node on <code>zigbee2mqtt/&lt;device&gt;/#</code> (output: auto-detect) feeds the adapter: the light’s state, its <code>/set</code> topic (to see other people’s commands) and its availability.</p></li>
+<li><strong>Choose its Broker.</strong><p>It subscribes to the light’s state, its <code>/set</code> topic (to see other people’s commands) and its availability, publishes the room’s commands, and reads the light each time the broker connects.</p></li>
 <li><strong>Wire it to the room both ways.</strong><p>The room’s second output (light commands) into the adapter; the adapter’s second output (readings) back into the room. One wire from the room can feed every light’s adapter.</p></li>
-<li><strong>Send its messages out.</strong><p>The adapter’s first output to an MQTT out node with no topic set.</p></li>
 </ol>
 <p>A group takes the same commands; Zigbee2MQTT works out its state from what it sent and its members’ reports. A group has no availability and can’t be asked to report. Each light’s availability is shown on its control state and in the room’s status, and changes nothing. A 5.x room’s dialog can create these nodes for its old targets: see the <a href="node-room-controller.html#before-6">room controller</a>. Full reference: <a href="node-z2m-light.html">Zigbee2MQTT light</a>.</p>
 </section>
 <section id="choose"><h2>Choose an adapter</h2>
 <div class="cards">
-<div class="card"><h3>shelly cover</h3><p>A Gen2-or-later relay device in cover mode, calibrated on the device. Position covers only. One MQTT in node on <code>&lt;prefix&gt;/#</code>.</p></div>
-<div class="card"><h3>zigbee2mqtt cover</h3><p>A Zigbee cover paired with Zigbee2MQTT. Position covers, or open, close and stop only. Two MQTT in nodes: the device topic and its availability.</p></div>
-<div class="card"><h3>zigbee2mqtt light</h3><p>A Zigbee light or group paired with Zigbee2MQTT, for a room lighting controller. One MQTT in node on <code>zigbee2mqtt/&lt;device&gt;/#</code>.</p></div>
-<div class="card"><h3>shelly switch</h3><p>A Gen2-or-later relay behind a wall switch: in detached mode, the switch’s presses for the switch policy; otherwise, the relay as the light. One MQTT in node on <code>&lt;prefix&gt;/#</code>.</p></div>
+<div class="card"><h3>shelly cover</h3><p>A Gen2-or-later relay device in cover mode, calibrated on the device. Position covers only. It subscribes to <code>&lt;prefix&gt;/#</code>.</p></div>
+<div class="card"><h3>zigbee2mqtt cover</h3><p>A Zigbee cover paired with Zigbee2MQTT. Position covers, or open, close and stop only. It subscribes to the device topic and its availability.</p></div>
+<div class="card"><h3>zigbee2mqtt light</h3><p>A Zigbee light or group paired with Zigbee2MQTT, for a room lighting controller. It subscribes to the light’s state, <code>/set</code> and availability.</p></div>
+<div class="card"><h3>shelly switch</h3><p>A Gen2-or-later relay behind a wall switch: in detached mode, the switch’s presses for the switch policy; otherwise, the relay as the light. It subscribes to <code>&lt;prefix&gt;/#</code>.</p></div>
 </div>
 <p>For any other device, the controller’s neutral commands and readings are the contract to map to; for a light, the room’s <a href="node-room-controller.html#light-contract">neutral light contract</a>.</p>
 </section>
 <section id="check"><h2>Check the result</h2>
 <p>Wire controller output 2 to a Debug node, then watch the adapter’s node status as well.</p>
 <div class="table-wrap" role="region" aria-label="Read the outcome; scroll horizontally on a phone" tabindex="0"><table><caption>Read the outcome</caption><thead><tr><th scope="col">What you see</th><th scope="col">What it means</th></tr></thead><tbody>
-<tr><td>Adapter status “waiting for the device”</td><td>No device message has arrived yet. Check the MQTT in topics and the broker.</td></tr>
+<tr><td>Adapter status “waiting for the device”</td><td>No device message has arrived yet. Check its Broker, and the prefix or friendly name.</td></tr>
 <tr><td>shelly cover status</td><td>The cover’s last state and position.</td></tr>
 <tr><td>zigbee2mqtt cover status as a position (such as <code>60%</code>), an end state, or a motion with a position</td><td>Reports are arriving and being read.</td></tr>
 <tr><td>zigbee2mqtt cover status “online” / “offline”</td><td>The last message was an availability report.</td></tr>
 <tr><td>Controller result <code>not-calibrated</code> / <code>position-unknown</code></td><td>A shelly cover cannot provide a usable position. Calibrate it on the device.</td></tr>
 <tr><td>Controller result <code>unavailable</code></td><td>The device is offline. No command is sent; it is read again when it returns.</td></tr>
 <tr><td>Controller error “observed cover reading has no position”</td><td>A zigbee2mqtt cover reports no position: set the controller’s <strong>Cover</strong> to <i>Open, close and stop only</i>.</td></tr>
-<tr><td>No command reaches the device</td><td>Check that the MQTT out node has no topic set and uses the same broker. For a shelly cover, check <strong>Enable MQTT Control</strong>; for a zigbee2mqtt cover, check the base topic and friendly name.</td></tr>
+<tr><td>No command reaches the device</td><td>Check the adapter’s Broker (without one, that the MQTT out node has no topic set and uses the same broker). For a shelly cover, check <strong>Enable MQTT Control</strong>; for a zigbee2mqtt cover, check the base topic and friendly name.</td></tr>
 </tbody></table></div>
-<p>Importable examples are in the package’s <a href="https://github.com/avantics-hq/node-red-home-automation/tree/main/examples">examples folder</a> (<strong>Import → Examples</strong> in the editor): <code>Shelly cover.json</code> wires a shelly cover, and <code>Cover control.json</code> wires a zigbee2mqtt cover. In each, injects stand in for the MQTT in nodes and a Debug node stands in for MQTT out. See also the <a href="https://github.com/avantics-hq/node-red-home-automation#covers">README Covers section</a> and the <a href="node-cover-controller.html">cover controller reference</a>.</p>
+<p>Importable examples are in the package’s <a href="https://github.com/avantics-hq/node-red-home-automation/tree/main/examples">examples folder</a> (<strong>Import → Examples</strong> in the editor): <code>Shelly cover.json</code> wires a shelly cover, and <code>Cover control.json</code> wires a zigbee2mqtt cover. Each uses one broker config node, “your MQTT broker”, whose host you set. See also the <a href="https://github.com/avantics-hq/node-red-home-automation#covers">README Covers section</a> and the <a href="node-cover-controller.html">cover controller reference</a>.</p>
 <p class="caption">Sources: README Covers; shelly cover, zigbee2mqtt cover and cover controller editor help; the Shelly cover and Cover control example flows.</p>
 </section>

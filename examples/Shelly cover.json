@@ -3,23 +3,10 @@
     "id": "example-shelly-cover-comment",
     "type": "comment",
     "name": "Shelly cover example",
-    "info": "A Shelly Gen2 device in cover mode, owned by the cover controller, with no function nodes. In your flow, replace the injects marked 'from the device' with an MQTT in node subscribed to <prefix>/# (output: auto-detect), and the debug node with an MQTT out node, both on your broker. Set the adapter's MQTT topic prefix to your device's (its device ID unless you set one). The controller's device commands go to the adapter, which sends them to the device as its MQTT control commands; the device's status, change notifications and online state come back through the adapter as the controller's readings.\n\nThe \"MQTT out connected\" status node sends the cover controller its startup message each time an MQTT out node connects to the broker, so what it announces reaches it: the broker drops anything sent before it connects. It watches every node on this flow, and the nodes act only on an MQTT out node's connected status; you can scope it to your MQTT out node instead.",
+    "info": "Needs: A Shelly Gen2 or later device in cover mode, on your broker.\n\nA Shelly Gen2 device in cover mode, owned by the cover controller, with no function nodes. Set the adapter's MQTT topic prefix to your device's (its device ID unless you set one). The controller's device commands go to the adapter, which sends them to the device as its MQTT control commands; the device's status, change notifications and online state come back from the broker through the adapter as the controller's readings.\n\nBefore deploying, open the \"your MQTT broker\" config node (any node's Broker setting) and set your broker's host: every node here that talks MQTT subscribes and publishes through it, with no MQTT in, MQTT out or status nodes.",
     "x": 150,
     "y": 40,
     "wires": []
-  },
-  {
-    "id": "example-shelly-cover-mqtt-connected",
-    "type": "status",
-    "name": "MQTT out connected",
-    "scope": null,
-    "x": 130,
-    "y": 100,
-    "wires": [
-      [
-        "example-shelly-cover-cover"
-      ]
-    ]
   },
   {
     "id": "example-shelly-cover-open",
@@ -115,7 +102,8 @@
         "example-shelly-cover-state"
       ],
       []
-    ]
+    ],
+    "broker": "example-mqtt-broker"
   },
   {
     "id": "example-shelly-cover-adapter",
@@ -126,29 +114,13 @@
     "x": 640,
     "y": 160,
     "wires": [
-      [
-        "example-shelly-cover-to-device"
-      ],
+      [],
       [
         "example-shelly-cover-cover"
       ]
-    ]
-  },
-  {
-    "id": "example-shelly-cover-to-device",
-    "type": "debug",
-    "name": "to the MQTT out node",
-    "active": true,
-    "tosidebar": true,
-    "console": false,
-    "tostatus": false,
-    "complete": "true",
-    "targetType": "full",
-    "statusVal": "",
-    "statusType": "auto",
-    "x": 880,
-    "y": 140,
-    "wires": []
+    ],
+    "broker": "example-mqtt-broker",
+    "publishesThroughOutput": false
   },
   {
     "id": "example-shelly-cover-state",
@@ -167,75 +139,34 @@
     "wires": []
   },
   {
-    "id": "example-shelly-cover-online",
-    "type": "inject",
-    "name": "online, from the device",
-    "props": [
-      {
-        "p": "payload",
-        "v": "true",
-        "vt": "str"
-      }
-    ],
-    "repeat": "",
-    "crontab": "",
-    "once": false,
-    "onceDelay": 0.1,
-    "topic": "shellyplus2pm-a8032ab12345/online",
-    "x": 180,
-    "y": 300,
-    "wires": [
-      [
-        "example-shelly-cover-adapter"
-      ]
-    ]
-  },
-  {
-    "id": "example-shelly-cover-status",
-    "type": "inject",
-    "name": "cover status, from the device",
-    "props": [
-      {
-        "p": "payload",
-        "v": "{\"id\":0,\"state\":\"stopped\",\"current_pos\":40,\"pos_control\":true}",
-        "vt": "json"
-      }
-    ],
-    "repeat": "",
-    "crontab": "",
-    "once": false,
-    "onceDelay": 0.1,
-    "topic": "shellyplus2pm-a8032ab12345/status/cover:0",
-    "x": 190,
-    "y": 340,
-    "wires": [
-      [
-        "example-shelly-cover-adapter"
-      ]
-    ]
-  },
-  {
-    "id": "example-shelly-cover-notify",
-    "type": "inject",
-    "name": "change notification, from the device",
-    "props": [
-      {
-        "p": "payload",
-        "v": "{\"src\":\"shellyplus2pm-a8032ab12345\",\"dst\":\"shellyplus2pm-a8032ab12345/events\",\"method\":\"NotifyStatus\",\"params\":{\"ts\":1764151200,\"cover:0\":{\"id\":0,\"state\":\"open\",\"current_pos\":100}}}",
-        "vt": "json"
-      }
-    ],
-    "repeat": "",
-    "crontab": "",
-    "once": false,
-    "onceDelay": 0.1,
-    "topic": "shellyplus2pm-a8032ab12345/events/rpc",
-    "x": 210,
-    "y": 380,
-    "wires": [
-      [
-        "example-shelly-cover-adapter"
-      ]
-    ]
+    "id": "example-mqtt-broker",
+    "type": "mqtt-broker",
+    "name": "your MQTT broker",
+    "broker": "your-mqtt-broker",
+    "port": 1883,
+    "clientid": "",
+    "autoConnect": true,
+    "usetls": false,
+    "protocolVersion": 4,
+    "keepalive": 60,
+    "cleansession": true,
+    "autoUnsubscribe": true,
+    "birthTopic": "",
+    "birthQos": "0",
+    "birthRetain": "false",
+    "birthPayload": "",
+    "birthMsg": {},
+    "closeTopic": "",
+    "closeQos": "0",
+    "closeRetain": "false",
+    "closePayload": "",
+    "closeMsg": {},
+    "willTopic": "",
+    "willQos": "0",
+    "willRetain": "false",
+    "willPayload": "",
+    "willMsg": {},
+    "userProps": "",
+    "sessionExpiry": ""
   }
 ]
