@@ -778,7 +778,7 @@ explicit configured activity. Controller output is retained under `desired`,
 `current`, `phase`, `transition` (when the latest transition started and finished, and which
 targets it left degraded), `failure`, `readiness`, `metrics`, `slo`, and `health/<target>`,
 each only when it changes beyond its times (`observedAt`, `evaluatedAt`, and
-each target's `observationAgeMs` and `lastConfirmationMs`): a steady activity
+each target's `observationAgeMs`): a steady activity
 publishes nothing new on each refresh, and a target's health keeps the time it
 last changed. A startup, and with a Broker each connect, republishes them all
 with the next snapshot. Metrics expose transition latency and outcome counts plus

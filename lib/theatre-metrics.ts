@@ -35,7 +35,8 @@ export function resetTransitionMetrics(metrics: TheatreMetrics): void {
 }
 
 // A target's report: its attempts, fallback use, how old its observation is
-// and, once ready, how long after the transition started it confirmed.
+// and, at its first ready report in this transition, how long after the
+// transition started it confirmed. Its refreshes leave that figure.
 export function recordTargetReport(
   metric: TheatreTargetMetrics,
   report: TargetState,
@@ -57,10 +58,11 @@ export function recordTargetReport(
   metric.fallbackUsed ||= fallbackUsed;
   metric.observationAgeMs = observedAt === null ? null : Math.max(0, nowMs - observedAt);
   if (report.status === "ready") {
+    // Null until then: resetTransitionMetrics clears it at each transition.
     const startedAt = Date.parse(transitionStartedAt || "");
-    metric.lastConfirmationMs = Number.isFinite(startedAt) && observedAt !== null
-      ? Math.max(0, observedAt - startedAt)
-      : null;
+    if (metric.lastConfirmationMs === null && Number.isFinite(startedAt) && observedAt !== null) {
+      metric.lastConfirmationMs = Math.max(0, observedAt - startedAt);
+    }
     metric.availability = "available";
   } else if (report.status === "failed" || report.status === "unavailable") {
     metric.availability = "unavailable";

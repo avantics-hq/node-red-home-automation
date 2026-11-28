@@ -687,6 +687,9 @@ export function transitionTheatre(
       if (state.blockedGeneration !== state.generation) {
         state.transitionStartedAt = now.toISOString();
         state.transitionCompletedAt = null;
+        // Re-confirming is a transition of its own: each target's
+        // confirmation is timed again from now.
+        for (const target of TARGETS) state.metrics.targets[target].lastConfirmationMs = null;
       }
     } else {
       commands.push(...targetProbeCommands());

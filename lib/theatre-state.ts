@@ -146,6 +146,8 @@ export function count(value: unknown): number {
 }
 
 function nullableDuration(value: unknown): number | null {
+  // Not a duration yet: null, as saved. Number(null) would make it 0.
+  if (value === null || value === undefined || value === "") return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
