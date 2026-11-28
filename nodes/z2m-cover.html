@@ -75,7 +75,7 @@
     Zigbee2MQTT's MQTT messages: no function nodes, and never Home Assistant.</p>
   <h3>Wiring</h3>
   <p>With a <b>Broker</b>, it subscribes to <code>&lt;base&gt;/&lt;friendly name&gt;</code> and its <code>/availability</code> (exactly these: a friendly name can contain <code>/</code>) and publishes on its device's topics itself: leave out the MQTT
-    in and MQTT out nodes below (still wired, they change nothing). Its first output then sends nothing. A node saved
+    in and MQTT out nodes below (still wired, they change nothing). Its first output then sends nothing. It reads its cover on each connect, as a Status node's startup did through the cover controller. A node saved
     before 6.2 keeps using them until you choose a broker.</p>
   <ol>
     <li>An <b>MQTT in</b> node subscribed to <code>&lt;base&gt;/&lt;friendly name&gt;</code> and another to

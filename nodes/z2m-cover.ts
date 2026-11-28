@@ -29,10 +29,15 @@ const registerZ2mCover: NodeInitializer = (RED) => {
     const trace = {area: "", component: "z2m-cover"};
     node.status({fill: "grey", shape: "ring", text: "waiting for the device"});
 
+    // With a broker, it reads its device on each connect, reconnects
+    // included, through its own observe: after a restart nothing reported it
+    // while it was away, and the controller acts on the reading as on one it
+    // asked for.
     // Exactly its own topics: a friendly name can contain "/", so <name>/#
     // would take in other devices' too.
     const topics = z2mCoverTopics(device);
-    const side = deviceSide(node, broker, topics.device, [topics.device, topics.availability], trace, (msg, send) => handle(msg, send));
+    const side = deviceSide(node, broker, topics.device, [topics.device, topics.availability], trace, (msg, send) => handle(msg, send),
+      () => handle({cover_command: {operation: "observe"}} as InputMessage, node.send.bind(node)));
 
     function handle(msg: InputMessage, send: Send) {
       const result = runReducer(node, trace, (saved: Partial<Z2mCoverState> | undefined, now) =>

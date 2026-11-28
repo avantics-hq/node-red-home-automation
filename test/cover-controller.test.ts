@@ -516,3 +516,25 @@ test("a reading with no position says which cover type fits, rather than only th
   // A position that is there but unusable is still reported as such.
   assert.throws(() => apply(ready.state, {kind: "observed", position: 140, observedAt: at(1).toISOString()}, 1), /must be a number from 0 to 100/);
 });
+
+test("after a restart, a cover's reading it didn't ask for is handled as its startup's verifying observe", () => {
+  // Ready at 40, then moved by hand to 70 while Node-RED was down.
+  let ready = setPosition(undefined, 40);
+  ready = observe(ready.state, 40, 10, "stopped");
+  assert.equal(ready.state.phase, "ready");
+  // With a Status node, its startup asked for a reading; with a broker, the
+  // adapter reads the cover on connecting, unasked.
+  const startup = apply(ready.state, {kind: "startup"}, 100);
+  assert.deepEqual(startup.commands.map(({operation}) => operation), ["observe"]);
+  const asked = observe(startup.state, 70, 101, "stopped");
+  const unasked = observe(ready.state, 70, 101, "stopped");
+  // Both hand it to the person at 70: only the latch's reason differs, as the
+  // startup knew it had been away.
+  assert.deepEqual([asked.state.phase, unasked.state.phase], ["manual_override", "manual_override"]);
+  assert.deepEqual([asked.state.observed?.position, unasked.state.observed?.position], [70, 70]);
+  assert.deepEqual([asked.commands, unasked.commands], [[], []]);
+  // Still at 40: both stay ready.
+  const askedHere = observe(startup.state, 40, 101, "stopped");
+  const unaskedHere = observe(ready.state, 40, 101, "stopped");
+  assert.deepEqual([askedHere.state.phase, unaskedHere.state.phase], ["ready", "ready"]);
+});

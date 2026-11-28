@@ -149,6 +149,10 @@ export function transitionShellyCover(
         publications.push({topic: topics.command, payload: `pos,${Math.round(Math.max(0, Math.min(100, position)))}`});
         trace("command", "sent", null, {operation, position});
       }
+    } else if (operation === "observe" && !Number.isInteger(generation)) {
+      // Its own read on connecting, not the controller's: no command for the
+      // reply to answer.
+      requestStatus("connected");
     } else if (operation === "stop" || operation === "observe") {
       state.command = {operation, generation};
       // observe asks for the device's full status, so the reading is fresh.
