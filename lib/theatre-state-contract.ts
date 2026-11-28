@@ -199,7 +199,8 @@ function statePublications(
 // Fields that only say when, or how long ago, something was seen: they move
 // on every refresh of a steady target, so a payload that differs only in
 // them is not a change. A target's health keeps the time it last changed.
-const TIME_ONLY_FIELDS = new Set(["observedAt", "evaluatedAt", "observationAgeMs", "lastConfirmationMs"]);
+// (A target's lastConfirmationMs is set once per transition, so it counts.)
+const TIME_ONLY_FIELDS = new Set(["observedAt", "evaluatedAt", "observationAgeMs"]);
 
 function comparable(payload: string): string {
   let value: unknown;

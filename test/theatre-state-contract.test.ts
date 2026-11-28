@@ -336,7 +336,7 @@ test("a node-named contract needs no area: entity IDs come from the display name
 });
 
 test("a steady activity publishes nothing again until something other than a time changes", () => {
-  const ready = (seconds: number, avr = "ready") => transitionTheatreStateContract(state, {theatre: snapshot({
+  const ready = (seconds: number, avr = "ready", confirmedMs = 4000) => transitionTheatreStateContract(state, {theatre: snapshot({
     phase: "ready", currentActivity: "tv_streamer", availability: "available", transitionCompletedAt: at(5).toISOString(),
     targets: {
       display: {status: "ready", observedAt: at(seconds).toISOString()},
@@ -346,7 +346,7 @@ test("a steady activity publishes nothing again until something other than a tim
     metrics: {requests: 1, ready: 1, failed: 0, superseded: 0, manualOverrides: 0, driftEvents: 0, recoveriesAdopted: 0,
       recoveriesUnknown: 0, lastTransitionMs: 5000, maxTransitionMs: 5000, lastOutcome: "ready",
       targets: {display: {attempts: 1, retries: 0, failures: 0, manualOverrides: 0, fallbackUses: 0, fallbackUsed: false,
-        lastConfirmationMs: seconds * 1000, observationAgeMs: seconds % 7, availability: "available"}}} as never
+        lastConfirmationMs: confirmedMs, observationAgeMs: seconds % 7, availability: "available"}}} as never
   })}, config, at(seconds));
   let state: TheatreStateContractState | undefined;
   let result = ready(10);
@@ -360,8 +360,12 @@ test("a steady activity publishes nothing again until something other than a tim
     assert.deepEqual(result.publications, [], `at ${seconds} s`);
     assert.equal(result.traces.at(-1)?.outcome, "unchanged");
   }
+  // A new confirmation time is a change, unlike an age: the metrics topic.
+  result = ready(75, "ready", 3000);
+  state = result.state;
+  assert.deepEqual(result.publications.map(({topic}) => topic), ["home/lounge/theatre/metrics"]);
   // The receiver degrades: only its health changes.
-  result = ready(80, "degraded");
+  result = ready(80, "degraded", 3000);
   state = result.state;
   assert.deepEqual(result.publications.map(({topic}) => topic), ["home/lounge/theatre/health/avr"]);
   // The health topic keeps the time it changed.
@@ -369,6 +373,6 @@ test("a steady activity publishes nothing again until something other than a tim
 
   // A startup (with a broker, each connect) republishes everything with the next snapshot.
   state = transitionTheatreStateContract(state, {theatreStateContract: {kind: "startup"}}, config, at(90)).state;
-  result = ready(100, "degraded");
+  result = ready(100, "degraded", 3000);
   assert.deepEqual(result.publications.map(({topic}) => topic), topics);
 });
