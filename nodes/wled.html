@@ -48,7 +48,8 @@
     for the command in hand: brightness 0 is off, anything else on. WLED reports every change, from any source, and
     doesn't say who made it: the backlighting controller judges a reading it didn't ask for as a manual change.
     An <code>observe</code> is answered from the last report while WLED is online; with none since Node-RED started
-    there is nothing to answer until WLED next changes.</p>
+    there is nothing to answer until WLED next changes: WLED publishes only when it changes, and can't be asked over
+    MQTT (seen on the firmware we tested).</p>
   <p>A <code>set_power</code> is answered with <code>command_result</code> ok once published, or not ok with reason
     <code>unavailable</code> while WLED is offline.</p>
 </script>

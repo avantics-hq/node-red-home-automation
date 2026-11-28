@@ -112,7 +112,7 @@ return msg;</code></pre></div>
 <li><strong>Add a wled node.</strong><p>Choose its <strong>Broker</strong> and set <strong>Device topic</strong> to WLED’s. It subscribes to <code>&lt;device topic&gt;/g</code> and <code>/status</code> itself.</p></li>
 <li><strong>Wire it to the controller both ways.</strong><p>The backlighting controller’s first output into the wled node; the wled node’s output back into the controller.</p></li>
 </ol>
-<p>WLED doesn’t say who changed it, so switching it from its own app reads as a manual change, as it should. On the firmware we tested it keeps none of its state retained (WLED’s documentation doesn’t say), so after a Node-RED restart the backlight has no reading until it next changes. Full reference: <a href="node-wled.html">WLED</a>.</p>
+<p>WLED doesn’t say who changed it, so switching it from its own app reads as a manual change, as it should. On the firmware we tested it keeps none of its state retained and can’t be asked for it over MQTT (WLED’s documentation doesn’t say either way): it publishes only when it changes. So after a Node-RED restart the backlight has no reading until it next changes. Full reference: <a href="node-wled.html">WLED</a>.</p>
 </section>
 <section id="zigbee2mqtt-light"><h2>Wire a zigbee2mqtt light</h2>
 <p>The <strong>zigbee2mqtt light</strong> node connects one Zigbee2MQTT light, or a Zigbee2MQTT group, to a <strong>room lighting controller</strong>: the room’s neutral commands become Zigbee2MQTT’s <code>/set</code> messages, exactly as the room sent them before 6.0, and the light’s reports become readings. Use one per light in the room’s Targets JSON.</p>

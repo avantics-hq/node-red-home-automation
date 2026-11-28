@@ -13,9 +13,12 @@
 //   <device>/g (and the colour on /c and the XML API response on /v);
 // - it says nothing of who made a change.
 // Not in its documentation, but seen on the firmware we tested:
-// <device>/status carries "online" or "offline" as its last will, retained,
-// and /g, /c and /v aren't retained. So online starts unknown, and only an
-// explicit offline refuses a command.
+// <device>/status carries "online" or "offline", and the broker holds a
+// retained "online"; each change publishes /g, /c, /v and /status online,
+// none retained; and nothing reads its state on demand over MQTT ({"v":true},
+// or an /api call that changes nothing, publishes nothing). So online starts
+// unknown, only an explicit offline refuses a command, and after a restart
+// there is no reading until it next changes.
 
 import type {TraceEntry} from "./bounded-trace";
 import {isObject, type MqttPublication} from "./mqtt-message";
